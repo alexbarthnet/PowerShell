@@ -1,0 +1,4 @@
+Host,Node,Cluster,Switch,FirstNic,MemoryGB,OsDiskGB,ClDiskGB,ClDiskCount
+hci1,hv1,cl1,Intranet,Manage1,8,50,100,3
+hci2,hv2,cl1,Intranet,Manage1,8,50,100,3
+hci3,hv3,cl1,Intranet,Manage1,8,50,100,3
