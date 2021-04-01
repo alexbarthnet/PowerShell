@@ -1,0 +1,7 @@
+AppData
+Attachments
+Email Attachments
+Microsoft Teams Chat Files
+Microsoft Teams Data
+Notebooks
+Public
