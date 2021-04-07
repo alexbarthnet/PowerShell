@@ -93,18 +93,28 @@ $csv_network | Where-Object {$_.vNIC} | ForEach-Object {
     $switch_name = $_.Switch
     $adapter_name = $_.Adapter
     $virtual_name = $_.vNIC
+    $virtual_addr = $_.Address
+    $virtual_mask = $_.Mask
 
-    # verify that any storage virtual NICs have a preference set
-    Write-Host ($hostname_vm + "," + $switch_name + "," + $virtual_name + " - checking for storage adapter(s)...")
-    $nic_smb = $null
-    $nic_smb = Get-VMNetworkAdapter -ManagementOS | Where-Object {$_.Name -eq $virtual_name}
+    # verify that any virtual NICs have a preference set
+    Write-Host ($hostname_vm + "," + $switch_name + "," + $virtual_name + " - checking for virtual adapter(s)...")
+    $nic_virtual = $null
+    $nic_virtual = Get-VMNetworkAdapter -ManagementOS | Where-Object {$_.Name -eq $virtual_name}
     # look for network adapters attached to the storage switch...
-    If ($nic_smb) {
-        Write-Host ($hostname_vm + "," + $switch_name + "," + $virtual_name + " - found storage adapter, setting team mapping...")
-        $nic_smb | Set-VMNetworkAdapterTeamMapping -ManagementOS -VMNetworkAdapterName $virtual_name -PhysicalNetAdapterName $adapter_name
+    If ($nic_virtual) {
+        Write-Host ($hostname_vm + "," + $switch_name + "," + $virtual_name + " - found virtual adapter, setting team mapping...")
+        $nic_virtual | Set-VMNetworkAdapterTeamMapping -ManagementOS -VMNetworkAdapterName $virtual_name -PhysicalNetAdapterName $adapter_name
+        # check if DHCP is enabled on NIC
+        Write-Host ($hostname_vm + "," + $switch_name + "," + $virtual_name + " - checking virtual adapter address...")
+        If (($nic_virtual | Get-NetIPAddress -AddressFamily IPv4).IPv4Address -eq $virtual_addr) {
+            Write-Host ($hostname_vm + "," + $switch_name + "," + $virtual_name + " - virtual adapter address already set")
+        } Else {
+            Write-Host ($hostname_vm + "," + $switch_name + "," + $virtual_name + " - virtual adapter address not set, fixing...")
+            $nic_virtual | New-NetIPAddress -AddressFamily IPv4 -IPAddress $virtual_addr -PrefixLength $virtual_mask | Out-Null
+        }
     } Else {
         # if no, create a network adapter
-        Write-Host ($hostname_vm + "," + $switch_name + "," + $virtual_name + " - no storage adapter found, skipping...")
+        Write-Host ($hostname_vm + "," + $switch_name + "," + $virtual_name + " - no virtual adapter found, skipping...")
     }
 }
 
