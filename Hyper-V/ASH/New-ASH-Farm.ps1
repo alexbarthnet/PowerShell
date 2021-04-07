@@ -53,7 +53,7 @@ Import-Csv -Path $ash_map_cluster | ForEach-Object {
     # run through network CSV to configure network adapaters
     Import-Csv -Path $ash_map_network | Where-Object {$_.Host -eq $vm_name} | ForEach-Object {
         # get values from CSV
-        $nic_name = $_.Name
+        $nic_name = $_.Adapter
         $nic_mode = $_.Mode
         $nic_vlan = $_.Vlan
 

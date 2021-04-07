@@ -57,17 +57,22 @@ $csv_network | Sort-Object Switch -Unique | ForEach-Object {
                 Add-VMSwitchTeamMember -SwitchName $switch_name -NetAdapterName $p_nic.InterfaceAlias
             }
         }
-        # verify the management switch has a virtual NIC
-        Write-Host ($hostname_vm + "," + $switch_name + " - checking for management adapter(s)...")
-        $nic_mgmt = $null
-        $nic_mgmt = Get-VMNetworkAdapter -ManagementOS | Where-Object {$_.SwitchName -eq $switch_name}
-        # look for network adapters attached to the management switch...
-        If ($nic_mgmt) {
-            Write-Host ($hostname_vm + "," + $switch_name + " - found " + $nic_mgmt.Count + " management adapter(s)")
+        Write-Host ($hostname_vm + "," + $switch_name + " - adapters verified, checking switch type...")
+        If ($switch_type -eq "Management") {
+            # verify the management switch has a virtual NIC
+            Write-Host ($hostname_vm + "," + $switch_name + " - management switch found, checking for management adapter(s)...")
+            $nic_mgmt = $null
+            $nic_mgmt = Get-VMNetworkAdapter -ManagementOS | Where-Object {$_.SwitchName -eq $switch_name}
+            # look for network adapters attached to the management switch...
+            If ($nic_mgmt) {
+                Write-Host ($hostname_vm + "," + $switch_name + " - found " + $nic_mgmt.Count + " management adapter(s)")
+            } Else {
+                # if no, create a network adapter
+                Write-Host ($hostname_vm + "," + $switch_name + " - no management adapters found, creating initial management adapater...")
+                $nic_mgmt = Add-VMNetworkAdapter -ManagementOS -SwitchName $switch_name -Name $switch_name
+            }
         } Else {
-            # if no, create a network adapter
-            Write-Host ($hostname_vm + "," + $switch_name + " - no management adapters found, creating initial management adapater...")
-            $nic_mgmt = Add-VMNetworkAdapter -ManagementOS -SwitchName $switch_name -Name $switch_name
+            Write-Host ($hostname_vm + "," + $switch_name + " - non-management switch found, skipping management adapter check...")
         }
     } Else {
         # if switch NOT found and we SHOULD make the virtual network adapater, create switch with NICs
@@ -103,18 +108,24 @@ $csv_network | Where-Object {$_.vNIC} | ForEach-Object {
     # look for network adapters attached to the storage switch...
     If ($nic_virtual) {
         Write-Host ($hostname_vm + "," + $switch_name + "," + $virtual_name + " - found virtual adapter, setting team mapping...")
-        $nic_virtual | Set-VMNetworkAdapterTeamMapping -ManagementOS -VMNetworkAdapterName $virtual_name -PhysicalNetAdapterName $adapter_name
+        Set-VMNetworkAdapterTeamMapping -ManagementOS -VMNetworkAdapterName $virtual_name -PhysicalNetAdapterName $adapter_name
         # check if DHCP is enabled on NIC
-        Write-Host ($hostname_vm + "," + $switch_name + "," + $virtual_name + " - checking virtual adapter address...")
-        If (($nic_virtual | Get-NetIPAddress -AddressFamily IPv4).IPv4Address -eq $virtual_addr) {
-            Write-Host ($hostname_vm + "," + $switch_name + "," + $virtual_name + " - virtual adapter address already set")
-        } Else {
-            Write-Host ($hostname_vm + "," + $switch_name + "," + $virtual_name + " - virtual adapter address not set, fixing...")
-            $nic_virtual | New-NetIPAddress -AddressFamily IPv4 -IPAddress $virtual_addr -PrefixLength $virtual_mask | Out-Null
-        }
     } Else {
         # if no, create a network adapter
         Write-Host ($hostname_vm + "," + $switch_name + "," + $virtual_name + " - no virtual adapter found, skipping...")
+    }
+
+    # check for IP address on netadapter
+    Write-Host ($hostname_vm + "," + $switch_name + "," + $virtual_name + " - checking network adapter address...")
+    $nic_network = $null
+    $nic_network = Get-NetAdapter | Where-Object {$_.Name -match $virtual_name}
+    If ($nic_network){
+        If (($nic_network | Get-NetIPAddress -AddressFamily IPv4).IPv4Address -eq $virtual_addr) {
+            Write-Host ($hostname_vm + "," + $switch_name + "," + $virtual_name + " - virtual adapter address already set")
+        } Else {
+            Write-Host ($hostname_vm + "," + $switch_name + "," + $virtual_name + " - virtual adapter address not set, fixing...")
+            $nic_network | New-NetIPAddress -AddressFamily IPv4 -IPAddress $virtual_addr -PrefixLength $virtual_mask | Out-Null
+        }
     }
 }
 
