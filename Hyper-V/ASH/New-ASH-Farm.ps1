@@ -74,7 +74,7 @@ Import-Csv -Path $ash_map_cluster | ForEach-Object {
             # set the NIC port mode
             If ($nic_mode -eq "Trunk") {
                 Write-Host ($env:computername.ToLower() + ",$vm_name - adding trunked NIC: " + $nic_name)
-                $vm | Add-VMNetworkAdapter -Name $nic_name -SwitchName $hv_switch -PassThru | Set-VMNetworkAdapterVlan -Trunk -NativeVlanId 1 -AllowedVlanIdList 1-4094
+                $vm | Add-VMNetworkAdapter -Name $nic_name -SwitchName $hv_switch -PassThru | Set-VMNetworkAdapterVlan -Trunk -NativeVlanId $nic_vlan -AllowedVlanIdList 1-4094
             }
             Else {
                 Write-Host ($env:computername.ToLower() + ",$vm_name - adding access NIC: " + $nic_name)

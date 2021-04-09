@@ -1,6 +1,7 @@
 # set the file locations
 $map_network = '.\ASH\ash-map-network.txt'
-$ps1_aliases = '.\Update-ASH-Network-Aliases.ps1'
+$dns_servers = '.\ASH\ash-dns-servers.txt'
+$ps1_script1 = '.\Update-ASH-Physical.ps1'
 
 # process the cluster mapping file
 Import-Csv -Path $map_network | Sort-Object Host -Unique | ForEach-Object {
@@ -31,16 +32,18 @@ Import-Csv -Path $map_network | Sort-Object Host -Unique | ForEach-Object {
     $vm_make = Invoke-Command -ComputerName $vm_name -ScriptBlock {New-Item -Path $using:vm_temp -Name "hv-setup" -ItemType Directory -Force}
     $vm_path = ("\\" + $vm_name + "\" + ($vm_temp -replace '\:','$') + "\" + $vm_make.Name)
 
-    # copy files for alias configuration
+    # copy files for address and switch configuration
     Write-Host ($vm_name + " - copying files...")
-    Copy-Item -Path $ps1_aliases -Destination $vm_path
-    
+    Copy-Item -Path $dns_servers -Destination $vm_path
+    Copy-Item -Path $map_network -Destination $vm_path
+    Copy-Item -Path $ps1_script1 -Destination $vm_path
+
     # run the scripts
     Write-Host ($vm_name + " - starting session...")
     $vm_options = New-PSSessionOption -OutputBufferingMode Drop
     $vm_session = Invoke-Command -ComputerName $vm_name -InDisconnectedSession -SessionOption $vm_options -ScriptBlock {
         Set-Location $using:vm_make.PSPath
-        Invoke-Expression $using:ps1_aliases
+        Invoke-Expression $using:ps1_script1
     }
 
     # declare session name

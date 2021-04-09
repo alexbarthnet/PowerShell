@@ -2,8 +2,8 @@
 $hostname_vm = [System.Net.Dns]::GetHostName().ToLower()
 $folder_temp = [System.Environment]::GetEnvironmentVariable('TEMP','Machine')
 $map_network = ($folder_temp + '\hv-setup\ash-map-network.txt')
-$log_address = ($folder_temp + '\hv-setup\ash-log-address.txt')
 $dns_servers = ($folder_temp + '\hv-setup\ash-dns-servers.txt')
+$log_address = ($folder_temp + '\hv-setup\ash-log-physical.txt')
 
 # start logging
 Start-Transcript -Path $log_address -Append -Force
@@ -37,15 +37,13 @@ Write-Host ("$hostname_vm - looping through intended IP addresses")
 $csv_imported | Where-Object {$_.Host -eq $hostname_vm} | ForEach-Object {
     $nic_name = $_.Adapter
     $nic_mode = $_.Mode
-    $nic_vlan = $_.Vlan
     $nic_addr = $_.Address
     $nic_mask = $_.Mask
     $nic_gway = $_.Gateway
-    $nic_rdma = $_.RDMA
 
     # clear variables
     $ip_already_set = $null
-    $nic_netdirect = $null
+    $nic_size = $null
     $nic_exists = $null
     $nic_bound = $null
 
@@ -60,11 +58,11 @@ $csv_imported | Where-Object {$_.Host -eq $hostname_vm} | ForEach-Object {
         $nic_exists = Get-NetAdapter -Physical | Where-Object {$_.InterfaceAlias -eq $nic_name} 
         If ($nic_exists) {
             # requested NIC found, check if requested NIC has IPv4 enabled
-            Write-Host ("$hostname_vm, $nic_name, $nic_addr - NIC found, checking for bindings...")
+            Write-Host ("$hostname_vm, $nic_name, $nic_addr - NIC found, checking for IP bindings...")
             $nic_bound = $nic_exists | Get-NetAdapterBinding | Where-Object {$_.ComponentID -eq "ms_tcpip" -and $_.Enabled}
             If ($nic_bound) {
                 # requested NIC has IPv4 bound, set the IP address
-                Write-Host ("$hostname_vm, $nic_name, $nic_addr - NIC bound, checking gateway...")
+                Write-Host ("$hostname_vm, $nic_name, $nic_addr - IPv4 bound, checking gateway...")
                 If ($nic_gway -ne "0") {
                     # requested NIC has gateway, set the IP address with default gateway
                     Write-Host ("$hostname_vm, $nic_name, $nic_addr - gateway found, setting IP address with default gateway...")
@@ -80,6 +78,8 @@ $csv_imported | Where-Object {$_.Host -eq $hostname_vm} | ForEach-Object {
                     Write-Host ("$hostname_vm, $nic_name, $nic_addr - gateway not found, setting IP address...")
                     $nic_exists | New-NetIPAddress -AddressFamily IPv4 -IPAddress $nic_addr -PrefixLength $nic_mask | Out-Null
                 }   
+            } Else {
+                Write-Host ("$hostname_vm, $nic_name, $nic_addr - IPv4 not bound, skipping address configuration...")
             }
         } Else {
             # requested NIC was NOT found, exit loop
@@ -87,35 +87,33 @@ $csv_imported | Where-Object {$_.Host -eq $hostname_vm} | ForEach-Object {
         }
     }
 
-    # update VLAN settings LAST as it disrupts the network
-    If ($nic_mode -eq "Trunk") {
-        # check for VLAN settings on NIC
-        $nic_prop = Get-NetAdapterAdvancedProperty | Where-Object {$_.Name -eq $nic_name -and $_.RegistryKeyword -eq "VlanId"}
-        If ($nic_prop) {
-            # VLAN settings found, check if current value matches requested VLAN ID
-            If ($nic_prop.RegistryValue -eq $nic_vlan) {
-                # current value matches requested VLAN ID, report and exit loop
-                Write-Host ("$hostname_vm, $nic_name, $nic_addr - found native VLAN: " + $nic_prop.RegistryValue)
-            } Else {
-                # current value does NOT match requested VLAN ID, set the VLAN ID
-                $nic_prop | Set-NetAdapterAdvancedProperty -RegistryValue $nic_vlan
-                Write-Host ("$hostname_vm, $nic_name, $nic_addr - set native VLAN to " + $nic_vlan)
-            }
+    # update jumbo packet settings
+    $nic_size = Get-NetAdapterAdvancedProperty -Name $nic_name | Where-Object {$_.DisplayName -eq 'Jumbo Packet'}
+    If ($nic_size -and $nic_mode -eq "Trunk") {
+        Write-Host ("$hostname_vm, $nic_name, $nic_addr - Jumbo Packet found: " + $nic_size.DisplayValue)
+        If ($nic_size.DisplayValue -ne "9014") {
+            Write-Host ("$hostname_vm, $nic_name, $nic_addr - Jumbo Packet not set to '9014', fixing...")
+            Set-NetAdapterAdvancedProperty -Name $nic_name -DisplayName 'Jumbo Packet' -DisplayValue '9014'    
+        } Else {
+            Write-Host ("$hostname_vm, $nic_name, $nic_addr - Jumbo Packet set to '9014'")
         }
+    } Else {
+        Write-Host ("$hostname_vm, $nic_name, $nic_addr - Jumbo Packet not found")
     }
 
     # update RDMA settings
+    $nic_rdma = Get-NetAdapterAdvancedProperty -Name $nic_name | Where-Object {$_.DisplayName -eq 'NetworkDirect Technology'}
     If ($nic_rdma) {
         # check for VLAN settings on NIC
-        Write-Host ("$hostname_vm, $nic_name, $nic_addr - RDMA requested: " + $nic_rdma)
-        $nic_netdirect = Get-NetAdapterAdvancedProperty -Name $nic_name | Where-Object {$_.DisplayName -eq 'NetworkDirect Technology'}
-        If ($nic_netdirect) {
-            Write-Host ("$hostname_vm, $nic_name, $nic_addr - RDMA options found, setting values...")
-            Set-NetAdapterAdvancedProperty -Name $nic_name -DisplayName 'NetworkDirect Technology' -DisplayValue $nic_rdma
-            Set-NetAdapterAdvancedProperty -Name $nic_name -DisplayName 'Jumbo Packet' -DisplayValue '9014'
+        Write-Host ("$hostname_vm, $nic_name, $nic_addr - RDMA found: " + $nic_rdma.DisplayValue)
+        If ($nic_rdma.DisplayValue -ne "iWARP") {
+            Write-Host ("$hostname_vm, $nic_name, $nic_addr - RDMA not set to 'iWARP', fixing...")
+            Set-NetAdapterAdvancedProperty -Name $nic_name -DisplayName 'NetworkDirect Technology' -DisplayValue 'iWARP'
         } Else {
-            Write-Host ("$hostname_vm, $nic_name, $nic_addr - RDMA options not found, skipping...")
+            Write-Host ("$hostname_vm, $nic_name, $nic_addr - RDMA set to 'iWARP'")
         }
+    } Else {
+        Write-Host ("$hostname_vm, $nic_name, $nic_addr - RDMA not found")
     }
 }
 

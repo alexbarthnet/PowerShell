@@ -2,7 +2,7 @@
 $hostname_vm = [System.Net.Dns]::GetHostName().ToLower()
 $folder_temp = [System.Environment]::GetEnvironmentVariable('TEMP','Machine')
 $map_feature = ($folder_temp + '\hv-setup\ash-map-feature.txt')
-$log_feature = ($folder_temp + '\hv-setup\ash-log-feature.txt')
+$log_feature = ($folder_temp + '\hv-setup\ash-log-features.txt')
 
 # start logging
 Start-Transcript -Path $log_feature -Append -Force

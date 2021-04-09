@@ -1,6 +1,6 @@
 # set the file locations
 $map_network = '.\ASH\ash-map-network.txt'
-$ps1_vswitch = '.\Update-ASH-Virtual-Switch.ps1'
+$ps1_script1 = '.\Update-ASH-Virtual.ps1'
 
 # process the cluster mapping file
 Import-Csv -Path $map_network | Sort-Object Host -Unique | ForEach-Object {
@@ -34,14 +34,14 @@ Import-Csv -Path $map_network | Sort-Object Host -Unique | ForEach-Object {
     # copy files for address and switch configuration
     Write-Host ($vm_name + " - copying files...")
     Copy-Item -Path $map_network -Destination $vm_path
-    Copy-Item -Path $ps1_vswitch -Destination $vm_path
+    Copy-Item -Path $ps1_script1 -Destination $vm_path
 
     # run the scripts
     Write-Host ($vm_name + " - starting session...")
     $vm_options = New-PSSessionOption -OutputBufferingMode Drop
     $vm_session = Invoke-Command -ComputerName $vm_name -InDisconnectedSession -SessionOption $vm_options -ScriptBlock {
         Set-Location $using:vm_make.PSPath
-        Invoke-Expression $using:ps1_vswitch
+        Invoke-Expression $using:ps1_script1
     }
 
     # declare session name

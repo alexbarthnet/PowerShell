@@ -2,10 +2,10 @@
 $map_network = '.\ASH\ash-map-network.txt'
 
 # clear arrays and create feature set
-$log_address = @()
-$log_adapter = @()
-$log_gateway = @()
-$nic_advprop = "VlanID","*JumboPacket","*NetworkDirect","*NetworkDirectTechnology"
+$log_adapters = @()
+$log_vmhost = @()
+$log_qospolicy = @()
+$log_qostraffic = @()
 
 # process the cluster mapping file
 Import-Csv -Path $map_network | Sort-Object Host -Unique | ForEach-Object {
@@ -37,14 +37,17 @@ Import-Csv -Path $map_network | Sort-Object Host -Unique | ForEach-Object {
 
     # run remote commands
     Write-Host ($vm_name + " - running commands...")
-    $log_adapter += $out_adapter = Invoke-Command -ComputerName $vm_name -ScriptBlock {
-        Get-NetAdapter -Physical | Get-NetAdapterAdvancedProperty | Where-Object {$using:nic_advprop -contains $_.RegistryKeyword} | Sort-Object DisplayName,Name
+    $log_adapters += $out_adapters = Invoke-Command -ComputerName $vm_name -ScriptBlock {
+        Get-NetAdapter -Physical | Sort-Object Name
     } 
-    $log_address += $out_address = Invoke-Command -ComputerName $vm_name -ScriptBlock {
-        Get-NetAdapterBinding | Where-Object {$_.ComponentID -eq "ms_tcpip"-and $_.Enabled} | Get-NetIPAddress -AddressFamily IPv4 | Sort-Object InterfaceAlias
+    $log_vmhost += $out_vmhost = Invoke-Command -ComputerName $vm_name -ScriptBlock {
+        Get-VMHost
+    }
+    $log_qospolicy += $out_qospolicy = Invoke-Command -ComputerName $vm_name -ScriptBlock {
+        Get-NetQosPolicy | Sort-Object PriorityValue
     } 
-    $log_gateway += $out_gateway = Invoke-Command -ComputerName $vm_name -ScriptBlock {
-        Get-NetRoute -AddressFamily IPv4 -DestinationPrefix 0.0.0.0/0
+    $log_qostraffic += $out_qostraffic = Invoke-Command -ComputerName $vm_name -ScriptBlock {
+        Get-NetQosTrafficClass
     }
     # run the scripts
     Write-Host ($vm_name + " - starting session...")
@@ -52,9 +55,10 @@ Import-Csv -Path $map_network | Sort-Object Host -Unique | ForEach-Object {
     $vm_session = Invoke-Command -ComputerName $vm_name -InDisconnectedSession -SessionOption $vm_options -ScriptBlock {
         Set-Location $using:vm_make.PSPath
         "======================== $(Get-Date -Format FileDateTime) ========================" | Out-File -FilePath ".\ash-net-review.txt" -Append
-        $using:out_adapter | Format-Table Name,DisplayName,DisplayValue | Out-File -FilePath ".\ash-net-review.txt" -Append
-        $using:out_address | Format-Table IPAddress,InterfaceAlias,InterfaceIndex,PrefixLength,PrefixOrigin,SkipAsSource | Out-File -FilePath ".\ash-net-review.txt" -Append
-        $using:out_gateway | Format-Table NextHop,DestinationPrefix,InterfaceIndex | Out-File -FilePath ".\ash-net-review.txt" -Append
+        $using:out_adapters | Format-Table Name,DisplayName,DisplayValue | Out-File -FilePath ".\ash-net-review.txt" -Append
+        $using:out_vmhost | Format-Table Name,@{Label = "LiveMigrate"; Expression = {$_.VirtualMachineMigrationEnabled}},@{Label = "LiveMigrate Auth"; Expression = {$_.VirtualMachineMigrationAuthenticationType}},@{Label = "LiveMigrate Type"; Expression = {$_.VirtualMachineMigrationPerformanceOption}}
+        $using:out_qospolicy | Format-Table Name,Owner,NetworkProfile,Template,PriorityValue,NetDirectPort | Out-File -FilePath ".\ash-net-review.txt" -Append
+        $using:out_qostraffic | Format-Table Name,PriorityFriendly,Bandwidth,Algorithm,PolicySet | Out-File -FilePath ".\ash-net-review.txt" -Append
     }
 
     # declare session name
@@ -64,6 +68,7 @@ Import-Csv -Path $map_network | Sort-Object Host -Unique | ForEach-Object {
 # declare results
 Write-Host ""
 Write-Host "======================== Results ========================"
-$log_adapter | Format-Table PSComputerName,Name,DisplayName,DisplayValue
-$log_address | Format-Table PSComputerName,IPAddress,InterfaceAlias,InterfaceIndex,PrefixLength,PrefixOrigin,SkipAsSource
-$log_gateway | Format-Table PSComputerName,NextHop,DestinationPrefix,InterfaceIndex
+$log_adapters | Format-Table PSComputerName,Name,InterfaceDescription,ifIndex,Status,MacAddress,LinkSpeed
+$log_vmhost | Format-Table PSComputerName,@{Label = "LM Enabled"; Expression = {$_.VirtualMachineMigrationEnabled}},@{Label = "LM Auth"; Expression = {$_.VirtualMachineMigrationAuthenticationType}},@{Label = "LM Type"; Expression = {$_.VirtualMachineMigrationPerformanceOption}}
+$log_qospolicy | Format-Table PSComputerName,Name,Owner,Template,PriorityValue,NetDirectPort
+$log_qostraffic | Format-Table PSComputerName,Name,PriorityFriendly,Bandwidth,Algorithm,PolicySet

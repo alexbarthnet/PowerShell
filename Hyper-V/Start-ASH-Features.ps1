@@ -1,7 +1,7 @@
 # set the file locations
 $map_network = '.\ASH\ash-map-network.txt'
 $map_feature = '.\ASH\ash-map-feature.txt'
-$ps1_feature = '.\Update-ASH-Windows-Features.ps1'
+$ps1_script1 = '.\Update-ASH-Features.ps1'
 
 # process the cluster mapping file
 Import-Csv -Path $map_network | Sort-Object Host -Unique | ForEach-Object {
@@ -34,15 +34,15 @@ Import-Csv -Path $map_network | Sort-Object Host -Unique | ForEach-Object {
 
     # copy files for feature configuration
     Write-Host ($vm_name + " - copying files...")
-    Copy-Item -Path $ps1_feature -Destination $vm_path
     Copy-Item -Path $map_feature -Destination $vm_path
+    Copy-Item -Path $ps1_script1 -Destination $vm_path
     
     # run the scripts
     Write-Host ($vm_name + " - starting session...")
     $vm_options = New-PSSessionOption -OutputBufferingMode Drop
     $vm_session = Invoke-Command -ComputerName $vm_name -InDisconnectedSession -SessionOption $vm_options -ScriptBlock {
         Set-Location $using:vm_make.PSPath
-        Invoke-Expression $using:ps1_feature
+        Invoke-Expression $using:ps1_script1
     }
     Write-Host ($vm_name + " - started session: " + $vm_session.Name)
 }
