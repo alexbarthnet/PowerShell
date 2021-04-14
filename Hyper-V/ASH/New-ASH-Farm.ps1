@@ -29,12 +29,13 @@ Import-Csv -Path $ash_map_cluster | ForEach-Object {
     Try {
         Write-Host ($env:computername.ToLower() + ",$vm_name - creating VHDs")
         New-VHD -Computer $hv_name -SizeBytes $hd_size_os -Path $hd_path_os | Out-Null
-        For ($i = 1;$i -le $hd_count; $i++) {
+        For ($i = 1; $i -le $hd_count; $i++) {
             # define path to new VHD
             $hd_path_cl = ($hd_root + '\' + $vm_name + '-' + $i + '.vhdx')
             $hd_array += New-VHD -Computer $hv_name -SizeBytes $hd_size_cl -Path $hd_path_cl
         }
-    } Catch {
+    }
+    Catch {
         Write-Host ($env:computername.ToLower() + ",$vm_name - creating VHDs - ERROR")
         Exit
     }
@@ -45,13 +46,14 @@ Import-Csv -Path $ash_map_cluster | ForEach-Object {
         $vm = New-VM -Computer $hv_name -VMName $vm_name -Generation 2 -MemoryStartupBytes $vm_ram -VHDPath $hd_path_os -SwitchName $hv_switch
         $vm | Set-VMProcessor -Count 4 -ExposeVirtualizationExtensions $true
  
-    } Catch {
+    }
+    Catch {
         Write-Host ($env:computername.ToLower() + ",$vm_name - creating VM - ERROR")
         Exit
     }
  
     # run through network CSV to configure network adapaters
-    Import-Csv -Path $ash_map_network | Where-Object {$_.Host -eq $vm_name} | ForEach-Object {
+    Import-Csv -Path $ash_map_network | Where-Object { $_.Host -eq $vm_name } | ForEach-Object {
         # get values from CSV
         $nic_name = $_.Adapter
         $nic_mode = $_.Mode
@@ -61,7 +63,7 @@ Import-Csv -Path $ash_map_cluster | ForEach-Object {
         If ($nic_name -eq $nic_1st) {
             Write-Host ($env:computername.ToLower() + ",$vm_name - updating original NIC: " + $nic_name)
             # find the original (untagged) adapter
-            $vm_nic = (Get-VMNetworkAdapterVlan -VM $vm | Where-Object {$_.OperationMode -eq "Untagged"}).ParentAdapter
+            $vm_nic = (Get-VMNetworkAdapterVlan -VM $vm | Where-Object { $_.OperationMode -eq 'Untagged' }).ParentAdapter
             # rename the original adapter
             Rename-VMNetworkAdapter -VMNetworkAdapter $vm_nic -NewName $nic_name
             # update the original adapter with the VLAN 
@@ -72,7 +74,7 @@ Import-Csv -Path $ash_map_cluster | ForEach-Object {
         # NICs with a gateway map to the original NIC and are updated
         Else {
             # set the NIC port mode
-            If ($nic_mode -eq "Trunk") {
+            If ($nic_mode -eq 'Trunk') {
                 Write-Host ($env:computername.ToLower() + ",$vm_name - adding trunked NIC: " + $nic_name)
                 $vm | Add-VMNetworkAdapter -Name $nic_name -SwitchName $hv_switch -PassThru | Set-VMNetworkAdapterVlan -Trunk -NativeVlanId $nic_vlan -AllowedVlanIdList 1-4094
             }

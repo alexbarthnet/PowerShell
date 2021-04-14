@@ -9,7 +9,9 @@ $cluster_farm = (Import-Csv -Path .\ash\ash-map-hypervisors.txt).Hypervisor | Ge
 
 # create the list of SPNs
 ForEach ($computer in $cluster_farm) {$cluster_spns += ('cifs/' + $computer.DNSHostName.ToLower())}
+ForEach ($computer in $cluster_farm) {$cluster_spns += ('cifs/' + $computer.Name.ToLower())}
 ForEach ($computer in $cluster_farm) {$cluster_spns += ('Microsoft Virtual System Migration Service/' + $computer.DNSHostName.ToLower())}
+ForEach ($computer in $cluster_farm) {$cluster_spns += ('Microsoft Virtual System Migration Service/' + $computer.Name.ToLower())}
 
 # update each hypervisor object
 ForEach ($computer in $cluster_farm) {
@@ -27,9 +29,7 @@ ForEach ($computer in $cluster_farm) {
 
     # add SPNs to each hypervisor
     ForEach ($spn in $cluster_spns) {
-        If ($spn -notmatch $computer.DNSHostname){
-            Write-Host ($computer.DNSHostName + " - adding delegated SPN: " + $spn)
-            Set-ADObject -Identity $computer -Add @{'msDS-AllowedToDelegateTo' = $spn}
-        }
+        Write-Host ($computer.DNSHostName + " - adding delegated SPN: " + $spn)
+        Set-ADObject -Identity $computer -Add @{'msDS-AllowedToDelegateTo' = $spn}
     }
 }

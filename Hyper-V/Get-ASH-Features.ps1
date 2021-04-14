@@ -15,7 +15,7 @@ Import-Csv -Path $map_network | Sort-Object Host -Unique | ForEach-Object {
     Write-Host "======================== $vm_name ========================"
 
     # clear the DNS cache then resolve hostname
-    Write-Host ($vm_name + " - resolving host...")
+    Write-Host ($vm_name + ' - resolving host...')
     Do {
         Clear-DnsClientCache
         $dns_found = $null
@@ -23,37 +23,37 @@ Import-Csv -Path $map_network | Sort-Object Host -Unique | ForEach-Object {
     } Until ($dns_found)
 
     # verify connection to remote host
-    Write-Host ($vm_name + " - connecting to host...")
+    Write-Host ($vm_name + ' - connecting to host...')
     Do {
         $vm_alive = $false
         $vm_alive = Test-NetConnection -ComputerName $vm_name -CommonTCPPort SMB -InformationLevel Quiet
     } Until ($vm_alive)
 
     # create and define remote directory
-    Write-Host ($vm_name + " - creating directory...")
-    $vm_temp = Invoke-Command -ComputerName $vm_name -ScriptBlock {[System.Environment]::GetEnvironmentVariable('TEMP','Machine')}
-    $vm_make = Invoke-Command -ComputerName $vm_name -ScriptBlock {New-Item -Path $using:vm_temp -Name "hv-setup" -ItemType Directory -Force}
+    Write-Host ($vm_name + ' - creating directory...')
+    $vm_temp = Invoke-Command -ComputerName $vm_name -ScriptBlock { [System.Environment]::GetEnvironmentVariable('TEMP', 'Machine') }
+    $vm_make = Invoke-Command -ComputerName $vm_name -ScriptBlock { New-Item -Path $using:vm_temp -Name 'hv-setup' -ItemType Directory -Force }
 
     # run remote commands
-    Write-Host ($vm_name + " - running commands...")
+    Write-Host ($vm_name + ' - running commands...')
     $log_feature += $out_feature = Invoke-Command -ComputerName $vm_name -ScriptBlock {
         Get-WindowsFeature -Name $using:feature_set
     } 
 
     # run the scripts
-    Write-Host ($vm_name + " - starting session...")
+    Write-Host ($vm_name + ' - starting session...')
     $vm_options = New-PSSessionOption -OutputBufferingMode Drop
     $vm_session = Invoke-Command -ComputerName $vm_name -InDisconnectedSession -SessionOption $vm_options -ScriptBlock {
         Set-Location $using:vm_make.PSPath
-        "======================== $(Get-Date -Format FileDateTime) ========================" | Out-File -FilePath ".\ash-net-review.txt" -Append
-        $using:out_feature | Format-Table Name,InstallState | Out-File -FilePath ".\ash-net-review.txt" -Append
+        "======================== $(Get-Date -Format FileDateTime) ========================" | Out-File -FilePath '.\ash-net-review.txt' -Append
+        $using:out_feature | Format-Table Name, InstallState | Out-File -FilePath '.\ash-net-review.txt' -Append
     }
 
     # declare session name
-    Write-Host ($vm_name + " - started session: " + $vm_session.Name)
+    Write-Host ($vm_name + ' - started session: ' + $vm_session.Name)
 }
 
 # declare results
-Write-Host ""
-Write-Host "======================== Results ========================"
-$log_feature | Format-Table PSComputerName,Name,InstallState
+Write-Host ''
+Write-Host '======================== Results ========================'
+$log_feature | Format-Table PSComputerName, Name, InstallState
