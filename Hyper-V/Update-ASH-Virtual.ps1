@@ -160,7 +160,7 @@ $csv_network | Where-Object { $_.vNIC } | ForEach-Object {
             }
         }
 
-        # updating the virtual adapter 
+        # set the virtual adapter isolation mode
         Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - force virtual adapter to Untagged VLAN mode')
         $nic_virtual | Set-VMNetworkAdapterVlan -Untagged
         If ($switch_name -ne 'Management') {
@@ -169,7 +169,6 @@ $csv_network | Where-Object { $_.vNIC } | ForEach-Object {
         }
 
         # update the name of the network adapter to remove the vEthernet nonsense
-        
         $nic_network = $null
         $nic_network = Get-NetAdapter | Where-Object { $_.InterfaceAlias -match $virtual_name }
         If ($nic_network) {
@@ -177,6 +176,7 @@ $csv_network | Where-Object { $_.vNIC } | ForEach-Object {
             $nic_network | Rename-NetAdapter -NewName $virtual_name
         }
 
+        # set the virtual adapter DNS registration mode
         Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - checking network adapter DNS settings')
         If ($switch_name -eq 'Management') {
             Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - network adapter is management, enabling DNS registration')
