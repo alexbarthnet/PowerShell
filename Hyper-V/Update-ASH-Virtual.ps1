@@ -166,23 +166,41 @@ $csv_network | Where-Object { $_.vNIC } | ForEach-Object {
         If ($switch_name -ne 'Management') {
             Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - set virtual adapter to VLAN isolation mode with VLAN ID')
             $nic_virtual | Set-VMNetworkAdapterIsolation -IsolationMode VLAN -AllowUntaggedTraffic $true -DefaultIsolationID $virtual_vlan
-            $nic_virtual | Set-DnsClient -RegisterThisConnectionsAddress $false
         }
 
         # update the name of the network adapter to remove the vEthernet nonsense
-        Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - setting network adapter name')
+        
         $nic_network = $null
-        $nic_network = Get-NetAdapter | Where-Object { $_.Name -match $virtual_name }
+        $nic_network = Get-NetAdapter | Where-Object { $_.InterfaceAlias -match $virtual_name }
         If ($nic_network) {
+            Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - setting network adapter name')
             $nic_network | Rename-NetAdapter -NewName $virtual_name
         }
 
-        # check the IP address on the networkadapter
-        If (($nic_network | Get-NetIPAddress -AddressFamily IPv4).IPv4Address -eq $virtual_addr) {
-            Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - network adapter address already set')
+        Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - checking network adapter DNS settings')
+        If ($switch_name -eq 'Management') {
+            Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - network adapter is management, enabling DNS registration')
+            $nic_network | Set-DnsClient -RegisterThisConnectionsAddress $true
         }
         Else {
-            Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - network adapter address not set, fixing...')
+            Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - network adapter not management, disabling DNS registration')
+            $nic_network | Set-DnsClient -RegisterThisConnectionsAddress $false
+        }
+
+        # check the IP address on the networkadapter
+        $nic_address = $null
+        $nic_address = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -match $virtual_name }
+        If ($nic_address.IPv4Address -eq $virtual_addr) {
+            Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - correct network adapter address found, skipping...')
+        }
+        ElseIf ($nic_address.IPv4Address) {
+            Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - wrong network adapter address found: ' + $nic_address.IPv4Address + ', removing...')
+            $nic_address | Remove-NetIPAddress -Confirm:$false
+            Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - setting network adapter address...')
+            $nic_network | New-NetIPAddress -AddressFamily IPv4 -IPAddress $virtual_addr -PrefixLength $virtual_mask | Out-Null
+        }
+        Else {
+            Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - network adapter address not found, setting...')
             $nic_network | New-NetIPAddress -AddressFamily IPv4 -IPAddress $virtual_addr -PrefixLength $virtual_mask | Out-Null
         }
 
