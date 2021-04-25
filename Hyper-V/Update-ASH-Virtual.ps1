@@ -174,6 +174,8 @@ $csv_network | Where-Object { $_.vNIC } | ForEach-Object {
         If ($nic_network) {
             Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - setting network adapter name')
             $nic_network | Rename-NetAdapter -NewName $virtual_name
+            Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - enabling RDMA on network adapter')
+            $nic_network | Enable-NetAdapterRdma
         }
 
         # set the virtual adapter DNS registration mode
