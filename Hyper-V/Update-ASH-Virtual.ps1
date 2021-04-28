@@ -160,10 +160,12 @@ $csv_network | Where-Object { $_.vNIC } | ForEach-Object {
             }
         }
 
-        # set the virtual adapter isolation mode
+        # set the virtual adapter VLAN modes
         Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - force virtual adapter to Untagged VLAN mode')
         $nic_virtual | Set-VMNetworkAdapterVlan -Untagged
         If ($switch_name -ne 'Management') {
+            Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - set virtual adapter to pass VLAN tags to switch')
+            $nic_virtual | Set-VMNetworkAdapter -IeeePriorityTag On
             Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - set virtual adapter to VLAN isolation mode with VLAN ID')
             $nic_virtual | Set-VMNetworkAdapterIsolation -IsolationMode VLAN -AllowUntaggedTraffic $true -DefaultIsolationID $virtual_vlan
         }
@@ -174,8 +176,12 @@ $csv_network | Where-Object { $_.vNIC } | ForEach-Object {
         If ($nic_network) {
             Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - setting network adapter name')
             $nic_network | Rename-NetAdapter -NewName $virtual_name
-            Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - enabling RDMA on network adapter')
-            $nic_network | Enable-NetAdapterRdma
+            If ($switch_name -ne 'Management') {
+                Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - enabling RDMA on non-management network adapter')
+                $nic_network | Enable-NetAdapterRdma
+                Write-Host ($hostname_vm + ',' + $switch_name + ',' + $virtual_name + ' - enabling Jumbo Packets on non-management network adapter')
+                $nic_network | Get-NetAdapterAdvancedProperty -RegistryKeyword "*JumboPacket" | Set-NetAdapterAdvancedProperty -RegistryValue 9014
+            }
         }
 
         # set the virtual adapter DNS registration mode

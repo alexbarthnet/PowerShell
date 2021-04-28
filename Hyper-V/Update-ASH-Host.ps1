@@ -66,22 +66,23 @@ Set-VMHost -VirtualMachineMigrationPerformanceOption SMB
 # .. QoS guarantees 50% for storage: 12.5Gb/s or 1.5625GB/s
 # .. QoS guarantees 1% for cluster: 0.25Gb/s or 31.25MB/s
 # .. This leaves 49% for migration: 12.25Gb/s or 1.53125GB/s
-Write-Host ($hostname_vm + " - setting Live Migration bandwidth limit: 1.5GB")
-Set-SmbBandwidthLimit -Category LiveMigration -BytesPerSecond 1.5GB
+# setting to static 750MB to satisfy Validate-DCB
+Write-Host ($hostname_vm + " - setting Live Migration bandwidth limit: 750MB/s")
+Set-SmbBandwidthLimit -Category LiveMigration -BytesPerSecond 750MB
 
 # disable DCBx
 Write-Host ($hostname_vm + " - disabling DCBx")
 Set-NetQosDcbxSetting -Willing $False -Confirm:$false
 
-# check for SMB QoS policy
+# check for SMBDirect QoS policy
 Write-Host ($hostname_vm + " - checking QoS policy for Storage traffic")
-$qos_policy_smb = Get-NetQosPolicy | Where-Object {$_.Name -eq 'SMB'}
+$qos_policy_smb = Get-NetQosPolicy | Where-Object {$_.Name -eq 'SMBDirect'}
 If ($qos_policy_smb) {
     Write-Host ($hostname_vm + " - setting QoS policy for Storage traffic")
-    Set-NetQosPolicy -Name 'SMB' -PriorityValue8021Action 3 -NetDirectPortMatchCondition 445    
+    Set-NetQosPolicy -Name 'SMBDirect' -PriorityValue8021Action 3 -NetDirectPortMatchCondition 445    
 } Else {
     Write-Host ($hostname_vm + " - creating QoS policy for Storage traffic")
-    New-NetQosPolicy -Name 'SMB' -PriorityValue8021Action 3 -NetDirectPortMatchCondition 445    
+    New-NetQosPolicy -Name 'SMBDirect' -PriorityValue8021Action 3 -NetDirectPortMatchCondition 445    
 }
 
 # check for Cluster QoS policy
@@ -95,15 +96,15 @@ If ($qos_policy_smb) {
     New-NetQosPolicy -Name 'Cluster' -PriorityValue8021Action 7 -Cluster
 }
 
-# check for SMB QoS traffic class
+# check for SMBDirect QoS traffic class
 Write-Host ($hostname_vm + " - checking QoS traffic class for Storage traffic")
-$qos_traffic_smb = Get-NetQosTrafficClass | Where-Object {$_.Name -eq 'SMB'}
+$qos_traffic_smb = Get-NetQosTrafficClass | Where-Object {$_.Name -eq 'SMBDirect'}
 If ($qos_traffic_smb) {
     Write-Host ($hostname_vm + " - setting QoS traffic class for Storage traffic")
-    Set-NetQosTrafficClass -Name 'SMB' -Priority 3 -BandwidthPercentage 50 -Algorithm ETS
+    Set-NetQosTrafficClass -Name 'SMBDirect' -Priority 3 -BandwidthPercentage 50 -Algorithm ETS
 } Else {
     Write-Host ($hostname_vm + " - creating QoS traffic class for Storage traffic")
-    New-NetQosTrafficClass -Name 'SMB' -Priority 3 -BandwidthPercentage 50 -Algorithm ETS
+    New-NetQosTrafficClass -Name 'SMBDirect' -Priority 3 -BandwidthPercentage 50 -Algorithm ETS
 }
 
 # check for Cluster QoS traffic class
