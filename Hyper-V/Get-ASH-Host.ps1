@@ -53,12 +53,12 @@ Import-Csv -Path $map_network | Sort-Object Host -Unique | ForEach-Object {
     Write-Host ($vm_name + ' - starting session...')
     $vm_options = New-PSSessionOption -OutputBufferingMode Drop
     $vm_session = Invoke-Command -ComputerName $vm_name -InDisconnectedSession -SessionOption $vm_options -ScriptBlock {
-        Set-Location $using:vm_make.PSPath
-        "======================== $(Get-Date -Format FileDateTime) ========================" | Out-File -FilePath '.\ash-net-review.txt' -Append
-        $using:out_adapters | Format-Table Name, DisplayName, DisplayValue | Out-File -FilePath '.\ash-net-review.txt' -Append
-        $using:out_vmhost | Format-Table Name, @{Label = 'LiveMigrate'; Expression = { $_.VirtualMachineMigrationEnabled } }, @{Label = 'LiveMigrate Auth'; Expression = { $_.VirtualMachineMigrationAuthenticationType } }, @{Label = 'LiveMigrate Type'; Expression = { $_.VirtualMachineMigrationPerformanceOption } }
-        $using:out_qospolicy | Format-Table Name, Owner, NetworkProfile, Template, PriorityValue, NetDirectPort | Out-File -FilePath '.\ash-net-review.txt' -Append
-        $using:out_qostraffic | Format-Table Name, PriorityFriendly, Bandwidth, Algorithm, PolicySet | Out-File -FilePath '.\ash-net-review.txt' -Append
+        $vm_review = ($using:vm_make.FullName + '.\ash-get-host.txt')
+        "======================== $(Get-Date -Format FileDateTime) ========================" | Out-File -FilePath $vm_review -Append
+        $using:out_adapters | Format-Table Name, InterfaceDescription, ifIndex, Status, MacAddress, LinkSpeed | Out-File -FilePath $vm_review -Append
+        $using:out_vmhost | Format-Table Name, @{Label = 'LiveMigrate'; Expression = { $_.VirtualMachineMigrationEnabled } }, @{Label = 'LiveMigrate Auth'; Expression = { $_.VirtualMachineMigrationAuthenticationType } }, @{Label = 'LiveMigrate Type'; Expression = { $_.VirtualMachineMigrationPerformanceOption } } | Out-File -FilePath $vm_review -Append
+        $using:out_qospolicy | Format-Table Name, Owner, NetworkProfile, Template, PriorityValue, NetDirectPort | Out-File -FilePath $vm_review -Append
+        $using:out_qostraffic | Format-Table Name, PriorityFriendly, Bandwidth, Algorithm, PolicySet | Out-File -FilePath $vm_review -Append
     }
 
     # declare session name
@@ -69,6 +69,6 @@ Import-Csv -Path $map_network | Sort-Object Host -Unique | ForEach-Object {
 Write-Host ''
 Write-Host '======================== Results ========================'
 $log_adapters | Format-Table PSComputerName, Name, InterfaceDescription, ifIndex, Status, MacAddress, LinkSpeed
-$log_vmhost | Format-Table PSComputerName, @{Label = 'LM Enabled'; Expression = { $_.VirtualMachineMigrationEnabled } }, @{Label = 'LM Auth'; Expression = { $_.VirtualMachineMigrationAuthenticationType } }, @{Label = 'LM Type'; Expression = { $_.VirtualMachineMigrationPerformanceOption } }
+$log_vmhost | Format-Table PSComputerName, @{Label = 'LiveMigrate'; Expression = { $_.VirtualMachineMigrationEnabled } }, @{Label = 'LiveMigrate Auth'; Expression = { $_.VirtualMachineMigrationAuthenticationType } }, @{Label = 'LiveMigrate Type'; Expression = { $_.VirtualMachineMigrationPerformanceOption } }
 $log_qospolicy | Format-Table PSComputerName, Name, Owner, Template, PriorityValue, NetDirectPort
 $log_qostraffic | Format-Table PSComputerName, Name, PriorityFriendly, Bandwidth, Algorithm, PolicySet

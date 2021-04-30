@@ -1,8 +1,12 @@
 # set the file locations
 $hostname_vm = [System.Net.Dns]::GetHostName().ToLower()
 $folder_temp = [System.Environment]::GetEnvironmentVariable('TEMP','Machine')
-$map_feature = ($folder_temp + '\hv-setup\ash-map-feature.txt')
-$log_feature = ($folder_temp + '\hv-setup\ash-log-features.txt')
+$path_hv_log = Join-Path -Path $folder_temp -ChildPath 'hv-setup'
+$map_feature = Join-Path -Path $path_hv_log -ChildPath 'ash-map-feature.txt'
+$log_feature = Join-Path -Path $path_hv_log -ChildPath 'ash-log-features.txt'
+
+# check path
+If (!(Test-Path -Path $path_hv_log)) {New-Item -ItemType Directory -Path $path_hv_log}
 
 # start logging
 Start-Transcript -Path $log_feature -Append -Force
@@ -29,7 +33,7 @@ Import-Csv -Path $map_feature | ForEach-Object {
 # install the roles
 If ($add_role) {
     Write-Host ($hostname_vm + " - installing features...")
-    Install-WindowsFeature -Name $add_role -IncludeManagementTools -Restart
+    Install-WindowsFeature -Name $add_role -IncludeAllSubFeature -IncludeManagementTools
 }
 
 # stop logging

@@ -1,8 +1,13 @@
 Feature
-Hyper-V
+BitLocker
 Data-Center-Bridging
 Failover-Clustering
-RSAT-AD-PowerShell
 FS-FileServer
 FS-Data-Deduplication
 FS-SMBBW
+GPMC
+Hyper-V
+Hyper-V-PowerShell
+RSAT-AD-Powershell
+RSAT-Clustering-PowerShell
+Storage-Replica

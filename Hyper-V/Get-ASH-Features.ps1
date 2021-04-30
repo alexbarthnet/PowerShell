@@ -37,16 +37,16 @@ Import-Csv -Path $map_network | Sort-Object Host -Unique | ForEach-Object {
     # run remote commands
     Write-Host ($vm_name + ' - running commands...')
     $log_feature += $out_feature = Invoke-Command -ComputerName $vm_name -ScriptBlock {
-        Get-WindowsFeature -Name $using:feature_set
+        Get-WindowsFeature -Name $using:feature_set | Sort-Object Name
     } 
 
     # run the scripts
     Write-Host ($vm_name + ' - starting session...')
     $vm_options = New-PSSessionOption -OutputBufferingMode Drop
     $vm_session = Invoke-Command -ComputerName $vm_name -InDisconnectedSession -SessionOption $vm_options -ScriptBlock {
-        Set-Location $using:vm_make.PSPath
-        "======================== $(Get-Date -Format FileDateTime) ========================" | Out-File -FilePath '.\ash-net-review.txt' -Append
-        $using:out_feature | Format-Table Name, InstallState | Out-File -FilePath '.\ash-net-review.txt' -Append
+        $vm_review = ($using:vm_make.FullName + '.\ash-get-feature.txt')
+        "======================== $(Get-Date -Format FileDateTime) ========================" | Out-File -FilePath $vm_review -Append
+        $using:out_feature | Format-Table Name, InstallState | Out-File -FilePath $vm_review -Append
     }
 
     # declare session name

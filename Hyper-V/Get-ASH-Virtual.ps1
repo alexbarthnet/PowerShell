@@ -1,8 +1,8 @@
 # set the file locations
 $map_network = '.\ASH\ash-map-network.txt'
-$local_review = '.\ash-get-virtual.txt'
 
 # clear arrays and create feature set
+$log_vswitch = @()
 $log_virtual = @()
 
 # process the cluster mapping file
@@ -35,37 +35,45 @@ Import-Csv -Path $map_network | Sort-Object Host -Unique | ForEach-Object {
 
     # run remote commands
     Write-Host ($vm_name + ' - running commands...')
+    $log_vswitch += $out_vswitch = Invoke-Command -ComputerName $vm_name -ScriptBlock {
+        Get-VMSwitch | Sort-Object Name | Select-Object Name, BandwidthReservationMode, EmbeddedTeamingEnabled, IOVEnabled, IOVSupport, IOVSupportReasons
+    } 
+
     $log_virtual += $out_virtual = Invoke-Command -ComputerName $vm_name -ScriptBlock {
         $vnic_out = @()
         $vnic_client = Get-DnsClient
         $vnic_route = Get-NetRoute -AddressFamily IPv4
         $vnic_addr = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.SkipAsSource -eq $false }
-        $vnic_list = Get-VMNetworkAdapter -ManagementOS
+        $vnic_list = Get-VMNetworkAdapter -ManagementOS | Sort-Object Name
+        $vnic_prop = Get-NetAdapterAdvancedProperty
         $vnic_list | ForEach-Object { 
             $vnic = $_; 
             $vnic_iso = $vnic | Get-VMNetworkAdapterIsolation
             $vnic_out += [pscustomobject]@{
-                Adapter    = $vnic.Name;
-                SwitchName = $vnic.SwitchName
-                IPAddress  = ($vnic_addr | Where-Object { $_.InterfaceAlias -eq $vnic.Name }).IPv4Address
-                Mask       = ($vnic_addr | Where-Object { $_.InterfaceAlias -eq $vnic.Name }).PrefixLength
-                Gateway    = ($vnic_route | Where-Object { $_.InterfaceAlias -eq $vnic.Name -and $_.DestinationPrefix -eq '0.0.0.0/0' }).NextHop
-                Register   = ($vnic_client | Where-Object { $_.InterfaceAlias -eq $vnic.Name }).RegisterThisConnectionsAddress
-                MacAddress = $vnic.MacAddress
-                Mode       = $vnic_iso.IsolationMode
-                Untagged   = $vnic_iso.AllowUntaggedTraffic
-                VLAN       = $vnic_iso.DefaultIsolationID
+                Adapter      = $vnic.Name;
+                SwitchName   = $vnic.SwitchName
+                MacAddress   = $vnic.MacAddress
+                VLAN         = $vnic_iso.DefaultIsolationID
+                Isolation    = $vnic_iso.IsolationMode
+                IPAddress    = ($vnic_addr | Where-Object { $_.InterfaceAlias -eq $vnic.Name }).IPv4Address
+                Mask         = ($vnic_addr | Where-Object { $_.InterfaceAlias -eq $vnic.Name }).PrefixLength
+                Gateway      = ($vnic_route | Where-Object { $_.InterfaceAlias -eq $vnic.Name -and $_.DestinationPrefix -eq '0.0.0.0/0' }).NextHop
+                Register     = ($vnic_client | Where-Object { $_.InterfaceAlias -eq $vnic.Name }).RegisterThisConnectionsAddress
+                Jumbo        = ($vnic_prop | Where-Object { $_.Name -eq $vnic.Name -and $_.RegistryKeyword -eq '*JumboPacket' }).DisplayValue
+                Rdma         = ($vnic_prop | Where-Object { $_.Name -eq $vnic.Name -and $_.RegistryKeyword -eq '*NetworkDirect' }).DisplayValue
+                IeeePriority = $vnic.IeeePriorityTag
             } 
         }
-        $vnic_out | Sort-Object IPAddress, Adapter, Jumbo
+        $vnic_out | Sort-Object Adapter
     }
     # run the scripts
     Write-Host ($vm_name + ' - starting session...')
     $vm_options = New-PSSessionOption -OutputBufferingMode Drop
     $vm_session = Invoke-Command -ComputerName $vm_name -InDisconnectedSession -SessionOption $vm_options -ScriptBlock {
-        Set-Location $using:vm_make.PSPath
-        "======================== $(Get-Date -Format FileDateTime) ========================" | Out-File -FilePath $local_review -Append
-        $using:out_virtual | Format-Table Adapter, SwitchName, MacAddress, IPAddress, Mask, Gateway, Register, Mode, Untagged, VLAN | Out-File -FilePath $local_review -Append
+        $vm_review = ($using:vm_make.FullName + '.\ash-get-physical.txt')
+        "======================== $(Get-Date -Format FileDateTime) ========================" | Out-File -FilePath $vm_review -Append
+        $using:out_vswitch | Format-Table Name, @{Label = 'BandwidthMode'; Expression = { $_.BandwidthReservationMode } }, @{Label = 'SET'; Expression = { $_.EmbeddedTeamingEnabled } }, IOVEnabled, IOVSupport, IOVSupportReasons | Out-File -FilePath $vm_review -Append
+        $using:out_virtual | Format-Table Adapter, SwitchName, MacAddress, VLAN, Isolation, IPAddress, Mask, Gateway, Register, Jumbo, Rdma, IeeePriority | Out-File -FilePath $vm_review -Append
     }
 
     # declare session name
@@ -75,4 +83,5 @@ Import-Csv -Path $map_network | Sort-Object Host -Unique | ForEach-Object {
 # declare results
 Write-Host ''
 Write-Host '======================== Results ========================'
-$log_virtual | Format-Table PSComputerName, Adapter, SwitchName, MacAddress, IPAddress, Mask, Gateway, Register, Mode, Untagged, VLAN
+$log_vswitch | Format-Table PSComputerName, Name, @{Label = 'BandwidthMode'; Expression = { $_.BandwidthReservationMode } }, @{Label = 'SET'; Expression = { $_.EmbeddedTeamingEnabled } }, IOVEnabled, IOVSupport, IOVSupportReasons
+$log_virtual | Format-Table PSComputerName, Adapter, SwitchName, MacAddress, VLAN, Isolation, IPAddress, Mask, Gateway, Register, Jumbo, Rdma, IeeePriority

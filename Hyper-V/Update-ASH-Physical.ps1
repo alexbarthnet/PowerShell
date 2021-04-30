@@ -1,13 +1,16 @@
 # set the file locations
 $hostname_vm = [System.Net.Dns]::GetHostName().ToLower()
 $folder_temp = [System.Environment]::GetEnvironmentVariable('TEMP','Machine')
-$map_network = ($folder_temp + '\hv-setup\ash-map-network.txt')
-$dns_servers = ($folder_temp + '\hv-setup\ash-dns-servers.txt')
-$log_address = ($folder_temp + '\hv-setup\ash-log-physical.txt')
+$path_hv_log = Join-Path -Path $folder_temp -ChildPath 'hv-setup'
+$log_network = Join-Path -Path $path_hv_log -ChildPath 'ash-log-physical.txt'
+$map_network = Join-Path -Path $path_hv_log -ChildPath 'ash-map-network.txt'
+$dns_servers = Join-Path -Path $path_hv_log -ChildPath 'ash-dns-servers.txt'
 
 # start logging
-Start-Transcript -Path $log_address -Append -Force
-$csv_imported = Import-Csv -Path $map_network
+Start-Transcript -Path $log_network -Append -Force
+
+# import CSVs
+$csv_network = Import-Csv -Path $map_network | Where-Object { $_.Host -eq $hostname_vm }
 
 # disable NetBT from all adapters
 Write-Host ("$hostname_vm - disabling NBT on all adapters")
@@ -34,20 +37,15 @@ $nic_ipv4 | Get-NetRoute | Where-Object {$_.DestinationPrefix -eq "0.0.0.0/0"} |
 
 # process the network mapping file - add phase
 Write-Host ("$hostname_vm - looping through intended IP addresses")
-$csv_imported | Where-Object {$_.Host -eq $hostname_vm} | ForEach-Object {
+$csv_network | ForEach-Object {
     $nic_name = $_.Adapter
     $nic_mode = $_.Mode
     $nic_addr = $_.Address
     $nic_mask = $_.Mask
     $nic_gway = $_.Gateway
 
-    # clear variables
-    $ip_already_set = $null
-    $nic_size = $null
-    $nic_exists = $null
-    $nic_bound = $null
-
     # check for IP addresses
+    $ip_already_set = $null
     $ip_already_set = Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -eq $nic_addr}
     If ($ip_already_set) {
         # IP found on NIC after IPs removed from physical NICs, IP likely on virtual NIC, exit loop
@@ -55,10 +53,12 @@ $csv_imported | Where-Object {$_.Host -eq $hostname_vm} | ForEach-Object {
     } Else {
         # IP not found on NIC, check if requested NIC exists    
         Write-Host ("$hostname_vm, $nic_name, $nic_addr - checking for nic...")
+        $nic_exists = $null
         $nic_exists = Get-NetAdapter -Physical | Where-Object {$_.InterfaceAlias -eq $nic_name} 
         If ($nic_exists) {
             # requested NIC found, check if requested NIC has IPv4 enabled
             Write-Host ("$hostname_vm, $nic_name, $nic_addr - NIC found, checking for IP bindings...")
+            $nic_bound = $null
             $nic_bound = $nic_exists | Get-NetAdapterBinding | Where-Object {$_.ComponentID -eq "ms_tcpip" -and $_.Enabled}
             If ($nic_bound) {
                 # requested NIC has IPv4 bound, set the IP address
@@ -88,6 +88,7 @@ $csv_imported | Where-Object {$_.Host -eq $hostname_vm} | ForEach-Object {
     }
 
     # update jumbo packet settings
+    $nic_size = $null
     $nic_size = Get-NetAdapterAdvancedProperty -Name $nic_name | Where-Object {$_.DisplayName -eq 'Jumbo Packet'}
     If ($nic_size -and $nic_mode -eq "Trunk") {
         Write-Host ("$hostname_vm, $nic_name, $nic_addr - Jumbo Packet found: " + $nic_size.DisplayValue)
@@ -102,11 +103,12 @@ $csv_imported | Where-Object {$_.Host -eq $hostname_vm} | ForEach-Object {
     }
 
     # update RDMA settings
-    $nic_rdma = Get-NetAdapterAdvancedProperty -Name $nic_name | Where-Object {$_.DisplayName -eq 'NetworkDirect Technology'}
-    If ($nic_rdma) {
+    $nic_tech = $null
+    $nic_tech = Get-NetAdapterAdvancedProperty -Name $nic_name | Where-Object {$_.DisplayName -eq 'NetworkDirect Technology'}
+    If ($nic_tech) {
         # check for VLAN settings on NIC
-        Write-Host ("$hostname_vm, $nic_name, $nic_addr - RDMA found: " + $nic_rdma.DisplayValue)
-        If ($nic_rdma.DisplayValue -ne "iWARP") {
+        Write-Host ("$hostname_vm, $nic_name, $nic_addr - RDMA found: " + $nic_tech.DisplayValue)
+        If ($nic_tech.DisplayValue -ne "iWARP") {
             Write-Host ("$hostname_vm, $nic_name, $nic_addr - RDMA not set to 'iWARP', fixing...")
             Set-NetAdapterAdvancedProperty -Name $nic_name -DisplayName 'NetworkDirect Technology' -DisplayValue 'iWARP'
         } Else {
@@ -115,6 +117,20 @@ $csv_imported | Where-Object {$_.Host -eq $hostname_vm} | ForEach-Object {
     } Else {
         Write-Host ("$hostname_vm, $nic_name, $nic_addr - RDMA not found")
     }
+
+    # enable RDMA name on the network adapter
+    $nic_rdma = $null
+    $nic_rdma = Get-NetAdapterRdma | Where-Object { $_.Name -match $nic_name }
+    If ($nic_rdma) {
+        If ($nic_rdma.Enabled) {
+            Write-Host ("$hostname_vm, $nic_name, $nic_addr - RDMA enabled")
+        }
+        Else {
+            Write-Host ("$hostname_vm, $nic_name, $nic_addr - RDMA not enabled, fixing...")
+            $nic_rdma | Enable-NetAdapterRdma
+            Start-Sleep -Seconds 15
+        }
+    }    
 }
 
 # stop logging
