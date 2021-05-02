@@ -89,12 +89,12 @@ $csv_network | ForEach-Object {
 
     # update jumbo packet settings
     $nic_size = $null
-    $nic_size = Get-NetAdapterAdvancedProperty -Name $nic_name | Where-Object {$_.DisplayName -eq 'Jumbo Packet'}
+    $nic_size = Get-NetAdapterAdvancedProperty -Name $nic_name | Where-Object {$_.RegistryKeyword -eq '*JumboPacket'}
     If ($nic_size -and $nic_mode -eq "Trunk") {
         Write-Host ("$hostname_vm, $nic_name, $nic_addr - Jumbo Packet found: " + $nic_size.DisplayValue)
-        If ($nic_size.DisplayValue -ne "9014") {
+        If ($nic_size.RegistryValue -ne 9014) {
             Write-Host ("$hostname_vm, $nic_name, $nic_addr - Jumbo Packet not set to '9014', fixing...")
-            Set-NetAdapterAdvancedProperty -Name $nic_name -DisplayName 'Jumbo Packet' -DisplayValue '9014'    
+            Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*JumboPacket' -RegistryValue 9014    
         } Else {
             Write-Host ("$hostname_vm, $nic_name, $nic_addr - Jumbo Packet set to '9014'")
         }
@@ -104,13 +104,13 @@ $csv_network | ForEach-Object {
 
     # update RDMA settings
     $nic_tech = $null
-    $nic_tech = Get-NetAdapterAdvancedProperty -Name $nic_name | Where-Object {$_.DisplayName -eq 'NetworkDirect Technology'}
+    $nic_tech = Get-NetAdapterAdvancedProperty -Name $nic_name | Where-Object {$_.RegistryKeyword -eq '*NetworkDirectTechnology'}
     If ($nic_tech) {
         # check for VLAN settings on NIC
         Write-Host ("$hostname_vm, $nic_name, $nic_addr - RDMA found: " + $nic_tech.DisplayValue)
-        If ($nic_tech.DisplayValue -ne "iWARP") {
+        If ($nic_tech.RegistryValue -ne 1) {
             Write-Host ("$hostname_vm, $nic_name, $nic_addr - RDMA not set to 'iWARP', fixing...")
-            Set-NetAdapterAdvancedProperty -Name $nic_name -DisplayName 'NetworkDirect Technology' -DisplayValue 'iWARP'
+            Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*NetworkDirectTechnology' -RegistryValue 1
         } Else {
             Write-Host ("$hostname_vm, $nic_name, $nic_addr - RDMA set to 'iWARP'")
         }
@@ -118,7 +118,7 @@ $csv_network | ForEach-Object {
         Write-Host ("$hostname_vm, $nic_name, $nic_addr - RDMA not found")
     }
 
-    # enable RDMA name on the network adapter
+    # enable RDMA on the network adapter
     $nic_rdma = $null
     $nic_rdma = Get-NetAdapterRdma | Where-Object { $_.Name -match $nic_name }
     If ($nic_rdma) {
@@ -131,6 +131,20 @@ $csv_network | ForEach-Object {
             Start-Sleep -Seconds 15
         }
     }    
+
+    # enable QoS on the network adapter
+    $nic_qos = $null
+    $nic_qos = Get-NetAdapterQos | Where-Object { $_.Name -match $virtual_name }
+    If ($nic_qos) {
+        If ($nic_qos.Enabled) {
+            Write-Host ("$hostname_vm,$switch_name,$virtual_name - QoS enabled")
+        }
+        Else {
+            Write-Host ("$hostname_vm,$switch_name,$virtual_name - QoS not enabled, fixing...")
+            $nic_qos | Enable-NetAdapterQos
+            Start-Sleep -Seconds 15
+        }
+    }
 }
 
 # stop logging

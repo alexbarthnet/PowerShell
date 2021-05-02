@@ -45,7 +45,6 @@ Import-Csv -Path $ash_map_cluster | ForEach-Object {
         Write-Host ($env:computername.ToLower() + ",$vm_name - creating VM")
         $vm = New-VM -Computer $hv_name -VMName $vm_name -Generation 2 -MemoryStartupBytes $vm_ram -VHDPath $hd_path_os -SwitchName $hv_switch
         $vm | Set-VMProcessor -Count 4 -ExposeVirtualizationExtensions $true
- 
     }
     Catch {
         Write-Host ($env:computername.ToLower() + ",$vm_name - creating VM - ERROR")

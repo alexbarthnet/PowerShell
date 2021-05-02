@@ -192,7 +192,7 @@ $csv_network | Where-Object { $_.vNIC } | ForEach-Object {
             }
         }
 
-        # enable RDMA name on the network adapter
+        # enable RDMA on the network adapter
         $nic_rdma = $null
         $nic_rdma = Get-NetAdapterRdma | Where-Object { $_.Name -match $virtual_name }
         If ($nic_rdma) {
@@ -202,6 +202,20 @@ $csv_network | Where-Object { $_.vNIC } | ForEach-Object {
             Else {
                 Write-Host ("$hostname_vm,$switch_name,$virtual_name - network adapter is not RDMA enabled, fixing...")
                 $nic_rdma | Enable-NetAdapterRdma
+                Start-Sleep -Seconds 15
+            }
+        }
+
+        # enable QoS on the network adapter
+        $nic_qos = $null
+        $nic_qos = Get-NetAdapterQos | Where-Object { $_.Name -match $virtual_name }
+        If ($nic_qos) {
+            If ($nic_qos.Enabled) {
+                Write-Host ("$hostname_vm,$switch_name,$virtual_name - network adapter is QoS enabled")
+            }
+            Else {
+                Write-Host ("$hostname_vm,$switch_name,$virtual_name - network adapter is not QoS enabled, fixing...")
+                $nic_qos | Enable-NetAdapterQos
                 Start-Sleep -Seconds 15
             }
         }
