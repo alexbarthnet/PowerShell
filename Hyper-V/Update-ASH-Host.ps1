@@ -58,6 +58,14 @@ Get-NetAdapter | Where-Object { $_.HardwareInterface } | Sort-Object InterfaceAl
     }
 }
 
+# configure Live Migration to allow 4 concurrent Live Migrations
+Write-Host ($hostname_vm + ' - disabling NUMA Spanning')
+Set-VMHost -NumaSpanningEnabled $false
+
+# configure Live Migration to allow 4 concurrent Live Migrations
+Write-Host ($hostname_vm + ' - disabling Enhanced Session Mode')
+Set-VMHost -EnableEnhancedSessionMode $false
+
 # determine live migration bandwidth limit
 $nic_speed = $null
 $nic_speed = (Get-NetAdapter -Physical | Sort-Object Speed | Select-Object -Last 1).Speed
@@ -77,14 +85,6 @@ Write-Host ($hostname_vm + ' - setting Live Migration bandwidth limit: ' + $smb_
 Set-SmbBandwidthLimit -Category LiveMigration -BytesPerSecond ($smb_limit * 1MB)
 
 # configure Live Migration to allow 4 concurrent Live Migrations
-Write-Host ($hostname_vm + ' - disabling NUMA Spanning')
-Set-VMHost -NumaSpanningEnabled $false
-
-# configure Live Migration to allow 4 concurrent Live Migrations
-Write-Host ($hostname_vm + ' - disabling Enhanced Session Mode')
-Set-VMHost -EnableEnhancedSessionMode $false
-
-# configure Live Migration to allow 4 concurrent Live Migrations
 Write-Host ($hostname_vm + ' - setting Live Migration concurrence: 4')
 Set-VMHost -MaximumVirtualMachineMigrations 4
 
@@ -101,7 +101,7 @@ Write-Host ($hostname_vm + ' - enabling Live Migration')
 Enable-VMMigration
 
 # disable DCBx
-Write-Host ($hostname_vm + ' - setting QoS DCBx Willing mode: Disabled')
+Write-Host ($hostname_vm + ' - disabling QoS DCBx Willing mode')
 Set-NetQosDcbxSetting -Willing $False -Confirm:$false
 
 # check for SMBDirect QoS policy
