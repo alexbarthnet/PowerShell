@@ -19,8 +19,11 @@ Get-NetAdapter | Where-Object { $_.HardwareInterface } | Sort-Object InterfaceAl
     # try to build the name from slot and port information
     $nic_hwi = ($_ | Get-NetAdapterHardwareInfo -ErrorAction SilentlyContinue)
     If ($nic_hwi.SlotNumber) {
-        $nic_new = ('SLOT ' + $nic_hwi.SlotNumber + ' Port ' + ($nic_hwi.FunctionNumber + 1))
+        $nic_new = ('Slot ' + $nic_hwi.SlotNumber + ' Port ' + ($nic_hwi.FunctionNumber + 1))
         $nic_new_via = 'slot/port number'
+    } Else {
+        $nic_new = ('Port ' + ($nic_hwi.FunctionNumber + 1))
+        $nic_new_via = 'port number'
     }
  
     # try to build the name from PCI device label
@@ -55,18 +58,6 @@ Get-NetAdapter | Where-Object { $_.HardwareInterface } | Sort-Object InterfaceAl
     }
 }
 
-# enable Live Migration
-Write-Host ($hostname_vm + ' - enabling Live Migration')
-Enable-VMMigration
-
-# configure Live Migration to use Kerberos
-Write-Host ($hostname_vm + ' - setting Live Migration authentication: Kerberos')
-Set-VMHost -VirtualMachineMigrationAuthenticationType Kerberos
-
-# configure Live Migration to use SMB
-Write-Host ($hostname_vm + ' - setting Live Migration transfer type: SMB')
-Set-VMHost -VirtualMachineMigrationPerformanceOption SMB
-
 # determine live migration bandwidth limit
 $nic_speed = $null
 $nic_speed = (Get-NetAdapter -Physical | Sort-Object Speed | Select-Object -Last 1).Speed
@@ -84,6 +75,30 @@ Else {
 # set live migration bandwidth limit
 Write-Host ($hostname_vm + ' - setting Live Migration bandwidth limit: ' + $smb_limit.ToString() + 'MB/s')
 Set-SmbBandwidthLimit -Category LiveMigration -BytesPerSecond ($smb_limit * 1MB)
+
+# configure Live Migration to allow 4 concurrent Live Migrations
+Write-Host ($hostname_vm + ' - disabling NUMA Spanning')
+Set-VMHost -NumaSpanningEnabled $false
+
+# configure Live Migration to allow 4 concurrent Live Migrations
+Write-Host ($hostname_vm + ' - disabling Enhanced Session Mode')
+Set-VMHost -EnableEnhancedSessionMode $false
+
+# configure Live Migration to allow 4 concurrent Live Migrations
+Write-Host ($hostname_vm + ' - setting Live Migration concurrence: 4')
+Set-VMHost -MaximumVirtualMachineMigrations 4
+
+# configure Live Migration to use Kerberos
+Write-Host ($hostname_vm + ' - setting Live Migration authentication: Kerberos')
+Set-VMHost -VirtualMachineMigrationAuthenticationType Kerberos
+
+# configure Live Migration to use SMB
+Write-Host ($hostname_vm + ' - setting Live Migration transfer type: SMB')
+Set-VMHost -VirtualMachineMigrationPerformanceOption SMB
+
+# enable Live Migration
+Write-Host ($hostname_vm + ' - enabling Live Migration')
+Enable-VMMigration
 
 # disable DCBx
 Write-Host ($hostname_vm + ' - setting QoS DCBx Willing mode: Disabled')
@@ -139,7 +154,7 @@ Else {
 
 # check for Default QoS policy
 Write-Host ($hostname_vm + ' - checking Default QoS policy')
-$qos_policy_default = Get-NetQosPolicy | Where-Object { $_.Name -eq 'Default' -and $_.PriorityValue -and 0 -or $_.Template -and 'Default' }
+$qos_policy_default = Get-NetQosPolicy | Where-Object { $_.Name -eq 'Default' -and $_.PriorityValue -eq 0 -and $_.Template -eq 'Default' }
 If ($qos_policy_default) {
     Write-Host ($hostname_vm + ' - verified Default QoS policy')
 }
@@ -211,12 +226,12 @@ Else {
 
 # check for Default QoS traffic class
 Write-Host ($hostname_vm + ' - checking Default QoS traffic class')
-$qos_traffic_default = Get-NetQosTrafficClass | Where-Object { $_.Name -eq 'Default' -and $_.Priority -eq 0 -and $_.Bandwidth -eq 49 -and $_.Algorithm -eq 'ETS' }
+$qos_traffic_default = Get-NetQosTrafficClass | Where-Object { $_.Name -match 'Default' -and $_.Priority -contains 0 -and $_.Bandwidth -eq 49 -and $_.Algorithm -eq 'ETS' }
 If ($qos_traffic_default) {
     Write-Host ($hostname_vm + ' - verified Default QoS traffic class')
 }
 Else {
-    $qos_traffic_default = Get-NetQosTrafficClass | Where-Object { $_.Name -eq 'Default' -and $_.Priority -eq 0 -and $_.Bandwidth -lt 49 -and $_.Algorithm -eq 'ETS' }
+    $qos_traffic_default = Get-NetQosTrafficClass | Where-Object { $_.Name -match 'Default' -and $_.Priority -contains 0 -and $_.Bandwidth -lt 49 -and $_.Algorithm -eq 'ETS' }
     If ($qos_traffic_default) {
         Write-Host ($hostname_vm + ' - found Default QoS traffic class with unexpected bandwidth reservation: ' + $qos_traffic_default.Bandwidth)
         Write-Host ($hostname_vm + ' - ... the default QoS configuration for S2D should reserve 49% of bandwidth')
