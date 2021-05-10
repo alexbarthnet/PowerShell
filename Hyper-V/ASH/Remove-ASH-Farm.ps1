@@ -47,6 +47,11 @@ Import-Csv -Path $ash_map_cluster | ForEach-Object {
         Write-Host ($env:computername.ToLower() + ",$vm_name - ...VM not found")
     }
 
+    # rotate CSVs to clear any locks
+    Write-Host ($env:computername.ToLower() + ",$vm_name - moving CSVs to unlock VM files...")
+    Get-ClusterSharedVolume -Cluster $hv_cluster | Move-ClusterSharedVolume | Out-Null
+    Write-Host ($env:computername.ToLower() + ",$vm_name - ...CSVs moved")
+
     # clean up hard drives
     Write-Host ($env:computername.ToLower() + ",$vm_name - checking for VM files on host")
     $hd_path = ("\\" + $hv_host + "\" + (Get-VMHost -ComputerName $hv_host).VirtualHardDiskPath -replace '\:','$')

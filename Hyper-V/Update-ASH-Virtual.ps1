@@ -16,7 +16,7 @@ $csv_network = Import-Csv -Path $map_network | Where-Object { $_.Host -eq $hostn
 
 # check for the cluster
 $cluster = $null
-$cluster = Get-Cluster
+$cluster = Get-Service | Where-Object { $_.Name -eq 'ClusSvc' -and $_.StartType -ne "Disabled"}
 If ($cluster) {
     Write-Host ("$hostname_vm - cluster found, will create management switch and virtual adapters")
 }
@@ -83,7 +83,7 @@ $csv_network | Sort-Object Switch -Unique | ForEach-Object {
                 $nic_mgmt = Get-VMNetworkAdapter -ManagementOS | Where-Object { $_.SwitchName -eq $switch_name }
                 # look for network adapters attached to the management switch...
                 If ($nic_mgmt) {
-                    Write-Host ("$hostname_vm,$switch_name - found " + $nic_mgmt.Count + " management adapter(s)")
+                    Write-Host ("$hostname_vm,$switch_name - found " + $nic_mgmt.Count + ' management adapter(s)')
                 }
                 Else {
                     # if no, create a network adapter
@@ -153,14 +153,14 @@ $csv_network | Where-Object { $_.vNIC } | ForEach-Object {
             $nic_virtual = Get-VMNetworkAdapter -ManagementOS | Where-Object { $_.Name -match $switch_name } | Select-Object -First 1
             If ($nic_virtual) {
                 # update virtual adapter after being found by switch name
-                Write-Host ("$hostname_vm,$switch_name,$virtual_name - virtual adapter found by switch, renaming network adapter...")
-                $nic_virtual | Rename-VMNetworkAdapter -NewName $virtual_name
+                Write-Host ("$hostname_vm,$switch_name,$virtual_name - Virtual adapter found by switch, renaming network adapter...")
+                $nic_virtual = $nic_virtual | Rename-VMNetworkAdapter -NewName $virtual_name -PassThru
             }
             Else {
                 # create virtual adapter after being found by switch name
                 Write-Host ("$hostname_vm,$switch_name,$virtual_name - virtual adapter not found by switch, creating then renaming...")
                 $nic_virtual = Add-VMNetworkAdapter -ManagementOS -SwitchName $switch_name -Name $switch_name -PassThru
-                $nic_virtual | Rename-VMNetworkAdapter -NewName $virtual_name
+                $nic_virtual = $nic_virtual | Rename-VMNetworkAdapter -NewName $virtual_name -PassThru
             }
         }
 
@@ -178,43 +178,87 @@ $csv_network | Where-Object { $_.vNIC } | ForEach-Object {
         $nic_network = $null
         $nic_network = Get-NetAdapter | Where-Object { $_.InterfaceAlias -match $virtual_name }
         If ($nic_network) {
-            Write-Host ("$hostname_vm,$switch_name,$virtual_name - setting network adapter name")
-            $nic_network | Rename-NetAdapter -NewName $virtual_name
+            # check complete name of network adapter
+            If ($nic_network.InterfaceAlias -eq $virtual_name) {
+                Write-Host ("$hostname_vm,$switch_name,$virtual_name - Network adapter name is correct")
+            }
+            Else {
+                Write-Host ("$hostname_vm,$switch_name,$virtual_name - Network adapter name is almost correct, fixing...")
+                $nic_network = $nic_network | Rename-NetAdapter -NewName $virtual_name -PassThru
+            }
+            # check for DNS registration
             If ($switch_name -eq 'Management') {
-                Write-Host ("$hostname_vm,$switch_name,$virtual_name - network adapter is management, enabling DNS registration")
+                Write-Host ("$hostname_vm,$switch_name,$virtual_name - DNS registration enabled for management NIC")
                 $nic_network | Set-DnsClient -RegisterThisConnectionsAddress $true
             }
             Else {
-                Write-Host ("$hostname_vm,$switch_name,$virtual_name - network adapter not management, disabling DNS registration")
+                Write-Host ("$hostname_vm,$switch_name,$virtual_name - DNS registration disabled for non-management NIC")
                 $nic_network | Set-DnsClient -RegisterThisConnectionsAddress $false
-                Write-Host ("$hostname_vm,$switch_name,$virtual_name - network adapter not management, setting Jumbo Packet size")
-                $nic_network | Get-NetAdapterAdvancedProperty -RegistryKeyword '*JumboPacket' | Set-NetAdapterAdvancedProperty -RegistryValue 9014
             }
         }
 
-        # enable RDMA on the network adapter
+        # check jumbo packet settings
+        $nic_size = $null
+        $nic_size = Get-NetAdapterAdvancedProperty | Where-Object { $_.Name -eq $virtual_name -and $_.RegistryKeyword -eq '*JumboPacket' }
+        If ($nic_size) {
+            Write-Host ("$hostname_vm,$switch_name,$virtual_name - Jumbo Packet found: " + $nic_size.DisplayValue)
+            If ($nic_size.RegistryValue -ne 9014 -and $virtual_name -notmatch 'Manage') {
+                Write-Host ("$hostname_vm,$switch_name,$virtual_name - Jumbo Packet on non-Management NIC not set to '9014', fixing...")
+                Set-NetAdapterAdvancedProperty -Name $virtual_name -RegistryKeyword '*JumboPacket' -RegistryValue 9014    
+            }
+        }
+        Else {
+            Write-Host ("$hostname_vm,$switch_name,$virtual_name - Jumbo Packet not found")
+        }
+
+        # check RDMA technology
+        $nic_tech = $null
+        $nic_tech = Get-NetAdapterAdvancedProperty | Where-Object { $_.Name -eq $virtual_name -and $_.RegistryKeyword -eq '*NetworkDirectTechnology' }
+        If ($nic_tech) {
+            $nic_rdma_on = $true
+            Write-Host ("$hostname_vm,$switch_name,$virtual_name - RDMA Technology found: " + $nic_tech.DisplayValue)
+            # check for iWARP
+            If ($nic_tech.RegistryValue -ne 1) {
+                Write-Host ("$hostname_vm,$switch_name,$virtual_name - RDMA Technology not set to 'iWARP', fixing...")
+                Set-NetAdapterAdvancedProperty -Name $virtual_name -RegistryKeyword '*NetworkDirectTechnology' -RegistryValue 1
+            }
+        }
+        Else {
+            $nic_rdma_on = $false
+            Write-Host ("$hostname_vm,$switch_name,$virtual_name - RDMA Technology not found")
+        }
+
+        # check RDMA state on NIC
         $nic_rdma = $null
         $nic_rdma = Get-NetAdapterRdma | Where-Object { $_.Name -match $virtual_name }
         If ($nic_rdma) {
-            If ($nic_rdma.Enabled) {
-                Write-Host ("$hostname_vm,$switch_name,$virtual_name - network adapter is RDMA enabled")
+            If ($nic_rdma.Enabled -and $nic_rdma_on) {
+                Write-Host ("$hostname_vm,$switch_name,$virtual_name - RDMA enabled")
             }
-            Else {
-                Write-Host ("$hostname_vm,$switch_name,$virtual_name - network adapter is not RDMA enabled, fixing...")
+            ElseIf ($nic_rdma_on) {
+                Write-Host ("$hostname_vm,$switch_name,$virtual_name - RDMA supported and not enabled, fixing...")
                 $nic_rdma | Enable-NetAdapterRdma
                 Start-Sleep -Seconds 15
             }
-        }
+            ElseIf ($nic_rdma.Enabled) {
+                Write-Host ("$hostname_vm,$switch_name,$virtual_name - RDMA not supported and enabled, fixing...")
+                $nic_rdma | Disable-NetAdapterRdma
+                Start-Sleep -Seconds 15
+            }
+            Else {
+                Write-Host ("$hostname_vm,$switch_name,$virtual_name - RDMA not enabled")
+            }
+        }    
 
         # enable QoS on the network adapter
         $nic_qos = $null
         $nic_qos = Get-NetAdapterQos | Where-Object { $_.Name -match $virtual_name }
         If ($nic_qos) {
             If ($nic_qos.Enabled) {
-                Write-Host ("$hostname_vm,$switch_name,$virtual_name - network adapter is QoS enabled")
+                Write-Host ("$hostname_vm,$switch_name,$virtual_name - QoS enabled")
             }
             Else {
-                Write-Host ("$hostname_vm,$switch_name,$virtual_name - network adapter is not QoS enabled, fixing...")
+                Write-Host ("$hostname_vm,$switch_name,$virtual_name - QoS disabled, fixing...")
                 $nic_qos | Enable-NetAdapterQos
                 Start-Sleep -Seconds 15
             }
@@ -224,21 +268,20 @@ $csv_network | Where-Object { $_.vNIC } | ForEach-Object {
         $nic_address = $null
         $nic_address = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -match $virtual_name }).IPv4Address
         If ($nic_address -eq $virtual_addr) {
-            Write-Host ("$hostname_vm,$switch_name,$virtual_name - correct network adapter address found, skipping...")
+            Write-Host ("$hostname_vm,$switch_name,$virtual_name - IP address correct, skipping...")
         }
         ElseIf ($nic_address) {
-            Write-Host ("$hostname_vm,$switch_name,$virtual_name - wrong network adapter address found: " + $nic_address)
+            Write-Host ("$hostname_vm,$switch_name,$virtual_name - IP address incorrect, fixing...")
             $nic_address | Remove-NetIPAddress -Confirm:$false
-            Write-Host ("$hostname_vm,$switch_name,$virtual_name - resetting network adapter address...")
             $nic_network | New-NetIPAddress -AddressFamily IPv4 -IPAddress $virtual_addr -PrefixLength $virtual_mask | Out-Null
         }
         Else {
-            Write-Host ("$hostname_vm,$switch_name,$virtual_name - network adapter address not found, setting...")
+            Write-Host ("$hostname_vm,$switch_name,$virtual_name - IP address missing, setting...")
             $nic_network | New-NetIPAddress -AddressFamily IPv4 -IPAddress $virtual_addr -PrefixLength $virtual_mask | Out-Null
         }
 
         # force set the team mapping
-        Write-Host ("$hostname_vm,$switch_name,$virtual_name - setting team mapping...")
+        Write-Host ("$hostname_vm,$switch_name,$virtual_name - Team mapping configured")
         Set-VMNetworkAdapterTeamMapping -ManagementOS -VMNetworkAdapterName $virtual_name -PhysicalNetAdapterName $adapter_name
     }
     Else {

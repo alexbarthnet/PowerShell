@@ -183,7 +183,7 @@ If ($qos_traffic_storage) {
     Write-Host ($hostname_vm + ' - verified SMBDirect QoS traffic class')
 }
 Else {
-    $qos_traffic_storage = Get-NetQosTrafficClass | Where-Object { $_.Name -eq 'SMBDirect' -or $_.Priority -eq 3 }
+    $qos_traffic_storage = Get-NetQosTrafficClass | Where-Object { $_.Name -eq 'SMBDirect' -or $_.Priority -eq 3 } | Where-Object {$_.Name -notmatch "Default"}
     If ($qos_traffic_storage) {
         $qos_traffic_storage | ForEach-Object {
             If ($_.Name -ne 'SMBDirect' -or $_.Priority -ne 3 -or $_.Bandwidth -ne 50 -or $_.Algorithm -ne 'ETS') {
@@ -207,7 +207,7 @@ If ($qos_traffic_cluster) {
     Write-Host ($hostname_vm + ' - verified Cluster QoS traffic class')
 }
 Else {
-    $qos_traffic_cluster = Get-NetQosTrafficClass | Where-Object { $_.Name -eq 'Cluster' -or $_.Priority -eq 7 }
+    $qos_traffic_cluster = Get-NetQosTrafficClass | Where-Object { $_.Name -eq 'Cluster' -or $_.Priority -eq 7 } | Where-Object {$_.Name -notmatch "Default"}
     If ($qos_traffic_cluster) {
         $qos_traffic_cluster | ForEach-Object {
             If ($_.Name -ne 'Cluster' -or $_.Priority -ne 7 -or $_.Bandwidth -ne 1 -or $_.Algorithm -ne 'ETS') {
