@@ -1,0 +1,8 @@
+{
+    "Subject":  "_default",
+    "Storage":  "\\\\alexbarth.net\\sysvol\\alexbarth.net\\certificates",
+    "Targets":  [
+                    "Domain Admins",
+                    "Domain Users"
+                ]
+}

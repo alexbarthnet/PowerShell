@@ -1,0 +1,7 @@
+*.csv
+*.dat
+*.exe
+*.txt
+ADFeed/*
+Archived/*
+Downloads/*/

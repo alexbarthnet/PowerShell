@@ -1,5 +1,0 @@
-Feature
-Hyper-V
-Data-Center-Bridging
-Failover-Clustering
-RSAT-AD-PowerShell
