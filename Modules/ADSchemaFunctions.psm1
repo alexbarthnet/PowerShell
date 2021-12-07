@@ -15,7 +15,6 @@ Function Add-ADSchemaAttributes {
 		[uint16]$Count = 1,
 		[Parameter(Position = 5)][ValidateRange(0, 8191)]
 		[uint16]$SearchFlags = 0,
-		[switch]$Write,
 		[string]$Server = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().SchemaRoleOwner.Name,
 		[string]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema().Name
 	)
@@ -134,7 +133,6 @@ Function Add-ADSchemaAttributesToClass {
 		[uint16]$Suffix = 1,
 		[Parameter(Position = 4)][ValidateRange(1, 65535)]
 		[uint16]$Count = 1,
-		[switch]$Write,
 		[string]$Server = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().SchemaRoleOwner.Name,
 		[string]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema().Name
 	)
@@ -208,7 +206,6 @@ Function Add-ADSchemaClass {
 		[Parameter(Position = 3)][ValidateRange(1, 65535)]
 		[uint16]$Suffix = 1,
 		[switch]$IncludeSuffixInName,
-		[switch]$Write,
 		[string]$Server = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().SchemaRoleOwner.Name,
 		[string]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema().Name
 	)
@@ -301,7 +298,6 @@ Function Add-ADSchemaClassToParent {
 		[string]$Class,
 		[Parameter(Position = 1, Mandatory)]
 		[string]$ParentClass,
-		[switch]$Write,
 		[string]$Server = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().SchemaRoleOwner.Name,
 		[string]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema().Name
 	)
