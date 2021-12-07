@@ -1,7 +1,8 @@
+# ignore data files
 *.csv
 *.dat
-*.exe
 *.txt
-ADFeed/*
+# ignore archived files
 Archived/*
-Downloads/*/
+# ignore private files
+Private/*
