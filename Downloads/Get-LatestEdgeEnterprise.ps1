@@ -1,7 +1,8 @@
 [CmdletBinding()]
 Param (
-    [Parameter(Position = 0, Mandatory = $true)][ValidateScript({Test-Path -Path $_})]
-    [string]$Destination,
+    [Parameter(Position = 0)][ValidateScript({Test-Path -Path $_})]
+    [string]$Destination = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path,
+    [Parameter(Position = 1)]
     [switch]$Force
 )
 
@@ -22,44 +23,32 @@ $edge_pol_path = ($edge_json | Where-Object {$_.Product -eq "Policy"} | Select-O
 
 # do we have edge already and, if so, is it the same as current?
 If (Test-Path $edge_msi_file) {
-    If ($Force) {
-        Write-Host "Edge Enterprise X64 - Force set, downloading!"
-        $edge_msi_down = $true
-    }
-    ElseIf ($edge_msi_size -ne (Get-ItemProperty $edge_msi_file).Length) {
-        Write-Host "Edge Enterprise X64 - File sizes mismatch, downloading!"
-        $edge_msi_down = $true
+    If ($edge_msi_size -eq (Get-ItemProperty $edge_msi_file).Length -and -not $Force) {
+        Write-Host "Edge Enterprise X64 - skipping download!"
     }
     Else {
-        Write-Host "Edge Enterprise X64 - File sizes matched, skipping download!"
+        $edge_msi_down = $true
     }
 } 
-Else {
-    Write-Host "Edge Enterprise X64 - File not found, downloading!"
-    $edge_msi_down = $true
-}
 
 # do we have policy already and, if so, is it the same as current?
 If (Test-Path $edge_pol_file) {
-    If ($Force) {
-        Write-Host "Edge Template Files - Force set, downloading!"
-        $edge_pol_down = $true
-    } 
-    ElseIf ($edge_pol_size -ne (Get-ItemProperty $edge_pol_file).Length) {
-        Write-Host "Edge Template Files - File sizes mismatch, will download!"
-        $edge_pol_down = $true
+    If ($edge_pol_size -eq (Get-ItemProperty $edge_pol_file).Length -and -not $Force) {
+        Write-Host "Edge Template Files - skipping download!"
     }
     Else {
-        Write-Host "Edge Template Files - File sizes matched, skipping download!"
+        $edge_pol_down = $true
     }
-}
-Else {
-    Write-Host "Edge Template Files - File not found, downloading!"
-    $edge_pol_down = $true
 }
 
 # if we should get a new edge, get it!
-If ($edge_msi_down) {Invoke-WebRequest -Uri $edge_msi_path -OutFile $edge_msi_file}
+If ($Force -or $edge_msi_down) {
+    Write-Host "Edge Enterprise X64 - downloading!"
+    Invoke-WebRequest -Uri $edge_msi_path -OutFile $edge_msi_file
+}
 
 # if we should get a new policy, get it!
-If ($edge_pol_down) {Invoke-WebRequest -Uri $edge_pol_path -OutFile $edge_pol_file}
+If ($Force -or $edge_pol_down) {
+    Write-Host "Edge Template Files - downloading!"
+    Invoke-WebRequest -Uri $edge_pol_path -OutFile $edge_pol_file
+}
