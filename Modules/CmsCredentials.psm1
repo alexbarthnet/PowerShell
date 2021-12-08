@@ -23,6 +23,42 @@ ValidityPeriodUnits = "100"
 %szOID_ENHANCED_KEY_USAGE% = "{text}%szOID_DOCUMENT_ENCRYPTION%"
 "@
 
+Function ConvertTo-SecurityIdentifier {
+    [CmdletBinding()]
+    param (
+        [Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
+        [object]$Principal
+    )
+
+    # verify the input
+    If ($Principal -isnot [System.String] -and $Principal -is [System.Security.Principal.SecurityIdentifier]) {
+        $Principal = $Principal.Value
+    }
+
+    # translate principal to SID
+    Try {
+        # check for specific well-known SIDs or translate the SID
+        switch ($Principal) {
+            { ($_ -eq 'Windows Authorization Access Group') -or ($_ -eq "$([System.Environment]::UserDomainName)\Windows Authorization Access Group") } {
+                Return [System.Security.Principal.SecurityIdentifier]('S-1-5-32-560')
+            }
+            { ($_ -match 'S-1-\d{1,2}-\d*') } {
+                Return [System.Security.Principal.SecurityIdentifier]($Principal)
+            }
+            { $_ -match '^[\w\.-]*\\[\w\.-]*$' } {
+                Return ([System.Security.Principal.NTAccount]($Principal)).Translate([System.Security.Principal.SecurityIdentifier])
+            }
+            Default {
+                Return ([System.Security.Principal.NTAccount]([System.Environment]::UserDomainName, $Principal)).Translate([System.Security.Principal.SecurityIdentifier])
+            }
+        }
+    }
+    Catch {
+        # return error
+        Return $_
+    }
+}
+
 Function Get-CmsComputers {
     [CmdletBinding()]
     param (
@@ -258,8 +294,6 @@ Function Update-CmsCredentialAccess {
         [Parameter(Position = 1)]
         [string]$cms_target,
         [Parameter(Position = 2)]
-        [string]$cms_prefix,
-        [Parameter(Position = 3)]
         [string[]]$cms_principals
     )
 
@@ -277,13 +311,12 @@ Function Update-CmsCredentialAccess {
         Default {
             ForEach ($cms_principal in $cms_principals) {
                 Try {
-                    $cms_principal = (New-Object System.Security.Principal.NTAccount([System.Environment]::UserDomainName,$cms_principal))
-                    $cms_sids += $cms_principal.Translate([System.Security.Principal.SecurityIdentifier])
+                    $cms_sids += ConvertTo-SecurityIdentifier -Principal $cms_principal
                 }
                 Catch {
                     Write-Host ('WARNING: unable to translate principal to SID: ' + $cms_principal)
                 }
-            }        
+            }
         }
     }
 
@@ -492,12 +525,10 @@ Function Grant-CmsCredentialAccess {
         [Parameter(Position = 1, Mandatory = $True)]
         [string[]]$Principals,
         [Parameter(Position = 2)]
-        [string]$Prefix = 'cms',
-        [Parameter(Position = 3)]
         [string[]]$ComputerName,
-        [Parameter(Position = 4)]
+        [Parameter(Position = 3)]
         [string[]]$ClusterName,
-        [Parameter(Position = 5)]
+        [Parameter(Position = 4)]
         [switch]$Cluster
     )
 
@@ -509,7 +540,7 @@ Function Grant-CmsCredentialAccess {
     If ($CmsComputers.Count -gt 0) {
         ForEach ($CmsComputer in $CmsComputers) {
             Try {
-                Invoke-Command -ComputerName $CmsComputer -ScriptBlock ${function:Update-CmsCredentialAccess} -ArgumentList 'Grant', $Target, $Prefix, $Principals
+                Invoke-Command -ComputerName $CmsComputer -ScriptBlock ${function:Update-CmsCredentialAccess} -ArgumentList 'Grant', $Target, $Principals
             }
             Catch {
                 Write-Host "ERROR: could not grant credential access on '$CmsComputer'"
@@ -517,7 +548,7 @@ Function Grant-CmsCredentialAccess {
         }
     }
     Else {
-        Update-CmsCredentialAccess 'Grant' $Target $Prefix $Principals
+        Update-CmsCredentialAccess 'Grant' $Target $Principals
     }    
 }
 
@@ -527,12 +558,10 @@ Function Reset-CmsCredentialAccess {
         [Parameter(Position = 0, Mandatory = $True)]
         [string]$Target,
         [Parameter(Position = 1)]
-        [string]$Prefix = 'cms',
-        [Parameter(Position = 2)]
         [string[]]$ComputerName,
-        [Parameter(Position = 3)]
+        [Parameter(Position = 2)]
         [string[]]$ClusterName,
-        [Parameter(Position = 4)]
+        [Parameter(Position = 3)]
         [switch]$Cluster
     )
 
@@ -544,7 +573,7 @@ Function Reset-CmsCredentialAccess {
     If ($CmsComputers.Count -gt 0) {
         ForEach ($CmsComputer in $CmsComputers) {
             Try {
-                Invoke-Command -ComputerName $CmsComputer -ScriptBlock ${function:Update-CmsCredentialAccess} -ArgumentList 'Reset', $Target, $Prefix
+                Invoke-Command -ComputerName $CmsComputer -ScriptBlock ${function:Update-CmsCredentialAccess} -ArgumentList 'Reset', $Target
             }
             Catch {
                 Write-Host "ERROR: could not Reset credential access on '$CmsComputer'"
@@ -552,11 +581,48 @@ Function Reset-CmsCredentialAccess {
         }
     }
     Else {
-        Update-CmsCredentialAccess 'Reset' $Target $Prefix
+        Update-CmsCredentialAccess 'Reset' $Target
     }    
 }
 
 Function Revoke-CmsCredentialAccess {
+    <#
+    .SYNOPSIS
+    Revokes access to the private key protecting a CMS credential
+
+    .DESCRIPTION
+    Revokes read access to the prinvate key protecting a CMS credential. This function cannot revoke access to SYSTEM or the built-in Administrators.
+
+    .PARAMETER Target
+    Specifies the identity of the credentials.
+
+    .PARAMETER Principals
+    Specifies the prinicipals that will no longer have access to the credentials
+
+    .INPUTS
+    None. You cannot pipe objects to Revoke-CmsCredentialAccess.
+
+    .OUTPUTS
+    None.
+    or file name.
+
+    .EXAMPLE
+    PS> Revoke-CmsCredentialAccess -Target "testcredential" -Principals "DOMAIN\TestUser"
+
+    .EXAMPLE
+    PS> Revoke-CmsCredentialAccess -Target "testcredential" -Principals "DOMAIN\TestUser"
+
+    .EXAMPLE
+    PS> extension "File" "doc"
+    File.doc
+
+    .LINK
+    http://www.fabrikam.com/extension.html
+
+    .LINK
+    Set-Item
+    #>
+    
     [CmdletBinding()]
     Param(  
         [Parameter(Position = 0, Mandatory = $True)]
@@ -564,12 +630,10 @@ Function Revoke-CmsCredentialAccess {
         [Parameter(Position = 1, Mandatory = $True)]
         [string[]]$Principals,
         [Parameter(Position = 2)]
-        [string]$Prefix = 'cms',
-        [Parameter(Position = 3)]
         [string[]]$ComputerName,
-        [Parameter(Position = 4)]
+        [Parameter(Position = 3)]
         [string[]]$ClusterName,
-        [Parameter(Position = 5)]
+        [Parameter(Position = 4)]
         [switch]$Cluster
     )
     # get computer names
@@ -580,7 +644,7 @@ Function Revoke-CmsCredentialAccess {
     If ($CmsComputers.Count -gt 0) {
         ForEach ($CmsComputer in $CmsComputers) {
             Try {
-                Invoke-Command -ComputerName $CmsComputer -ScriptBlock ${function:Update-CmsCredentialAccess} -ArgumentList 'Revoke', $Target, $Prefix, $Principals
+                Invoke-Command -ComputerName $CmsComputer -ScriptBlock ${function:Update-CmsCredentialAccess} -ArgumentList 'Revoke', $Target, $Principals
             }
             Catch {
                 Write-Host "ERROR: could not revoke credential access on '$CmsComputer'"
@@ -588,7 +652,7 @@ Function Revoke-CmsCredentialAccess {
         }
     }
     Else {
-        Update-CmsCredentialAccess 'Revoke' $Target $Prefix $Principals
+        Update-CmsCredentialAccess 'Revoke' $Target $Principals
     }    
 }
 

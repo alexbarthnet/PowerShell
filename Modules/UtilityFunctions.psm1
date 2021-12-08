@@ -6,21 +6,25 @@ Function ConvertFrom-SecurityIdentifier {
     )
 
     # verify the input
-    If ($SID -isnot [System.Security.Principal.SecurityIdentifier]) {
-        If (($SID -is [System.String]) -and ($SID -match 'S-1-\d{1,2}-\d*')) {
-            $SID = [System.Security.Principal.SecurityIdentifier]($SID)
-        }
+    If ($SID -isnot [System.Security.Principal.SecurityIdentifier] -and $SID -is [System.String] -and $SID -match 'S-1-\d{1,2}-\d*') {
+        $SID = [System.Security.Principal.SecurityIdentifier]($SID)
     }
 
     # return the NTAccount
     Try {
-        # return value of NTAccount
-        $SID.Translate([System.Security.Principal.NTAccount]).Value
+        # return value for specific well-known SIDs or translate the SID
+        switch ($SID.Value) {
+            { $_ -eq 'S-1-5-32-560' } {
+                "$([System.Environment]::UserDomainName)\Windows Authorization Access Group"
+            }
+            Default {
+                $SID.Translate([System.Security.Principal.NTAccount]).Value
+            }
+        }
     }
     Catch {
-        # return null and declare
-        $null
-        Write-Host 'Could not translate SID'
+        # return error
+        Return $_
     }
 }
 
@@ -28,31 +32,35 @@ Function ConvertTo-SecurityIdentifier {
     [CmdletBinding()]
     param (
         [Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
-        [string]$Principal
+        [object]$Principal
     )
 
-    # check principal against well-known SIDs in the BUILTIN space
-    switch ($Principal) {
-        { ($_ -eq 'Windows Authorization Access Group') -or ($_ -eq "$([System.Environment]::UserDomainName)\Windows Authorization Access Group") } {
-            [System.Security.Principal.SecurityIdentifier]('S-1-5-32-560')
-        }
-        Default {
-            Try {
-                # convert a SID text string into a SID object
-                [System.Security.Principal.SecurityIdentifier]($Principal)
+    # verify the input
+    If ($Principal -isnot [System.String] -and $Principal -is [System.Security.Principal.SecurityIdentifier]) {
+        $Principal = $Principal.Value
+    }
+
+    # translate principal to SID
+    Try {
+        # check for specific well-known SIDs or translate the SID
+        switch ($Principal) {
+            { ($_ -eq 'Windows Authorization Access Group') -or ($_ -eq "$([System.Environment]::UserDomainName)\Windows Authorization Access Group") } {
+                Return [System.Security.Principal.SecurityIdentifier]('S-1-5-32-560')
             }
-            Catch {
-                Try {
-                    # convert an NT-style principal into a SID object
-                    ([System.Security.Principal.NTAccount]($Principal)).Translate([System.Security.Principal.SecurityIdentifier])
-                }
-                Catch {
-                    # return null and declare
-                    $null
-                    Write-Host 'Could not translate principal'
-                }
-            }        
+            { ($_ -match 'S-1-\d{1,2}-\d*') } {
+                Return [System.Security.Principal.SecurityIdentifier]($Principal)
+            }
+            { $_ -match '^[\w\.-]*\\[\w\.-]*$' } {
+                Return ([System.Security.Principal.NTAccount]($Principal)).Translate([System.Security.Principal.SecurityIdentifier])
+            }
+            Default {
+                Return ([System.Security.Principal.NTAccount]([System.Environment]::UserDomainName, $cms_principal)).Translate([System.Security.Principal.SecurityIdentifier])
+            }
         }
+    }
+    Catch {
+        # return error
+        Return $_
     }
 }
 
