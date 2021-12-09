@@ -58,7 +58,7 @@ Function Find-ADGroup {
 Function Update-ADMembers {
     [CmdletBinding(SupportsShouldProcess)]
     Param (
-        [Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ $_ -is [Microsoft.ActiveDirectory.Management.ADGroup] -or $_ -is [System.String] })]
+        [Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ $_ -is [Microsoft.ActiveDirectory.Management.ADObject] -or $_ -is [System.String] })]
         [object]$Identity,
         [Parameter(Position = 1, Mandatory = $true)][AllowEmptyCollection()][AllowEmptyString()][AllowNull()]
         [string[]]$MemberDNs,
