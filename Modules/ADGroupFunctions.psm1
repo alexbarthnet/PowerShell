@@ -62,11 +62,13 @@ Function Update-ADMembers {
         [object]$Identity,
         [Parameter(Position = 1, Mandatory = $true)][AllowEmptyCollection()][AllowEmptyString()][AllowNull()]
         [string[]]$MemberDNs,
-        [Parameter(Position = 2)]
-        [string]$Filter = '^CN=',
+        [Parameter(Position = 2)][AllowEmptyCollection()][AllowEmptyString()][AllowNull()]
+        [string[]]$ExcludedDNs,
         [Parameter(Position = 3)]
-        [string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
+        [string]$Filter = '^CN=',
         [Parameter(Position = 4)]
+        [string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
+        [Parameter(Position = 5)]
         [switch]$Report
     )
 
@@ -90,6 +92,8 @@ Function Update-ADMembers {
         # create empty arrays 
         $ad_members_current = @()
         $ad_members_desired = @()
+        $ad_members_exclude = @()
+        $ad_members_trimmed = @()
 
         # retrieve current members
         ForEach ($MemberDN in $ad_members_object.Member) {
@@ -98,17 +102,28 @@ Function Update-ADMembers {
         
         # retrieve desired members
         ForEach ($MemberDN in $MemberDNs) {
-            If ($MemberDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberDN)) { $ad_members_desired += $MemberDN } 
+            If ($MemberDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberDN)) { $ad_members_desired += $MemberDN }
         }
+
+        # retrieve excluded DNs
+        ForEach ($MemberDN in $ExcludedDNs) {
+            If ($MemberDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberDN)) { $ad_members_exclude += $MemberDN }
+        }
+
+        # retrieve missing members less any excluded DNs
+        $ad_members_trimmed += [array][System.Linq.Enumerable]::Except([string[]]$ad_members_desired, [string[]]$ad_members_exclude)
+
+        # retrieve missing members, linq will ensure that the output is of unique values
+        $ad_members_missing += [array][System.Linq.Enumerable]::Except([string[]]$ad_members_trimmed, [string[]]$ad_members_current)
         
-        # retrieve missing and extra members
-        $ad_members_missing += [array][System.Linq.Enumerable]::Except([string[]]$ad_members_desired, [string[]]$ad_members_current)
-        $ad_members_invalid += [array][System.Linq.Enumerable]::Except([string[]]$ad_members_current, [string[]]$ad_members_desired)
+        # retrieve extra members, linq will ensure that the output is of unique values
+        $ad_members_invalid += [array][System.Linq.Enumerable]::Except([string[]]$ad_members_current, [string[]]$ad_members_trimmed)
 
         # report desired, current, missing, and extra members
         If ($VerbosePreference -eq 'Continue') {
             ForEach ($ad_member_fqdn in $ad_members_current) { Write-Verbose "Current Member: $ad_member_fqdn" }
-            ForEach ($ad_member_fqdn in $ad_members_desired) { Write-Verbose "Desired Member: $ad_member_fqdn" }
+            ForEach ($ad_member_fqdn in $ad_members_trimmed) { Write-Verbose "Desired Member: $ad_member_fqdn" }
+            ForEach ($ad_member_fqdn in $ad_members_exclude) { Write-Verbose "Exclude Member: $ad_member_fqdn" }
             ForEach ($ad_member_fqdn in $ad_members_missing) { Write-Verbose "Will Add: $ad_member_fqdn" }
             ForEach ($ad_member_fqdn in $ad_members_invalid) { Write-Verbose "Will Remove: $ad_member_fqdn" }
         }
