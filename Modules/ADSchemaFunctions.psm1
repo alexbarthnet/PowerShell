@@ -67,7 +67,7 @@ Function Add-ADSchemaAttributes {
 	For ($index = 0; $index -lt $Count; $index++) {
 		# create strings
 		$ad_attribute_suffix = ($Suffix + $index).ToString()
-		$ad_attribute_name = ($NamePrefix + (Get-Culture).TextInfo.ToTitleCase($Type).ToLower() + $ad_attribute_suffix)
+		$ad_attribute_name = ($NamePrefix + (Get-Culture).TextInfo.ToTitleCase($Type.ToLower()) + $ad_attribute_suffix)
 		$ad_attribute_path = "CN=$ad_attribute_name,$Schema"
     
 		# check if attribute exists
@@ -155,7 +155,7 @@ Function Add-ADSchemaAttributesToClass {
 	For ($index = 0; $index -lt $Count; $index++) {
 		# create strings
 		$ad_attribute_suffix = ($Suffix + $index).ToString()
-		$ad_attribute_name = ($NamePrefix + (Get-Culture).TextInfo.ToTitleCase($Type).ToLower() + $ad_attribute_suffix)
+		$ad_attribute_name = ($NamePrefix + (Get-Culture).TextInfo.ToTitleCase($Type.ToLower()) + $ad_attribute_suffix)
 
 		# verify attribute
 		Try {
@@ -173,9 +173,8 @@ Function Add-ADSchemaAttributesToClass {
 		}
 		Else {
 			# add attribute to mayContain attribute of class
-			If ($PSCmdlet.ShouldProcess("$ad_attribute_name to $ad_class_path")) {
+			If ($PSCmdlet.ShouldProcess("$ad_attribute_name to $Class")) {
 				Try {
-					Write-Warning -Message 'The directory schema will be modified. This action is irreversiable.' -WarningAction Inquire
 					Set-ADObject -Server $Server -Identity $ad_class_path -Add @{ mayContain = $ad_attribute_name }
 					Write-Host "Attribute '$ad_attribute_name' was SUCCESSFULLY added to the MayContain of '$Class'"
 				}
