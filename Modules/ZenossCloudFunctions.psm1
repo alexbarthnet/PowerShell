@@ -75,11 +75,11 @@ Function Get-ZenossCloudDevice {
 Function Get-ZenossCloudProductionStates {
     [CmdletBinding()]
     param (
-        [Parameter(Position = 0, Mandatory)]
+        [Parameter(Position = 0, Mandatory = $true)]
         [string]$Uri,
-        [Parameter()]
+        [Parameter(Position = 1, Mandatory = $true)]
         [string]$Key,
-        [Parameter()]
+        [Parameter(Position = 2)]
         [switch]$Reset
     )
 
@@ -118,13 +118,13 @@ Function Get-ZenossCloudProductionStates {
 Function Set-ZenossCloudProductionState {
     [CmdletBinding()]
     param (
-        [Parameter(Position = 0, Mandatory)]
-        [string]$Uri,
-        [Parameter()]
-        [string]$Key,
         [Parameter(Position = 0, Mandatory = $true)]
-        [string]$Hostname,
+        [string]$Uri,
         [Parameter(Position = 1, Mandatory = $true)]
+        [string]$Key,
+        [Parameter(Position = 2, Mandatory = $true)]
+        [string]$Hostname,
+        [Parameter(Position = 3, Mandatory = $true)]
         [string]$State
     )
 
@@ -144,9 +144,6 @@ Function Set-ZenossCloudProductionState {
     If ($null -eq $zenoss_device.uid) {
         Return "ERROR: Device '$Hostname' not found in Zenoss Cloud"
     }
-    Else {
-        $zenoss_uid = $zenoss_device.uid
-    }
 
     # create hashtable for HTML headers
     $zenoss_head = @{
@@ -156,7 +153,7 @@ Function Set-ZenossCloudProductionState {
 
     # create array for zenoss body entry
     $zenoss_data = [array][PSCustomObject]@{
-        uids      = $zenoss_uid
+        uids      = $zenoss_device.uid
         prodState = $zenoss_state
         hashcheck = 'no' 
     }
@@ -171,6 +168,50 @@ Function Set-ZenossCloudProductionState {
 
     # invoke rest method to update state
     Invoke-RestMethod -Method 'Post' -Uri $Uri -Headers $zenoss_head -Body ($zenoss_body | ConvertTo-Json)
+}
+
+Function Invoke-ZenossCloudDeviceRemodel {
+    [CmdletBinding()]
+    param (
+        [Parameter(Position = 0, Mandatory = $true)]
+        [string]$Uri,
+        [Parameter(Position = 1, Mandatory = $true)]
+        [string]$Key,
+        [Parameter(Position = 2, Mandatory = $true)]
+        [string]$Hostname
+    )
+
+    # retrieve device uid
+    $zenoss_device = $null
+    $zenoss_device = Get-ZenossCloudDevice -Uri $Uri -Key $Key -Hostname $Hostname
+    If ($null -eq $zenoss_device.uid) {
+        Return "ERROR: Device '$Hostname' not found in Zenoss Cloud"
+    }
+
+    # create hashtable for HTML headers
+    $zenoss_head = @{
+        'z-api-key'    = $Key
+        'Content-Type' = 'application/json' 
+    }
+
+    # create array for zenoss body entry
+    $zenoss_data = [array][PSCustomObject]@{
+        deviceUid = $zenoss_device.uid
+    }
+
+    # create hashtable for HTML body
+    $zenoss_body = @{
+        'action' = 'DeviceRouter'
+        'method' = 'remodel'
+        'data'   = $zenoss_data
+        'tid'    = 1
+    }
+
+    # modify URI for remodel command
+    $uri_remodel = $Uri.Replace('/zport/dmd',$zenoss_device.uid)
+
+    # invoke rest method to update state
+    Invoke-RestMethod -Method 'Post' -Uri $uri_remodel -Headers $zenoss_head -Body ($zenoss_body | ConvertTo-Json)
 }
 
 # define functions to export
