@@ -69,7 +69,7 @@ Function Add-ADSchemaAttributes {
 		$ad_attribute_suffix = ($Suffix + $index).ToString()
 		$ad_attribute_name = ($NamePrefix + (Get-Culture).TextInfo.ToTitleCase($Type.ToLower()) + $ad_attribute_suffix)
 		$ad_attribute_path = "CN=$ad_attribute_name,$Schema"
-    
+
 		# check if attribute exists
 		Try {
 			$ad_attribute_found = Get-ADObject -Server $Server -Identity $ad_attribute_path
@@ -250,7 +250,7 @@ Function Add-ADSchemaClass {
 		# create strings for schema object
 		$ad_class_text = ($ad_class_definition.adminTextPrefix + $ad_class_suffix)
 		$ad_class_governsID = "$OIDPrefix.$ad_class_suffix"
-	
+
 		# create class
 		$ad_class_object = @{
 			lDAPDisplayName     = $ad_class_name
@@ -304,7 +304,7 @@ Function Add-ADSchemaClassToParent {
 	# force refresh of schema before update
 	$ad_root_dse = Get-ADRootDSE -Server $Server
 	$ad_root_dse.schemaUpdateNow = $true	
-	
+
 	# verify the child class object
 	Try {
 		$ad_class_path = "CN=$Class,$Schema"
@@ -324,7 +324,7 @@ Function Add-ADSchemaClassToParent {
 		Write-Host "Class '$ParentClass' does NOT exist, exiting!"
 		Return $null
 	}
-	
+
 	# check auxiliaryClass attribute of parent class for name of child class
 	If ($ad_parent_object.auxiliaryClass -match $Class) {
 		Write-Host "Class '$Class' was ALREADY an auxiliary class of '$ParentClass'"
@@ -379,10 +379,10 @@ Function Get-ADSchemaClass {
 	Else {
 		# define query for requested class
 		$ad_schema_classes_ldapquery = "(&(objectCategory=classSchema)(objectClass=classSchema)(lDAPDisplayName=$ObjectClass))"
-		
+
 		# retrieve schema object for requested class
 		$ad_schema_object = Get-ADObject -Server $Server -SearchBase $ad_nc_schema -LDAPFilter $ad_schema_classes_ldapquery -Properties *
-		
+
 		# verify requested class exists
 		If ($null -ne $ad_schema_object) {
 			# populate class hashtable with schema object for requested class
@@ -422,7 +422,7 @@ Function Get-ADSchemaClassAncestry {
 	Else {
 		# create or reset class ancestry hashtable for requested class
 		$ad_schema_class_ancestry[$ObjectClass] = @{}
-	
+
 		# retrieve schema object for requested class
 		$ad_schema_class_object = Get-ADSchemaClass -Server $Server -ObjectClass $ObjectClass
 
@@ -440,7 +440,7 @@ Function Get-ADSchemaClassAncestry {
 				ForEach ($ad_schema_class in $ad_schema_class_object.ldapDisplayName) { $ad_schema_class_ancestry[$ObjectClass][$ad_schema_class] = $true }
 				ForEach ($ad_schema_class in $ad_schema_class_object.auxiliaryClass) { $ad_schema_class_ancestry[$ObjectClass][$ad_schema_class] = $true }
 				ForEach ($ad_schema_class in $ad_schema_class_object.systemAuxiliaryClass) { $ad_schema_class_ancestry[$ObjectClass][$ad_schema_class] = $true }
-	
+
 				# set parent class as focus of next loop iteration
 				$ad_schema_class_for_loop = $ad_schema_class_object.SubClassOf
 			}
@@ -484,7 +484,7 @@ Function Get-ADSchemaClassAttributes {
 
 		# retrieve ancestry for requested class
 		$ad_schema_class_ancestry = Get-ADSchemaClassAncestry -Server $Server -ObjectClass $ObjectClass
-		
+
 		# verify ancestry for requested class exists
 		If ($null -ne $ad_schema_class_ancestry) {
 			# populate class attributes hashtable with all attributes for requested class
@@ -663,7 +663,7 @@ Function Set-ADAttribute {
 					Catch {
 						$function_error += $_
 						$function_reply += "ERROR-replacing-value-on-$Attribute"
-					}									
+					}
 				}
 			} 
 		}
@@ -676,11 +676,11 @@ Function Set-ADAttribute {
 
 			# add existing values to array
 			ForEach ($value in $object_to_update.$Attribute) { $existing_values += $value }
-			
+
 			# retrieve diffs between requested values and existing values
 			$attr_values_to_add += [array][System.Linq.Enumerable]::Except([string[]]$AttributeValues, [string[]]$existing_values)
 			$attr_values_to_rem += [array][System.Linq.Enumerable]::Except([string[]]$existing_values, [string[]]$AttributeValues)
-			
+
 			# check for values to add
 			If ($attr_values_to_add.Count -gt 0) {
 				# check -whatif before adding values
@@ -696,7 +696,7 @@ Function Set-ADAttribute {
 					}
 				}
 			}
-			
+
 			# check for values to remove
 			If ($attr_values_to_rem.Count -gt 0) {
 				# check -whatif before removing values
@@ -714,7 +714,7 @@ Function Set-ADAttribute {
 			}
 		}
 	}
-	
+
 	# report actions if requested
 	If ($Report) {
 		[PSCustomObject]@{ 
