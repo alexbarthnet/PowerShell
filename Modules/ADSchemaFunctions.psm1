@@ -54,8 +54,8 @@ Function Add-ADSchemaAttributes {
 			}
 		}
 		Default {
-			Write-Host 'Invalid attribute type, exiting...'
-			Exit
+			Write-Host 'Unsupported attribute type provided, exiting...'
+			Return
 		}
 	}
 
@@ -106,7 +106,7 @@ Function Add-ADSchemaAttributes {
 					Write-Host "Attribute '$($ad_attribute_name)' was SUCCESSFULLY created"
 				}
 				Catch {
-					Write-Host "Attribute '$($ad_attribute_name)' was NOT created"
+					Write-Error "Attribute '$($ad_attribute_name)' was NOT created"
 					Return $_
 				}	
 			}
@@ -147,7 +147,7 @@ Function Add-ADSchemaAttributesToClass {
 		$ad_class_object = Get-ADObject -Server $Server -Identity $ad_class_path -Properties mayContain    
 	}
 	Catch {
-		Write-Host 'Class '$Class' does NOT exist, exiting!'
+		Write-Error 'Class '$Class' does NOT exist'
 		Return $null
 	}
 
@@ -163,7 +163,7 @@ Function Add-ADSchemaAttributesToClass {
 			$null = Get-ADObject -Server $Server -Identity $ad_attribute_path -Properties 'mayContain'
 		}
 		Catch {
-			Write-Host "Attribute '$ad_attribute_name' does NOT exist, exiting!"
+			Write-Error "Attribute '$ad_attribute_name' does NOT exist"
 			Return $null
 		}
 
@@ -179,7 +179,7 @@ Function Add-ADSchemaAttributesToClass {
 					Write-Host "Attribute '$ad_attribute_name' was SUCCESSFULLY added to the MayContain of '$Class'"
 				}
 				Catch {
-					Write-Host "Attribute '$ad_attribute_name' was NOT added to the MayContain of '$Class', exiting!"
+					Write-Error "Attribute '$ad_attribute_name' was NOT added to the MayContain of '$Class'"
 					Return $_
 				}	
 			}
@@ -277,8 +277,8 @@ Function Add-ADSchemaClass {
 				Write-Host "Class '$ad_class_name' was SUCCESSFULLY created"
 			}
 			Catch {
-				Write-Host "Class '$ad_class_name' was NOT created"
-				$_
+				Write-Error "Class '$ad_class_name' was NOT created"
+				Return $_
 			}
 		}
 		Else {
@@ -311,7 +311,7 @@ Function Add-ADSchemaClassToParent {
 		$ad_class_object = Get-ADObject -Server $Server -Identity $ad_class_path -Properties 'governsID'
 	}
 	Catch {
-		Write-Host "Class '$Class' does NOT exist, exiting!"
+		Write-Error "Class '$Class' does NOT exist"
 		Return $null
 	}
 
@@ -321,7 +321,7 @@ Function Add-ADSchemaClassToParent {
 		$ad_parent_object = Get-ADObject -Server $Server -Identity $ad_parent_path -Properties 'auxiliaryClass'
 	}
 	Catch {
-		Write-Host "Class '$ParentClass' does NOT exist, exiting!"
+		Write-Error "Class '$ParentClass' does NOT exist, exiting!"
 		Return $null
 	}
 
@@ -337,7 +337,7 @@ Function Add-ADSchemaClassToParent {
 				Write-Host "Class '$Class' was SUCCESSFULLY added as an auxiliary class of '$ParentClass'"
 			}
 			Catch {
-				Write-Host "Class '$Class' was NOT added as an auxiliary class of '$ParentClass'"
+				Write-Error "Class '$Class' was NOT added as an auxiliary class of '$ParentClass'"
 				Return $_
 			}	
 		}
