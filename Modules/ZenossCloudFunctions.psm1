@@ -1,11 +1,11 @@
 Function Get-ZenossCloudDevices {
     [CmdletBinding()]
     param (
-        [Parameter()]
+        [Parameter(Position = 0, Mandatory = $true)]
         [string]$Uri,
-        [Parameter()]
+        [Parameter(Position = 1, Mandatory = $true)]
         [string]$Key,
-        [Parameter()]
+        [Parameter(Position = 2)]
         [switch]$Reset
     )
 
