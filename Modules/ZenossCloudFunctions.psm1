@@ -47,6 +47,31 @@ Function Get-ZenossCloudDevices {
     }
 }
 
+Function Get-ZenossCloudDevice {
+    [CmdletBinding()]
+    param (
+        [Parameter(Position = 0, Mandatory = $true)]
+        [string]$Uri,
+        [Parameter(Position = 1, Mandatory = $true)]
+        [string]$Key,
+        [Parameter(Position = 2, Mandatory = $true)]
+        [string]$Hostname
+    )
+
+    # get zenoss cloud device collection
+    $zenoss_devices = Get-ZenossCloudDevices -Uri $Uri -Key $Key
+
+    # retrieve device uid
+    $zenoss_device = $null
+    $zenoss_device = $zenoss_devices.result.devices | Where-Object { $_.Name -eq $Hostname }
+    If ($null -eq $zenoss_device) {
+        Return "ERROR: Device '$Hostname' not found in Zenoss Cloud"
+    }
+    Else {
+        Return $zenoss_device
+    }
+}
+
 Function Get-ZenossCloudProductionStates {
     [CmdletBinding()]
     param (
@@ -87,31 +112,6 @@ Function Get-ZenossCloudProductionStates {
 
         # return production states
         Return $zenoss_states
-    }
-}
-
-Function Get-ZenossCloudDevice {
-    [CmdletBinding()]
-    param (
-        [Parameter(Position = 0, Mandatory = $true)]
-        [string]$Uri,
-        [Parameter(Position = 1, Mandatory = $true)]
-        [string]$Key,
-        [Parameter(Position = 2, Mandatory = $true)]
-        [string]$Hostname
-    )
-
-    # get zenoss cloud device collection
-    $zenoss_devices = Get-ZenossCloudDevices -Uri $Uri -Key $Key
-
-    # retrieve device uid
-    $zenoss_device = $null
-    $zenoss_device = $zenoss_devices.result.devices | Where-Object { $_.Name -eq $Hostname }
-    If ($null -eq $zenoss_device) {
-        Return "ERROR: Device '$Hostname' not found in Zenoss Cloud"
-    }
-    Else {
-        Return $zenoss_device
     }
 }
 
@@ -176,6 +176,7 @@ Function Set-ZenossCloudProductionState {
 # define functions to export
 $functions_to_export = @()
 $functions_to_export += 'Get-ZenossCloudDevices'
+$functions_to_export += 'Get-ZenossCloudDevice'
 $functions_to_export += 'Get-ZenossCloudProductionStates'
 $functions_to_export += 'Set-ZenossCloudProductionState'
 
