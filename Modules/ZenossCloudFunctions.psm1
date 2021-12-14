@@ -166,8 +166,11 @@ Function Set-ZenossCloudProductionState {
         'tid'    = 1
     }
 
-    # invoke rest method to update state
-    Invoke-RestMethod -Method 'Post' -Uri $Uri -Headers $zenoss_head -Body ($zenoss_body | ConvertTo-Json)
+    # create device-specific URI
+    $uri_device = $Uri.Replace('/zport/dmd',$zenoss_device.uid)
+
+    # invoke rest method
+    Invoke-RestMethod -Method 'Post' -Uri $uri_device -Headers $zenoss_head -Body ($zenoss_body | ConvertTo-Json)
 }
 
 Function Invoke-ZenossCloudDeviceRemodel {
@@ -207,11 +210,11 @@ Function Invoke-ZenossCloudDeviceRemodel {
         'tid'    = 1
     }
 
-    # modify URI for remodel command
-    $uri_remodel = $Uri.Replace('/zport/dmd',$zenoss_device.uid)
+    # create device-specific URI
+    $uri_device = $Uri.Replace('/zport/dmd',$zenoss_device.uid)
 
-    # invoke rest method to update state
-    Invoke-RestMethod -Method 'Post' -Uri $uri_remodel -Headers $zenoss_head -Body ($zenoss_body | ConvertTo-Json)
+    # invoke rest method
+    Invoke-RestMethod -Method 'Post' -Uri $uri_device -Headers $zenoss_head -Body ($zenoss_body | ConvertTo-Json)
 }
 
 # define functions to export
@@ -220,6 +223,7 @@ $functions_to_export += 'Get-ZenossCloudDevices'
 $functions_to_export += 'Get-ZenossCloudDevice'
 $functions_to_export += 'Get-ZenossCloudProductionStates'
 $functions_to_export += 'Set-ZenossCloudProductionState'
+$functions_to_export += 'Invoke-ZenossCloudDeviceRemodel'
 
 # export module members
 Export-ModuleMember -Function $functions_to_export
