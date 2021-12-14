@@ -565,7 +565,7 @@ Function Set-ADAttribute {
 		[Parameter(Position = 1, Mandatory = $true)]
 		[string]$Attribute,
 		[Parameter(Position = 2, Mandatory = $true)][AllowEmptyCollection()][AllowEmptyString()][AllowNull()]
-		[object[]]$AttributeNumbers,
+		[object[]]$AttributeValues,
 		[Parameter(Position = 3)]
 		[string]$Separator = ';',
 		[Parameter(Position = 4)]
@@ -576,26 +576,28 @@ Function Set-ADAttribute {
 
 	# create empty objects
 	$object_to_update = $null
+	$object_attribute = $null
 	$function_error = @()
 	$function_reply = @()
 
-	# retrieve object
+	# verify object
 	Try {
 		$object_to_update = Get-ADObject -Server $Server -Properties $Attribute -Identity $Identity
+		$object_attribute = (Get-ADSchemaClassAttributes -Server $Server -ObjectClass $object_to_update.objectClass)[$Attribute]
+		If ($null -eq $object_attribute) {
+			$function_error += $null
+			$function_reply += "ERROR-attribute-not-valid-for-object"
+		}
 	}
 	Catch {
-		$object_to_update = $null
-	}
-
-	# verify object
-	If ($null -eq $object_to_update) {
 		$function_error += $_
 		$function_reply += "ERROR-get-object: $Identity"
 	}
+
 	# check if attribute valid for requested object
-	ElseIf ($null -ne ((Get-ADSchemaClassAttributes -Server $Server -ObjectClass $object_to_update.objectClass)[$Attribute])) {
+	If ($null -ne $object_to_update -and $null -ne $object_attribute) {
 		# clear attribute
-		If ($AttributeNumbers.Count -eq 0) {
+		If ($AttributeValues.Count -eq 0) {
 			# check if requested attribute is already clear
 			If ($object_to_update.$Attribute.Count -gt 0) {
 				# check -whatif before clearing attribute
@@ -613,9 +615,9 @@ Function Set-ADAttribute {
 			}
 		}
 		# update single-valued attribute with multiple requested values
-		ElseIf (($AttributeNumbers.Count -gt 1) -and (Get-ADSchemaAttribute -Server $Server -Attribute $Attribute).IsSingleValued) {
+		ElseIf (($AttributeValues.Count -gt 1) -and (Get-ADSchemaAttribute -Server $Server -Attribute $Attribute).IsSingleValued) {
 			# sort and join requested values
-			$attribute_singlevalue = ($AttributeNumbers | Sort-Object) -join $Separator
+			$attribute_singlevalue = ($AttributeValues | Sort-Object) -join $Separator
 			# check if requested attribute is empty
 			If ($object_to_update.$Attribute.Count -eq 0) {
 				# check -whatif before adding attribute
@@ -648,13 +650,13 @@ Function Set-ADAttribute {
 			}
 		}
 		# update multi-valued attribute with one requested value and one existing value
-		ElseIf (($AttributeNumbers.Count -eq 1) -and ($object_to_update.$Attribute.Count -eq 1)) {
+		ElseIf (($AttributeValues.Count -eq 1) -and ($object_to_update.$Attribute.Count -eq 1)) {
 			# check if requested value matches existing value
-			If ($object_to_update.$Attribute -ne $AttributeNumbers) {
+			If ($object_to_update.$Attribute -ne $AttributeValues) {
 				# check -whatif before replacing attribute
 				If ($PSCmdlet.ShouldProcess($object_to_update.Name, "Replace $Attribute")) {
 					Try {
-						Set-AdObject -Server $Server -Identity $object_to_update.DistinguishedName -Replace @{ $Attribute = $AttributeNumbers }
+						Set-AdObject -Server $Server -Identity $object_to_update.DistinguishedName -Replace @{ $Attribute = $AttributeValues }
 						$function_error += $null
 						$function_reply += "replaced-value-on-$Attribute"	
 					}
@@ -676,8 +678,8 @@ Function Set-ADAttribute {
 			ForEach ($value in $object_to_update.$Attribute) { $existing_values += $value }
 			
 			# retrieve diffs between requested values and existing values
-			$attr_values_to_add += [array][System.Linq.Enumerable]::Except([string[]]$AttributeNumbers, [string[]]$existing_values)
-			$attr_values_to_rem += [array][System.Linq.Enumerable]::Except([string[]]$existing_values, [string[]]$AttributeNumbers)
+			$attr_values_to_add += [array][System.Linq.Enumerable]::Except([string[]]$AttributeValues, [string[]]$existing_values)
+			$attr_values_to_rem += [array][System.Linq.Enumerable]::Except([string[]]$existing_values, [string[]]$AttributeValues)
 			
 			# check for values to add
 			If ($attr_values_to_add.Count -gt 0) {
@@ -711,11 +713,6 @@ Function Set-ADAttribute {
 				}
 			}
 		}
-	}
-	Else {
-		# record error
-		$function_error += $null
-		$function_reply += 'ERROR-attribute-not-valid-for-object'		
 	}
 	
 	# report actions if requested
