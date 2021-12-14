@@ -3,13 +3,13 @@ Function Write-LogToMultiple {
     Param (
         [Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
         [string]$LogText,
-        [Parameter()]
+        [Parameter()][AllowEmptyString]
         [string]$LogSubject,
         [Parameter()]
         [string]$LogLevel = 'information',
-        [Parameter()]
+        [Parameter()][AllowEmptyString]
         [string]$LogUser,
-        [Parameter()]
+        [Parameter()][AllowEmptyString]
         [string]$LogHost,
         [Parameter()]
         [string]$LogTime = (Get-Date -Format FileDateTimeUniversal),
