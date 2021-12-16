@@ -1,3 +1,32 @@
+Function Write-Log {
+    [CmdletBinding()]
+    param (
+        [Parameter(Position = 0, Mandatory = $true)]
+        [string]$LogText,
+        [Parameter(Position = 1)]
+        [string]$LogSubject
+    )
+
+    # check for Write-LogToMultiple
+    If ($null -eq $LogToMultipleAvailable) {
+        If ($null -eq (Get-Module -ListAvailable -Name 'LogToMultiple')) {
+            $LogToMultipleAvailable = $false
+        }
+        Else {
+            $LogToMultipleAvailable = $true
+        }
+    }
+
+    # write log
+    If ($LogToMultipleAvailable) {
+        Write-LogToMultiple -LogText $LogText -LogSubject $LogSubject
+    }
+    Else {
+        $text_withdate = @((Get-Date -Format FileDateTimeUniversal), [System.Environment]::MachineName.ToLower(), [System.Environment]::UserName.ToLower(), $LogSubject, $LogText) -join ','
+        Write-Host -Object $text_withdate
+    }
+}
+
 Function Write-LogToMultiple {
     [CmdletBinding()]
     Param (
