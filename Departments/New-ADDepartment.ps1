@@ -1,7 +1,83 @@
-Param(  
-    [Parameter(Mandatory = $True)]
-    [string]$Department
+[CmdletBinding()]
+Param(
+	[Parameter(Mandatory = $True)]
+	[string]$Department
 )
+
+Function New-ADContainerFromDN {
+	[CmdletBinding()]
+	param (
+		[Parameter(Position = 0)]
+		[string]$ContainerDN
+	)
+
+	# create strings
+	$ad_filter = "distinguishedName -eq '$ContainerDN'"
+
+	# check OU
+	$ad_object = $null
+	$ad_object = Get-ADObject -Server $ad_pdc -Filter $ad_filter
+	If ($ad_object) {
+		Write-Host ("$env_comp_name,$ad_pdc - ...found OU: $ContainerDN")
+	}
+	Else {
+		# create OU
+		$ad_ou_split = $ContainerDN -split ('OU=', 2) -split (',', 2)
+		If ($ad_ou_split.Count -eq 3) {
+			$ad_name = $ad_ou_split[1]
+			$ad_path = $ad_ou_split[2]
+			Try {
+				New-ADOrganizationalUnit -Server $ad_pdc -Name $ad_name -Path $ad_path -ProtectedFromAccidentalDeletion $false
+				Write-Host ("$env_comp_name,$ad_pdc - ...created OU: $ContainerDN")
+			}
+			Catch {
+				Write-Host ("$env_comp_name,$ad_pdc - ERROR: could not create OU: $ContainerDN")
+				Return
+			}
+		}
+		Else {
+			Write-Host ("$env_comp_name,$ad_pdc - ERROR: could not process object: $ContainerDN")
+		}    
+	}
+}
+
+Function New-ADGroupFromDN {
+	[CmdletBinding()]
+	param (
+		[Parameter(Position = 0)]
+		[string]$GroupDN,
+		[Parameter(Position = 1)]
+		[string]$GroupType = 'Universal'
+	)
+
+	# create strings
+	$ad_filter = "distinguishedName -eq '$GroupDN'"
+
+	# check group
+	$ad_object = $null
+	$ad_object = Get-ADObject -Server $ad_pdc -Filter $ad_filter
+	If ($ad_object) {
+		Write-Host ("$env_comp_name,$ad_pdc - ...found existing object: $($ad_object.Name)")
+	}
+	Else {
+		# create group
+		$ad_cn_split = $GroupDN -split ('CN=', 2) -split (',', 2)
+		If ($ad_cn_split.Count -eq 3) {
+			$ad_name = $ad_cn_split[1]
+			$ad_path = $ad_cn_split[2]
+			Try {
+				New-ADGroup -Server $ad_pdc -Name $ad_name -Path $ad_path -GroupScope $GroupType
+				Write-Host ("$env_comp_name,$ad_pdc - ...created group: $ad_name")    
+			}
+			Catch {
+				Write-Host ("$env_comp_name,$ad_pdc - ERROR: could not create group: $ad_name")
+			}
+		}
+		Else {
+			Write-Host ("$env_comp_name,$ad_pdc - ERROR: could not process object: " + $GroupDN)
+		}    
+	}
+}
 
 # create global objects
 $env_comp_name = $env:computername.ToLower()
@@ -9,8 +85,8 @@ $env_comp_name = $env:computername.ToLower()
 # validate input
 Write-Host ("$env_comp_name - Checking input...")
 If ($Department.Contains(',')) {
-    Write-Host ("$env_comp_name - ERROR: found invalid character ',' in Department: " + $Department)
-    Exit
+	Write-Host ("$env_comp_name - ERROR: found invalid character ',' in Department: " + $Department)
+	Return
 }
 
 # connect to AD
@@ -18,14 +94,14 @@ Write-Host ("$env_comp_name - Connecting to AD...")
 $ad_domain = $null
 $ad_domain = Get-ADDomain
 If ($ad_domain) {
-    $ad_pdc = $ad_Domain.PDCEmulator
-    $ad_nc_domain = $ad_domain.DistinguishedName
-    Write-Host ("$env_comp_name - ...found domain distinguished name: " + $ad_nc_domain)
-    Write-Host ("$env_comp_name - ...found primary domain controller: " + $ad_pdc)
+	$ad_pdc = $ad_Domain.PDCEmulator
+	$ad_nc_domain = $ad_domain.DistinguishedName
+	Write-Host ("$env_comp_name - ...found domain distinguished name: " + $ad_nc_domain)
+	Write-Host ("$env_comp_name - ...found primary domain controller: " + $ad_pdc)
 }
 Else {
-    Write-Host ("$env_comp_name - ...could not connect to AD, exiting!")
-    Exit
+	Write-Host ("$env_comp_name - ...could not connect to AD, exiting!")
+	Return
 }
 
 # add department OUs by full DN
@@ -49,102 +125,22 @@ $ad_globals += ('CN=' + $Department + '-DeptGroupAdministrators,OU=' + $Departme
 $ad_globals += ('CN=' + $Department + '-DeptGpoAdministrators,OU=' + $Department + ',OU=Departments,OU=Administrative,' + $ad_nc_domain)
 $ad_globals += ('CN=' + $Department + '-GPO Editors,OU=' + $Department + ',OU=Departments,OU=Administrative,' + $ad_nc_domain)
 
-# check for existing OUs
-Write-Host ("$env_comp_name,$ad_pdc - Checking for existing objects...")
-$ad_deptou, $ad_locals, $ad_globals | ForEach-Object {
-    # check for object by path
-    $ad_dnpath = $_
-    $ad_filter = $null
-    $ad_filter = "distingiushedName -eq '$ad_dnpath'"
-    $ad_object = $null
-    $ad_object = Get-ADObject -Server $ad_pdc -Filter $ad_filter
-    If ($ad_object) {
-        Write-Host ("$env_comp_name,$ad_pdc - ERROR: found existing object by path: " + $ad_dnpath)
-        Write-Host ("$env_comp_name,$ad_pdc - Exiting!")
-        Exit
-    }
-
-    # check for objects by CN
-    $ad_splits = $null
-    $ad_splits = $ad_dnpath -split ('CN=', 2) -split (',', 2)
-    If ($ad_splits.Count -eq 3) {
-        $ad_cn_bit = $ad_splits[1]
-        $ad_filter = $null
-        $ad_filter = "cn -eq '$ad_cn_bit' -or sAMAccountName -eq '$ad_cn_bit'"
-        $ad_object = $null
-        $ad_object = Get-ADObject -Server $ad_pdc -Filter $ad_filter
-        If ($ad_object) {
-            Write-Host ("$env_comp_name,$ad_pdc - ERROR: found existing object by CN or SAM account name: " + $ad_cn_bit)
-            Write-Host ("$env_comp_name,$ad_pdc - Exiting!")
-            Exit
-        }
-    }
-}
-Write-Host ("$env_comp_name,$ad_pdc - ...no existing objects found")
-
-# create containers
+# check for OUs
 Write-Host ("$env_comp_name,$ad_pdc - Creating OUs...")
-$ad_deptou | ForEach-Object {
-    $ad_dnpath = $_
-    $ad_ou_split = $ad_dnpath -split ('OU=', 2) -split (',', 2)
-    If ($ad_ou_split.Count -eq 3) {
-        $ad_name = $ad_ou_split[1]
-        $ad_path = $ad_ou_split[2]
-        Try {
-            New-ADOrganizationalUnit -Server $ad_pdc -Name $ad_name -Path $ad_path -ProtectedFromAccidentalDeletion $false
-            Write-Host ("$env_comp_name,$ad_pdc - ...created OU: " + $ad_dnpath)
-        }
-        Catch {
-            Write-Host ("$env_comp_name,$ad_pdc - ERROR: could not create OU: " + $ad_dnpath)
-        }
-    }
-    Else {
-        Write-Host ("$env_comp_name,$ad_pdc - ERROR: could not create object: " + $ad_dnpath)
-    }
+ForEach ($ad_dnpath in $ad_deptou) {
+	New-ADContainerFromDN -ContainerDN $ad_dnpath
 }
 
 # create local groups
 Write-Host ("$env_comp_name,$ad_pdc - Creating local groups...")
-$ad_locals | ForEach-Object {
-    $ad_dnpath = $_
-    $ad_cn_split = $ad_dnpath -split ('CN=', 2) -split (',', 2)
-    # check if group (3) or OU (2)
-    If ($ad_cn_split.Count -eq 3) {
-        $ad_name = $ad_cn_split[1]
-        $ad_path = $ad_cn_split[2]
-        Try {
-            New-ADGroup -Server $ad_pdc -Name $ad_name -Path $ad_path -GroupScope DomainLocal
-            Write-Host ("$env_comp_name,$ad_pdc - ...created local group: " + $ad_name)    
-        }
-        Catch {
-            Write-Host ("$env_comp_name,$ad_pdc - ERROR: could not create global group: " + $ad_name)
-        }
-    }
-    Else {
-        Write-Host ("$env_comp_name,$ad_pdc - ERROR: could not create object: " + $ad_dnpath)
-    }
+ForEach ($ad_dnpath in $ad_locals) {
+	New-ADGroupFromDN -GroupDN $ad_dnpath -GroupType 'DomainLocal'
 }
 
 # create global groups
 Write-Host ("$env_comp_name,$ad_pdc - Creating global groups...")
-$ad_globals | ForEach-Object {
-    $ad_dnpath = $_
-    $ad_cn_split = $ad_dnpath -split ('CN=', 2) -split (',', 2)
-    # check if group (3) or OU (2)
-    If ($ad_cn_split.Count -eq 3) {
-        $ad_name = $ad_cn_split[1]
-        $ad_path = $ad_cn_split[2]
-        Try {
-            New-ADGroup -Server $ad_pdc -Name $ad_name -Path $ad_path -GroupScope Global
-            Write-Host ("$env_comp_name,$ad_pdc - ...created global group: " + $ad_name)
-        }
-        Catch {
-            Write-Host ("$env_comp_name,$ad_pdc - ERROR: could not create global group: " + $ad_name)
-        }
-    }
-    Else {
-        Write-Host ("$env_comp_name,$ad_pdc - ERROR: could not create object: " + $ad_dnpath)
-    }
+ForEach ($ad_dnpath in $ad_globals) { 
+	New-ADGroupFromDN -GroupDN $ad_dnpath -GroupType 'Global'    
 }
 
 # define group names for membership
