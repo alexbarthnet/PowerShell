@@ -6,7 +6,7 @@ Start-Transcript -Path $vm_text -Append
 Write-Output "Found current computer name: $os_name"
 Write-Output "Found hypervisor guest name: $vm_name"
 If ($os_name -ne $vm_name) {
-    Write-Output "Renaming computer to: $vm_name"
-    Rename-Computer -NewName $vm_name -Restart -Force
+	Write-Output "Renaming computer to: $vm_name"
+	Rename-Computer -NewName $vm_name -Restart -Force
 }
 Stop-Transcript
