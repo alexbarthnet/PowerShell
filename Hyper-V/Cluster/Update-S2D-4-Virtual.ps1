@@ -251,7 +251,7 @@ $map_network | Where-Object { $_.vNIC } | ForEach-Object {
                 Else {
                     If ($nic_size.RegistryValue -ne 9014) {
                         Write-Host ("$host_name,$vswitch_name,$vnic_name - Jumbo Packet on non-Management NIC not set to '9014', fixing...")
-                        Set-NetAdapterAdvancedProperty -Name $vnic_name -RegistryKeyword '*JumboPacket' -RegistryValue 9014    
+                        Set-NetAdapterAdvancedProperty -Name $vnic_name -RegistryKeyword '*JumboPacket' -RegistryValue 9014
                     }
                 }
             }
