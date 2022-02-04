@@ -1,42 +1,27 @@
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	[Parameter(Mandatory = $True, ParameterSetName = 'Mount')]
-	[switch]$Mount,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Clear')]
-	[switch]$Clear,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
-	[switch]$Remove,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
-	[switch]$Add,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
-	[Parameter(Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')]
-	[string]$Subject,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')][ValidateScript({ Test-Path -Path $_ })]
-	[string]$Storage
-)
-
-
-Param(  
-	[string]$OneDriveString,
-	[string]$ExcludedFolders
+	[string]$Identity,
+	[switch]$SkipExcludedFoldersCheck,
+	[switch]$ExcludeFolders,
+	[string[]]$ExcludedFolders
 )
 
 # define the default OneDrive excluded folders list
-$onedrive_block_list = @()
-$onedrive_block_list += 'AppData'
-$onedrive_block_list += 'Attachments'
-$onedrive_block_list += 'Email Attachments'
-$onedrive_block_list += 'Microsoft Teams Chat Files'
-$onedrive_block_list += 'Microsoft Teams Data'
-$onedrive_block_list += 'Notebooks'
-$onedrive_block_list += 'Public'	
+$excludedfolders_default = @()
+$excludedfolders_default += 'AppData'
+$excludedfolders_default += 'Attachments'
+$excludedfolders_default += 'Email Attachments'
+$excludedfolders_default += 'Microsoft Teams Chat Files'
+$excludedfolders_default += 'Microsoft Teams Data'
+$excludedfolders_default += 'Notebooks'
+$excludedfolders_default += 'Public'
 
 # buffer output
-Write-Output (' ')
+Write-Output "`n"
 
 # get the OneDrive path(s)
 $onedrive_directory = $null
-switch ($OneDriveString) {
+switch ($Identity) {
 	{ 'OneDrive' -or 'Personal' } {
 		Write-Output ('Searching for OneDrive directory...')
 		$onedrive_directory = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object { $_.Name -eq 'OneDrive' }
@@ -46,8 +31,8 @@ switch ($OneDriveString) {
 		$onedrive_directory = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object { $_.Name -match 'OneDrive' }
 	}
 	Default {
-		Write-Output ('Searching for OneDrive directory where name matches the OneDriveString parameter...')
-		$onedrive_directory = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object { $_.Name -match 'OneDrive - ' -and $_.Name -match $OneDriveString }	
+		Write-Output ('Searching for OneDrive directory where name matches the Identity parameter...')
+		$onedrive_directory = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object { $_.Name -match 'OneDrive - ' -and $_.Name -match $Identity }	
 	}
 }
 
@@ -56,7 +41,7 @@ switch (($onedrive_directory).Count) {
 	1 { Write-Output ('...found the OneDrive directory: ' + $onedrive_directory.FullName) }
 	0 { Write-Output ('...found no OneDrive directories; exiting!'); Exit }
 	Default {
-		If ([string]::IsNullOrEmpty($OneDriveString)) {
+		If ([string]::IsNullOrEmpty($Identity)) {
 			Write-Output ('...found multiple OneDrive directories and no arguments were provided to limit scope to single directory, exiting!')
 			Exit
 		}
@@ -77,32 +62,39 @@ Else {
 }
 
 # buffer output
-Write-Output (' ')
+Write-Output "`n"
 
 # define OneDrive directories that will *NOT* be junctioned
-Write-Output ('Checking for folders to exclude from junctioning...')
-$onedrive_block_list = @()
-If ($ExcludedFolders) {
-	Write-Output ('Checking the file in the ExcludedFolders parameter...')
-	If (Test-Path $ExcludedFolders) {
-		$onedrive_block_list = @()
-		Get-Content -Path $ExcludedFolders | ForEach-Object { $onedrive_block_list += $_ }
-		Write-Output ('...setting the excluded folders to the following from the file:')
+If ($ExcludeFolders) {
+	Write-Output ('Checking the excluded folders...')
+	If ($ExcludedFolders.Count -ge 1) {
+		If (-not $SkipExcludedFoldersCheck) {
+			ForEach ($ExcludedFolder in $ExcludedFolders) {
+				$ExcludedFolder_path = Join-Path -Path $onedrive_directory -ChildPath $ExcludedFolder
+				If (Test-Path $ExcludedFolder_path) {
+					Write-Output ("`t Located: $ExcludedFolder_path")
+				} Else {
+					Write-Output ("`t Missing: $ExcludedFolder_path")
+					Write-Output ('WARNING: the folder above was defined in the ExcludedFolders parameter but not found in OneDrive, exiting!')
+					Return
+				}
+			}
+		}
 	}
 	Else {
-		Write-Output ('...file in the ExcludedFolders parameter was not found, exiting!')
-		Exit
+		Write-Output ('NOTICE: no excluded folders were explicitly defined')
+		Write-Output ('...the following default folders will be excluded from junctioning:')
+		$ExcludedFolders = $excludedfolders_default
+		ForEach ($ExcludedFolder in $ExcludedFolders) {
+			$ExcludedFolder_path = Join-Path -Path $onedrive_directory -ChildPath $ExcludedFolder
+			Write-Output ("`t $ExcludedFolder_path")
+		}
+		# insert warning here!
 	}
 }
-Else {
-	Write-Output ('...setting the excluded folders to the following defaults:')
-}
-
-# declare the excluded folders
-$onedrive_block_list
 
 # buffer output
-Write-Output (' ')
+Write-Output "`n"
 Write-Output ('-----')
 
 # loop through directories inside OneDrive directories
@@ -115,7 +107,7 @@ Get-ChildItem -Path $onedrive_directory.FullName | Where-Object { $_.PSIsContain
 	Write-Output (' ')
 	Write-Output ("Found OneDrive folder: '" + $folder_cloud + "'")
 	# check if current folder matching the block list
-	If ($onedrive_block_list -contains $folder_short) {
+	If ($excludedfolders_default -contains $folder_short) {
 		Write-Output ("...'" + $folder_short + "' explicitly blocked, skipping!")
 	}
 	Else {
