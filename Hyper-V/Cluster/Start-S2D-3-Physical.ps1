@@ -34,7 +34,7 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 	Write-Host ("======================== $host_name ========================")
 
 	# clear the DNS cache then resolve hostname
-	Write-Host ($host_name + ' - resolving host...')
+	Write-Host "$host_name - resolving host..."
 	Do {
 		Clear-DnsClientCache
 		$dns_found = $null
@@ -42,14 +42,14 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 	} Until ($dns_found)
 
 	# verify connection to remote host
-	Write-Host ($host_name + ' - checking host...')
+	Write-Host "$host_name - checking host..."
 	Do {
 		$host_alive = $false
 		$host_alive = Test-NetConnection -ComputerName $host_name -CommonTCPPort 'WINRM' -InformationLevel 'Quiet'
 	} Until ($host_alive)
 
 	# close existing sessions
-	Write-Host ($host_name + ' - closing any existing sessions...')
+	Write-Host "$host_name - closing any existing sessions..."
 	$pss_old = $null
 	$pss_old = Get-PSSession -ComputerName $host_name
 	If ($pss_old) {
@@ -57,23 +57,23 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 	}
 
 	# start session for files
-	Write-Host ($host_name + ' - starting file session...')
+	Write-Host "$host_name - starting file session..."
 	$pss_files = $null
 	$pss_files = New-PSSession -ComputerName $host_name
 
 	# create and define remote directory
-	Write-Host ($host_name + ' - creating directory...')
+	Write-Host "$host_name - creating directory..."
 	$host_path = Invoke-Command -Session $pss_files -ScriptBlock {
 		$host_temp = [System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')
 		New-Item -Path $host_temp -Name 'hv-setup' -ItemType 'Directory' -Force
 	}
 	
 	# copy files for address and switch configuration
-	Write-Host ($host_name + ' - copying files...')
+	Write-Host "$host_name - copying files..."
 	$file_names | Copy-Item -ToSession $pss_files -Destination $host_path
 
 	# close session for files
-	Write-Host ($host_name + ' - ending file session...')
+	Write-Host "$host_name - ending file session..."
 	Remove-PSSession -Session $pss_files
 
 	# get basename of files
@@ -81,7 +81,7 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 	$dns_txt = (Get-Item -Path $DnsList).Name
 
 	# run the scripts
-	Write-Host ($host_name + ' - starting script session...')
+	Write-Host "$host_name - starting script session..."
 	$pss_options = New-PSSessionOption -OutputBufferingMode 'Drop'
 	$pss_scripts = Invoke-Command -ComputerName $host_name -InDisconnectedSession -SessionOption $pss_options -ScriptBlock {
 		Set-Location -Path $using:host_path
@@ -91,5 +91,5 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 	}
 
 	# declare session name
-	Write-Host ($host_name + ' - started script session: ' + $pss_scripts.Name)
+	Write-Host "$host_name - started script session: $($pss_scripts.Name)"
 }
