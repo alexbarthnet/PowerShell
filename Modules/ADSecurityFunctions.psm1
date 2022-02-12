@@ -168,7 +168,7 @@ Function Reset-ADSecurity {
 			$ad_psdrive = (New-ADCustomPSDrive -Server $Server -Passthru).Name
 		}
 		Catch {
-			Write-Host "ERROR: creating 'ADCustom' PSDrive for server: '$Server'"
+			Write-Host "ERROR: creating custom PSDrive for server: '$Server'"
 			Break
 		}	
 	}
@@ -197,6 +197,17 @@ Function Reset-ADSecurity {
 		$ad_acl.SetSecurityDescriptorSddlForm($ad_sddl)
 		$ad_acl.SetAccessRuleProtection($false, $false)
 		$ad_acl | Set-Acl -Path $ad_path
+	}
+
+	# remove custom PSdrive if created
+	If ($null -ne $Server) {
+		Try {
+			Remove-ADCustomPSDrive
+		}
+		Catch {
+			Write-Host "ERROR: removing custom PSDrive"
+			Break
+		}	
 	}
 }
 
