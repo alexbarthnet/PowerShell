@@ -1,3 +1,14 @@
+<#
+.SYNOPSIS
+Retrieves and displays the live migration and QoS settings on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D).
+
+.DESCRIPTION
+Retrieves and displays the live migration and QoS settings on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files. 
+
+.LINK
+https://github.com/alexbarthnet/PowerShell/
+#>
+
 Param(  
 	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$HostCsv,

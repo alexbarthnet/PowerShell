@@ -1,3 +1,16 @@
+<#
+.SYNOPSIS
+Runs a script to configure the physical NICs on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D).
+
+.DESCRIPTION
+Runs a script to configure the physical NICs on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files. 
+
+This parent script pushes another script and any configuration files to each Hyper-V host defined in a CSV starts the script using PowerShell Remoting.
+
+.LINK
+https://github.com/alexbarthnet/PowerShell/
+#>
+
 Param(  
 	[Parameter(DontShow = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Script1 = '.\Update-S2D-3-Physical.ps1',
