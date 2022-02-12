@@ -1,45 +1,62 @@
-# set the folder locations
-$host_name = [System.Net.Dns]::GetHostName().ToLower()
-$path_temp = [System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')
-$path_logs = Join-Path -Path $path_temp -ChildPath 'hv-setup'
+<#
+.SYNOPSIS
+Configures the Windows features on a Hyper-V host that will be or is running Storage Spaces Direct (S2D).
 
-# create the logs folder if necessary
-If (!(Test-Path -Path $path_logs)) { New-Item -ItemType Directory -Path $path_logs }
+.DESCRIPTION
+Configures the Windows features on a Hyper-V host that will be or is running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files. 
 
-# set the file locations
-$log_feature = Join-Path -Path $path_logs -ChildPath ('log-update-s2d-1-features-' + (Get-Date -Format FileDateTime) + '.txt')
+A parent script pushes this script and the configuration files to each Hyper-V host then starts the script using PowerShell Remoting.
 
-# start logging
-Start-Transcript -Path $log_feature -Append -Force
+.LINK
+https://github.com/alexbarthnet/PowerShell/
+#>
 
-# define required roles
-$features = @()
-$features += 'BitLocker' # storage encryption of cluster shared volumes
-$features += 'Data-Center-Bridging' # enable network qos in cooperation with switches
-$features += 'Failover-Clustering' # enable failover clustering
-$features += 'FS-FileServer' # base feature for dedupe and bandwidth limits
-$features += 'FS-Data-Deduplication' # deduplicate cluster shared volumes
-$features += 'FS-SMBBW' # limit live migration bandwidth
-$features += 'GPMC' # console for handling group policy
-$features += 'Hyper-V' # enable virtualization
-$features += 'Hyper-V-PowerShell' # powershell for hyper-v
-$features += 'NetworkVirtualization' # network virtualization for SDN and SCVMM
-$features += 'RSAT-AD-Powershell' # powershell for AD
-$features += 'RSAT-Clustering-PowerShell' # powershell for failover clustering
-$features += 'Storage-Replica' # enable stretch clusters
+[CmdletBinding()]
+param (
+	[Parameter()]
+	[string]$Hostname = [System.Net.Dns]::GetHostName().ToLower(),
+	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
+	[string]$TempPath = [System.Environment]::GetEnvironmentVariable('TEMP', 'Machine'),
+	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
+	[string]$FilePath = (Join-Path -Path $TempPath -ChildPath 'hv-setup'),
+	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
+	[string]$LogFile = $PSCommandPath.Replace('.ps1', "-$(Get-Date -Format FileDateTime).txt")
+)
 
-# check if part of a cluster
-Write-Host ($host_name + ' - checking if Cluster service is running...')
-$cluster = $null
-$cluster = Get-Service | Where-Object { $_.Name -eq 'ClusSvc' -and $_.Status -eq 'Running'}
-If ($cluster) {
-    Write-Host ($host_name + ' - ...cluster service is running, installing features without restarting...')
-    Install-WindowsFeature -Name $features -IncludeAllSubFeature -IncludeManagementTools
+Try {
+	# start logging
+	Start-Transcript -Path $LogFile -Append -Force
+
+	# define required roles
+	$features = @()
+	$features += 'BitLocker' # storage encryption of cluster shared volumes
+	$features += 'Data-Center-Bridging' # enable network qos in cooperation with switches
+	$features += 'Failover-Clustering' # enable failover clustering
+	$features += 'FS-FileServer' # base feature for dedupe and bandwidth limits
+	$features += 'FS-Data-Deduplication' # deduplicate cluster shared volumes
+	$features += 'FS-SMBBW' # limit live migration bandwidth
+	$features += 'GPMC' # console for handling group policy
+	$features += 'Hyper-V' # enable virtualization
+	$features += 'Hyper-V-PowerShell' # powershell for hyper-v
+	$features += 'NetworkVirtualization' # network virtualization for SDN and SCVMM
+	$features += 'RSAT-AD-Powershell' # powershell for AD
+	$features += 'RSAT-Clustering-PowerShell' # powershell for failover clustering
+	$features += 'Storage-Replica' # enable stretch clusters
+
+	# check if part of a cluster
+	Write-Host "$Hostname - checking if Cluster service is running..."
+	$cluster = $null
+	$cluster = Get-Service | Where-Object { $_.Name -eq 'ClusSvc' -and $_.Status -eq 'Running' }
+	If ($cluster) {
+		Write-Host "$Hostname - ...cluster service is running, installing features without restarting..."
+		Install-WindowsFeature -Name $features -IncludeAllSubFeature -IncludeManagementTools
+	}
+	Else {
+		Write-Host "$Hostname - ...cluster service is not running, installing features and restarting if required..."
+		Install-WindowsFeature -Name $features -IncludeAllSubFeature -IncludeManagementTools -Restart
+	}
 }
-Else {
-    Write-Host ($host_name + ' - ...cluster service is not running, installing features and restarting if required...')
-    Install-WindowsFeature -Name $features -IncludeAllSubFeature -IncludeManagementTools -Restart
+Finally {
+	# stop logging
+	Stop-Transcript
 }
-
-# stop logging
-Stop-Transcript

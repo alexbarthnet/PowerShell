@@ -3,7 +3,7 @@
 Configures the physical NICs on a Hyper-V host that will be or is running Storage Spaces Direct (S2D).
 
 .DESCRIPTION
-Configures the physical NICs on a Hyper-V host that will be or is  Storage Spaces Direct (S2D) with information from a set of host-specific configuration files. 
+Configures the physical NICs on a Hyper-V host that will be or is running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files. 
 
 A parent script pushes this script and the configuration files to each Hyper-V host then starts the script using PowerShell Remoting.
 
@@ -15,22 +15,22 @@ https://github.com/alexbarthnet/PowerShell/
 param (
 	[Parameter()]
 	[string]$Hostname = [System.Net.Dns]::GetHostName().ToLower(),
-	[Parameter()][ValidateScript({ Test-Path -Path $_})]
+	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
 	[string]$TempPath = [System.Environment]::GetEnvironmentVariable('TEMP', 'Machine'),
-	[Parameter()][ValidateScript({ Test-Path -Path $_})]
+	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
 	[string]$FilePath = (Join-Path -Path $TempPath -ChildPath 'hv-setup'),
-	[Parameter()][ValidateScript({ Test-Path -Path $_})]
-	[string]$LogsFile = $PSCommandPath.Replace(".ps1", "-$(Get-Date -Format FileDateTime).txt"),
-	[Parameter()][ValidateScript({ Test-Path -Path $_})]
+	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
+	[string]$LogFile = $PSCommandPath.Replace('.ps1', "-$(Get-Date -Format FileDateTime).txt"),
+	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
 	[string]$NetworkCsv = (Join-Path -Path $FilePath -ChildPath "$($Hostname)-net.csv"),
-	[Parameter()][ValidateScript({ Test-Path -Path $_})]
+	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
 	[string]$DnsServers = (Join-Path -Path $FilePath -ChildPath "$($Hostname)-dns.txt")
 )
 
-# start logging
-Start-Transcript -Path $LogsFile -Append -Force
-
 Try {
+	# start logging
+	Start-Transcript -Path $LogFile -Append -Force
+
 	# disable DHCP on non-USB adapters
 	Write-Host ("$Hostname - Disabling DHCP on non-USB NICs...")
 	$nics_not_usb = $null
@@ -46,6 +46,63 @@ Try {
 		}
 		Else {
 			Write-Host ("$Hostname, $nic_ifalias - DHCPv4 disabled")
+		}
+	}
+
+	# get the adapters that are a hardware device to exclude virtual adapters
+	Get-NetAdapter | Where-Object { $_.HardwareInterface } | Sort-Object InterfaceAlias | ForEach-Object {
+		# set base names
+		$nic_old = ($_).Name
+		$nic_new = $null
+
+		# try to build the name from slot and port information
+		$nic_hwi = ($_ | Get-NetAdapterHardwareInfo -ErrorAction 'SilentlyContinue')
+		If ($nic_hwi.BusNumber -eq 0) {
+			$nic_new = ('Port ' + $nic_hwi.BusNumber)
+			$nic_new_via = 'bus number'
+		}
+		ElseIf ($nic_hwi.SlotNumber) {
+			$nic_new = ('Slot ' + $nic_hwi.SlotNumber + ' Port ' + ($nic_hwi.FunctionNumber + 1))
+			$nic_new_via = 'slot/port number'
+		}
+		Else {
+			$nic_new = ('Port ' + ($nic_hwi.FunctionNumber + 1))
+			$nic_new_via = 'port number'
+		}
+ 
+		# try to build the name from PCI device label
+		$nic_pci = ($_ | Get-NetAdapterHardwareInfo -ErrorAction 'SilentlyContinue').PciDeviceLabelString
+		If ($nic_pci) {
+			$nic_new = $nic_pci
+			$nic_new_via = 'PCI device label'
+		}
+ 
+		# try to build the name from Hyper-V 
+		$nic_adv = ($_ | Get-NetAdapterAdvancedProperty -ErrorAction 'SilentlyContinue' | Where-Object { $_.RegistryKeyword -eq 'HyperVNetworkAdapterName' }).DisplayValue
+		If ($nic_adv) {
+			$nic_new = $nic_adv
+			$nic_new_via = 'Hyper-V'
+		}
+
+		# if the new name was generated...
+		If ($nic_new) {
+			If ($nic_old -eq 'Management') {
+				# if old is "Management", leave alone; likely already configured by WAC
+				Write-Host "$Hostname - '$nic_old' NOT renamed; a NIC named 'Management' is not renamed"
+			}
+			ElseIf ($nic_new -ne $nic_old) {
+				# if new is different from old, set the NIC and declare the source
+				Write-Host "$Hostname - '$nic_old' renamed to '$nic_new' via '$nic_new_via'"
+				Rename-NetAdapter -Name $nic_old -NewName $nic_new
+			}
+			Else {
+				# if new is the same as old, declare and move on
+				Write-Host "$Hostname - '$nic_old' NOT renamed; generated name matches current name"
+			}
+		}
+		Else {
+			# if new name was not generated...
+			Write-Host "$Hostname - '$nic_old' NOT renamed; could not generate name"
 		}
 	}
 
