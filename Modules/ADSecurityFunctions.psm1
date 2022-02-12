@@ -205,7 +205,7 @@ Function Reset-ADSecurity {
 			Remove-ADCustomPSDrive
 		}
 		Catch {
-			Write-Host "ERROR: removing custom PSDrive"
+			Write-Host 'ERROR: removing custom PSDrive'
 			Break
 		}	
 	}
@@ -328,6 +328,17 @@ Function Update-ADSecurity {
 		Else {
 			Write-Host "WARNING: object not found: '$ad_object_dn'"
 		}
+	}
+
+	# remove custom PSdrive if created
+	If ($null -ne $Server) {
+		Try {
+			Remove-ADCustomPSDrive
+		}
+		Catch {
+			Write-Host 'ERROR: removing custom PSDrive'
+			Break
+		}	
 	}
 }
 
