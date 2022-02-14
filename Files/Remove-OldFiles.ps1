@@ -54,23 +54,28 @@ Function Remove-ItemsFromPathByDays {
 		$old_paths += Get-ChildItem -Path $Path -Recurse -Force -Attributes 'Directory' | Where-Object { $_.LastWriteTime -lt $date_purge } | Sort-Object -Property FullName -Descending
 		ForEach ($old_path in $old_paths) {
 			Write-LogToMultiple -LogSubject $Path -Text "checking folder: '$($old_path.FullName)'"
-			If ($null -eq (Get-ChildItem -Path $old_path -Recurse -Force)) {
-				If ($Run) {
-					Write-LogToMultiple -LogSubject $Path -Text 'folder is empty, removing!'
-					Remove-Item -Path $old_path.FullName -Force
+			If (Test-Path -Path $old_path) {
+				If ($null -eq (Get-ChildItem -Path $old_path -Recurse -Force)) {
+					If ($Run) {
+						Write-LogToMultiple -LogSubject $Path -Text 'folder is empty, removing!'
+						Remove-Item -Path $old_path.FullName -Force
+					}
+					Else {
+						Write-LogToMultiple -LogSubject $Path -Text 'TESTING - folder is empty, would remove!'
+					}
 				}
 				Else {
-					Write-LogToMultiple -LogSubject $Path -Text 'TESTING - folder is empty, would remove!'
+					Write-LogToMultiple -LogSubject $Path -Text 'folder not empty, skipping!'
 				}
 			}
 			Else {
-				Write-LogToMultiple -LogSubject $Path -Text 'folder not empty, skipping!'
+				Write-LogToMultiple -LogSubject $Path -Text 'folder not found, skipping!'
 			}
 		}
 	}
 	Else {
 		Write-LogToMultiple -LogSubject $Path -Text 'directory not found, skipping!'
-	}    
+	}
 }
 
 # define configuration file from script path then verify path
