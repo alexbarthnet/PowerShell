@@ -277,6 +277,9 @@ Function Update-ADSecurity {
 				Write-Host "ERROR: could not retrieve ACL for: '$ad_object_dn'"
 				Continue ad_object
 			}
+			# retrieve inheritance settings
+			# $ad_object_acl.IsProtected
+			# $ad_object_acl.preserveInheritance
 			# check inheritance settings
 			switch ($Inheritance) {
 				'Enable' {
