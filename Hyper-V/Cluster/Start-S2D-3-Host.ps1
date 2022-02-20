@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-Runs a script to configure the virtual NICs, VM switches, and VM storage on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D).
+Runs a script to configure the live migration and QoS settings on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D).
 
 .DESCRIPTION
-Runs a script to configure the virtual NICs, VM switches, and VM storage on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files.
+Runs a script to configure the live migration and QoS settings on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files. 
 
 This parent script pushes another script and any configuration files to each Hyper-V host defined in a CSV then starts the script using PowerShell Remoting.
 
@@ -13,7 +13,7 @@ https://github.com/alexbarthnet/PowerShell/
 
 Param(  
 	[Parameter(DontShow = $True)][ValidateScript({ Test-Path -Path $_ })]
-	[string]$Script1 = '.\Update-S2D-4-Virtual.ps1',
+	[string]$Script1 = '.\Update-S2D-3-Host.ps1',
 	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$HostCsv,
 	[string]$HostName
@@ -79,23 +79,23 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 		New-Item -Path $host_temp -Name 'hv-setup' -ItemType 'Directory' -Force
 	}
 
-	# copy files for address and switch configuration
+	# copy files for alias configuration
 	Write-Host "$host_name - copying files..."
-	$file_names | Copy-Item -ToSession $pss_files -Destination $host_path -Force
+	$file_names | Copy-Item -ToSession $pss_files -Destination $host_path
 
 	# close session for files
 	Write-Host "$host_name - ending file session..."
 	Remove-PSSession -Session $pss_files
-
+	
 	# get basename of files
 	$host_csv = (Get-Item -Path $HostCsv).Name
-	
+
 	# run the scripts
 	Write-Host "$host_name - starting script session..."
 	$pss_options = New-PSSessionOption -OutputBufferingMode 'Drop'
 	$pss_scripts = Invoke-Command -ComputerName $host_name -InDisconnectedSession -SessionOption $pss_options -ScriptBlock {
 		Set-Location -Path $using:host_path
-		Move-Item -Path $using:host_csv -Destination ($using:host_name + '-net.csv') -Force
+		Move-Item -Path $using:host_csv -Destination ($using:host_name + '-host.csv') -Force
 		Invoke-Expression -Command $using:Script1
 	}
 

@@ -50,36 +50,39 @@ Try {
 	}
 
 	# get the adapters that are a hardware device to exclude virtual adapters
-	Get-NetAdapter | Where-Object { $_.HardwareInterface } | Sort-Object InterfaceAlias | ForEach-Object {
+	$nic_hw_all = Get-NetAdapter | Where-Object { $_.HardwareInterface } | Sort-Object -Property 'InterfaceAlias'
+	ForEach ($nic_hw in $nic_hw_all) {
 		# set base names
-		$nic_old = ($_).Name
+		$nic_old = $nic_hw.Name
 		$nic_new = $null
 
+		# get hardware info
+		$nic_hw_info = Get-NetAdapterHardwareInfo -Name $nic_old -ErrorAction 'SilentlyContinue'
+
 		# try to build the name from slot and port information
-		$nic_hwi = ($_ | Get-NetAdapterHardwareInfo -ErrorAction 'SilentlyContinue')
-		If ($nic_hwi.BusNumber -eq 0) {
-			$nic_new = ('Port ' + $nic_hwi.BusNumber)
+		If ($nic_hw_info.BusNumber -eq 0) {
+			$nic_new = ('Port ' + $nic_hw_info.BusNumber)
 			$nic_new_via = 'bus number'
 		}
-		ElseIf ($nic_hwi.SlotNumber) {
-			$nic_new = ('Slot ' + $nic_hwi.SlotNumber + ' Port ' + ($nic_hwi.FunctionNumber + 1))
+		ElseIf ($nic_hw_info.SlotNumber) {
+			$nic_new = ('Slot ' + $nic_hw_info.SlotNumber + ' Port ' + ($nic_hw_info.FunctionNumber + 1))
 			$nic_new_via = 'slot/port number'
 		}
 		Else {
-			$nic_new = ('Port ' + ($nic_hwi.FunctionNumber + 1))
+			$nic_new = ('Port ' + ($nic_hw_info.FunctionNumber + 1))
 			$nic_new_via = 'port number'
 		}
  
 		# try to build the name from PCI device label
-		$nic_pci = ($_ | Get-NetAdapterHardwareInfo -ErrorAction 'SilentlyContinue').PciDeviceLabelString
-		If ($nic_pci) {
+		$nic_pci = $nic_hw_info.PciDeviceLabelString
+		If ($null -ne $nic_pci) {
 			$nic_new = $nic_pci
 			$nic_new_via = 'PCI device label'
 		}
  
 		# try to build the name from Hyper-V 
-		$nic_adv = ($_ | Get-NetAdapterAdvancedProperty -ErrorAction 'SilentlyContinue' | Where-Object { $_.RegistryKeyword -eq 'HyperVNetworkAdapterName' }).DisplayValue
-		If ($nic_adv) {
+		$nic_adv = ($nic_hw_info | Where-Object { $_.RegistryKeyword -eq 'HyperVNetworkAdapterName' }).DisplayValue
+		If ($null -ne $nic_adv) {
 			$nic_new = $nic_adv
 			$nic_new_via = 'Hyper-V'
 		}
@@ -200,8 +203,8 @@ Try {
 					}
 
 					# current NIC has gateway, set the DNS servers
-					Write-Host ("$Hostname, $nic_name, $nic_addr - ...setting DNS servers: $(Get-Content($DnsServers) -join ',')")
-					$nic_exists | Set-DnsClientServerAddress -ServerAddress $(Get-Content($DnsServers))
+					Write-Host ("$Hostname, $nic_name, $nic_addr - ...setting DNS servers: $((Get-Content -Path $DnsServers) -join ',')")
+					$nic_exists | Set-DnsClientServerAddress -ServerAddress $(Get-Content -Path $DnsServers)
 					# requested NIC has gateway, enable DNS registration
 					Write-Host ("$Hostname, $nic_name, $nic_addr - ...enabling DNS registration")
 					$nic_exists | Set-DnsClient -RegisterThisConnectionsAddress $true

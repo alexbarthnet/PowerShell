@@ -13,7 +13,7 @@ https://github.com/alexbarthnet/PowerShell/
 
 Param(  
 	[Parameter(DontShow = $True)][ValidateScript({ Test-Path -Path $_ })]
-	[string]$Script1 = '.\Update-S2D-1-Features.ps1',
+	[string]$Script1 = '.\Update-S2D-2-Features.ps1',
 	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$HostCsv,
 	[string]$HostName
