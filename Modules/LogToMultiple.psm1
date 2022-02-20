@@ -32,13 +32,13 @@ Function Write-LogToMultiple {
 	Param (
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		[string]$LogText,
-		[Parameter()][AllowEmptyString]
+		[Parameter()]
 		[string]$LogSubject,
 		[Parameter()]
 		[string]$LogLevel = 'information',
-		[Parameter()][AllowEmptyString]
+		[Parameter()]
 		[string]$LogUser,
-		[Parameter()][AllowEmptyString]
+		[Parameter()]
 		[string]$LogHost,
 		[Parameter()]
 		[string]$LogTime = (Get-Date -Format FileDateTimeUniversal),
@@ -57,13 +57,13 @@ Function Write-LogToMultiple {
 	)
 
 	# set any global defaults
-	If ($global:LogToScreenAndFile.Started) {
-		If ([string]::IsNullOrEmpty($EventLog)) { $EventLog = $global:LogToScreenAndFile.LogEvent }
-		If ([string]::IsNullOrEmpty($EventSource)) { $EventSource = $global:LogToScreenAndFile.LogSource }
-		If ([string]::IsNullOrEmpty($LogEncoding)) { $LogEncoding = $global:LogToScreenAndFile.LogEncoding }
-		If ([string]::IsNullOrEmpty($LogFile)) { $LogFile = $global:LogToScreenAndFile.LogFile }
-		If ([string]::IsNullOrEmpty($LogHost)) { $LogHost = $global:LogToScreenAndFile.LogHost }
-		If ([string]::IsNullOrEmpty($LogUser)) { $LogUser = $global:LogToScreenAndFile.LogUser }
+	If ($global:LogToMultiple.Started) {
+		If ([string]::IsNullOrEmpty($EventLog)) { $EventLog = $global:LogToMultiple.LogEvent }
+		If ([string]::IsNullOrEmpty($EventSource)) { $EventSource = $global:LogToMultiple.LogSource }
+		If ([string]::IsNullOrEmpty($LogEncoding)) { $LogEncoding = $global:LogToMultiple.LogEncoding }
+		If ([string]::IsNullOrEmpty($LogFile)) { $LogFile = $global:LogToMultiple.LogFile }
+		If ([string]::IsNullOrEmpty($LogHost)) { $LogHost = $global:LogToMultiple.LogHost }
+		If ([string]::IsNullOrEmpty($LogUser)) { $LogUser = $global:LogToMultiple.LogUser }
 	}
 
 	# set any local defaults
@@ -185,14 +185,14 @@ Function Start-LogToMultiple {
 			Write-LogToMultiple -LogLevel 'error' -LogFile $log_file -LogText 'event-source-ERROR'
 			# return error to caller
 			Return $_
-		}    
+		}
 	}
 	Else {
 		$EventLogName = [string]::Empty
 	}
 
 	# set global variables
-	New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'LogToScreenAndFile' -Value (
+	New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'LogToMultiple' -Value (
 		[pscustomobject]@{
 			Started     = $true
 			LogScreen   = $true
@@ -203,7 +203,7 @@ Function Start-LogToMultiple {
 			LogEvent    = $EventLogName
 			LogSource   = $log_base
 		}
-	)
+	)	
 }
 
 Function Initialize-LogToMultiple {
@@ -223,7 +223,7 @@ Function Initialize-LogToMultiple {
 
 	# verify function run as admin
 	If ([System.Security.Principal.WindowsIdentity]::GetCurrent().Groups.Value -contains 'S-1-5-32-544' -eq $false) {
-		Write-Host "ERROR: this function must be run as an administrator, exiting!"
+		Write-Host 'ERROR: this function must be run as an administrator, exiting!'
 		Return
 	}
 
@@ -248,8 +248,8 @@ Function Initialize-LogToMultiple {
 	Else {
 		Try {
 			# create log path
-			New-Item -Path $LogsPath -Name $log_base -ItemType 'Directory' -Force
-			Write-Host '...log path found created'
+			$null = New-Item -Path $LogsPath -Name $log_base -ItemType 'Directory' -Force
+			Write-Host '...log path created'
 		}
 		Catch {
 			# report log path not created
@@ -261,7 +261,7 @@ Function Initialize-LogToMultiple {
 	# verify log path permissions
 	Write-Host "Checking permissions on log path: $log_path"
 	$log_path_acl = Get-Acl -Path $log_path
-	If ($null -eq ($log_path_acl.Access | Where-Object { $_.IdentityReference -match $ScriptUser -and $_.AccessControlType -match 'Allow' -and $_.FileSystemRights -match 'Modify' -and $_.InheritanceFlags -match 'ContainerInherit' -and $_.InheritanceFlags -match 'ObjectInherit' })) {
+	If ($null -eq ($log_path_acl.Access | Where-Object { { $_.IdentityReference.Value -like "*$ScriptUser" } -and $_.AccessControlType -match 'Allow' -and $_.FileSystemRights -match 'Modify' -and $_.InheritanceFlags -match 'ContainerInherit' -and $_.InheritanceFlags -match 'ObjectInherit' })) {
 		Try {
 			$log_path_ace = New-Object 'System.Security.AccessControl.FileSystemAccessRule' @($log_path_sid, 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
 			$log_path_acl.PurgeAccessRules($log_path_sid)
