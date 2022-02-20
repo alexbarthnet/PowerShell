@@ -13,7 +13,7 @@ https://github.com/alexbarthnet/PowerShell/
 
 Param(  
 	[Parameter(DontShow = $True)][ValidateScript({ Test-Path -Path $_ })]
-	[string]$Script1 = '.\Update-S2D-3-Physical.ps1',
+	[string]$Script1 = '.\Update-S2D-4-Physical.ps1',
 	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$DnsList,
 	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
