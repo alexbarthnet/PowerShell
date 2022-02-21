@@ -138,7 +138,7 @@ Try {
 				# check for wrong address on current NIC
 				$nic_addr_on_nic = $null
 				$nic_addr_on_nic = Get-NetIPAddress | Where-Object { $_.IPv4Address -ne $nic_addr -and $_.AddressFamily -eq 'IPv4' -and $_.InterfaceAlias -eq $nic_name -and $_.InterfaceAlias -ne $nic_vnic }
-				If ($nic_addr_on_nic) {
+				If ($nic_addr_on_nic -and ($nic_addr_on_nic -notlike "169.254.*")) {
 					Write-Host ("$Hostname, $nic_name, $nic_addr - ...wrong IP address found on current NIC, removing '$($nic_addr_on_nic.IPv4Address)' from '$($nic_addr_on_nic.InterfaceAlias)'")
 					$nic_addr_on_nic | Remove-NetIPAddress -Confirm:$false
 				}
