@@ -125,7 +125,7 @@ switch ($true) {
 		# create custom object from parameters then add to object
 		$json_data += [pscustomobject]@{ 
 			VMName = $VMName
-			Purge  = $Purge
+			Purge  = $Purge.ToBool()
 			Source = $Source 
 			Target = $Target 
 		}
