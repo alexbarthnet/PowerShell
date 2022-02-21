@@ -38,13 +38,12 @@ Function Import-OfflineFilesToVM {
 	$vm_check = Get-VM | Where-Object { $_.Name -eq $VMName }
 	If ($vm_check) {
 		# retrieve VM credentials
-		Set-Location -Path $PSScriptRoot
-		$global:Credential = $null
-		Unprotect-CmsCredentials -Target $VMName
-		If ($global:Credential) {
+		$Credential = $null
+		$Credential = Unprotect-CmsCredentials -Target $VMName
+		If ($Credential) {
 			# connect to VM
 			$vm_direct = $null
-			$vm_direct = New-PSSession -VMName $VMName -Credential $global:Credential
+			$vm_direct = New-PSSession -VMName $VMName -Credential $Credential
 			If ($vm_direct) {
 				# verify source
 				If (Test-Path -Path $Source) { 
