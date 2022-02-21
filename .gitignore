@@ -6,3 +6,5 @@
 Archived/*
 # ignore private files
 Private/*
+# ignore shortcut files
+Shortcuts/*
