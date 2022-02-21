@@ -97,11 +97,11 @@ Else {
 
 # evaluate parameters
 switch ($true) {
-	$Clear { 
+	$Clear {
 		Write-Output "`nClearing '$json_name'`n"
 		If ($json_test) { Remove-Item -Path $json_path -Force }
 	}
-	$Remove { 
+	$Remove {
 		# remove matching entries from object
 		$json_data = $json_data | Where-Object { $_.Path -ne $Path }
 		$json_data | ConvertTo-Json | Set-Content -Path $json_path
@@ -109,7 +109,7 @@ switch ($true) {
 		Write-Output "`nUpdated '$json_name' to remove '$Path':"
 		$json_data | Select-Object Path, Path, Updated
 	}
-	$Add { 
+	$Add {
 		# create custom object from parameters then add to object
 		$json_data += [pscustomobject]@{ 
 			Days    = $Days
