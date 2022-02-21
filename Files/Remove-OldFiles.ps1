@@ -107,7 +107,7 @@ switch ($true) {
 		$json_data | ConvertTo-Json | Set-Content -Path $json_path
 		# declare changes then show current state
 		Write-Output "`nUpdated '$json_name' to remove '$Path':"
-		$json_data | Select-Object Path, Path, Updated
+		$json_data | Select-Object Days, Path, Updated
 	}
 	$Add {
 		# create custom object from parameters then add to object
@@ -118,7 +118,7 @@ switch ($true) {
 		}
 		$json_data | ConvertTo-Json | Set-Content -Path $json_path
 		# declare changes then show current state
-		Write-Output "`nUpdated '$json_name' to add '$Path'"
+		Write-Output "`nUpdated '$json_name' to add '$Path':"
 		$json_data | Select-Object Days, Path, Updated
 	}
 	{ $Run -or $Test } {
@@ -132,12 +132,15 @@ switch ($true) {
 			# check entry count in configuration file
 			If ($json_data.Count -eq 0) {
 				Write-Host "ERROR: no entries found in configuration file: $json_name"
-				Exit
+				Return
 			}
 			
 			# process configuration file
 			ForEach ($json_datum in $json_data) { 
-				If ([string]::IsNullOrEmpty($json_datum.Path) -and -not [string]::IsNullOrEmpty($json_datum.Days)) {
+				If ([string]::IsNullOrEmpty($json_datum.Path) -or [string]::IsNullOrEmpty($json_datum.Days)) {
+					Write-Host "ERROR: invalid entry found in configuration file: $json_name"
+				}
+				Else {
 					Remove-ItemsFromPathByDays -Path $json_datum.Path -Days $json_datum.Days
 				}
 			}

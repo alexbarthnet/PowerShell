@@ -227,12 +227,27 @@ Function Initialize-LogToMultiple {
 		Return
 	}
 
-	# verify script user
+	# get script user SID
 	Try {
-		$log_path_sid = (New-Object 'System.Security.Principal.NTAccount' $ScriptUser).Translate([System.Security.Principal.SecurityIdentifier])
+		$log_user_sid = (New-Object 'System.Security.Principal.NTAccount' $ScriptUser).Translate([System.Security.Principal.SecurityIdentifier])
 	}
 	Catch {
 		Write-Host "ERROR: could not retrieve SID for the '$ScriptUser' username, exiting!"
+		Return
+	}
+
+	# get script user full NT name
+	Try {
+		$log_user_name = (New-Object 'System.Security.Principal.SecurityIdentifier' $log_user_sid).Translate([System.Security.Principal.NTAccount])
+	}
+	Catch {
+		Write-Host "ERROR: could not retrieve full NTAcount for the '$ScriptUser' SID, exiting!"
+		Return
+	}
+
+	# check script user domain
+	If ($log_user_name.Value -match '^NT AUTHORITY') {
+		Write-Host "ERROR: provided username maps to an 'NT AUTHORITY' principal, exiting!"
 		Return
 	}
 
@@ -259,11 +274,19 @@ Function Initialize-LogToMultiple {
 	}
 
 	# verify log path permissions
-	Write-Host "Checking permissions on log path: $log_path"
+	Write-Host "Retrieved permissions on log path: $log_path"
 	$log_path_acl = Get-Acl -Path $log_path
-	If ($null -eq ($log_path_acl.Access | Where-Object { { $_.IdentityReference.Value -like "*$ScriptUser" } -and $_.AccessControlType -match 'Allow' -and $_.FileSystemRights -match 'Modify' -and $_.InheritanceFlags -match 'ContainerInherit' -and $_.InheritanceFlags -match 'ObjectInherit' })) {
+	$log_path_ace = $log_path_acl.Access | Where-Object { 
+		$_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]) -eq $log_user_sid -and
+		$_.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and
+		$_.InheritanceFlags -eq @([System.Security.AccessControl.InheritanceFlags]::ContainerInherit, [System.Security.AccessControl.InheritanceFlags]::ObjectInherit) -and
+		($_.FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::Modify) -eq [System.Security.AccessControl.FileSystemRights]::Modify
+	}
+	# verify log path permissions
+	Write-Host "Verifying permissions on log path: $log_path"
+	If ($null -eq $log_path_ace) {
 		Try {
-			$log_path_ace = New-Object 'System.Security.AccessControl.FileSystemAccessRule' @($log_path_sid, 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+			$log_path_ace = New-Object 'System.Security.AccessControl.FileSystemAccessRule' @($log_user_sid, 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
 			$log_path_acl.PurgeAccessRules($log_path_sid)
 			$log_path_acl.AddAccessRule($log_path_ace)
 			$log_path_acl | Set-Acl -Path $log_path 
@@ -299,7 +322,7 @@ Function Initialize-LogToMultiple {
 		Catch {
 			Write-Host 'ERROR: event log source could not be checked, exiting!'
 			Return
-		}    
+		}
 	}
 }
 

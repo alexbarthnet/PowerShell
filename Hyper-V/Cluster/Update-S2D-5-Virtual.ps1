@@ -284,7 +284,6 @@ Try {
 				Write-Host ("$Hostname,$vswitch_name,$vnic_name - QoS not found")
 			}
 
-
 			# check the IP address on the networkadapter
 			$nic_address = $null
 			$nic_address = (Get-NetIPAddress -AddressFamily 'IPv4' | Where-Object { $_.InterfaceAlias -match $vnic_name }).IPv4Address
