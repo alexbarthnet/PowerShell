@@ -77,7 +77,7 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 	Write-Host "$host_name - running commands..."
 	$log_devices += $out_devices = Invoke-Command -Session $pss_main -ScriptBlock {
 		Get-Disk | Where-Object { $_.Number -ne $null } | Where-Object { $_.IsBoot -ne $true } | Where-Object { $_.IsSystem -ne $true } | Where-Object { $_.PartitionStyle -eq 'RAW' } | Group-Object -NoElement -Property 'Model' | Sort-Object -Property 'Count'
-	} 
+	}
 
 	# save output to host
 	Write-Host "$host_name - saving output to host..."

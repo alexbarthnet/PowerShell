@@ -39,26 +39,23 @@ Try {
 	# start logging
 	Start-Transcript -Path $LogFile -Append -Force
 
-	# get defualt bandwidth percentage
-	$DefaultPercent
-
 	# determine live migration bandwidth limit
 	$nic_speed = $null
 	$nic_speed = (Get-NetAdapter -Physical | Sort-Object Speed | Select-Object -Last 1).Speed
-	If ($nic_speed -le [Math]::Pow(10, 10)) {
-		# at 10Gb and below, set SMB bandwidth limit to 30% of the link speed in MB
+	If ($nic_speed -lt [Math]::Pow(10, 10)) {
+		# below 10Gb, set SMB bandwidth limit to 30% of the link speed in MB
 		# the math: take linkspeed, divide by 1 million (convert bit to megabits), divide by 8 (convert megabits to megabytes), multiply by 0.3 (30%)
 		$smb_limit = $nic_speed / [Math]::Pow(10, 6) / 8 * 0.3
 	}
 	Else {
-		# above 10Gb, set SMB bandwidth limit to 750MB
+		# at or above 10Gb, set SMB bandwidth limit to 375MB
 		# the math above applied to 25Gb adapters would be 937.5MB/s
-		$smb_limit = 750
+		$smb_limit = 375
 	}
 
 	# set winrm max envelope size
-	Write-Host "$Hostname - setting WinRM Envelope maximum to 1MB"
-	Set-WSManInstance -ResourceURI 'winrm/config' -ValueSet @{MaxEnvelopeSizekb = '1024' }
+	Write-Host "$Hostname - setting WinRM Envelope maximum to 4MB"
+	Set-WSManInstance -ResourceURI 'winrm/config' -ValueSet @{MaxEnvelopeSizekb = '4096' }
 
 	# set live migration bandwidth limit
 	Write-Host "$Hostname - setting Live Migration bandwidth limit: $($smb_limit.ToString()) MB/s"
@@ -115,30 +112,6 @@ Try {
 			New-NetQosPolicy -Name $StorageLabel -PriorityValue8021Action 3 -NetDirectPortMatchCondition 445
 		}
 	}
-
-	# # check for SMB QoS policy
-	# Write-Host "$Hostname - checking SMB QoS policy"
-	# $qos_policy_cluster = Get-NetQosPolicy | Where-Object { $_.Name -eq $StorageLabel -and $_.PriorityValue -eq 3 -and $_.Template -eq 'SMB' }
-	# If ($qos_policy_cluster) {
-	# 	Write-Host "$Hostname - verified SMB QoS policy"
-	# }
-	# Else {
-	# 	$qos_policy_cluster = Get-NetQosPolicy | Where-Object { $_.Name -eq $StorageLabel -or $_.Template -eq 'SMB' }
-	# 	If ($qos_policy_cluster) {
-	# 		$qos_policy_cluster | ForEach-Object {
-	# 			If ($_.Name -ne $StorageLabel -or $_.PriorityValue -ne 3 -or $_.Template -ne 'SMB') {
-	# 				Write-Host "$Hostname - removing incorrect SMB QoS policy: $($_.Name)"
-	# 				$_ | Remove-NetQosPolicy -Confirm:$false
-	# 			}
-	# 		}
-	# 		Write-Host "$Hostname - resetting SMB QoS policy"
-	# 		New-NetQosPolicy -Name $StorageLabel -PriorityValue8021Action 3 -SMB
-	# 	}
-	# 	Else {
-	# 		Write-Host "$Hostname - creating SMB QoS policy"
-	# 		New-NetQosPolicy -Name $StorageLabel -PriorityValue8021Action 3 -SMB
-	# 	}
-	# }
 
 	# check for Cluster QoS policy
 	Write-Host "$Hostname - checking Cluster QoS policy"
@@ -238,15 +211,15 @@ Try {
 
 	# check for Default QoS traffic class
 	Write-Host "$Hostname - checking Default QoS traffic class"
-	$qos_traffic_default = Get-NetQosTrafficClass | Where-Object { $_.Name -match $DefaultLabel -and $_.Priority -contains 0 -and $_.Bandwidth -eq 49 -and $_.Algorithm -eq 'ETS' }
+	$qos_traffic_default = Get-NetQosTrafficClass | Where-Object { $_.Name -match $DefaultLabel -and $_.Priority -contains 0 -and $_.Bandwidth -eq $DefaultPercent -and $_.Algorithm -eq 'ETS' }
 	If ($qos_traffic_default) {
 		Write-Host "$Hostname - verified Default QoS traffic class"
 	}
 	Else {
-		$qos_traffic_default = Get-NetQosTrafficClass | Where-Object { $_.Name -match $DefaultLabel -and $_.Priority -contains 0 -and $_.Bandwidth -lt 49 -and $_.Algorithm -eq 'ETS' }
+		$qos_traffic_default = Get-NetQosTrafficClass | Where-Object { $_.Name -match $DefaultLabel -and $_.Priority -contains 0 -and $_.Bandwidth -lt $DefaultPercent -and $_.Algorithm -eq 'ETS' }
 		If ($qos_traffic_default) {
 			Write-Host "$Hostname - found Default QoS traffic class with unexpected bandwidth reservation: $($qos_traffic_default.Bandwidth)"
-			Write-Host "$Hostname - ... the default QoS configuration for S2D should reserve 49% of bandwidth"
+			Write-Host "$Hostname - ... the default QoS configuration for S2D should reserve $DefaultPercent% of bandwidth"
 			Write-Host "$Hostname - ... review other QoS traffic classes on the system to determine if correct"
 		}
 		Else {
