@@ -42,28 +42,6 @@ Try {
 	# import CSV
 	$map_network = Import-Csv -Path $NetworkCsv | Where-Object { $_.Host -eq $Hostname }
 
-	# get the VM paths from the network CSV
-	Write-Host ("$Hostname - Processing VM storage settings...")
-	$map_network | Where-Object { $_.VmPath -and $_.VhdPath } | ForEach-Object {
-		If ($cluster) {
-			Write-Host ("$Hostname - Host is clustered, checking Hyper-V paths...")
-			$host_vmpath = $_.VmPath
-			$host_vhdpath = $_.VhdPath
-			If ((Test-Path -Path $host_vmpath) -and (Test-Path -Path $host_vhdpath)) {
-				Write-Host ("$Hostname - Setting Virtual Machine Path: " + $host_vmpath)
-				Set-VMHost -VirtualMachinePath $host_vmpath
-				Write-Host ("$Hostname - Setting Virtual Hard Disk Path: " + $host_vhdpath)
-				Set-VMHost -VirtualHardDiskPath $host_vhdpath	
-			}
-			Else {
-				Write-Host ("$Hostname - Host is clustered but paths not found, skipping Hyper-V paths")
-			}
-		}
-		Else {
-			Write-Host ("$Hostname - Host is not clustered, skipping Hyper-V paths")
-		}
-	}
-
 	# get the virtual switches from the network CSV
 	Write-Host ("$Hostname - Processing virtual switch settings...")
 	$map_network | Sort-Object -Property 'Switch' -Unique | ForEach-Object {
@@ -290,7 +268,7 @@ Try {
 			If ($nic_address -eq $vnic_addr) {
 				Write-Host ("$Hostname,$vswitch_name,$vnic_name - IP address correct, skipping...")
 			}
-			ElseIf ($nic_address -and ($nic_address -notlike "169.254.*")) {
+			ElseIf ($nic_address -and ($nic_address -notlike '169.254.*')) {
 				Write-Host ("$Hostname,$vswitch_name,$vnic_name - IP address incorrect, fixing...")
 				$nic_address | Remove-NetIPAddress -Confirm:$false
 				$nic_network | New-NetIPAddress -AddressFamily 'IPv4' -IPAddress $vnic_addr -PrefixLength $vnic_mask | Out-Null
