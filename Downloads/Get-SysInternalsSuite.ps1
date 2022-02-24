@@ -1,33 +1,52 @@
 [CmdletBinding()]
 Param (
-    [Parameter(Position = 0)][ValidateScript({Test-Path -Path $_})]
-    [string]$Destination = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path,
-    [Parameter(Position = 1)]
-    [switch]$Force
+	[Parameter(Position = 0)][ValidateScript({ Test-Path -Path $_ })]
+	[string]$Destination = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path,
+	[Parameter(Position = 1)]
+	[string]$FileName = 'SysinternalsSuite.zip',
+	[Parameter(Position = 2)]
+	[string]$FilePath = (Join-Path -Path $Destination -ChildPath $FileName),
+	[Parameter(Position = 3)]
+	[string]$Uri = 'https://download.sysinternals.com/files/SysinternalsSuite.zip',
+	[Parameter(Position = 4)]
+	[switch]$Extract,
+	[Parameter(Position = 5)]
+	[switch]$SkipDownload,
+	[Parameter(Position = 6)]
+	[switch]$Force
 )
 
-# define strings
-$uri_file = "https://download.sysinternals.com/files/SysinternalsSuite.zip"
-$zip_name = "SysinternalsSuite.zip"
-
-# build file paths
-$zip_file = Join-Path -Path $Destination -ChildPath $zip_name
-
-# get file sizes
-$uri_size = (Invoke-WebRequest -Uri $uri_file -UseBasicParsing -Method Head).Headers.'Content-Length'
-$zip_size = (Get-ItemProperty -Path $zip_file -ErrorAction SilentlyContinue).Length
-
-# check file sizes
-If ($uri_size -eq $zip_size -and -not $Force) {
-    Write-Output "The local file and remote file have the same size, skipping download"
+# check file
+If (Test-Path $FilePath -and -not $SkipDownload) {
+	# get size of local file and remote URI
+	$file_size = (Get-ItemProperty -Path $FilePath -ErrorAction 'SilentlyContinue').Length
+	$uri_size = (Invoke-WebRequest -Uri $Uri -UseBasicParsing -Method 'Head').Headers.'Content-Length'
+	# compare sizes
+	If ($uri_size -eq $file_size) {
+		Write-Output 'The local file and remote file have the same size, skipping download'
+		$SkipDownload = $true
+	}
 }
-Else {
-    # download file
-    Invoke-WebRequest -Uri $uri_file -OutFile $zip_file
 
-    # build file path using downloaded file
-    $zip_path = Join-Path -Path $PSScriptRoot -ChildPath (Get-Item -Path $zip_file).BaseName
+# download file to destination
+If ($Force -or -not $SkipDownload) {
+	# download latest release to destination
+	Try {
+		Invoke-WebRequest -Uri $Uri -UseBasicParsing -OutFile $FilePath
+	}
+	Catch {
+		Write-Error 'ERROR: could not download the file to the specified location'
+		Return
+	}
+}
 
-    # extract files
-    Expand-Archive -Path $zip_file -DestinationPath $zip_path -Force    
+# extract files to destination
+If ($Extract) {
+	Try {
+		Expand-Archive -Path $FilePath -DestinationPath $Destination -Force
+	}
+	Catch {
+		Write-Error 'ERROR: could not extract files to the destination'
+		Return
+	}
 }
