@@ -53,10 +53,9 @@ Try {
 		$pnic_array = @()
 		$pnic_names = $null
 		$pnic_names = $map_network | Where-Object { $_.Switch -eq $vswitch_name } | Sort-Object -Property 'Adapter'
-		$pnic_names | ForEach-Object {
-			# get network adapters matching NIC names
-			$pnic_name = $_.Adapter
+		ForEach ($pnic_name in $pnic_names.Adapter) {
 			Write-Host ("$Hostname,$vswitch_name - Checking physical NIC: " + $pnic_name)
+			# get network adapters matching NIC names
 			$pnic = $null
 			$pnic = Get-NetAdapter -Physical | Where-Object { $_.InterfaceAlias -eq $pnic_name }
 			If ($pnic) {
@@ -75,8 +74,7 @@ Try {
 		If ($vswitch) {
 			# if switch found, check NICs in switch
 			Write-Host ("$Hostname,$vswitch_name - Found switch: $vswitch_name")
-			$pnic_array | ForEach-Object {
-				$pnic = $_
+			ForEach ($pnic in $pnic_array) {
 				Write-Host ("$Hostname,$vswitch_name - Checking adapter: " + $pnic.InterfaceAlias)
 				# if the NIC exists, check if NIC is already in the switch team
 				If ($vswitch.NetAdapterInterfaceGuid -match [guid]$pnic.InterfaceGuid) {
@@ -89,28 +87,9 @@ Try {
 					Add-VMSwitchTeamMember -SwitchName $vswitch_name -NetAdapterName $pnic.InterfaceAlias
 				}
 			}
-			Write-Host ("$Hostname,$vswitch_name - Adapters verified, checking switch type...")
-			If ($vswitch_name -eq 'Management') {
-				# verify the management switch has a virtual NIC
-				Write-Host ("$Hostname,$vswitch_name - Management switch found, checking for management adapter(s)...")
-				$nic_mgmt = $null
-				$nic_mgmt = Get-VMNetworkAdapter -ManagementOS | Where-Object { $_.SwitchName -eq $vswitch_name }
-				# look for network adapters attached to the management switch...
-				If ($nic_mgmt) {
-					Write-Host ("$Hostname,$vswitch_name - Found " + $nic_mgmt.Count + ' management adapter(s)')
-				}
-				Else {
-					# if no, create a network adapter
-					Write-Host ("$Hostname,$vswitch_name - No management adapters found, creating initial management adapater...")
-					$nic_mgmt = Add-VMNetworkAdapter -ManagementOS -SwitchName $vswitch_name -Name $vswitch_name
-				}
-			}
-			Else {
-				Write-Host ("$Hostname,$vswitch_name - Non-management switch found, skipping management adapter check...")
-			}
 		}
 		Else {
-			# if switch NOT found check the type of switch and if the cluster exists
+			# if switch NOT found check the type of switch
 			Write-Host ("$Hostname,$vswitch_name - Switch not found, checking switch type...")
 			If ($pnic_array.Count -le 1) {
 				# if only one physical NIC is defined to be in the switch, don't make a switch!
@@ -127,7 +106,7 @@ Try {
 			}
 			Else {
 				# if switch NOT found and we should NOT make the virtual network adapater, create switch with NICs without adapter
-				Write-Host ("$Hostname,$vswitch_name - Switch is not Management and host is clustered, creating empty switch with: " + $pnic_array[0].Name)
+				Write-Host ("$Hostname,$vswitch_name - Switch is not Management, creating empty switch with: " + $pnic_array[0].Name)
 				$vswitch = New-VMSwitch -Name $vswitch_name -NetAdapterName $pnic_array[0].Name -EnableEmbeddedTeaming $true -EnableIov $true -AllowManagementOS $false
 				For ($i = 1; $i -lt $pnic_array.Count; $i++) {
 					Write-Host ("$Hostname,$vswitch_name - Expanding switch with: " + $pnic_array[$i].Name)
