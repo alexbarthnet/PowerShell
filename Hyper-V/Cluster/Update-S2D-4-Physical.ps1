@@ -27,27 +27,10 @@ param (
 	[string]$DnsServers = (Join-Path -Path $FilePath -ChildPath "$($Hostname)-dns.txt")
 )
 
+# pass 1: physical NIC rename
 Try {
 	# start logging
 	Start-Transcript -Path $LogFile -Append -Force
-
-	# disable DHCP on non-USB adapters
-	Write-Host ("$Hostname - Disabling DHCP on non-USB NICs...")
-	$nics_not_usb = $null
-	$nics_not_usb = Get-NetAdapter | Where-Object { $_.ComponentID -notmatch 'usb' } | Sort-Object InterfaceAlias
-	ForEach ($nic_not_usb in $nics_not_usb) {
-		$nic_ifalias = $nic_not_usb.InterfaceAlias
-		$nic_dhcp_v4 = $null
-		$nic_dhcp_v4 = $nic_not_usb | Get-NetIPInterface | Where-Object { $_.AddressFamily -eq 'IPv4' -and $_.DHCP -and $_.ConnectionState }
-		If ($nic_dhcp_v4) {
-			Write-Host ("$Hostname, $nic_ifalias - Disabling DHCP v4 and restarting NIC")
-			$nic_dhcp_v4 | Set-NetIPInterface -Dhcp Disabled
-			$nic_not_usb | Restart-NetAdapter
-		}
-		Else {
-			Write-Host ("$Hostname, $nic_ifalias - DHCPv4 disabled")
-		}
-	}
 
 	# get the adapters that are a hardware device to exclude virtual adapters
 	$nic_hw_all = Get-NetAdapter | Where-Object { $_.HardwareInterface } | Sort-Object -Property 'InterfaceAlias'
@@ -55,10 +38,10 @@ Try {
 		# set base names
 		$nic_old = $nic_hw.Name
 		$nic_new = $null
-
+	
 		# get hardware info
 		$nic_hw_info = Get-NetAdapterHardwareInfo -Name $nic_old -ErrorAction 'SilentlyContinue'
-
+	
 		# try to build the name from slot and port information
 		If ($nic_hw_info.BusNumber -eq 0) {
 			$nic_new = ('Port ' + $nic_hw_info.BusNumber)
@@ -72,21 +55,21 @@ Try {
 			$nic_new = ('Port ' + ($nic_hw_info.FunctionNumber + 1))
 			$nic_new_via = 'port number'
 		}
- 
+	 
 		# try to build the name from PCI device label
 		$nic_pci = $nic_hw_info.PciDeviceLabelString
 		If ($null -ne $nic_pci) {
 			$nic_new = $nic_pci
 			$nic_new_via = 'PCI device label'
 		}
- 
+	 
 		# try to build the name from Hyper-V 
 		$nic_adv = ($nic_hw_info | Where-Object { $_.RegistryKeyword -eq 'HyperVNetworkAdapterName' }).DisplayValue
 		If ($null -ne $nic_adv) {
 			$nic_new = $nic_adv
 			$nic_new_via = 'Hyper-V'
 		}
-
+	
 		# if the new name was generated...
 		If ($nic_new) {
 			If ($nic_old -eq 'Management') {
@@ -108,6 +91,16 @@ Try {
 			Write-Host "$Hostname - '$nic_old' NOT renamed; could not generate name"
 		}
 	}
+}
+Finally {
+	# stop logging
+	Stop-Transcript
+}
+
+# pass 2: physical NIC configure
+Try {
+	# start logging
+	Start-Transcript -Path $LogFile -Append -Force
 
 	# import CSV
 	$map_network = Import-Csv -Path $NetworkCsv | Where-Object { $_.Host -eq $Hostname -and $_.Adapter }
@@ -134,14 +127,24 @@ Try {
 			$nic_bound = $nic_exists | Get-NetAdapterBinding | Where-Object { $_.ComponentID -eq 'ms_tcpip' -and $_.Enabled }
 			If ($nic_bound) {
 				# requested NIC has IPv4 bound, check IP addresses
-				Write-Host ("$Hostname, $nic_name, $nic_addr - IPv4 bound, checking IP addresses and gateway...")
+				Write-Host ("$Hostname, $nic_name, $nic_addr - IPv4 bound, checking IPv4 settings...")
+
+				# check for DHCP on current NIC
+				$nic_dhcp_on = $null
+				$nic_dhcp_on = $nic_exists | Get-NetIPInterface | Where-Object { $_.AddressFamily -eq 'IPv4' -and $_.DHCP }
+				If ($nic_dhcp_on) {
+					Write-Host ("$Hostname, $nic_name, $nic_addr - ...DHCPv4 enabled found enabled on NIC, disabling...")
+					$nic_dhcp_on | Set-NetIPInterface -Dhcp 'Disabled'
+				}
+
 				# check for wrong address on current NIC
 				$nic_addr_on_nic = $null
 				$nic_addr_on_nic = Get-NetIPAddress | Where-Object { $_.IPv4Address -ne $nic_addr -and $_.AddressFamily -eq 'IPv4' -and $_.InterfaceAlias -eq $nic_name -and $_.InterfaceAlias -ne $nic_vnic }
-				If ($nic_addr_on_nic -and ($nic_addr_on_nic -notlike "169.254.*")) {
+				If ($nic_addr_on_nic -and ($nic_addr_on_nic -notlike '169.254.*')) {
 					Write-Host ("$Hostname, $nic_name, $nic_addr - ...wrong IP address found on current NIC, removing '$($nic_addr_on_nic.IPv4Address)' from '$($nic_addr_on_nic.InterfaceAlias)'")
 					$nic_addr_on_nic | Remove-NetIPAddress -Confirm:$false
 				}
+
 				# check for requested address on other NICs
 				$nic_addr_on_sys = $null
 				$nic_addr_on_sys = Get-NetIPAddress | Where-Object { $_.IPv4Address -eq $nic_addr -and $_.AddressFamily -eq 'IPv4' -and $_.InterfaceAlias -ne $nic_name -and $_.InterfaceAlias -ne $nic_vnic }
