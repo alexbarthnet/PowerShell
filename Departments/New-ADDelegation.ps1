@@ -19,7 +19,7 @@ Param(
 )
 
 # create global objects
-$env_comp_name = $env:computername.ToLower()
+$env_comp_name = [System.Environment]::MachineName.ToLowerInvariant()
 
 # declare verification
 Write-Output "$env_comp_name - verifying parameters..."
