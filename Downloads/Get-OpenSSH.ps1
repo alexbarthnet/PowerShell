@@ -5,43 +5,52 @@ Param (
 	[Parameter(Position = 1)]
 	[string]$FileName = 'OpenSSH-Win64.zip',
 	[Parameter(Position = 2)]
-	[switch]$Install,
+	[string]$FilePath = (Join-Path -Path $Destination -ChildPath $FileName),
 	[Parameter(Position = 3)]
-	[switch]$InstallService,
-	[Parameter(Position = 4)][ValidateSet('Automatic', 'Manual', 'Disabled')]
-	[string]$StartType = 'Disabled',
+	[string]$Uri = 'https://github.com/PowerShell/Win32-OpenSSH/releases/latest/',
 	[Parameter(Position = 4)]
+	[switch]$Install,
+	[Parameter(Position = 5)]
+	[switch]$InstallService,
+	[Parameter(Position = 6)][ValidateSet('Automatic', 'Manual', 'Disabled')]
+	[string]$ServiceStartType = 'Disabled',
+	[Parameter(Position = 7)]
+	[switch]$SkipDownload,
+	[Parameter(Position = 8)]
 	[switch]$Force
 )
 
-# define local objects
-$file_down = $true
-$file_path = Join-Path -Path $Destination -ChildPath $file_name
-
 # retrieve information on latest release
-$uri_path = 'https://github.com/PowerShell/Win32-OpenSSH/releases/latest/'
-$uri_link = (Invoke-WebRequest -Uri $uri_path -UseBasicParsing -MaximumRedirection 0 -ErrorAction SilentlyContinue).Headers.Location.Replace('/tag/', '/download/') + '/' + $file_name
+$uri_link = (Invoke-WebRequest -Uri $Uri -UseBasicParsing -MaximumRedirection 0 -ErrorAction SilentlyContinue).Headers.Location.Replace('/tag/', '/download/') + '/' + $FileName
 
 # check file
-If (Test-Path $file_path) {
-	$uri_size = (Invoke-WebRequest -Uri $uri_file -UseBasicParsing -Method Head).Headers.'Content-Length'
-	If ($uri_size -eq (Get-ItemProperty $file_path).Length -and -not $Force) {
-		Write-Output 'Size of most recent download matches current download size, skipping!'
-		$file_down = $false
+If ((Test-Path -Path $FilePath) -and -not $SkipDownload) {
+	# get MD5 hash for local file and remote URI
+	$file_hash = [System.Convert]::ToBase64String([System.Security.Cryptography.HashAlgorithm]::Create('md5').ComputeHash((Get-Content -Path $FilePath -Raw -Encoding Byte)))
+	$uri_hash = (Invoke-WebRequest -Uri $uri_link -UseBasicParsing -Method Head).Headers.'Content-MD5'
+	# compare hashs
+	If ($uri_hash -eq $file_hash) {
+		Write-Output 'MD5 hash of most recent download matches MD5 hash in headers for URL, skipping!'
+		$SkipDownload = $true
 	}
 }
 
-# download file
-If ($file_down) {
-	# download latest release to destination
-	Invoke-WebRequest -Uri $uri_link -UseBasicParsing -OutFile $file_path
+# download file to destination
+If ($Force -or -not $SkipDownload) {
+	Try {
+		Invoke-WebRequest -Uri $uri_link -UseBasicParsing -OutFile $FilePath
+	}
+	Catch{
+		Write-Error "ERROR: could not download the file to the specified location"
+		Return
+	}
 }
 
 # install file
 If ($Install) {
 	# check for admin rights
 	If (-not ([Security.Principal.WindowsPrincipal]([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
-		Write-Error "ERROR: the 'Install' switch was set but the script cannot continue. The current PowerShell session does not have the Administrator role." -ErrorAction SilentlyContinue
+		Write-Error "ERROR: the 'Install' switch was set but the script cannot continue. The current PowerShell session does not have the Administrator role."
 		Return
 	}
 
@@ -86,9 +95,9 @@ If ($Install) {
 		Return
 	}
 
-	# extract files
+	# extract files to Program Files
 	Try {
-		Expand-Archive -Path $file_path -DestinationPath ([System.Environment]::GetFolderPath('ProgramFiles')) -Force
+		Expand-Archive -Path $FilePath -DestinationPath ([System.Environment]::GetFolderPath('ProgramFiles')) -Force
 	}
 	Catch {
 		Write-Error "ERROR: could not extract files to Program Files directory"
@@ -98,17 +107,21 @@ If ($Install) {
 	# run install script
 	If ($InstallService) {
 		# run install script
-		. "$([System.Environment]::GetFolderPath('ProgramFiles'))\$($file_path.BaseName)\install-sshd.ps1"
-		# configure the service
-		$service = Get-Service | Where-Object { $_.Name -eq 'sshd' }
+		. "$([System.Environment]::GetFolderPath('ProgramFiles'))\$($FilePath.BaseName)\install-sshd.ps1"
 	}
 
-	# restore service starttype
+	# configure service starttype
 	If ($service) {
+		# restore service start type
 		$service | Set-Service -StartupType $service_starttype
 		# restart service if previously running
 		If ($service_status -eq 'Running') {
 			$service | Start-Service
 		}
+	}
+	Else {
+		# retrieve service and set service start type
+		$service = Get-Service | Where-Object { $_.Name -eq 'sshd' }
+		$service | Set-Service -StartupType $ServiceStartType
 	}
 }
