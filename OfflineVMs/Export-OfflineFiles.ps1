@@ -21,7 +21,9 @@ Param(
 	[ValidatePattern('^[^\*]+$')]
 	[string]$Target,
 	[Parameter(ParameterSetName = 'Add')]
-	[switch]$Purge
+	[switch]$Purge,
+	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
+	[string]$Json
 )
 
 Function Export-OfflineFilesFromVM {
@@ -91,7 +93,12 @@ Function Export-OfflineFilesFromVM {
 }
 
 # define configuration file from script path then verify path
-$json_path = $PSCommandPath.Replace('.ps1', '.json')
+If ([string]::IsNullOrEmpty($Json)) {
+	$json_path = $PSCommandPath.Replace('.ps1', '.json')	
+}
+Else {
+	$json_path = $Json
+}
 $json_test = Test-Path -Path $json_path
 
 # clear required objects then check file
