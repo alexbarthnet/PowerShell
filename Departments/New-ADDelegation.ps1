@@ -36,8 +36,8 @@ switch ($true) {
 		}
 		Catch {
 			Write-Output "$env_comp_name - ERROR: group not found: $Group"
-			Exit
-		}		
+			Return
+		}
 	}
 }
 
@@ -55,18 +55,18 @@ ForEach ($ad_ou_string in $Container) {
 	}
 	Else {
 		Write-Output "$env_comp_name - ERROR: OU not found: $ad_ou_string"
-		Exit
+		Return
 	}
 }
 
 # import required objects
-Write-Output "$env_comp_name - loading required objects from ADPermissions module..."
+Write-Output "$env_comp_name - verifying required objects were loaded by ADSecurityFunctions module..."
 Try {
-	Get-ADPermissionsObjects
+	Get-ADSecurityObjects
 }
 Catch {
 	Write-Output "$env_comp_name - ERROR: could not load required objects"
-	Exit
+	Return
 }
 
 # create empty array for ACEs
@@ -444,8 +444,8 @@ Else {
 				$ad_aces_add += New-Object System.DirectoryServices.ActiveDirectoryAccessRule $ad_sid, $ad_rights, $ad_permit, $ad_scoped_to, $ad_inheritance, $ad_inherited_by
 			}
 			Default {
-				Write-Output "$env_comp_name - ERROR: invalid Delegation specified, exiting!"
-				Exit
+				Write-Output "$env_comp_name - ERROR: invalid Delegation specified!"
+				Return
 			}
 		}
 	}
