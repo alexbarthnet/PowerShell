@@ -1,7 +1,7 @@
 #Requires -Modules CmsCredentials
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
-Param(  
+Param(
 	[Parameter(Mandatory = $True, ParameterSetName = 'Export')]
 	[switch]$Export,
 	[Parameter(Mandatory = $True, ParameterSetName = 'Clear')]
@@ -54,11 +54,11 @@ Function Export-OfflineFilesFromVM {
 						# verify target
 						$target_check = $null
 						$target_check = { If ( Test-Path -Path $Target ) { Get-Item -Path $Target } Else { New-Item -ItemType Directory -Path $Target } }
-						If ($target_check) { 
+						If ($target_check) {
 							# determine if target should be cleaned before writing files
 							If ($Purge) {
 								Write-Output "Clearing '$Target' before copy"
-								Get-ChildItem -Path $Target | Remove-Item -Force
+								Get-ChildItem -Path $Target -Recurse -Force | Remove-Item -Force
 							}
 							# copy files from VM to target
 							$file_list.FullName | Copy-Item -FromSession $vm_direct -Destination $Target -Force -Verbose
@@ -78,11 +78,11 @@ Function Export-OfflineFilesFromVM {
 				$vm_direct | Remove-PSSession
 			}
 			Else {
-				Write-Output "Could not create PowerShell Direct session for VM: '$VMName'"        
+				Write-Output "Could not create PowerShell Direct session for VM: '$VMName'"
 			}
 		}
 		Else {
-			Write-Output "Could not locate credentials for VM: '$VMName'"    
+			Write-Output "Could not locate credentials for VM: '$VMName'"
 		}
 	}
 	Else {
@@ -101,7 +101,7 @@ If ($json_test) {
 	$json_name = (Get-Item -Path $json_path).Name
 	# create object from JSON file
 	$json_data += Get-Content -Path $json_path | ConvertFrom-Json
-} 
+}
 Else {
 	# define expected JSON file name
 	$json_name = Split-Path -Path $json_path -Leaf
@@ -109,7 +109,7 @@ Else {
 
 # evaluate parameters
 switch ($true) {
-	$Clear { 
+	$Clear {
 		Write-Output "`nClearing '$json_name'`n"
 		If ($json_test) { Remove-Item -Path $json_path -Force }
 	}
@@ -123,11 +123,11 @@ switch ($true) {
 	}
 	$Add {
 		# create custom object from parameters then add to object
-		$json_data += [pscustomobject]@{ 
+		$json_data += [pscustomobject]@{
 			VMName = $VMName
 			Purge  = $Purge.ToBool()
-			Source = $Source 
-			Target = $Target 
+			Source = $Source
+			Target = $Target
 		}
 		$json_data | ConvertTo-Json | Set-Content -Path $json_path
 		# declare changes then show current state
@@ -147,7 +147,7 @@ switch ($true) {
 				Write-Host "ERROR: no entries found in configuration file: $json_name"
 				Return
 			}
-			
+
 			# process configuration file
 			ForEach ($json_datum in $json_data) {
 				If ([string]::IsNullOrEmpty($json_datum.VMName) -or [string]::IsNullOrEmpty($json_datum.Source) -or [string]::IsNullOrEmpty($json_datum.Target)) {
