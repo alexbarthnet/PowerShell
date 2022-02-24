@@ -68,7 +68,7 @@ Function Copy-FilesFromSourceToTarget {
 }
 
 # define configuration file from script path then verify path
-If ([string]::IsNullOrEmpty($json)) {
+If ([string]::IsNullOrEmpty($Json)) {
 	$json_path = $PSCommandPath.Replace('.ps1', '.json')	
 }
 Else {
