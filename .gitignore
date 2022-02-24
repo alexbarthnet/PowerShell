@@ -4,6 +4,8 @@
 *.txt
 # ignore archived files
 Archived/*
+# ignore personal files
+Personal/*
 # ignore private files
 Private/*
 # ignore shortcut files
