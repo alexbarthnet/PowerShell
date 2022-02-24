@@ -82,7 +82,7 @@ Function Write-LogToMultiple {
 	# write to event log
 	If ( [string]::IsNullOrEmpty($EventLog) -eq $false -and [string]::IsNullOrEmpty($EventSource) -eq $false ) {
 		Write-EventLog -LogName $EventLog -Source $EventSource -Category 0 -EventId $EventId -EntryType $LogLevel -Message $LogText
-	}    
+	}
 
 	# write to screen based upon level
 	If ($LogScreen) {
@@ -171,7 +171,7 @@ Function Start-LogToMultiple {
 		}
 		Try {
 			# verify event source exists
-			If ([System.Diagnostics.EventLog]::SourceExists($log_base)) { 
+			If ([System.Diagnostics.EventLog]::SourceExists($log_base)) {
 				Write-LogToMultiple -LogFile $log_file -LogText 'event-source-exists'
 			}
 			Else {
@@ -203,7 +203,7 @@ Function Start-LogToMultiple {
 			LogEvent    = $EventLogName
 			LogSource   = $log_base
 		}
-	)	
+	)
 }
 
 Function Initialize-LogToMultiple {
@@ -222,7 +222,7 @@ Function Initialize-LogToMultiple {
 	)
 
 	# verify function run as admin
-	If ([System.Security.Principal.WindowsIdentity]::GetCurrent().Groups.Value -contains 'S-1-5-32-544' -eq $false) {
+	If (-not ([Security.Principal.WindowsPrincipal]([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
 		Write-Host 'ERROR: this function must be run as an administrator, exiting!'
 		Return
 	}
@@ -276,7 +276,7 @@ Function Initialize-LogToMultiple {
 	# verify log path permissions
 	Write-Host "Retrieved permissions on log path: $log_path"
 	$log_path_acl = Get-Acl -Path $log_path
-	$log_path_ace = $log_path_acl.Access | Where-Object { 
+	$log_path_ace = $log_path_acl.Access | Where-Object {
 		$_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]) -eq $log_user_sid -and
 		$_.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and
 		$_.InheritanceFlags -eq @([System.Security.AccessControl.InheritanceFlags]::ContainerInherit, [System.Security.AccessControl.InheritanceFlags]::ObjectInherit) -and
@@ -289,7 +289,7 @@ Function Initialize-LogToMultiple {
 			$log_path_ace = New-Object 'System.Security.AccessControl.FileSystemAccessRule' @($log_user_sid, 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
 			$log_path_acl.PurgeAccessRules($log_path_sid)
 			$log_path_acl.AddAccessRule($log_path_ace)
-			$log_path_acl | Set-Acl -Path $log_path 
+			$log_path_acl | Set-Acl -Path $log_path
 			Write-Host '...log path permissions corrected'
 		}
 		Catch {
@@ -305,7 +305,7 @@ Function Initialize-LogToMultiple {
 	If ($EventLog) {
 		Write-Host "Checking for event log source registered: $log_base"
 		Try {
-			If ([System.Diagnostics.EventLog]::SourceExists($log_base)) { 
+			If ([System.Diagnostics.EventLog]::SourceExists($log_base)) {
 				Write-Host '...event log source found'
 			}
 			Else {
