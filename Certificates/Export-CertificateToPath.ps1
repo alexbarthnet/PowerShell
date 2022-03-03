@@ -14,7 +14,9 @@ Param(
     [Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')][ValidateScript({ Test-Path -Path $_ })]
     [string]$Storage,
     [Parameter(Position = 3, Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')]
-    [string[]]$Principals
+    [string[]]$Principals,
+	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
+	[string]$Json
 )
 
 Function Export-CertificateChainFiles {
@@ -127,7 +129,12 @@ Function Export-PfxCertificateToPrincipals {
 }
 
 # define configuration file from script path then verify path
-$json_path = $PSCommandPath.Replace('.ps1', '.json')
+If ([string]::IsNullOrEmpty($Json)) {
+	$json_path = $PSCommandPath.Replace('.ps1', '.json')	
+}
+Else {
+	$json_path = $Json
+}
 $json_test = Test-Path -Path $json_path
 
 # clear required objects then check file
