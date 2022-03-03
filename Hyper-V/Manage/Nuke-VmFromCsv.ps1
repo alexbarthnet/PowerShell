@@ -1,8 +1,10 @@
-Param(  
+Param(
 	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$VmCsv,
 	[Parameter(Mandatory = $True)]
-	[string[]]$VmName
+	[string[]]$VmName,
+	[string]$HostName,
+	[switch]$UseDefaultPathOnHost
 )
 
 # create global objects
@@ -28,7 +30,7 @@ $vm_list | ForEach-Object {
 	# define objects from CSV
 	$vm_name = $_.Name
 	$vm_host = $_.Host
-	
+
 	# define objects from CSV for storage cleanup
 	$vm_path = $_.Path
 	$vhd_excl_ct = $_.ExclVhdCount
@@ -37,45 +39,71 @@ $vm_list | ForEach-Object {
 	$vm_dhcp_server = $_.DhcpServer
 	$vm_dhcp_scope = $_.DhcpScope
 	$vm_ip_address = $_.IpAddress
-	
+
 	# define optional objects from CSV - OSD general parameters
 	$vm_osd_method = $_.OsdMethod
 	$vm_osd_server = $_.OsdServer
 	$vm_osd_domain = $_.Domain
 
+	# check for host override
+	If ($HostName) {
+		$vm_host = $HostName
+	}
+
+	# check for host override
+	If ($HostPath) {
+		$vm_path = $HostPath
+	}	
+
+	# check if host is valid
+	Write-Host ("$env_comp_name,$vm_host,$vm_name - checking host...")
+	Try {
+		$null = Test-WSMan -ComputerName $vm_host -Authentication 'Default'
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...found host")
+	}
+	Catch {
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not connect to host")
+		Return
+	}
+
 	# check if host is clustered
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - locating VM on cluster...")
+	Write-Host ("$env_comp_name,$vm_host,$vm_name - checking if host is clustered...")
 	$vm_on_cl = $null
 	$vm_host_cl = $null
 	$vm_host_cl = Get-Service -ComputerName $vm_host | Where-Object { $_.Name -eq 'ClusSvc' -and $_.StartType -ne 'Disabled' }
-	
+
 	# check for VM on cluster
 	If ($vm_host_cl) {
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...host is clustered")
 		# check for VM on cluster
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - locating VM on cluster...")
 		$vm_cluster = Invoke-Command -ComputerName $vm_host { (Get-Cluster).Name }
 		$vm_on_cl = Get-ClusterGroup -Cluster $vm_cluster | Where-Object { $_.Name -eq $vm_name -and $_.GroupType -eq 'VirtualMachine' }
-	}
+		# remove VM from cluster
+		If ($vm_on_cl) {
+			# verify the resource group is on the local node
+			$vm_node = $vm_on_cl.OwnerNode.NodeName
+			If ($vm_host -eq $vm_node) {
+				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM found on expected host in cluster")
+			}
+			Else {
+				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM found on different host in cluster, changing host to: " + $vm_node)
+				$vm_host = $vm_node
+			}
 
-	# remove VM from cluster
-	If ($vm_on_cl) {
-		# verify the resource group is on the local node
-		$vm_node = $vm_on_cl.OwnerNode.NodeName
-		If ($vm_host -eq $vm_node) {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM found on expected host in cluster")
+			# remove resource group from the cluster
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - removing cluster resource...")
+			$vm_on_cl | Remove-ClusterGroup -RemoveResources -Force
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...cluster resource removed")
 		}
 		Else {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM found on different host in cluster, changing host to: " + $vm_node)
-			$vm_host = $vm_node
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...cluster resource not found")
 		}
-		
-		# remove resource group from the cluster
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - removing cluster resource...")
-		$vm_on_cl | Remove-ClusterGroup -RemoveResources -Force
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...cluster resource removed")
 	}
 	Else {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...cluster resource not found")
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...host is standalone")
 	}
+
 
 	# check for VM on host
 	Write-Host ("$env_comp_name,$vm_host,$vm_name - locating VM on host...")
@@ -87,7 +115,7 @@ $vm_list | ForEach-Object {
 	If ($vm_on_hv) {
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM found on host")
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - removing VM from host...")
-		
+
 		# turn off the VM if running
 		If ($vm_on_hv.State -ne 'Off') {
 			$vm_on_hv | Stop-VM -TurnOff
@@ -99,14 +127,14 @@ $vm_list | ForEach-Object {
 		If ($vm_hdd) {
 			$vm_disk = ($vm_on_hv | Get-VMHardDiskDrive).Path
 		}
-		
+
 		# retrieve the MAC address from the first NIC before removing VM
 		$vm_nic = $null
 		$vm_nic = $vm_on_hv | Get-VMNetworkAdapter
 		If ($vm_nic) {
 			$vm_hwid = ($vm_on_hv | Get-VMNetworkAdapter)[0].MacAddress
 		}
-		
+
 		# remove the VM
 		$vm_on_hv | Remove-VM -Force -Confirm:$false
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM removed from host")
@@ -117,17 +145,16 @@ $vm_list | ForEach-Object {
 
 	# remove files from host
 	If ($vm_disk) {
-		Invoke-Command -ComputerName $vm_host -ScriptBlock { 
+		Invoke-Command -ComputerName $vm_host -ScriptBlock {
 			# map objects into session
 			$env_name = $using:env_comp_name
 			$env_host = $using:vm_host
 			$vm_label = $using:vm_name
 			$vm_drive = $using:vm_disk
-			
+
 			# dismount VHDs to unlock files for delete
 			Write-Host ("$env_name,$env_host,$vm_label - dismounting VHDs on host...")
-			$vm_drive | ForEach-Object {
-				$vm_vhd_path = $_
+			ForEach ($vm_vhd_path in $vm_drive) {
 				Try {
 					Dismount-DiskImage -ImagePath $vm_vhd_path
 					Write-Host ("$env_name,$env_host,$vm_label - ...dismounting: " + $vm_vhd_path)
@@ -136,39 +163,77 @@ $vm_list | ForEach-Object {
 					Write-Host ("$env_name,$env_host,$vm_label - ERROR: could not dismount VHD: " + $vm_vhd_path)
 				}
 			}
+
+			# remove VHD files
+			Write-Host ("$env_name,$env_host,$vm_label - deleting VHDs on host...")
+			ForEach ($vm_vhd_path in $vm_drive) {
+				Try {
+					Remove-Item -Path $vm_vhd_path -Force
+					Write-Host ("$env_name,$env_host,$vm_label - ...deleting: " + $vm_vhd_path)
+				}
+				Catch {
+					Write-Host ("$env_name,$env_host,$vm_label - ERROR: could not delete VHD: " + $vm_vhd_path)
+				}
+			}
 		}
 	}
 
-	# define paths to folders
+	# verify which VM path to use
+	Write-Host ("$env_comp_name,$vm_host,$vm_name - verifying VM path...")
+	If ($vm_path -and -not $UseDefaultPathOnHost) {
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...using provided VM path: " + $vm_path)
+	}
+	Else {
+		$vm_path = (Get-VMHost -ComputerName $vm_host).VirtualMachinePath
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...using default VM path: " + $vm_path)
+	}
+
+	# define paths to folders using VM information
 	$vm_path_delete = @()
+	$vm_path_delete += $vm_on_hv.CheckpointFileLocation
+	$vm_path_delete += $vm_on_hv.ConfigurationLocation
+	$vm_path_delete += $vm_on_hv.SmartPagingFilePath
+	$vm_path_delete += $vm_on_hv.SnapshotFileLocation
+	$vm_path_delete += $vm_on_hv.Path
+	$vm_path_delete += $vm_disk
+
+	# define paths to folders using CSV information
 	$vm_path_delete += Invoke-Command -ComputerName $vm_host -ScriptBlock { Join-Path -Path $using:vm_path -ChildPath $using:vm_name }
 	If ($vhd_excl_ct) {
 		$vm_path_delete += Invoke-Command -ComputerName $vm_host -ScriptBlock { Join-Path -Path $using:vm_path -ChildPath ('Exclude\' + $using:vm_name) }
 	}
-	
+
+	# get unique paths to folders
+	$vm_path_unique = $vm_path_delete | Select-Object -Unique
+
 	# remove folders from host
-	Invoke-Command -ComputerName $vm_host -ScriptBlock { 
+	Invoke-Command -ComputerName $vm_host -ScriptBlock {
 		# map objects into session
 		$env_name = $using:env_comp_name
 		$env_host = $using:vm_host
 		$vm_label = $using:vm_name
-		$path_local = $using:vm_path_delete
-		
+		$vm_paths = $using:vm_path_unique
+
 		# remove the VM folder and all files
 		Write-Host ("$env_name,$env_host,$vm_label - locating VM folders on host...")
-		$path_local | ForEach-Object {
-			$path_to_delete = $_
-			If (Test-Path $path_to_delete) {
-				Try {
-					$path_to_delete | Remove-Item -Recurse -Force -Confirm:$false
-					Write-Host ("$env_name,$env_host,$vm_label - ...removing folder: " + $path_to_delete)
+		ForEach ($vm_path in $vm_paths) {
+			If (Test-Path $vm_path) {
+				Write-Host ("$env_name,$env_host,$vm_label - ...located folder: " + $vm_path)
+				If (Get-ChildItem -Path $vm_path -Recurse -Force) {
+					Write-Host ("$env_name,$env_host,$vm_label - ...skipping non-empty folder: " + $vm_path)
 				}
-				Catch {
-					Write-Host ("$env_name,$env_host,$vm_label - ERROR: could not remove folder: " + $path_to_delete)
+				Else {
+					Try {
+						$vm_path | Remove-Item -Confirm:$false
+						Write-Host ("$env_name,$env_host,$vm_label - ...removing empty folder: " + $vm_path)
+					}
+					Catch {
+						Write-Host ("$env_name,$env_host,$vm_label - ERROR: could not remove folder: " + $vm_path)
+					}
 				}
 			}
 			Else {
-				Write-Host ("$env_name,$env_host,$vm_label - ...folder not found: " + $path_to_delete)
+				Write-Host ("$env_name,$env_host,$vm_label - ...folder not found: " + $vm_path)
 			}
 		}
 	}
@@ -188,17 +253,17 @@ $vm_list | ForEach-Object {
 				$sccm_srv = $using:vm_osd_server
 				$dev_name = $using:vm_name
 				$dev_hwid = $using:vm_hwid
-	
+
 				# retrieve the psd1 file
 				$cm_psd1_path = 'HKLM:\SOFTWARE\Microsoft\SMS\Setup'
 				$cm_psd1_item = 'UI Installation Directory'
 				$cm_psd1 = (Get-ItemProperty -Path $cm_psd1_path -Name $cm_psd1_item).$($cm_psd1_item) + '\bin\ConfigurationManager.psd1'
-				
+
 				# retrieve the site code
 				$cm_site_path = 'HKLM:\SOFTWARE\Microsoft\SMS\Identification'
 				$cm_site_item = 'Site Code'
 				$cm_site = (Get-ItemProperty -Path $cm_site_path -Name $cm_site_item).$($cm_site_item)
-	
+
 				# connect to SCCM
 				Write-Host ("$env_name,$sccm_srv,$dev_name - importing SCCM module")
 				Import-Module $cm_psd1
@@ -220,15 +285,15 @@ $vm_list | ForEach-Object {
 					If ($dev_found.Count -gt 1) {
 						Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: multiple devices found with the same MAC address")
 						Write-Host ("$env_name,$sccm_srv,$dev_name - ...remove extra devices before continuing")
-						Break    
+						Break
 					}
-					Else {    
+					Else {
 						# declare the device was found in SCCM
 						$dev_resid = $dev_found.ResourceId
 						Write-Host ("$env_name,$sccm_srv,$dev_name - ...found device by MAC address, resource ID: " + $dev_resid)
 					}
 				}
-				
+
 				# check for device by mac address via WMI call
 				If ($null -eq $dev_resid) {
 					Write-Host ("$env_name,$sccm_srv,$dev_name - retrieving device with name: " + $dev_name)
@@ -244,7 +309,7 @@ $vm_list | ForEach-Object {
 						Write-Host ("$env_name,$sccm_srv,$dev_name - ...found device by name, resource ID: " + $dev_resid)
 					}
 				}
-				
+
 				# remove the device
 				If ($dev_resid) {
 					# reset PXE state

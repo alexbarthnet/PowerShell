@@ -1,7 +1,10 @@
-Param(  
+Param(
 	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$VmCsv,
-	[string[]]$VmName
+	[string[]]$VmName,
+	[string]$HostName,
+	[string]$HostPath,
+	[switch]$UseDefaultPathOnHost
 )
 
 # create global objects
@@ -20,7 +23,7 @@ If ($VmName) {
 		Write-Host ("$env_comp_name,$vm_name - VM not found in CSV, exiting!")
 		Return
 	}
-} 
+}
 Else {
 	# process all VMs
 	$vm_list = Import-Csv -Path $VmCsv
@@ -54,7 +57,7 @@ $vm_list | ForEach-Object {
 	$vm_dhcp_scope = $_.DhcpScope
 	$vm_ip_address = $_.IpAddress
 	$vm_mac_prefix = $_.MacPrefix
-	
+
 	# define optional objects from CSV - OSD general parameters
 	$vm_osd_method = $_.OsdMethod
 	$vm_osd_server = $_.OsdServer
@@ -72,13 +75,23 @@ $vm_list | ForEach-Object {
 	$vhd_os_size = [int64]([decimal]$vhd_os_gb * 1GB)
 	$vhd_data_size = [int64]([decimal]$vhd_data_gb * 1GB)
 	$vhd_excl_size = [int64]([decimal]$vhd_excl_gb * 1GB)
-	
+
 	# clear check objects
 	$vm_make = $false
 	$vm_prov = $false
 	$vm_on_cl = $null
 	$vm_on_hv = $null
 
+	# check for host override
+	If ($HostName) {
+		$vm_host = $HostName
+	}
+
+	# check for host override
+	If ($HostPath) {
+		$vm_path = $HostPath
+	}
+	
 	# check for cloud
 	If ($vm_host -match 'cloud') {
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - cloud VM...")
@@ -86,32 +99,46 @@ $vm_list | ForEach-Object {
 		$vm_prov = $true
 	}
 	Else {
+		# check if host is valid
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - checking host...")
+		Try {
+			$null = Test-WSMan -ComputerName $vm_host -Authentication 'Default'
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...found host")
+		}
+		Catch {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not connect to host")
+			Return
+		}
+
 		# check if host is clustered
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - locating VM on cluster...")
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - checking if host is clustered...")
 		$vm_host_cl = $null
 		$vm_host_cl = Get-Service -ComputerName $vm_host | Where-Object { $_.Name -eq 'ClusSvc' -and $_.StartType -eq 'Automatic' -and $_.Status -eq 'Running' }
 
 		# check for VM on cluster
 		If ($vm_host_cl) {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...host is clustered")
 			# check for VM on cluster
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - locating VM on cluster...")
 			$vm_cluster = Invoke-Command -ComputerName $vm_host { (Get-Cluster).Name }
 			$vm_on_cl = Get-ClusterGroup -Cluster $vm_cluster | Where-Object { $_.Name -eq $vm_name -and $_.GroupType -eq 'VirtualMachine' }
-		} 
-
-		# remove VM from cluster
-		If ($vm_on_cl) {
-			# verify the resource group is on the local node
-			$vm_node = $vm_on_cl.OwnerNode.NodeName
-			If ($vm_host -eq $vm_node) {
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM found on expected host in cluster")
+			If ($vm_on_cl) {
+				# verify the resource group is on the local node
+				$vm_node = $vm_on_cl.OwnerNode.NodeName
+				If ($vm_host -eq $vm_node) {
+					Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM found on expected host in cluster")
+				}
+				Else {
+					Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM found on different host in cluster, changing host to: " + $vm_node)
+					$vm_host = $vm_node
+				}
 			}
 			Else {
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM found on different host in cluster, changing host to: " + $vm_node)
-				$vm_host = $vm_node
+				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM not found on cluster")
 			}
 		}
 		Else {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM not found on cluster")
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...host is standalone")
 		}
 
 		# check for VM on host
@@ -126,24 +153,24 @@ $vm_list | ForEach-Object {
 			Write-Host ("$env_comp_name,$vm_host,$vm_name - ....VM not found on host")
 			$vm_make = $true
 		}
-	}    
+	}
 
 	# create VM
 	If ($vm_make) {
 		# verify path
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - verifying paths...")
-		If ($vm_path) {
+		If ($vm_path -and -not $UseDefaultPathOnHost) {
 			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...using provided VM path: " + $vm_path)
 		}
 		Else {
 			$vm_path = (Get-VMHost -ComputerName $vm_host).VirtualMachinePath
 			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...using default VM path: " + $vm_path)
 		}
-		
+
 		# define required folders
 		$vm_path_vm = Invoke-Command -ComputerName $vm_host -ScriptBlock { Join-Path -Path $using:vm_path -ChildPath $using:vm_name }
 		$vm_path_hd = Invoke-Command -ComputerName $vm_host -ScriptBlock { Join-Path -Path $using:vm_path_vm -ChildPath 'Virtual Hard Disks' }
-		
+
 		# verify required folders
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - checking folders...")
 		Invoke-Command -ComputerName $vm_host -ScriptBlock {
@@ -176,7 +203,7 @@ $vm_list | ForEach-Object {
 				$vhd_data_files += Invoke-Command -ComputerName $vm_host -ScriptBlock { Join-Path -Path $using:vm_path_hd -ChildPath ($using:vm_name + '-data-' + $using:vhd_addl + '.vhdx') }
 			}
 		}
-		
+
 		# define paths for any excluded data VHDs
 		$vhd_excl_files = @()
 		If ($vhd_excl_ct) {
@@ -201,7 +228,7 @@ $vm_list | ForEach-Object {
 			If ($vhd_exists) {
 				Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: found existing OS disk: " + $vhd_data)
 				Break
-			} 
+			}
 			Else {
 				# create the VM hard disk
 				Try {
@@ -227,15 +254,15 @@ $vm_list | ForEach-Object {
 			If ($vhd_exists) {
 				Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: found existing data disk: " + $vhd_file)
 				Break
-			} 
+			}
 			Else {
 				Try {
 					New-VHD -Computer $vm_host -SizeBytes $vhd_size -Path $vhd_file | Out-Null
 					Write-Host ("$env_comp_name,$vm_host,$vm_name - ...created data disk: " + $vhd_file)
-				} 
+				}
 				Catch {
 					Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not create data disk: " + $vhd_file)
-					Exit    
+					Exit
 				}
 			}
 		}
@@ -252,7 +279,7 @@ $vm_list | ForEach-Object {
 			If ($vhd_exists) {
 				Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: found existing excluded data disk: " + $vhd_file)
 				Break
-			} 
+			}
 			Else {
 				Try {
 					New-VHD -Computer $vm_host -SizeBytes $vhd_size -Path $vhd_file | Out-Null
@@ -260,7 +287,7 @@ $vm_list | ForEach-Object {
 				}
 				Catch {
 					Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not create disk: " + $vhd_file)
-					Exit    
+					Exit
 				}
 			}
 		}
@@ -291,7 +318,7 @@ $vm_list | ForEach-Object {
 		# configure the CPU
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...setting CPU count: " + $vm_cpu)
 		$vm | Set-VMProcessor -Count $vm_cpu
-		
+
 		# configure the memory
 		If ($vm_mem_min -and $vm_mem_max) {
 			# set check objects to false
@@ -376,7 +403,7 @@ $vm_list | ForEach-Object {
 		# retrieve updated firmware settings from WMI
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - retrieving updated settings via WMI...")
 		$vm_data_object = Get-WmiObject -ComputerName $vm_host -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_VirtualSystemSettingData' -Filter "ElementName = '$vm_name'"
-		
+
 		# display updated firmware settings from WMI
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...BIOSGUID value: " + $vm_data_object.BIOSGUID)
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...NumLock status: " + $vm_data_object.BIOSNumLock)
@@ -384,12 +411,12 @@ $vm_list | ForEach-Object {
 		# check if NIC should be removed
 		If ($vm_switch -eq 'Remove') {
 			$vm_nic = Get-VMNetworkAdapter -VM $vm
-			$vm_nic | Remove-VMNetworkAdapter 
+			$vm_nic | Remove-VMNetworkAdapter
 		}
 		Else {
 			# set the VLAN on the NIC
 			Write-Host ("$env_comp_name,$vm_host,$vm_name - configuring networking...")
-			If ($vm_vlan -gt 0) { 
+			If ($vm_vlan -gt 0) {
 				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...setting VLAN to: " + $vm_vlan)
 				$vm | Set-VMNetworkAdapterVlan -Access -VlanId $vm_vlan
 			}
@@ -523,12 +550,12 @@ $vm_list | ForEach-Object {
 						# get the mac address from the VM NIC
 						$vm = Get-VM -ComputerName $vm_host -Id $vm_id
 						$vm_hw_address = ($vm.NetworkAdapters)[0].MacAddress
-						
+
 						# create objects for invoked commands
 						$vm_macaddress = ($vm_hw_address -split '(\w{2})' | Where-Object { $_ -ne '' }) -join ':'
 						Write-Host ("$env_comp_name,$vm_host,$vm_name - creating SCCM device with MAC: " + $vm_macaddress)
 					}
-						
+
 					# connect to SCCM remotely
 					Write-Host ("$env_comp_name,$vm_host,$vm_name - connecting to SCCM: " + $vm_osd_server)
 					Invoke-Command -ComputerName $vm_osd_server -ScriptBlock {
@@ -542,33 +569,33 @@ $vm_list | ForEach-Object {
 						$dev_oupath = $using:vm_osd_path
 						$cm_col_deploy = $using:vm_col_deploy
 						$cm_col_window = $using:vm_col_window
-			
+
 						# retrieve the psd1 file
 						$cm_psd1_path = 'HKLM:\SOFTWARE\Microsoft\SMS\Setup'
 						$cm_psd1_item = 'UI Installation Directory'
 						$cm_psd1 = (Get-ItemProperty -Path $cm_psd1_path -Name $cm_psd1_item).$($cm_psd1_item) + '\bin\ConfigurationManager.psd1'
-						
+
 						# retrieve the site code
 						$cm_site_path = 'HKLM:\SOFTWARE\Microsoft\SMS\Identification'
 						$cm_site_item = 'Site Code'
 						$cm_site = (Get-ItemProperty -Path $cm_site_path -Name $cm_site_item).$($cm_site_item)
-						
+
 						# connect to SCCM
 						Write-Host ("$env_name,$sccm_srv,$dev_name - ...importing SCCM module")
 						Import-Module $cm_psd1
 						Write-Host ("$env_name,$sccm_srv,$dev_name - ...setting location to site drive")
 						Set-Location ($cm_site + ':\')
-	
+
 						# build strings for WMI query
 						$cm_space = 'Root\SMS\Site_' + $cm_site
 						$cm_class = 'SMS_R_System'
-	
+
 						# empty variables
 						$dev_found = $null
 						$dev_resid = $null
 						$col_window = $null
 						$col_deploy = $null
-	
+
 						# retrieve device
 						Write-Host ("$env_name,$sccm_srv,$dev_name - checking device location...")
 						If ($dev_host -match 'cloud') {
@@ -592,7 +619,7 @@ $vm_list | ForEach-Object {
 								Break
 							}
 							Else {
-								# declare issue and end early 
+								# declare issue and end early
 								Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: device for cloud VM not found")
 								Write-Host ("$env_name,$sccm_srv,$dev_name - ...join VM to domain then install SCCM agent")
 								Break
@@ -606,7 +633,7 @@ $vm_list | ForEach-Object {
 							If ($dev_found.Count -gt 1) {
 								Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: multiple devices found with the same MAC address")
 								Write-Host ("$env_name,$sccm_srv,$dev_name - ...remove extra devices before continuing")
-								Break    
+								Break
 							}
 							ElseIf ($dev_found.IsClient) {
 								# declare the device was found but the client is installed
@@ -614,7 +641,7 @@ $vm_list | ForEach-Object {
 								Write-Host ("$env_name,$sccm_srv,$dev_name - ...verify any previous device has been removed from SCCM")
 								Break
 							}
-							ElseIf ($dev_found) {    
+							ElseIf ($dev_found) {
 								# declare the device was found in SCCM
 								Write-Host ("$env_name,$sccm_srv,$dev_name - ...found existing device with resource ID: " + $dev_resid)
 								$dev_resid = $dev_found.ResourceId
@@ -623,12 +650,12 @@ $vm_list | ForEach-Object {
 								# import the device into SCCM
 								Write-Host ("$env_name,$sccm_srv,$dev_name - ...adding device to SCCM")
 								Import-CMComputerInformation -ComputerName ($dev_name.ToLower()) -MacAddress $dev_hwid
-	
+
 								# wait until device is visible in SCCM
 								Write-Host ("$env_name,$sccm_srv,$dev_name - waiting for device to be visible in SCCM...")
-								Do { Start-Sleep -Seconds 5 } 
+								Do { Start-Sleep -Seconds 5 }
 								Until (Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.MacAddresses -eq $dev_hwid })
-	
+
 								# declare the device was found in SCCN
 								Write-Host ("$env_name,$sccm_srv,$dev_name - ...retrieving resource ID for device")
 								$dev_found = Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.MacAddresses -eq $dev_hwid }
@@ -639,7 +666,7 @@ $vm_list | ForEach-Object {
 							Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: on-premises VM found but no MAC address available")
 							Break
 						}
-						
+
 						# retrieve the maintenance window collection
 						Write-Host ("$env_name,$sccm_srv,$dev_name - retrieving collection for maintenance window: " + $cm_col_window)
 						$col_window = Get-CMDeviceCollection -Name $cm_col_window
@@ -650,7 +677,7 @@ $vm_list | ForEach-Object {
 							Write-Host ("$env_name,$sccm_srv,$dev_name - ERROR: maintenance window collection not found")
 							Break
 						}
-	
+
 						# check for device in maintenance window collection
 						If ($col_window | Get-CMDeviceCollectionDirectMembershipRule -ResourceId $dev_resid) {
 							# declare the device was found in the collection
@@ -660,20 +687,20 @@ $vm_list | ForEach-Object {
 							# add the device to the collection
 							Write-Host ("$env_name,$sccm_srv,$dev_name - ...adding direct membership rule for device to maintenance window")
 							$col_window | Add-CMDeviceCollectionDirectMembershipRule -ResourceId $dev_resid | Out-Null
-		
+
 							# update the deploy collection manually
 							Write-Host ("$env_name,$sccm_srv,$dev_name - ...updating maintenance window")
 							$col_window | Invoke-CMCollectionUpdate | Out-Null
-		
+
 							# wait until device is visible in collection
 							Write-Host ("$env_name,$sccm_srv,$dev_name - waiting for device to be visible in maintenance window")
-							Do { Start-Sleep -Seconds 5 } 
+							Do { Start-Sleep -Seconds 5 }
 							Until ($col_window | Get-CMCollectionMember -ResourceId $dev_resid)
-		
+
 							# declare the device was found in the collection
 							Write-Host ("$env_name,$sccm_srv,$dev_name - ...found device in maintenance window")
 						}
-	
+
 						# check for device in deploy collection for on-premises VMs
 						If ($dev_host -match 'cloud') {
 							Write-Host ("$env_name,$sccm_srv,$dev_name - skipping deploy collection for cloud VM")
@@ -689,7 +716,7 @@ $vm_list | ForEach-Object {
 								Write-Host ("$env_name,$sccm_srv,$dev_name - ERROR: collection not found")
 								Break
 							}
-	
+
 							# check for device in specified collection
 							If ($col_deploy | Get-CMDeviceCollectionDirectMembershipRule -ResourceId $dev_resid) {
 								# declare the device was found in the collection
@@ -699,20 +726,20 @@ $vm_list | ForEach-Object {
 								# import the device into the collection
 								Write-Host ("$env_name,$sccm_srv,$dev_name - ...adding direct membership rule for device to deploy collection")
 								$col_deploy | Add-CMDeviceCollectionDirectMembershipRule -ResourceId $dev_resid | Out-Null
-				
+
 								# update the deploy collection manually
 								Write-Host ("$env_name,$sccm_srv,$dev_name - ...updating deploy collection")
 								$col_deploy | Invoke-CMCollectionUpdate | Out-Null
-				
+
 								# wait until device is visible in collection
 								Write-Host ("$env_name,$sccm_srv,$dev_name - waiting for device to be visible in deploy collection...")
-								Do { Start-Sleep -Seconds 5 } 
+								Do { Start-Sleep -Seconds 5 }
 								Until ($col_deploy | Get-CMCollectionMember -ResourceId $dev_resid)
-								
+
 								# declare the device was found in the collection
 								Write-Host ("$env_name,$sccm_srv,$dev_name - ...found device in collection")
 							}
-	
+
 							# update the device with the domain and LDAP path of the computer object
 							Write-Host ("$env_name,$sccm_srv,$dev_name - setting OSD variables for local VM")
 							Write-Host ("$env_name,$sccm_srv,$dev_name - ...setting OSD domain to: " + $dev_domain)
