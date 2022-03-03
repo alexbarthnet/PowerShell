@@ -12,14 +12,22 @@ Param(
     [Parameter(Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')]
     [string]$Subject,
     [Parameter(Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')][ValidateScript({ Test-Path -Path $_ })]
-    [string]$Storage
+    [string]$Storage,
+    [Parameter(Mandatory = $True, ParameterSetName = 'Add')]
+    [string[]]$Principals,
+    [Parameter()][ValidateScript({ Test-Path -Path $_ })]
+    [string]$Json
 )
 
-Function Set-CertificateMinimumPermissions {
+Function Set-CertificatePermissions {
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ $_ -is [System.Security.Cryptography.X509Certificates.X509Certificate2] })]
-        [object]$Certificate
+        [object]$Certificate,
+        [Parameter(Position = 1)][AllowEmptyCollection()]
+        [string[]]$Principals,
+        [Parameter(Position = 2)]
+        [string[]]$RequiredPrincipals = @('BUILTIN\Administrators', 'NT AUTHORITY\SYSTEM')
     )
 
     # verify certificate has private key
@@ -27,21 +35,48 @@ Function Set-CertificateMinimumPermissions {
         # retrieve ACL for private key
         $cert_key = [System.Environment]::GetFolderPath('CommonApplicationData') + '\Microsoft\Crypto\RSA\MachineKeys\' + $Certificate.PrivateKey.CspKeyContainerInfo.UniqueKeyContainerName
         $cert_acl = Get-Acl -Path $cert_key
-        
-        # create minimum ACEs if missing from ACL
         $cert_aces = @()
-        If ($null -eq ($cert_acl.Access | Where-Object { $_.IdentityReference -eq 'BUILTIN\Administrators' -and $_.FileSystemRights -eq 'FullControl' })) {
-            $cert_aces += New-Object System.Security.AccessControl.FileSystemAccessRule @('BUILTIN\Administrators', 'FullControl', 'Allow')
+
+        # check ACL for required ACEs
+        $AccessRights = 'FullControl'
+        ForEach ($Principal in $RequiredPrincipals) {
+            If ($null -eq ($cert_acl.Access | Where-Object { $_.IdentityReference -eq $Principal -and $_.FileSystemRights -eq $AccessRights })) {
+                Try {
+                    $cert_aces += New-Object System.Security.AccessControl.FileSystemAccessRule @($Principal, $AccessRights, 'Allow')
+                    Write-Host "  - ACE Added  : $Principal"
+                }
+                Catch {
+                    Write-Host "ERROR: '$($Certificate.Subject)' - could not create ACE for: $Principal"
+                }
+            }
+            Else {
+                Write-Host "  - ACE Found  : $Principal"
+            }
         }
-        If ($null -eq ($cert_acl.Access | Where-Object { $_.IdentityReference -eq 'NT AUTHORITY\SYSTEM' -and $_.FileSystemRights -eq 'FullControl' })) {
-            $cert_aces += New-Object System.Security.AccessControl.FileSystemAccessRule @('NT AUTHORITY\SYSTEM', 'FullControl', 'Allow')
+
+        # check ACL for custom ACEs
+        $AccessRights = @('Read', 'Synchronize')
+        ForEach ($Principal in $Principals) {
+            If ($null -eq ($cert_acl.Access | Where-Object { $_.IdentityReference -eq $Principal -and $_.FileSystemRights -eq $AccessRights })) {
+                Try {
+                    $cert_aces += New-Object System.Security.AccessControl.FileSystemAccessRule @($Principal, $AccessRights, 'Allow')
+                    Write-Host "  - ACE Added  : $Principal"
+                }
+                Catch {
+                    Write-Host "ERROR: '$($Certificate.Subject)' - could not create ACE for: $Principal"
+                }
+            }
+            Else {
+                Write-Host "  - ACE Found  : $Principal"
+            }
         }
-    
+
         # update ACL if required
         If ($cert_aces.Count -gt 0) {
             ForEach ($cert_ace in $cert_aces) { $cert_acl.AddAccessRule($cert_ace) }
             Try {
                 $cert_acl | Set-Acl -Path $cert_key
+				Write-Host "  - ACE Updated..."
             }
             Catch {
                 Write-Host "ERROR: '$($Certificate.Subject)' - could not update private key"
@@ -59,7 +94,7 @@ Function Get-CertificateDetails {
         [Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][AllowNull()]
         [object]$Certificate
     )
-    
+
     # report certificate details
     Write-Host "  - Subject    : $($Certificate.Subject)"
     Write-Host "  - Issuer     : $($Certificate.Issuer)"
@@ -129,7 +164,7 @@ Function Find-CertificateFromFile {
 
     # retrieve certificate from expected store with matching thumbprint
     $cert_found = Get-ChildItem -Path $cert_store.Location | Where-Object { $_.Thumbprint -eq $cert_object.Thumbprint } | Sort-Object NotBefore | Select-Object -Last 1
-    
+
     # return certificate already imported if found
     If ($cert_found -is [System.Security.Cryptography.X509Certificates.X509Certificate2]) {
         Return [PSCustomObject]@{ Imported = $true; Certificate = $cert_found; Store = $cert_store }
@@ -189,21 +224,21 @@ Function Import-ChainCertificates {
         # retrieve CNs from subject
         $cert_subject_cn = @()
         $cert_subject_cn += $Certificate.Subject.Split(',') | Where-Object { $_ -match 'CN=' }
-        
+
         # add a final CN if no CNs are in the subject
         $cert_subject_cn += "_default"
 
         # retrieve subject and NotBefore from input certificate
         $cert_file_head = $cert_subject_cn[0].Replace('CN=', $null).Trim()
         $cert_file_date = Get-Date -Date $Certificate.NotBefore -Format 'FileDateTimeUniversal'
-        
+
         # define prefix for exported certificates from input certificate
         $Prefix = $cert_file_head, $cert_file_date -join '_'
-    }    
+    }
 
     # retrieve files matching cert name
     $cert_chain_files = Get-ChildItem -Path $Path | Where-Object { $_.BaseName -match "^$Prefix" -and ( $_.Extension -match '(\.cer|\.crt|\.pem)') }
-    
+
     If ($cert_chain_files.Count -eq 0) {
         Write-Host 'WARNING: no chain certificates found'
     }
@@ -224,7 +259,9 @@ Function Import-PfxCertificateFromFile {
         [Parameter(Position = 1)]
         [switch]$Validate,
         [Parameter(Position = 2)]
-        [string]$ValidationExtension = '.cer'
+        [string]$ValidationExtension = '.cer',
+        [Parameter(Position = 3)]
+        [string[]]$Principals
     )
 
     # retrieve object
@@ -246,7 +283,7 @@ Function Import-PfxCertificateFromFile {
         If ($cert_found.Imported -and $cert_found.Certificate.HasPrivateKey) {
             # declare PFX certificate already installed
             Write-Host ' - PFX file already imported'
-            
+
             # report certificate information
             $cert_imported = $true
         }
@@ -255,12 +292,12 @@ Function Import-PfxCertificateFromFile {
     # import certificate if required
     If ($cert_imported -eq $false) {
         Write-Host ' - PFX file will be imported'
-        
+
         # set certificate store
         If ($null -eq $cert_found) {
             $cert_found = [PSCustomObject]@{ Imported = $false; Certificate = $null; Store = (Get-CertificateStore -Certificate $null) }
         }
-        
+
         # import PFX
         Try {
             $cert_found.Certificate = Import-PfxCertificate -FilePath $FilePath -CertStoreLocation $cert_found.Store.Location -Exportable
@@ -273,7 +310,7 @@ Function Import-PfxCertificateFromFile {
     # report certificate information, verify permissions, then import chain
     If ($cert_found.Certificate -is [System.Security.Cryptography.X509Certificates.X509Certificate2]) {
         $cert_found.Certificate | Get-CertificateDetails
-        $cert_found.Certificate | Set-CertificateMinimumPermissions
+        $cert_found.Certificate | Set-CertificatePermissions -Principals $Principals
         $cert_found.Certificate | Import-ChainCertificates -Path $cert_pfx_file.DirectoryName
     }
 }
@@ -284,7 +321,9 @@ Function Import-PfxCertificateFromFolder {
         [Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ })]
         [object]$Path,
         [Parameter(Position = 1, Mandatory = $true)][ValidatePattern('^[^\*]+$')]
-        [string]$Subject
+        [string]$Subject,
+        [Parameter(Position = 2)][AllowEmptyCollection()]
+        [string[]]$Principals
     )
 
     # create empty objects
@@ -295,23 +334,28 @@ Function Import-PfxCertificateFromFolder {
         $cert_pfx_files += Get-ChildItem -Path $Path | Where-Object { $_.Extension -match '(\.pfx|\.p12)' } | Sort-Object BaseName
     }
     Else {
-        $cert_pfx_files += Get-ChildItem -Path $Path | Where-Object { $_.Extension -match '(\.pfx|\.p12)' } | Sort-Object BaseName | Where-Object { $_.BaseName -match "^$Subject" } | Select-Object -Last 1 
+        $cert_pfx_files += Get-ChildItem -Path $Path | Where-Object { $_.Extension -match '(\.pfx|\.p12)' } | Sort-Object BaseName | Where-Object { $_.BaseName -match "^$Subject" } | Select-Object -Last 1
     }
 
     # check file count
     If ($cert_pfx_files.Count -eq 0) {
         Write-Host "`nERROR: no certificates found with subject: $Subject"
     }
-    Else { 
+    Else {
         ForEach ($cert_pfx_file in $cert_pfx_files) {
             Write-Host "`nFound PFX file: '$($cert_pfx_file.FullName)'"
-            Import-PfxCertificateFromFile -FilePath $cert_pfx_file.FullName -Validate
+            Import-PfxCertificateFromFile -FilePath $cert_pfx_file.FullName -Principals $Principals -Validate
         }
     }
 }
 
-# define configuration file from script path then test path
-$json_path = $PSCommandPath.Replace('.ps1', '.json')
+# define configuration file from script path then verify path
+If ([string]::IsNullOrEmpty($Json)) {
+    $json_path = $PSCommandPath.Replace('.ps1', '.json')
+}
+Else {
+    $json_path = $Json
+}
 $json_test = Test-Path -Path $json_path
 
 # clear required objects then check file
@@ -321,7 +365,7 @@ If ($json_test) {
     $json_name = (Get-Item -Path $json_path).Name
     # create object from JSON file
     $json_data += Get-Content -Path $json_path | ConvertFrom-Json
-} 
+}
 Else {
     # define expected JSON file name
     $json_name = Split-Path -Path $json_path -Leaf
@@ -332,23 +376,28 @@ switch ($true) {
         Write-Output "Clearing '$json_name'"
         If ($json_test) { Remove-Item -Path $json_path -Force }
     }
-    $Remove { 
+    $Remove {
         # remove matching entries from object
         $json_data = $json_data | Where-Object { $_.Subject -ne $Subject }
         $json_data | ConvertTo-Json | Set-Content -Path $json_path
         # declare changes then show current state
         Write-Output "Updating '$json_name' to remove '$Subject'"
-        $json_data | Select-Object Subject, Storage, Updated | Format-Table
+        $json_data | Select-Object Subject, Storage, Principals, Updated | Format-Table
     }
-    $Add { 
+    $Add {
         # create custom object from parameters then add to object
-        $json_data += [pscustomobject]@{ Subject = $Subject ; Storage = $Storage; Updated = (Get-Date -Format FileDateTimeUniversal) }
+        $json_data += [pscustomobject]@{
+            Subject    = [string]$Subject
+            Storage    = [string]$Storage
+            Principals = [string[]]$Principals
+            Updated    = (Get-Date -Format FileDateTimeUniversal)
+        }
         $json_data | ConvertTo-Json | Set-Content -Path $json_path
         # declare changes then show current state
         Write-Output "Updating '$json_name' to add '$Subject'"
-        $json_data | Select-Object Subject, Storage, Updated | Format-Table
+        $json_data | Select-Object Subject, Storage, Principals, Updated | Format-Table
     }
-    $Import { 
+    $Import {
         Try {
             # define transcript file from script path and start transcript
             Start-Transcript -Path $PSCommandPath.Replace('.ps1', '.txt') -Force
@@ -358,36 +407,22 @@ switch ($true) {
 
             # check entry count in configuration file
             If ($json_data.Count -eq 0) {
-                Write-Host "ERROR: no entries found in input file: $json_name"
-                Exit
+                Write-Host "ERROR: no entries found in configuration file: $json_name"
+                Return
             }
 
-            # clear error boolean
-            $cert_entry_error = $false
-
-            # process each entry in configuration file
+            # process configuration file
             ForEach ($json_datum in $json_data) {
-                # retrieve values from entry
-                $cert_subject = $json_datum.Subject
-                $cert_storage = $json_datum.Storage
-                    
-                # verify strings for subject and storage
-                If (-not [string]::IsNullOrEmpty($cert_subject) -and -not [string]::IsNullOrEmpty($cert_storage)) { 
-                    # declare values then import
-                    Write-Host " - subject: '$cert_subject'"
-                    Write-Host " - storage: '$cert_storage'"
-                    Import-PfxCertificateFromFolder -Path $json_datum.Storage -Subject $json_datum.Subject
+                If ([string]::IsNullOrEmpty($json_datum.Subject) -or [string]::IsNullOrEmpty($json_datum.Storage)) {
+                    Write-Host "ERROR: invalid entry found in configuration file: $json_name"
                 }
                 Else {
-                    # set error boolean
-                    $cert_entry_error = $true
+                    Write-Host " - subject    : '$($json_datum.Subject)'"
+                    Write-Host " - storage    : '$($json_datum.Storage)'"
+                    Write-Host " - principals : '$($json_datum.Principals)'"
+                    Import-PfxCertificateFromFolder -Subject $json_datum.Subject -Path $json_datum.Storage -Principals $json_datum.Principals
                 }
             }
-
-            # check error boolean
-            If ($cert_entry_error) {
-                Write-Host 'ERROR: one or more entries in configuration contains null or empty values'
-            }                
         }
         Finally {
             # stop transscript
@@ -395,8 +430,8 @@ switch ($true) {
             Stop-Transcript
         }
     }
-    Default { 
+    Default {
         Write-Output "Displaying '$json_name'"
-        $json_data | Select-Object Subject, Storage, Updated | Format-Table
+        $json_data | Select-Object Subject, Storage, Principals, Updated | Format-Table
     }
 }
