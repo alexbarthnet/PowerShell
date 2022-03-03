@@ -146,9 +146,6 @@ switch ($true) {
 			# define transcript file from script path and start transcript
 			Start-Transcript -Path $PSCommandPath.Replace('.ps1', '.txt') -Force
 
-			# # start logging
-			# Start-LogToMultiple -ScriptPath $PSCommandPath
-
 			# check entry count in configuration file
 			If ($json_data.Count -eq 0) {
 				Write-Host "ERROR: no entries found in configuration file: $json_name"
