@@ -11,6 +11,6 @@ If ($os_name -ne $vm_name) {
 	Write-Output "Found current computer name: $os_name"
 	Write-Output "Found hypervisor guest name: $vm_name"	
 	Write-Output "Renaming computer to: $vm_name"
-	Rename-Computer -NewName $log_path -Restart -Force
+	Rename-Computer -NewName $vm_name -Restart -Force
 	Stop-Transcript
 }
