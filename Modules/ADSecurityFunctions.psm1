@@ -1,5 +1,45 @@
 #Requires -Modules ActiveDirectory
 
+Function Get-ADSecurityIdentifier {
+	[CmdletBinding()]
+	param (
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
+		[object]$Principal
+	)
+
+	# verify the input
+	If ($Principal -isnot [System.String] -and $Principal -is [System.Security.Principal.SecurityIdentifier]) {
+		$Principal = $Principal.Value
+	}
+
+	# translate principal to SID
+	Try {
+		# check for specific well-known SIDs or translate the SID
+		switch ($Principal) {
+			# well-known built-in SID that only translates on a domain controller
+			{ ($_ -eq 'Windows Authorization Access Group') -or ($_ -eq "$([System.Environment]::UserDomainName)\Windows Authorization Access Group") } {
+				Return [System.Security.Principal.SecurityIdentifier]('S-1-5-32-560')
+			}
+			# a SID in string format
+			{ ($_ -match 'S-1-\d{1,2}-\d+') } {
+				Return [System.Security.Principal.SecurityIdentifier]($Principal)
+			}
+			# a principal with domain prefix or suffix
+			{ ($_ -match '^[\w\.-]+\\[\w\.-]+$') -or ($_ -match '^[\w\.-]+@[\w\.-]+$') } {
+				Return ([System.Security.Principal.NTAccount]($Principal)).Translate([System.Security.Principal.SecurityIdentifier])
+			}
+			# a principal without domain prefix or suffix
+			Default {
+				Return ([System.Security.Principal.NTAccount]([System.Environment]::UserDomainName, $Principal)).Translate([System.Security.Principal.SecurityIdentifier])
+			}
+		}
+	}
+	Catch {
+		# return error
+		Return $_
+	}
+}
+
 Function Get-ADSecurityObjects {
 	[CmdletBinding()]
 	Param(
@@ -350,6 +390,7 @@ Get-ADSecurityObjects -Force
 
 # define functions to export
 $functions_to_export = @()
+$functions_to_export += 'Get-ADSecurityIdentifier'
 $functions_to_export += 'Get-ADSecurityObjects'
 $functions_to_export += 'New-ADCustomPSDrive'
 $functions_to_export += 'Remove-ADCustomPSDrive'
