@@ -17,6 +17,8 @@ Param(
 	[string]$Target,
 	[Parameter(ParameterSetName = 'Add')]
 	[switch]$Purge,
+	[Parameter(ParameterSetName = 'Add')]
+	[switch]$CheckHash,
 	[Parameter()][ValidateScript({ Test-Path -Path (Split-Path -Path $_) })]
 	[string]$Json
 )
@@ -203,19 +205,20 @@ switch ($true) {
 		$json_data | ConvertTo-Json | Set-Content -Path $json_path
 		# declare changes then show current state
 		Write-Output "`nUpdated '$json_name' to remove '$Source':"
-		$json_data | Select-Object Source, Target, Purge
+		$json_data | Format-Table
 	}
 	$Add {
 		# create custom object from parameters then add to object
 		$json_data += [pscustomobject]@{
-			Source = $Source
-			Target = $Target
-			Purge  = $Purge.ToBool()
+			Source    = $Source
+			Target    = $Target
+			Purge     = $Purge.ToBool()
+			CheckHash = $CheckHash.ToBool()
 		}
 		$json_data | ConvertTo-Json | Set-Content -Path $json_path
 		# declare changes then show current state
 		Write-Output "`nUpdated '$json_name' to add '$Source':"
-		$json_data | Select-Object Source, Target, Purge
+		$json_data | Format-Table
 	}
 	$Copy {
 		Try {
@@ -234,7 +237,7 @@ switch ($true) {
 					Write-Host "ERROR: invalid entry found in configuration file: $json_name"
 				}
 				Else {
-					Copy-FilesFromSourceToTarget -Source $json_datum.Source -Target $json_datum.Target -Purge $json_datum.Purge
+					Copy-FilesFromSourceToTarget -Source $json_datum.Source -Target $json_datum.Target -Purge $json_datum.Purge -CheckHash $json_datum.CheckHash
 				}
 			}
 		}
@@ -245,6 +248,6 @@ switch ($true) {
 	}
 	Default {
 		Write-Output "`nDisplaying '$json_name':"
-		$json_data | Select-Object Source, Target, Purge
+		$json_data | Format-Table
 	}
 }
