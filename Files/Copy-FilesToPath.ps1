@@ -19,7 +19,7 @@ Param(
 	[switch]$Purge,
 	[Parameter(ParameterSetName = 'Add')]
 	[switch]$CheckHash,
-	[Parameter()][ValidateScript({ Test-Path -Path (Split-Path -Path $_) })]
+	[Parameter()][ValidateScript({ Test-Path -Path (Split-Path -Path $_) -PathType 'Container'})]
 	[string]$Json
 )
 
@@ -38,20 +38,9 @@ Function Copy-FilesFromSourceToTarget {
 
 	# verify source and target
 	switch ($true) {
-		{ -not (Test-Path -Path $Source) } { Write-Output "Could not find '$Source' on host"; Return }
-		{ -not (Test-Path -Path $Target) } { Write-Output "Could not find '$Target' on host"; Return }
+		{ -not (Test-Path -Path $Source -PathType 'Container') } { Write-Output "Could not find folder '$Source' on host"; Return }
+		{ -not (Test-Path -Path $Target -PathType 'Container') } { Write-Output "Could not find folder '$Target' on host"; Return }
 		Default { Write-Output "Verified '$Source' and '$Target' on host" }
-	}
-
-	# get inputs
-	$source_path = Get-Item -Path $Source
-	$target_path = Get-Item -Path $Target
-
-	# verify source and target are folders
-	switch ($true) {
-		{ -not $source_path.PSIsContainer } { Write-Output "ERROR: '$Source' is not a folder"; Return }
-		{ -not $target_path.PSIsContainer } { Write-Output "ERROR: '$Target' is not a folder"; Return }
-		Default { Write-Output "Verified '$Source' and '$Target' are folders" }
 	}
 
 	# remove all files and folders from target if Purge is set
