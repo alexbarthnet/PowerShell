@@ -53,7 +53,7 @@ Try {
 	Write-Host ("$Hostname - Physical disks cleared")
 
 	# remove existing storage pools
-	$disks = Get-Disk | Where-Object { $_.Number -ne $null } | Where-Object { $_.IsBoot -ne $true } | Where-Object { $_.IsSystem -ne $true } | Where-Object { $_.PartitionStyle -ne 'RAW' } | Sort-Object -Property 'Number'
+	$disks = Get-Disk | Where-Object { $_.Number -ne $null -and $_.IsBoot -ne $true -and $_.IsSystem -ne $true -and $_.PartitionStyle -ne 'RAW' } | Sort-Object -Property 'Number'
 	ForEach ($disk in $disks) {
 		$disk | Set-Disk -IsOffline:$false
 		$disk | Set-Disk -IsReadOnly:$false
