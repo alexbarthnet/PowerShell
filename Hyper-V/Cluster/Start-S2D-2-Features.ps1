@@ -3,7 +3,7 @@
 Runs a script to configure the Windows features on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D).
 
 .DESCRIPTION
-Runs a script to configure the Windows features on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files. 
+Runs a script to configure the Windows features on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files.
 
 This parent script pushes another script and any configuration files to each Hyper-V host defined in a CSV then starts the script using PowerShell Remoting.
 
@@ -11,10 +11,10 @@ This parent script pushes another script and any configuration files to each Hyp
 https://github.com/alexbarthnet/PowerShell/
 #>
 
-Param(  
+Param(
 	[Parameter(DontShow = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Script1 = '.\Update-S2D-2-Features.ps1',
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
+	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$HostCsv,
 	[string]$HostName
 )
@@ -30,7 +30,7 @@ If ($HostName) {
 	If ($host_list.Count -lt 1) {
 		Write-Host "...could not find '$HostName' in '$HostCsv'"
 	}
-} 
+}
 Else {
 	# process all hosts
 	$host_list = Import-Csv -Path $HostCsv
@@ -86,7 +86,7 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 	# close session for files
 	Write-Host "$host_name - ending file session..."
 	Remove-PSSession -Session $pss_files
-	
+
 	# run the scripts
 	Write-Host "$host_name - starting script session..."
 	$pss_options = New-PSSessionOption -OutputBufferingMode 'Drop'

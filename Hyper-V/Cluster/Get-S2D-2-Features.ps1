@@ -3,14 +3,14 @@
 Retrieves and displays the Windows features on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D).
 
 .DESCRIPTION
-Retrieves and displays the Windows features on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files. 
+Retrieves and displays the Windows features on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files.
 
 .LINK
 https://github.com/alexbarthnet/PowerShell/
 #>
 
-Param(  
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
+Param(
+	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$HostCsv,
 	[string]$HostName
 )
@@ -42,7 +42,7 @@ If ($HostName) {
 	If ($host_list.Count -lt 1) {
 		Write-Host "...could not find '$HostName' in '$HostCsv'"
 	}
-} 
+}
 Else {
 	# process all hosts
 	$host_list = Import-Csv -Path $HostCsv
@@ -93,7 +93,7 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 	Write-Host "$host_name - running commands..."
 	$log_feature += $out_feature = Invoke-Command -Session $pss_main -ScriptBlock {
 		Get-WindowsFeature -Name $using:features | Sort-Object 'Name'
-	} 
+	}
 
 	# save output to host
 	Write-Host "$host_name - saving output to host..."

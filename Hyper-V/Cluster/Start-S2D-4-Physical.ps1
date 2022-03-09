@@ -3,7 +3,7 @@
 Runs a script to configure the physical NICs on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D).
 
 .DESCRIPTION
-Runs a script to configure the physical NICs on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files. 
+Runs a script to configure the physical NICs on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files.
 
 This parent script pushes another script and any configuration files to each Hyper-V host defined in a CSV starts the script using PowerShell Remoting.
 
@@ -11,12 +11,12 @@ This parent script pushes another script and any configuration files to each Hyp
 https://github.com/alexbarthnet/PowerShell/
 #>
 
-Param(  
+Param(
 	[Parameter(DontShow = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Script1 = '.\Update-S2D-4-Physical.ps1',
 	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$DnsList,
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
+	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$HostCsv,
 	[string]$HostName
 )
@@ -80,7 +80,7 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 		$host_temp = [System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')
 		New-Item -Path $host_temp -Name 'hv-setup' -ItemType 'Directory' -Force
 	}
-	
+
 	# copy files for address and switch configuration
 	Write-Host "$host_name - copying files..."
 	$file_names | Copy-Item -ToSession $pss_files -Destination $host_path

@@ -3,14 +3,14 @@
 Retrieves and displays the live migration and QoS settings on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D).
 
 .DESCRIPTION
-Retrieves and displays the live migration and QoS settings on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files. 
+Retrieves and displays the live migration and QoS settings on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files.
 
 .LINK
 https://github.com/alexbarthnet/PowerShell/
 #>
 
-Param(  
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
+Param(
+	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$HostCsv,
 	[string]$HostName
 )
@@ -29,7 +29,7 @@ If ($HostName) {
 	If ($host_list.Count -lt 1) {
 		Write-Host "...could not find '$HostName' in '$HostCsv'"
 	}
-} 
+}
 Else {
 	# process all hosts
 	$host_list = Import-Csv -Path $HostCsv
@@ -81,9 +81,9 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 
 	# run remote commands
 	Write-Host "$host_name - running commands..."
-	$log_adapter += $out_adapter = Invoke-Command -Session $pss_main -ScriptBlock { Get-NetAdapter -Physical | Sort-Object 'Name' } 
+	$log_adapter += $out_adapter = Invoke-Command -Session $pss_main -ScriptBlock { Get-NetAdapter -Physical | Sort-Object 'Name' }
 	$log_vm_host += $out_vm_host = Invoke-Command -Session $pss_main -ScriptBlock { Get-VMHost }
-	$log_qospols += $out_qospols = Invoke-Command -Session $pss_main -ScriptBlock { Get-NetQosPolicy | Sort-Object 'PriorityValue' } 
+	$log_qospols += $out_qospols = Invoke-Command -Session $pss_main -ScriptBlock { Get-NetQosPolicy | Sort-Object 'PriorityValue' }
 	$log_qostraf += $out_qostraf = Invoke-Command -Session $pss_main -ScriptBlock { Get-NetQosTrafficClass }
 
 	# save output to host

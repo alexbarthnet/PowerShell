@@ -3,14 +3,14 @@
 Retrieves and displays the physical NICs on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D).
 
 .DESCRIPTION
-Retrieves and displays the physical NICs on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files. 
+Retrieves and displays the physical NICs on one or more Hyper-V hosts that will be or are running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files.
 
 .LINK
 https://github.com/alexbarthnet/PowerShell/
 #>
 
-Param(  
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
+Param(
+	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$HostCsv,
 	[string]$HostName
 )
@@ -26,7 +26,7 @@ If ($HostName) {
 	If ($host_list.Count -lt 1) {
 		Write-Host "...could not find '$HostName' in '$HostCsv'"
 	}
-} 
+}
 Else {
 	# process all hosts
 	$host_list = Import-Csv -Path $HostCsv
@@ -42,7 +42,7 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 
 	# clear per-host objects
 	$out_physical = $null
-	
+
 	# clear the DNS cache then resolve hostname
 	Write-Host "$host_name - resolving host..."
 	Do {
@@ -83,8 +83,8 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 		$nic_prop = Get-NetAdapterAdvancedProperty
 		$nic_rdma = Get-NetAdapterRdma
 		$nic_list = Get-NetAdapter -Physical
-		$nic_list | ForEach-Object { 
-			$nic = $_; 
+		$nic_list | ForEach-Object {
+			$nic = $_;
 			$nic_out += [pscustomobject]@{
 				Adapter   = $nic.Name;
 				VLAN      = ($nic_prop | Where-Object { $_.Name -eq $nic.Name -and $_.RegistryKeyword -eq 'VlanID' }).DisplayValue;
@@ -97,7 +97,7 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 				RdmaType  = ($nic_prop | Where-Object { $_.Name -eq $nic.Name -and $_.RegistryKeyword -eq '*NetworkDirectTechnology' }).DisplayValue
 				PFC       = ($nic_rdma | Where-Object { $_.Name -eq $nic.Name }).PFC
 				ETS       = ($nic_rdma | Where-Object { $_.Name -eq $nic.Name }).ETS
-			} 
+			}
 		}
 		$nic_out | Sort-Object Adapter
 	}

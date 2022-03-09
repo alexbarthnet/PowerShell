@@ -9,8 +9,8 @@ Retrieves and displays the virtual NICs, VM switches, and VM storage on one or m
 https://github.com/alexbarthnet/PowerShell/
 #>
 
-Param(  
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
+Param(
+	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$HostCsv,
 	[string]$HostName
 )
@@ -27,7 +27,7 @@ If ($HostName) {
 	If ($host_list.Count -lt 1) {
 		Write-Host "...could not find '$HostName' in '$HostCsv'"
 	}
-} 
+}
 Else {
 	# process all hosts
 	$host_list = Import-Csv -Path $HostCsv
@@ -44,7 +44,7 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 	# clear per-host objects
 	$out_vswitch = $null
 	$out_virtual = $null
-	
+
 	# clear the DNS cache then resolve hostname
 	Write-Host "$host_name - resolving host..."
 	Do {
@@ -77,7 +77,7 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 
 	# run remote commands
 	Write-Host "$host_name - running commands..."
-	$log_vswitch += $out_vswitch = Invoke-Command -Session $pss_main -ScriptBlock { Get-VMSwitch | Sort-Object Name | Select-Object Name, BandwidthReservationMode, EmbeddedTeamingEnabled, IOVEnabled, IOVSupport, IOVSupportReasons } 
+	$log_vswitch += $out_vswitch = Invoke-Command -Session $pss_main -ScriptBlock { Get-VMSwitch | Sort-Object Name | Select-Object Name, BandwidthReservationMode, EmbeddedTeamingEnabled, IOVEnabled, IOVSupport, IOVSupportReasons }
 	$log_virtual += $out_virtual = Invoke-Command -Session $pss_main -ScriptBlock {
 		$vnic_out = @()
 		$vnic_client = Get-DnsClient
@@ -85,8 +85,8 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 		$vnic_addr = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.SkipAsSource -eq $false }
 		$vnic_list = Get-VMNetworkAdapter -ManagementOS | Sort-Object Name
 		$vnic_prop = Get-NetAdapterAdvancedProperty
-		$vnic_list | ForEach-Object { 
-			$vnic = $_; 
+		$vnic_list | ForEach-Object {
+			$vnic = $_;
 			$vnic_iso = $vnic | Get-VMNetworkAdapterIsolation
 			$vnic_out += [pscustomobject]@{
 				Adapter      = $vnic.Name;
@@ -101,7 +101,7 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 				Jumbo        = ($vnic_prop | Where-Object { $_.Name -eq $vnic.Name -and $_.RegistryKeyword -eq '*JumboPacket' }).DisplayValue
 				Rdma         = ($vnic_prop | Where-Object { $_.Name -eq $vnic.Name -and $_.RegistryKeyword -eq '*NetworkDirect' }).DisplayValue
 				IeeePriority = $vnic.IeeePriorityTag
-			} 
+			}
 		}
 		$vnic_out | Sort-Object Adapter
 	}

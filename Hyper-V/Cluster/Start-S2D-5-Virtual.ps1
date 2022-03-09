@@ -11,10 +11,10 @@ This parent script pushes another script and any configuration files to each Hyp
 https://github.com/alexbarthnet/PowerShell/
 #>
 
-Param(  
+Param(
 	[Parameter(DontShow = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Script1 = '.\Update-S2D-5-Virtual.ps1',
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
+	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$HostCsv,
 	[string]$HostName
 )
@@ -30,7 +30,7 @@ If ($HostName) {
 	If ($host_list.Count -lt 1) {
 		Write-Host "...could not find '$HostName' in '$HostCsv'"
 	}
-} 
+}
 Else {
 	# process all hosts
 	$host_list = Import-Csv -Path $HostCsv
@@ -89,7 +89,7 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 
 	# get basename of files
 	$host_csv = (Get-Item -Path $HostCsv).Name
-	
+
 	# run the scripts
 	Write-Host "$host_name - starting script session..."
 	$pss_options = New-PSSessionOption -OutputBufferingMode 'Drop'
