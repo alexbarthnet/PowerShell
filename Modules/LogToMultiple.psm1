@@ -1,32 +1,3 @@
-Function Write-Log {
-	[CmdletBinding()]
-	param (
-		[Parameter(Position = 0, Mandatory = $true)]
-		[string]$LogText,
-		[Parameter(Position = 1)]
-		[string]$LogSubject
-	)
-
-	# check for Write-LogToMultiple
-	If ($null -eq $LogToMultipleAvailable) {
-		If ($null -eq (Get-Module -ListAvailable -Name 'LogToMultiple')) {
-			$LogToMultipleAvailable = $false
-		}
-		Else {
-			$LogToMultipleAvailable = $true
-		}
-	}
-
-	# write log
-	If ($LogToMultipleAvailable) {
-		Write-LogToMultiple -LogText $LogText -LogSubject $LogSubject
-	}
-	Else {
-		$text_withdate = @((Get-Date -Format FileDateTimeUniversal), [System.Environment]::MachineName.ToLower(), [System.Environment]::UserName.ToLower(), $LogSubject, $LogText) -join ','
-		Write-Host -Object $text_withdate
-	}
-}
-
 Function Write-LogToMultiple {
 	[CmdletBinding()]
 	Param (
@@ -206,6 +177,68 @@ Function Start-LogToMultiple {
 	)
 }
 
+Function Remove-LogToMultiple {
+	[CmdletBinding()]
+	Param (
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ })]
+		[string]$ScriptPath,
+		[Parameter(Position = 1)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
+		[string]$LogsPath = 'C:\Content\logs',
+		[Parameter(Position = 2)][ValidateSet('Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
+		[string]$OlderThanType = 'Days',
+		[Parameter(Position = 3)][ValidateRange(1, 32767)]
+		[int16]$OlderThanUnits = 30
+	)
+
+	# build required strings for log path and file
+	$log_base = (Get-Item -Path $ScriptPath).BaseName
+
+	# build log path and file
+	$log_path = Join-Path -Path $LogsPath -ChildPath $log_base
+
+	# start log file
+	Try {
+		Start-LogToMultiple -ScriptPath $ScriptPath
+	}
+	Catch {
+		Write-Host 'ERROR: could not start logging'
+		Exit $LASTERRORCODE
+	}
+
+
+	# verify log directory
+	If (Test-Path -Path $log_Path) {
+		Write-LogToMultiple -LogSubject $log_base -LogText "Found log folder: $log_Path"
+	}
+	Else {
+		Write-LogToMultiple -LogSubject $log_base -LogText "ERROR: could not locate log folder: $log_Path"
+		Return
+	}
+
+	# get date from inputs
+	switch ($OlderThanType) {
+		'Minutes' { $log_date_time = (Get-Date).AddMinutes(-1 * $OlderThanUnits) }
+		'Hours' { $log_date_time = (Get-Date).AddHours(-1 * $OlderThanUnits) }
+		'Days' { $log_date_time = (Get-Date).AddDays(-1 * $OlderThanUnits) }
+		'Weeks' { $log_date_time = (Get-Date).AddWeeks(-1 * $OlderThanUnits) }
+		'Months' { $log_date_time = (Get-Date).AddMonths(-1 * $OlderThanUnits) }
+		'Years' { $log_date_time = (Get-Date).AddYears(-1 * $OlderThanUnits) }
+	}
+	Write-LogToMultiple -LogSubject $log_base -LogText "Removing files older than: $($log_date_time | Get-Date -Format FileDateTime)"
+
+	# get files from date
+	$log_files_old = Get-ChildItem -Path $log_Path | Where-Object { $_.LastWriteTime -lt $log_date_time }
+	ForEach ($log_file in $log_files_old) {
+		Try {
+			Remove-Item -Path $log_file.FullName -Force
+			Write-LogToMultiple -LogSubject $log_base -LogText "Removing log file: $($log_file.FullName)"
+		}
+		Catch {
+			Write-LogToMultiple -LogSubject $log_base -LogText "ERROR: removing log file: $($log_file.FullName)" -LogLevel Error
+		}
+	}
+}
+
 Function Initialize-LogToMultiple {
 	[CmdletBinding()]
 	Param (
@@ -330,6 +363,7 @@ Function Initialize-LogToMultiple {
 $functions_to_export = @()
 $functions_to_export += 'Write-LogToMultiple'
 $functions_to_export += 'Start-LogToMultiple'
+$functions_to_export += 'Remove-LogToMultiple'
 $functions_to_export += 'Initialize-LogToMultiple'
 
 # export module members
