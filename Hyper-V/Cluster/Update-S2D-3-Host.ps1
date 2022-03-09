@@ -148,22 +148,20 @@ Try {
 
 	# check for Cluster QoS policy
 	Write-Host "$Hostname - checking Cluster QoS policy"
-	$qos_policy_cluster = Get-NetQosPolicy | Where-Object { $_.Name -eq $ClusterLabel -and $_.PriorityValue -eq 7 -and $_.Template -eq 'Cluster' }
+	$qos_policy_cluster = Get-NetQosPolicy | Where-Object { $_.Name -eq $ClusterLabel -and $_.PriorityValue -eq 7 -and $_.Template -eq $ClusterLabel }
 	If ($qos_policy_cluster) {
 		Write-Host "$Hostname - verified Cluster QoS policy"
 	}
 	Else {
-		$qos_policy_cluster = Get-NetQosPolicy | Where-Object { $_.Name -eq $ClusterLabel -or $_.PriorityValue -eq 7 -or $_.Template -eq 'Cluster' }
+		$qos_policy_cluster = Get-NetQosPolicy | Where-Object { $_.Name -eq $ClusterLabel -or $_.PriorityValue -eq 7 -or $_.Template -eq $ClusterLabel }
 		$qos_policy_cluster | ForEach-Object {
-			If ($_.Name -ne $ClusterLabel -or $_.PriorityValue -ne 7 -or $_.Template -ne 'Cluster') {
+			If ($_.Name -ne $ClusterLabel -or $_.PriorityValue -ne 7 -or $_.Template -ne $ClusterLabel) {
 				Write-Host "$Hostname - removing incorrect Cluster QoS policy: $($_.Name)"
 				$_ | Remove-NetQosPolicy -Confirm:$false
 			}
 		}
-		Else {
-			Write-Host "$Hostname - creating Cluster QoS policy"
-			New-NetQosPolicy -Name $ClusterLabel -PriorityValue8021Action 7 -Cluster
-		}
+		Write-Host "$Hostname - creating Cluster QoS policy"
+		New-NetQosPolicy -Name $ClusterLabel -PriorityValue8021Action 7 -Cluster
 	}
 
 	# check for Default QoS policy
