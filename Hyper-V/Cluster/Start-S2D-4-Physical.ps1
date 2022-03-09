@@ -98,8 +98,8 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 	$pss_options = New-PSSessionOption -OutputBufferingMode 'Drop'
 	$pss_scripts = Invoke-Command -ComputerName $host_name -InDisconnectedSession -SessionOption $pss_options -ScriptBlock {
 		Set-Location -Path $using:host_path
-		Move-Item -Path $using:host_csv -Destination ($using:host_name + '-net.csv') -Force
-		Move-Item -Path $using:dns_txt -Destination ($using:host_name + '-dns.txt') -Force
+		Move-Item -Path $using:host_csv -Destination "$($using:host_name)-net.csv" -Force
+		Move-Item -Path $using:dns_txt -Destination "$($using:host_name)-dns.txt" -Force
 		Invoke-Expression -Command $using:Script1
 	}
 
