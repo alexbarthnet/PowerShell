@@ -3,7 +3,7 @@
 Configures the live migration and QoS settings on a Hyper-V host that will be or is running Storage Spaces Direct (S2D).
 
 .DESCRIPTION
-Configures the live migration and QoS settings on a Hyper-V host that will be or is running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files. 
+Configures the live migration and QoS settings on a Hyper-V host that will be or is running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files.
 
 A parent script pushes this script and the configuration files to each Hyper-V host then starts the script using PowerShell Remoting.
 
@@ -83,7 +83,7 @@ Try {
 			$host_vhdpath = 'C:\Users\Public\Documents\Hyper-V\Virtual Hard Disks'
 		}
 	}
-	
+
 	# set virtual hard disk path
 	Write-Host "$Hostname - setting Virtual Machine Path to: '$host_vmpath'"
 	Set-VMHost -VirtualMachinePath $host_vmpath
@@ -173,7 +173,7 @@ Try {
 		Else {
 			Write-Host "$Hostname - creating Cluster QoS policy"
 			New-NetQosPolicy -Name $ClusterLabel -PriorityValue8021Action 7 -Cluster
-		}    
+		}
 	}
 
 	# check for Default QoS policy
@@ -197,7 +197,7 @@ Try {
 		Else {
 			Write-Host "$Hostname - creating Default QoS policy"
 			New-NetQosPolicy -Name $DefaultLabel -PriorityValue8021Action 0 -Default
-		}    
+		}
 	}
 
 	# check for SMB QoS traffic class
@@ -221,7 +221,7 @@ Try {
 		Else {
 			Write-Host "$Hostname - creating SMB QoS traffic class"
 			New-NetQosTrafficClass -Name $StorageLabel -Priority 3 -BandwidthPercentage $StoragePercent -Algorithm ETS
-		}    
+		}
 	}
 
 	# check for Cluster QoS traffic class
@@ -245,7 +245,7 @@ Try {
 		Else {
 			Write-Host "$Hostname - creating Cluster QoS traffic class"
 			New-NetQosTrafficClass -Name $ClusterLabel -Priority 7 -BandwidthPercentage $ClusterPercent -Algorithm ETS
-		}    
+		}
 	}
 
 	# check for Default QoS traffic class

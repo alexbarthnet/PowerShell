@@ -3,7 +3,7 @@
 Configures the Windows features on a Hyper-V host that will be or is running Storage Spaces Direct (S2D).
 
 .DESCRIPTION
-Configures the Windows features on a Hyper-V host that will be or is running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files. 
+Configures the Windows features on a Hyper-V host that will be or is running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files.
 
 A parent script pushes this script and the configuration files to each Hyper-V host then starts the script using PowerShell Remoting.
 

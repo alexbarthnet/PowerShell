@@ -3,7 +3,7 @@
 Configures the physical NICs on a Hyper-V host that will be or is running Storage Spaces Direct (S2D).
 
 .DESCRIPTION
-Configures the physical NICs on a Hyper-V host that will be or is running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files. 
+Configures the physical NICs on a Hyper-V host that will be or is running Storage Spaces Direct (S2D) with information from a set of host-specific configuration files.
 
 A parent script pushes this script and the configuration files to each Hyper-V host then starts the script using PowerShell Remoting.
 
@@ -38,10 +38,10 @@ Try {
 		# set base names
 		$nic_old = $nic_hw.Name
 		$nic_new = $null
-	
+
 		# get hardware info
 		$nic_hw_info = Get-NetAdapterHardwareInfo -Name $nic_old -ErrorAction 'SilentlyContinue'
-	
+
 		# try to build the name from slot and port information
 		If ($nic_hw_info.BusNumber -eq 0) {
 			$nic_new = ('Port ' + $nic_hw_info.BusNumber)
@@ -55,21 +55,21 @@ Try {
 			$nic_new = ('Port ' + ($nic_hw_info.FunctionNumber + 1))
 			$nic_new_via = 'port number'
 		}
-	 
+
 		# try to build the name from PCI device label
 		$nic_pci = $nic_hw_info.PciDeviceLabelString
 		If ($null -ne $nic_pci) {
 			$nic_new = $nic_pci
 			$nic_new_via = 'PCI device label'
 		}
-	 
-		# try to build the name from Hyper-V 
+
+		# try to build the name from Hyper-V
 		$nic_adv = ($nic_hw_info | Where-Object { $_.RegistryKeyword -eq 'HyperVNetworkAdapterName' }).DisplayValue
 		If ($null -ne $nic_adv) {
 			$nic_new = $nic_adv
 			$nic_new_via = 'Hyper-V'
 		}
-	
+
 		# if the new name was generated...
 		If ($nic_new) {
 			If ($nic_old -eq 'Management') {
@@ -116,10 +116,10 @@ Try {
 		$nic_vnic = $_.vNIC
 
 		# check for IP addresses
-		# IP not found on NIC, check if requested NIC exists    
+		# IP not found on NIC, check if requested NIC exists
 		Write-Host ("$Hostname, $nic_name, $nic_addr - Checking for NIC...")
 		$nic_exists = $null
-		$nic_exists = Get-NetAdapter -Physical | Where-Object { $_.InterfaceAlias -eq $nic_name } 
+		$nic_exists = Get-NetAdapter -Physical | Where-Object { $_.InterfaceAlias -eq $nic_name }
 		If ($nic_exists) {
 			# requested NIC found, check if requested NIC has IPv4 enabled
 			Write-Host ("$Hostname, $nic_name, $nic_addr - NIC found, checking for IP bindings...")
@@ -183,7 +183,7 @@ Try {
 					# current NIC lacks gateway, disable DNS registration
 					Write-Host ("$Hostname, $nic_name, $nic_addr - ...disabling DNS registration")
 					$nic_exists | Set-DnsClient -RegisterThisConnectionsAddress $false
-					
+
 				}
 				Else {
 					# check for default route on other physical and virtual NICs
@@ -250,7 +250,7 @@ Try {
 						Write-Host ("$Hostname, $nic_name, $nic_addr - Jumbo Packet on non-Management NIC not set to '9014', fixing...")
 						Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*JumboPacket' -RegistryValue 9014
 					}
-				} 
+				}
 				Else {
 					If ($nic_size.RegistryValue -ne 1514) {
 						Write-Host ("$Hostname, $nic_name, $nic_addr - Jumbo Packet on Management NIC not set to '1514', fixing...")

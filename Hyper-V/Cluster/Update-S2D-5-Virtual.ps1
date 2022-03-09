@@ -115,7 +115,7 @@ Try {
 			}
 		}
 	}
-	
+
 	# get the virtual NICs from the network CSV
 	Write-Host ("$Hostname - Processing virtual NIC settings...")
 	$map_network | Where-Object { $_.vNIC } | ForEach-Object {
@@ -302,7 +302,7 @@ Try {
 			Write-Host ("$Hostname,$vswitch_name,$vnic_name - Switch not found by name, re-run script to create the virtual switch...")
 		}
 	}
-	
+
 }
 Finally {
 	# stop logging
