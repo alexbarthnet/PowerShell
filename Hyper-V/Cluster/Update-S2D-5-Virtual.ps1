@@ -90,7 +90,7 @@ Try {
 		}
 		Else {
 			# if switch NOT found check the type of switch
-			Write-Host ("$Hostname,$vswitch_name - Switch not found, checking switch type...")
+			Write-Host ("$Hostname,$vswitch_name - Switch not found, checking count of associated physical NICs...")
 			If ($pnic_array.Count -le 1) {
 				# if only one physical NIC is defined to be in the switch, don't make a switch!
 				Write-Host ("$Hostname,$vswitch_name - Switch defined with only one physical NIC, skipping switch creation: " + $pnic_array[0].Name)
