@@ -22,9 +22,7 @@ param (
 	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
 	[string]$LogFile = $PSCommandPath.Replace('.ps1', "-$(Get-Date -Format FileDateTime).txt"),
 	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
-	[string]$NetworkCsv = (Join-Path -Path $FilePath -ChildPath "$($Hostname)-net.csv"),
-	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
-	[string]$DnsServers = (Join-Path -Path $FilePath -ChildPath "$($Hostname)-dns.txt")
+	[string]$NicCsv = (Join-Path -Path $FilePath -ChildPath "$($Hostname)-nic.csv")
 )
 
 # pass 1: physical NIC rename
@@ -99,7 +97,7 @@ Try {
 	Start-Transcript -Path $LogFile -Append -Force
 
 	# import CSV
-	$map_network = Import-Csv -Path $NetworkCsv | Where-Object { $_.Host -eq $Hostname -and $_.Adapter }
+	$map_network = Import-Csv -Path $NicCsv | Where-Object { $_.Host -eq $Hostname -and $_.Adapter }
 
 	# process the network mapping file - add phase
 	Write-Host ("$Hostname - Checking physical NIC settings...")
@@ -110,6 +108,7 @@ Try {
 		$nic_mask = $_.Mask
 		$nic_gway = $_.Gateway
 		$nic_vnic = $_.vNIC
+		$nic_dns = $_.DnsServers
 
 		# check for IP addresses
 		# IP not found on NIC, check if requested NIC exists
@@ -202,8 +201,8 @@ Try {
 					}
 
 					# current NIC has gateway, set the DNS servers
-					Write-Host ("$Hostname, $nic_name, $nic_addr - ...setting DNS servers: $((Get-Content -Path $DnsServers) -join ',')")
-					$nic_exists | Set-DnsClientServerAddress -ServerAddress $(Get-Content -Path $DnsServers)
+					Write-Host ("$Hostname, $nic_name, $nic_addr - ...setting DNS servers: $nic_dns")
+					$nic_exists | Set-DnsClientServerAddress -ServerAddress $nic_dns.Split(';')
 					# requested NIC has gateway, enable DNS registration
 					Write-Host ("$Hostname, $nic_name, $nic_addr - ...enabling DNS registration")
 					$nic_exists | Set-DnsClient -RegisterThisConnectionsAddress $true
