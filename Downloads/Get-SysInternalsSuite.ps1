@@ -17,7 +17,7 @@ Param (
 )
 
 # check file
-If (Test-Path $FilePath -and -not $SkipDownload) {
+If ((Test-Path -Path $FilePath) -and -not $SkipDownload) {
 	# get size of local file and remote URI
 	$file_size = (Get-ItemProperty -Path $FilePath -ErrorAction 'SilentlyContinue').Length
 	$uri_size = (Invoke-WebRequest -Uri $Uri -UseBasicParsing -Method 'Head').Headers.'Content-Length'
