@@ -244,6 +244,37 @@ Try {
 	Enable-NetQosFlowControl -Priority 3, 7
 	Disable-NetQosFlowControl -Priority 0, 1, 2, 4, 5, 6
 
+	# balance VFs across SRIOV adapters
+	Write-Host "$Hostname - checking for balanced VFs on SRIOV-enabled adapters..."
+	$sriov_adapters = Get-NetAdapter | Where-Object { ($_ | Get-NetAdapterAdvancedProperty).RegistryKeyword -eq '*SRIOV' }
+	If ($sriov_adapters) {
+		Write-Host "$Hostname - ...found $($sriov_adapters.Count) SRIOV-enabled adapters to review ..."
+		# group SRIOV adapters by DriverDescription
+		$sriov_groups = $sriov_adapters | Group-Object -Property 'DriverDescription'
+		ForEach ($sriov_group in $sriov_groups) {
+			Write-Host "$Hostname - ...getting VFs for adapters with driver: $($sriov_group.Name)"
+			# reset VF count for group
+			$sriov_vfs = 0
+			# get current VF count from each adapter in group
+			ForEach ($sriov_adapter in $sriov_group.Group) {
+				# add adapter VF count to VF count for group
+				$sriov_vfs += ($sriov_adapter | Get-NetAdapterSriov).NumVFs
+			}
+			Write-Host "$Hostname - ...found '$sriov_vfs' VFs for '$($sriov_group.Count)' adapters"
+			$sriov_vfs_per_adapter = $sriov_vfs / ($sriov_group.Count)
+			# verify correct VF count on each adapter in group
+			ForEach ($sriov_adapter in $sriov_group.Group) {
+				$sriov_vfs_on_adapter = ($sriov_adapter | Get-NetAdapterSriov).NumVFs
+				If ($sriov_vfs_on_adapter -ne $sriov_vfs_per_adapter) {
+					$sriov_adapter | Set-NetAdapterSriov -NumVFs $sriov_vfs_per_adapter
+					Write-Host "$Hostname - ...updated '$($sriov_adapter.Description)' to '$sriov_vfs_per_adapter' VFs"
+				}
+				Else {
+					Write-Host "$Hostname - ...found '$sriov_vfs_per_adapter' VFs on '$($sriov_adapter.Name)'"
+				}
+			}
+		}
+	}
 }
 Finally {
 	# stop logging
