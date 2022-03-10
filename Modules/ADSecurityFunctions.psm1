@@ -30,7 +30,7 @@ Function Get-ADSecurityIdentifier {
 			}
 			# a principal without domain prefix or suffix
 			Default {
-				Return ([System.Security.Principal.NTAccount]([System.Environment]::UserDomainName, $Principal)).Translate([System.Security.Principal.SecurityIdentifier])
+				Return ([System.Security.Principal.NTAccount]("$([System.Environment]::UserDomainName)\$Principal")).Translate([System.Security.Principal.SecurityIdentifier])
 			}
 		}
 	}
@@ -315,7 +315,7 @@ Function Update-ADSecurity {
 			}
 			Catch {
 				Write-Host "ERROR: could not retrieve ACL for: '$ad_object_dn'"
-				Continue ad_object
+				Continue ad_object_dn
 			}
 			# retrieve inheritance settings
 			# $ad_object_acl.IsProtected
