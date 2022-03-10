@@ -43,11 +43,7 @@ Try {
 		$nic_hw_info = Get-NetAdapterHardwareInfo -Name $nic_old -ErrorAction 'SilentlyContinue'
 
 		# try to build the name from slot and port information
-		If ($nic_hw_info.BusNumber -eq 0) {
-			$nic_new = ('Port ' + $nic_hw_info.BusNumber)
-			$nic_new_via = 'bus number'
-		}
-		ElseIf ($nic_hw_info.SlotNumber) {
+		If ($nic_hw_info.SlotNumber) {
 			$nic_new = ('Slot ' + $nic_hw_info.SlotNumber + ' Port ' + ($nic_hw_info.FunctionNumber + 1))
 			$nic_new_via = 'slot/port number'
 		}
@@ -149,7 +145,7 @@ Try {
 				$nic_addr_on_sys = $null
 				$nic_addr_on_sys = Get-NetIPAddress | Where-Object { $_.IPv4Address -eq $nic_addr -and $_.AddressFamily -eq 'IPv4' -and $_.InterfaceAlias -ne $nic_name -and $_.InterfaceAlias -ne $nic_vnic }
 				If ($nic_addr_on_sys) {
-					Write-Host ("$Hostname, $nic_name, $nic_addr - ...current IP address found on other NIC, removing '$($nic_addr_on_sys.IPv4Address)' from '$($nic_addr_on_sys.InterfaceAlias)'")
+					Write-Host ("$Hostname, $nic_name, $nic_addr - ...correct IP address found on other NIC, removing '$($nic_addr_on_sys.IPv4Address)' from '$($nic_addr_on_sys.InterfaceAlias)'")
 					$nic_addr_on_sys | Remove-NetIPAddress -Confirm:$false
 				}
 
@@ -158,7 +154,7 @@ Try {
 				$nic_correct_ip = Get-NetIPAddress | Where-Object { $_.IPv4Address -eq $nic_addr -and $_.AddressFamily -eq 'IPv4' -and ($_.InterfaceAlias -eq $nic_name -or $_.InterfaceAlias -eq $nic_vnic) }
 				If ($nic_correct_ip) {
 					# IP address found
-					Write-Host ("$Hostname, $nic_name, $nic_addr - ...current IP address found on correct physical or virtual NIC")
+					Write-Host ("$Hostname, $nic_name, $nic_addr - ...correct IP address found on correct physical or virtual NIC")
 				}
 				Else {
 					Write-Host ("$Hostname, $nic_name, $nic_addr - ...setting IP address")
