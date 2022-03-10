@@ -14,28 +14,26 @@ https://github.com/alexbarthnet/PowerShell/
 Param(
 	[Parameter(DontShow = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Script1 = '.\Update-S2D-4-Physical.ps1',
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
-	[string]$DnsList,
 	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
-	[string]$HostCsv,
+	[string]$NicCsv,
 	[string]$HostName
 )
 
 # get array of file names
-$file_names = @($Script1, $HostCsv, $DnsList)
+$file_names = @($Script1, $NicCsv)
 
 # import host information
 $host_list = $null
 If ($HostName) {
 	# process single host
-	$host_list = Import-Csv -Path $HostCsv | Where-Object { $_.Host -eq $HostName }
+	$host_list = Import-Csv -Path $NicCsv | Where-Object { $_.Host -eq $HostName }
 	If ($host_list.Count -lt 1) {
-		Write-Host "...could not find '$HostName' in '$HostCsv'"
+		Write-Host "...could not find '$HostName' in '$NicCsv'"
 	}
 }
 Else {
 	# process all hosts
-	$host_list = Import-Csv -Path $HostCsv
+	$host_list = Import-Csv -Path $NicCsv
 }
 
 # process the cluster mapping file
@@ -90,16 +88,14 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 	Remove-PSSession -Session $pss_files
 
 	# get basename of files
-	$host_csv = (Get-Item -Path $HostCsv).Name
-	$dns_txt = (Get-Item -Path $DnsList).Name
+	$host_csv = (Get-Item -Path $NicCsv).Name
 
 	# run the scripts
 	Write-Host "$host_name - starting script session..."
 	$pss_options = New-PSSessionOption -OutputBufferingMode 'Drop'
 	$pss_scripts = Invoke-Command -ComputerName $host_name -InDisconnectedSession -SessionOption $pss_options -ScriptBlock {
 		Set-Location -Path $using:host_path
-		Move-Item -Path $using:host_csv -Destination "$($using:host_name)-net.csv" -Force
-		Move-Item -Path $using:dns_txt -Destination "$($using:host_name)-dns.txt" -Force
+		Move-Item -Path $using:host_csv -Destination "$($using:host_name)-nic.csv" -Force
 		Invoke-Expression -Command $using:Script1
 	}
 
