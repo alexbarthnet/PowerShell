@@ -22,7 +22,7 @@ param (
 	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
 	[string]$LogFile = $PSCommandPath.Replace('.ps1', "-$(Get-Date -Format FileDateTime).txt"),
 	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
-	[string]$NetworkCsv = (Join-Path -Path $FilePath -ChildPath "$($Hostname)-net.csv")
+	[string]$NicCsv = (Join-Path -Path $FilePath -ChildPath "$($Hostname)-nic.csv")
 )
 
 Try {
@@ -40,7 +40,7 @@ Try {
 	}
 
 	# import CSV
-	$map_network = Import-Csv -Path $NetworkCsv | Where-Object { $_.Host -eq $Hostname }
+	$map_network = Import-Csv -Path $NicCsv | Where-Object { $_.Host -eq $Hostname }
 
 	# get the virtual switches from the network CSV
 	Write-Host ("$Hostname - Processing virtual switch settings...")
