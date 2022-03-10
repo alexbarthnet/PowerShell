@@ -81,7 +81,26 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 
 	# run remote commands
 	Write-Host "$host_name - running commands..."
-	$log_adapter += $out_adapter = Invoke-Command -Session $pss_main -ScriptBlock { Get-NetAdapter -Physical | Sort-Object 'Name' }
+	$log_adapter += $out_adapter = Invoke-Command -Session $pss_main -ScriptBlock { 
+		$nic_out = @()
+		$nic_list = Get-NetAdapter -Physical
+		ForEach ($nic in $nic_list) {
+			$nic_hw = $nic | Get-NetAdapterHardwareInfo
+			$nic_out += [pscustomobject]@{
+				Name        = $nic.Name;
+				Description = $nic.InterfaceDescription;
+				Index       = $nic.InterfaceIndex
+				Status      = $nic.Status
+				MacAddress  = $nic.MacAddress
+				LinkSpeed   = $nic.LinkSpeed
+				Slot        = $nic_hw.SlotNumber
+				Port        = $nic_hw.FunctionNumber + 1
+				PciLabel    = $nic_hw.PciDeviceLabelString
+				FutureName  = "Slot $($nic_hw.SlotNumber) Port $($nic_hw.FunctionNumber + 1)"
+			}
+		}
+		$nic_out | Sort-Object Name
+	}
 	$log_vm_host += $out_vm_host = Invoke-Command -Session $pss_main -ScriptBlock { Get-VMHost }
 	$log_qospols += $out_qospols = Invoke-Command -Session $pss_main -ScriptBlock { Get-NetQosPolicy | Sort-Object 'PriorityValue' }
 	$log_qostraf += $out_qostraf = Invoke-Command -Session $pss_main -ScriptBlock { Get-NetQosTrafficClass }
@@ -93,8 +112,8 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 		$host_review = Join-Path -Path $using:host_path.FullName -ChildPath ('ash-get-host-' + (Get-Date -Format 'FileDateTime') + '.txt')
 		# build the file
 		$file_headers = "======================== $(Get-Date -Format 'FileDateTime') ========================"
-		$file_output1 = $using:out_adapter | Format-Table Name, InterfaceDescription, ifIndex, Status, MacAddress, LinkSpeed
-		$file_output2 = $using:out_vm_host | Format-Table Name, @{Label = 'LiveMigrate'; Expression = { $_.VirtualMachineMigrationEnabled } }, @{Label = 'LiveMigrate Auth'; Expression = { $_.VirtualMachineMigrationAuthenticationType } }, @{Label = 'LiveMigrate Type'; Expression = { $_.VirtualMachineMigrationPerformanceOption } }
+		$file_output1 = $using:out_adapter | Format-Table Name, Description, Index, Status, MacAddress, LinkSpeed, Slot, Port, PciLabel, FutureName
+		$file_output2 = $using:out_vm_host | Format-Table Name, @{Label = 'LiveMigrate'; Expression = { $_.VirtualMachineMigrationEnabled } }, @{Label = 'LiveMigrateAuth'; Expression = { $_.VirtualMachineMigrationAuthenticationType } }, @{Label = 'LiveMigrateType'; Expression = { $_.VirtualMachineMigrationPerformanceOption } }
 		$file_output3 = $using:out_qospols | Format-Table Name, Owner, NetworkProfile, Template, PriorityValue, NetDirectPort
 		$file_output4 = $using:out_qostraf | Format-Table Name, PriorityFriendly, Bandwidth, Algorithm, PolicySet
 		# write the file
@@ -113,7 +132,7 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 # declare results
 Write-Host ''
 Write-Host '======================== Results ========================'
-$log_adapter | Format-Table PSComputerName, Name, InterfaceDescription, ifIndex, Status, MacAddress, LinkSpeed
-$log_vm_host | Format-Table PSComputerName, @{Label = 'LiveMigrate'; Expression = { $_.VirtualMachineMigrationEnabled } }, @{Label = 'LiveMigrate Auth'; Expression = { $_.VirtualMachineMigrationAuthenticationType } }, @{Label = 'LiveMigrate Type'; Expression = { $_.VirtualMachineMigrationPerformanceOption } }
+$log_adapter | Format-Table PSComputerName, Name, Description, Index, Status, MacAddress, LinkSpeed, Slot, Port, PciLabel, FutureName
+$log_vm_host | Format-Table PSComputerName, @{Label = 'LiveMigrate'; Expression = { $_.VirtualMachineMigrationEnabled } }, @{Label = 'LiveMigrateAuth'; Expression = { $_.VirtualMachineMigrationAuthenticationType } }, @{Label = 'LiveMigrateType'; Expression = { $_.VirtualMachineMigrationPerformanceOption } }
 $log_qospols | Format-Table PSComputerName, Name, Owner, Template, PriorityValue, NetDirectPort
 $log_qostraf | Format-Table PSComputerName, Name, PriorityFriendly, Bandwidth, Algorithm, PolicySet
