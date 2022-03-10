@@ -1,20 +1,28 @@
 [CmdletBinding()]
 Param (
-	[Parameter(Position = 0)][ValidateScript({ Test-Path -Path $_ })]
-	[string]$Destination = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path,
-	[Parameter(Position = 1)]
+	[Parameter(DontShow)][ValidateScript({ Test-Path -Path $_ })]
+	[string]$DefaultPath = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path,
+	[Parameter(DontShow)]
 	[string]$FileName = 'SysinternalsSuite.zip',
-	[Parameter(Position = 2)]
-	[string]$FilePath = (Join-Path -Path $Destination -ChildPath $FileName),
-	[Parameter(Position = 3)]
+	[Parameter(DontShow)]
 	[string]$Uri = 'https://download.sysinternals.com/files/SysinternalsSuite.zip',
-	[Parameter(Position = 4)]
+	[Parameter(Position = 0)][ValidateScript({ Test-Path -Path $_ })]
+	[string]$Destination,
+	[Parameter(Position = 1)]
 	[switch]$Extract,
-	[Parameter(Position = 5)]
+	[Parameter(Position = 2)]
 	[switch]$SkipDownload,
-	[Parameter(Position = 6)]
+	[Parameter(Position = 3)]
 	[switch]$Force
 )
+
+# set file path based upon inputs
+If ($Destination) {
+	$FilePath = Join-Path -Path $Destination -ChildPath $FileName
+}
+Else {
+	$FilePath = Join-Path -Path $DefaultPath -ChildPath $FileName
+}
 
 # check file
 If ((Test-Path -Path $FilePath) -and -not $SkipDownload) {
@@ -41,9 +49,28 @@ If ($Force -or -not $SkipDownload) {
 }
 
 # extract files to destination
-If ($Extract) {
+If ((Test-Path -Path $FilePath) -and $Extract) {
+	If ($Destination) {
+		# extract files to the path in the parameter
+		$Folder = $Destination
+	}
+	Else {
+		# extract files to a subfolder of the default Downloads folder
+		$Folder = Join-Path -Path $DefaultPath -ChildPath (Get-Item -Path $FilePath).BaseName
+	}
+	# create folder
+	If (-not (Test-Path -Path $Folder)) {
+		Try {
+			$null = New-Item -ItemType 'Directory' -Path $Folder -Force
+		}
+		Catch {
+			Write-Error 'ERROR: could not create folder in destination'
+			Return
+		}
+	}
+	# extract files to folder
 	Try {
-		Expand-Archive -Path $FilePath -DestinationPath $Destination -Force
+		Expand-Archive -Path $FilePath -DestinationPath $Folder -Force
 	}
 	Catch {
 		Write-Error 'ERROR: could not extract files to the destination'
