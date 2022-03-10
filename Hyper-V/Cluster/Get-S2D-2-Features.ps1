@@ -117,3 +117,8 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 Write-Host ''
 Write-Host '======================== Results ========================'
 $log_feature | Format-Table 'PSComputerName', 'Name', 'InstallState'
+
+# declare last run time
+Write-Host ''
+Write-Host '======================== Time ========================'
+Write-Host "Last run time: $(Get-Date -Format FileDateTime)"

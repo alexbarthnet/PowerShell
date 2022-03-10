@@ -131,3 +131,8 @@ Write-Host ''
 Write-Host '======================== Results ========================'
 $log_vswitch | Format-Table PSComputerName, Name, @{Label = 'BandwidthMode'; Expression = { $_.BandwidthReservationMode } }, @{Label = 'SET'; Expression = { $_.EmbeddedTeamingEnabled } }, IOVEnabled, IOVSupport, IOVSupportReasons
 $log_virtual | Format-Table PSComputerName, Adapter, SwitchName, MacAddress, VLAN, Isolation, IPAddress, Mask, Gateway, Register, Jumbo, Rdma, IeeePriority
+
+# declare last run time
+Write-Host ''
+Write-Host '======================== Time ========================'
+Write-Host "Last run time: $(Get-Date -Format FileDateTime)"

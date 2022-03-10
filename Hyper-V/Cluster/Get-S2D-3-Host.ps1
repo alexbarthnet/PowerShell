@@ -138,3 +138,8 @@ $log_adapter | Format-Table PSComputerName, Name, Description, Index, Status, Ma
 $log_vm_host | Format-Table PSComputerName, @{Label = 'LiveMigrate'; Expression = { $_.VirtualMachineMigrationEnabled } }, @{Label = 'LiveMigrateAuth'; Expression = { $_.VirtualMachineMigrationAuthenticationType } }, @{Label = 'LiveMigrateType'; Expression = { $_.VirtualMachineMigrationPerformanceOption } }
 $log_qospols | Format-Table PSComputerName, Name, Owner, Template, PriorityValue, NetDirectPort
 $log_qostraf | Format-Table PSComputerName, Name, PriorityFriendly, Bandwidth, Algorithm, PolicySet
+
+# declare last run time
+Write-Host ''
+Write-Host '======================== Time ========================'
+Write-Host "Last run time: $(Get-Date -Format FileDateTime)"

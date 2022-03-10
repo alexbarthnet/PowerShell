@@ -123,3 +123,8 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 Write-Host ''
 Write-Host '======================== Results ========================'
 $log_physical | Format-Table PSComputerName, Name, VLAN, IPAddress, Mask, Gateway, Register, Jumbo, Rdma, RdmaType, PFC, ETS
+
+# declare last run time
+Write-Host ''
+Write-Host '======================== Time ========================'
+Write-Host "Last run time: $(Get-Date -Format FileDateTime)"
