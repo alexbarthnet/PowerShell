@@ -22,7 +22,7 @@ param (
 	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
 	[string]$LogFile = $PSCommandPath.Replace('.ps1', "-$(Get-Date -Format FileDateTime).txt"),
 	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
-	[string]$NetworkCsv = (Join-Path -Path $FilePath -ChildPath "$($Hostname)-net.csv"),
+	[string]$HostCsv = (Join-Path -Path $FilePath -ChildPath "$($Hostname)-host.csv"),
 	[Parameter()]
 	[string]$ClusterLabel = 'Cluster',
 	[Parameter()][ValidateRange(1, 100)]
@@ -55,33 +55,35 @@ Try {
 		$smb_limit = 375
 	}
 
-	# import CSV
-	$map_network = Import-Csv -Path $NetworkCsv | Where-Object { $_.Host -eq $Hostname }
+	# import host CSV and retrieve any values for VmPath and VhdPath
+	$host_data = Import-Csv -Path $HostCsv | Where-Object { $_.Host -eq $Hostname -and $_.VmPath -and $_.VhdPath } | Select-Object -First 1
 
-	# get the VM paths from the network CSV
-	$map_network | Where-Object { $_.VmPath -and $_.VhdPath } | ForEach-Object {
-		# check virtual hard disk path
-		$host_vmpath = $_.VmPath
-		If (Test-Path -Path $host_vmpath) {
-			$host_vmpath = $_.VmPath
-		}
-		ElseIf (Test-Path -Path (Get-VMHost).VirtualMachinePath) {
-			$host_vmpath = (Get-VMHost).VirtualMachinePath
-		}
-		Else {
-			$host_vmpath = 'C:\ProgramData\Microsoft\Windows\Hyper-V'
-		}
-		# check virtual hard disk path
-		$host_vhdpath = $_.VhdPath
-		If (Test-Path -Path $host_vhdpath) {
-			$host_vhdpath = $_.VhdPath
-		}
-		ElseIf (Test-Path -Path (Get-VMHost).VirtualHardDiskPath) {
-			$host_vhdpath = (Get-VMHost).VirtualHardDiskPath
-		}
-		Else {
-			$host_vhdpath = 'C:\Users\Public\Documents\Hyper-V\Virtual Hard Disks'
-		}
+	# check virtual hard disk path
+	If ([string]::IsNullOrEmpty($host_data.VmPath)) {
+		$host_vmpath = 'C:\ProgramData\Microsoft\Windows\Hyper-V'
+	}
+	ElseIf (Test-Path -Path $host_data.VmPath) {
+		$host_vmpath = $host_data.VmPath
+	}
+	ElseIf (Test-Path -Path (Get-VMHost).VirtualMachinePath) {
+		$host_vmpath = (Get-VMHost).VirtualMachinePath
+	}
+	Else {
+		$host_vmpath = 'C:\ProgramData\Microsoft\Windows\Hyper-V'
+	}
+
+	# check virtual hard disk path
+	If ([string]::IsNullOrEmpty($host_data.VhdPath)) {
+		$host_vhdpath = 'C:\Users\Public\Documents\Hyper-V\Virtual Hard Disks'
+	}
+	ElseIf (Test-Path -Path $host_data.VhdPath) {
+		$host_vhdpath = $host_data.VhdPath
+	}
+	ElseIf (Test-Path -Path (Get-VMHost).VirtualHardDiskPath) {
+		$host_vhdpath = (Get-VMHost).VirtualHardDiskPath
+	}
+	Else {
+		$host_vhdpath = 'C:\Users\Public\Documents\Hyper-V\Virtual Hard Disks'
 	}
 
 	# set virtual hard disk path
