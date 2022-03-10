@@ -77,29 +77,28 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 	Write-Host "$host_name - running commands..."
 	$log_physical += $out_physical = Invoke-Command -Session $pss_main -ScriptBlock {
 		$nic_out = @()
-		$nic_client = Get-DnsClient
-		$nic_route = Get-NetRoute -AddressFamily 'IPv4'
-		$nic_addr = Get-NetIPAddress -AddressFamily 'IPv4' | Where-Object { $_.SkipAsSource -eq $false }
-		$nic_prop = Get-NetAdapterAdvancedProperty
-		$nic_rdma = Get-NetAdapterRdma
 		$nic_list = Get-NetAdapter -Physical
-		$nic_list | ForEach-Object {
-			$nic = $_;
+		ForEach ($nic in $nic_list) {
+			$nic_client = $nic | Get-DnsClient
+			$nic_route = $nic | Get-NetRoute -AddressFamily 'IPv4'
+			$nic_addr = $nic | Get-NetIPAddress -AddressFamily 'IPv4' -SkipAsSource $false -ErrorAction 'SilentlyContinue'
+			$nic_prop = $nic | Get-NetAdapterAdvancedProperty
+			$nic_rdma = $nic | Get-NetAdapterRdma -ErrorAction 'SilentlyContinue'
 			$nic_out += [pscustomobject]@{
-				Adapter   = $nic.Name;
-				VLAN      = ($nic_prop | Where-Object { $_.Name -eq $nic.Name -and $_.RegistryKeyword -eq 'VlanID' }).DisplayValue;
-				IPAddress = ($nic_addr | Where-Object { $_.InterfaceIndex -eq $nic.ifIndex }).IPv4Address
-				Mask      = ($nic_addr | Where-Object { $_.InterfaceIndex -eq $nic.ifIndex }).PrefixLength
-				Gateway   = ($nic_route | Where-Object { $_.InterfaceIndex -eq $nic.ifIndex -and $_.DestinationPrefix -eq '0.0.0.0/0' }).NextHop
-				Register  = ($nic_client | Where-Object { $_.InterfaceIndex -eq $nic.ifIndex }).RegisterThisConnectionsAddress
-				Jumbo     = ($nic_prop | Where-Object { $_.Name -eq $nic.Name -and $_.RegistryKeyword -eq '*JumboPacket' }).DisplayValue
-				Rdma      = ($nic_prop | Where-Object { $_.Name -eq $nic.Name -and $_.RegistryKeyword -eq '*NetworkDirect' }).DisplayValue
-				RdmaType  = ($nic_prop | Where-Object { $_.Name -eq $nic.Name -and $_.RegistryKeyword -eq '*NetworkDirectTechnology' }).DisplayValue
-				PFC       = ($nic_rdma | Where-Object { $_.Name -eq $nic.Name }).PFC
-				ETS       = ($nic_rdma | Where-Object { $_.Name -eq $nic.Name }).ETS
+				Name   = $nic.Name;
+				IPAddress = $nic_addr.IPv4Address
+				Mask      = $nic_addr.PrefixLength
+				Register  = $nic_client.RegisterThisConnectionsAddress
+				Gateway   = $nic_route | Where-Object { $_.DestinationPrefix -eq '0.0.0.0/0' } | Select-Object -ExpandProperty 'NextHop'
+				VLAN      = $nic_prop | Where-Object { $_.RegistryKeyword -eq 'VlanID' } | Select-Object -ExpandProperty 'DisplayValue'
+				Jumbo     = $nic_prop | Where-Object { $_.RegistryKeyword -eq '*JumboPacket' } | Select-Object -ExpandProperty 'DisplayValue'
+				Rdma      = $nic_prop | Where-Object { $_.RegistryKeyword -eq '*NetworkDirect' } | Select-Object -ExpandProperty 'DisplayValue'
+				RdmaType  = $nic_prop | Where-Object { $_.RegistryKeyword -eq '*NetworkDirectTechnology' } | Select-Object -ExpandProperty 'DisplayValue'
+				PFC       = $nic_rdma.PFC
+				ETS       = $nic_rdma.ETS
 			}
 		}
-		$nic_out | Sort-Object Adapter
+		$nic_out | Sort-Object Name
 	}
 
 	# save output to host
@@ -109,7 +108,7 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 		$host_review = Join-Path -Path $using:host_path.FullName -ChildPath ('ash-get-physical-' + (Get-Date -Format 'FileDateTime') + '.txt')
 		# build the file
 		$file_headers = "======================== $(Get-Date -Format 'FileDateTime') ========================"
-		$file_output1 = $using:out_physical | Format-Table Adapter, VLAN, IPAddress, Mask, Gateway, Register, Jumbo, Rdma, RdmaType, PFC, ETS
+		$file_output1 = $using:out_physical | Format-Table Name, VLAN, IPAddress, Mask, Gateway, Register, Jumbo, Rdma, RdmaType, PFC, ETS
 		# write the file
 		$file_headers | Out-File -FilePath $host_review -Append
 		$file_output1 | Out-File -FilePath $host_review -Append
@@ -123,4 +122,4 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 # declare results
 Write-Host ''
 Write-Host '======================== Results ========================'
-$log_physical | Format-Table PSComputerName, Adapter, VLAN, IPAddress, Mask, Gateway, Register, Jumbo, Rdma, RdmaType, PFC, ETS
+$log_physical | Format-Table PSComputerName, Name, VLAN, IPAddress, Mask, Gateway, Register, Jumbo, Rdma, RdmaType, PFC, ETS
