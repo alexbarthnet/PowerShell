@@ -258,7 +258,7 @@ Try {
 			}
 
 			# check the default route on the networkadapter
-			If ($vnic_gway -eq 0) {
+			If ([string]::IsNullOrEmpty($vnic_gway)) {
 				Write-Host ("$Hostname,$vswitch_name,$vnic_name - No gateway defined for NIC")
 			}
 			Else {

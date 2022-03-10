@@ -162,7 +162,7 @@ Try {
 				}
 
 				# check for gateway
-				If ($nic_gway -eq '0') {
+				If ([string]::IsNullOrEmpty($nic_gway)) {
 					# check for default route on current NIC
 					$nic_wrong_gw = $null
 					$nic_wrong_gw = Get-NetRoute | Where-Object { $_.DestinationPrefix -eq '0.0.0.0/0' -and ($_.InterfaceAlias -eq $nic_name -or $_.InterfaceAlias -eq $nic_vnic) }
