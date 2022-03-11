@@ -66,7 +66,7 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 
 	# close existing sessions
 	Write-Host "$host_name - closing any existing sessions..."
-	Get-PSSession -ComputerName $host_name | Remove-PSSession
+	Get-PSSession -ComputerName $host_name | Where-Object { $_.Availability -ne 'Busy' } | Remove-PSSession
 
 	# start session for files
 	Write-Host "$host_name - starting main session..."
