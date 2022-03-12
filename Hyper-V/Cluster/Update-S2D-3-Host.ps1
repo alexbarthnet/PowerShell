@@ -24,17 +24,21 @@ param (
 	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
 	[string]$HostCsv = (Join-Path -Path $FilePath -ChildPath "$($Hostname)-host.csv"),
 	[Parameter()]
+	[string]$SmbLabel = 'SMB',
+	[Parameter()]
+	[string]$SmbDirectLabel = 'SMBDirect',
+	[Parameter()][ValidateRange(1, 100)]
+	[uint16]$SmbDirectPercent = 50,
+	[Parameter()]
+	[string]$ClusterPortLabel = 'ClusterPort',
+	[Parameter()]
 	[string]$ClusterLabel = 'Cluster',
 	[Parameter()][ValidateRange(1, 100)]
 	[uint16]$ClusterPercent = 1,
 	[Parameter()]
-	[string]$StorageLabel = 'SMBDirect',
-	[Parameter()][ValidateRange(1, 100)]
-	[uint16]$StoragePercent = 50,
-	[Parameter()]
 	[string]$DefaultLabel = 'Default',
 	[Parameter()][ValidateRange(1, 100)]
-	[uint16]$DefaultPercent = (100 - $StoragePercent - $ClusterPercent )
+	[uint16]$DefaultPercent = (100 - $SmbDirectPercent - $ClusterPercent )
 )
 
 Try {
@@ -130,22 +134,58 @@ Try {
 	Write-Host "$Hostname - disabling QoS DCBx Willing mode"
 	Set-NetQosDcbxSetting -Willing $False -Confirm:$false
 
-	# check for SMB QoS policy
+	# check for SMBDirect QoS policy
+	Write-Host "$Hostname - checking SMBDirect QoS policy"
+	$qos_policy_smb_direct = Get-NetQosPolicy | Where-Object { $_.Name -eq $SmbDirectLabel -and $_.PriorityValue -eq 3 -and $_.NetDirectPort -eq 445 }
+	If ($qos_policy_smb_direct) {
+		Write-Host "$Hostname - verified SMBDirect QoS policy"
+	}
+	Else {
+		$qos_policy_smb_direct = Get-NetQosPolicy | Where-Object { $_.Name -eq $SmbDirectLabel -or $_.NetDirectPort -eq 445 }
+		$qos_policy_smb_direct | ForEach-Object {
+			If ($_.Name -ne $SmbDirectLabel -or $_.PriorityValue -ne 3 -or $_.NetDirectPort -ne 445 ) {
+				Write-Host "$Hostname - removing errant SMBDirect QoS policy: $($_.Name)"
+				$_ | Remove-NetQosPolicy -Confirm:$false
+			}
+		}
+		Write-Host "$Hostname - creating SMBDirect QoS policy"
+		New-NetQosPolicy -Name $SmbDirectLabel -PriorityValue8021Action 3 -NetDirectPortMatchCondition 445
+	}
+
+	# check for SMBDirect QoS policy
 	Write-Host "$Hostname - checking SMB QoS policy"
-	$qos_policy_storage = Get-NetQosPolicy | Where-Object { $_.Name -eq $StorageLabel -and $_.PriorityValue -eq 3 -and $_.NetDirectPort -eq 445 }
-	If ($qos_policy_storage) {
+	$qos_policy_smb = Get-NetQosPolicy | Where-Object { $_.Name -eq $SmbLabel -and $_.PriorityValue -eq 3 -and $_.Template -eq $SmbLabel }
+	If ($qos_policy_smb) {
 		Write-Host "$Hostname - verified SMB QoS policy"
 	}
 	Else {
-		$qos_policy_storage = Get-NetQosPolicy | Where-Object { $_.Name -eq $StorageLabel -or $_.NetDirectPort -eq 445 }
-		$qos_policy_storage | ForEach-Object {
-			If ($_.Name -ne $StorageLabel -or $_.PriorityValue -ne 3 -or $_.NetDirectPort -ne 445 ) {
+		$qos_policy_smb = Get-NetQosPolicy | Where-Object { $_.Name -eq $SmbLabel -or $_.NetDirectPort -eq 445 }
+		$qos_policy_smb | ForEach-Object {
+			If ($_.Name -ne $SmbLabel -or $_.PriorityValue -ne 3 -or $_.Template -ne $SmbLabel) {
 				Write-Host "$Hostname - removing errant SMB QoS policy: $($_.Name)"
 				$_ | Remove-NetQosPolicy -Confirm:$false
 			}
 		}
 		Write-Host "$Hostname - creating SMB QoS policy"
-		New-NetQosPolicy -Name $StorageLabel -PriorityValue8021Action 3 -NetDirectPortMatchCondition 445
+		New-NetQosPolicy -Name $SmbLabel -PriorityValue8021Action 3 -SMB
+	}
+
+	# check for Cluster Port QoS policy
+	Write-Host "$Hostname - checking Cluster Port QoS policy"
+	$qos_policy_cluster_port = Get-NetQosPolicy | Where-Object { $_.Name -eq $ClusterPortLabel -and $_.PriorityValue -eq 7 -and $_.IPDstPortStart -eq '3343' -and $_.IPDstPortEnd -eq '3343' }
+	If ($qos_policy_cluster_port) {
+		Write-Host "$Hostname - verified Cluster Port QoS policy"
+	}
+	Else {
+		$qos_policy_cluster_port = Get-NetQosPolicy | Where-Object { $_.Name -eq $ClusterPortLabel -or $_.IPDstPortStart -eq '3343' -or $_.IPDstPortEnd -eq '3343' }
+		$qos_policy_cluster_port | ForEach-Object {
+			If ($_.Name -ne $ClusterPortLabel -or $_.PriorityValue -ne 7 -or $_.IPDstPortStart -eq '3343' -or $_.IPDstPortEnd -eq '3343') {
+				Write-Host "$Hostname - removing incorrect Cluster Port QoS policy: $($_.Name)"
+				$_ | Remove-NetQosPolicy -Confirm:$false
+			}
+		}
+		Write-Host "$Hostname - creating Cluster Port QoS policy"
+		New-NetQosPolicy -Name $ClusterPortLabel -PriorityValue8021Action 7 -IPDstPort 3343
 	}
 
 	# check for Cluster QoS policy
@@ -155,7 +195,7 @@ Try {
 		Write-Host "$Hostname - verified Cluster QoS policy"
 	}
 	Else {
-		$qos_policy_cluster = Get-NetQosPolicy | Where-Object { $_.Name -eq $ClusterLabel -or $_.PriorityValue -eq 7 -or $_.Template -eq $ClusterLabel }
+		$qos_policy_cluster = Get-NetQosPolicy | Where-Object { $_.Name -eq $ClusterLabel -or $_.Template -eq $ClusterLabel }
 		$qos_policy_cluster | ForEach-Object {
 			If ($_.Name -ne $ClusterLabel -or $_.PriorityValue -ne 7 -or $_.Template -ne $ClusterLabel) {
 				Write-Host "$Hostname - removing incorrect Cluster QoS policy: $($_.Name)"
@@ -173,7 +213,7 @@ Try {
 		Write-Host "$Hostname - verified Default QoS policy"
 	}
 	Else {
-		$qos_policy_default = Get-NetQosPolicy | Where-Object { $_.Name -eq $DefaultLabel -or $_.PriorityValue -eq 0 -or $_.Template -eq $DefaultLabel }
+		$qos_policy_default = Get-NetQosPolicy | Where-Object { $_.Name -eq $DefaultLabel -or $_.Template -eq $DefaultLabel }
 		$qos_policy_default | ForEach-Object {
 			If ($_.Name -ne $DefaultLabel -or $_.PriorityValue -ne 0 -or $_.Template -ne $DefaultLabel) {
 				Write-Host "$Hostname - removing incorrect Default QoS policy: $($_.Name)"
@@ -185,21 +225,21 @@ Try {
 	}
 
 	# check for SMB QoS traffic class
-	Write-Host "$Hostname - checking SMB QoS traffic class"
-	$qos_traffic_storage = Get-NetQosTrafficClass | Where-Object { $_.Name -eq $StorageLabel -and $_.Priority -eq 3 -and $_.Bandwidth -eq $StoragePercent -and $_.Algorithm -eq 'ETS' }
-	If ($qos_traffic_storage) {
-		Write-Host "$Hostname - verified SMB QoS traffic class"
+	Write-Host "$Hostname - checking SMBDirect QoS traffic class"
+	$qos_traffic_smb_direct = Get-NetQosTrafficClass | Where-Object { $_.Name -eq $SmbDirectLabel -and $_.Priority -eq 3 -and $_.Bandwidth -eq $SmbDirectPercent -and $_.Algorithm -eq 'ETS' }
+	If ($qos_traffic_smb_direct) {
+		Write-Host "$Hostname - verified SMBDirect QoS traffic class"
 	}
 	Else {
-		$qos_traffic_storage = Get-NetQosTrafficClass | Where-Object { $_.Name -eq $StorageLabel -or $_.Priority -eq 3 } | Where-Object { $_.Name -notmatch $DefaultLabel }
-		$qos_traffic_storage | ForEach-Object {
-			If ($_.Name -ne $StorageLabel -or $_.Priority -ne 3 -or $_.Bandwidth -ne $StoragePercent -or $_.Algorithm -ne 'ETS') {
-				Write-Host "$Hostname - removing errant SMB QoS traffic class: $($_.Name)"
+		$qos_traffic_smb_direct = Get-NetQosTrafficClass | Where-Object { $_.Name -eq $SmbDirectLabel -or $_.Priority -eq 3 } | Where-Object { $_.Name -notmatch $DefaultLabel }
+		$qos_traffic_smb_direct | ForEach-Object {
+			If ($_.Name -ne $SmbDirectLabel -or $_.Priority -ne 3 -or $_.Bandwidth -ne $SmbDirectPercent -or $_.Algorithm -ne 'ETS') {
+				Write-Host "$Hostname - removing errant SMBDirect QoS traffic class: $($_.Name)"
 				$_ | Remove-NetQosTrafficClass -Confirm:$false
 			}
 		}
-		Write-Host "$Hostname - creating SMB QoS traffic class"
-		New-NetQosTrafficClass -Name $StorageLabel -Priority 3 -BandwidthPercentage $StoragePercent -Algorithm ETS
+		Write-Host "$Hostname - creating SMBDirect QoS traffic class"
+		New-NetQosTrafficClass -Name $SmbDirectLabel -Priority 3 -BandwidthPercentage $SmbDirectPercent -Algorithm ETS
 	}
 
 	# check for Cluster QoS traffic class
