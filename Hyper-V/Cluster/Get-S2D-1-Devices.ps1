@@ -12,7 +12,8 @@ https://github.com/alexbarthnet/PowerShell/
 Param(
 	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$HostCsv,
-	[string]$HostName
+	[string]$HostName,
+	[uint16]$RoundTo
 )
 
 Function Format-FileSize {
@@ -20,12 +21,12 @@ Function Format-FileSize {
 		[int64]$Size
 	)
 	Switch ($Size) {
-		{ $_ -ge 1PB } { "$([math]::Round($Size / 1PB,2)) PB"; Break }
-		{ $_ -ge 1TB } { "$([math]::Round($Size / 1TB,2)) TB"; Break }
-		{ $_ -ge 1GB } { "$([math]::Round($Size / 1GB,2)) GB"; Break }
-		{ $_ -ge 1MB } { "$([math]::Round($Size / 1MB,2)) MB"; Break }
-		{ $_ -ge 1KB } { "$([math]::Round($Size / 1KB,2)) KB"; Break }
-		Default { "$([math]::Round($Size,2)) B" }
+		{ $_ -ge 1PB } { "$([math]::Round($Size / 1PB,$RoundTo)) PB"; Break }
+		{ $_ -ge 1TB } { "$([math]::Round($Size / 1TB,$RoundTo)) TB"; Break }
+		{ $_ -ge 1GB } { "$([math]::Round($Size / 1GB,$RoundTo)) GB"; Break }
+		{ $_ -ge 1MB } { "$([math]::Round($Size / 1MB,$RoundTo)) MB"; Break }
+		{ $_ -ge 1KB } { "$([math]::Round($Size / 1KB,$RoundTo)) KB"; Break }
+		Default { "$([math]::Round($Size,$RoundTo)) B" }
 	}
 }
 
