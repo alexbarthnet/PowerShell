@@ -1,5 +1,5 @@
 Param(
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
+	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$VmCsv,
 	[Parameter(Mandatory = $True)]
 	[string[]]$VmName,
