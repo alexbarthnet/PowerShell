@@ -1,5 +1,5 @@
 Param(
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
+	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$VmCsv,
 	[string[]]$VmName,
 	[string]$HostName,
@@ -39,8 +39,6 @@ $vm_list | ForEach-Object {
 	$vm_cpu = $_.CpuCount
 	$vm_mem = $_.MemoryGB
 	$vhd_os_gb = $_.OsVhdGB
-	$vm_vlan = $_.VLAN
-	$vm_switch = $_.Switch
 
 	# define optional objects from CSV - additional storage
 	$vhd_data_ct = $_.DataVhdCount
@@ -52,7 +50,10 @@ $vm_list | ForEach-Object {
 	$vm_mem_max = $_.MemMaxGB
 	$vm_mem_min = $_.MemMinGB
 
-	# define optional objects from CSV - IP address configuration
+	# define optional objects from CSV - network configuration
+	$vm_vlan = $_.VLAN
+	$vm_switch = $_.Switch
+	$vm_nicname = $_.NicName
 	$vm_dhcp_server = $_.DhcpServer
 	$vm_dhcp_scope = $_.DhcpScope
 	$vm_ip_address = $_.IpAddress
@@ -91,7 +92,7 @@ $vm_list | ForEach-Object {
 	If ($HostPath) {
 		$vm_path = $HostPath
 	}
-	
+
 	# check for cloud
 	If ($vm_host -match 'cloud') {
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - cloud VM...")
@@ -317,7 +318,7 @@ $vm_list | ForEach-Object {
 
 		# configure the CPU
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...setting CPU count: " + $vm_cpu)
-		$vm | Set-VMProcessor -Count $vm_cpu
+		$vm | Set-VMProcessor -Count $vm_cpu -ExposeVirtualizationExtensions $true
 
 		# configure the memory
 		If ($vm_mem_min -and $vm_mem_max) {
@@ -409,13 +410,20 @@ $vm_list | ForEach-Object {
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...NumLock status: " + $vm_data_object.BIOSNumLock)
 
 		# check if NIC should be removed
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - configuring networking...")
 		If ($vm_switch -eq 'Remove') {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...removing NIC; switch was defined as 'Remove'")
 			$vm_nic = Get-VMNetworkAdapter -VM $vm
 			$vm_nic | Remove-VMNetworkAdapter
 		}
 		Else {
+			# set the name of the NIC
+			If ($vm_nicname) {
+				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...renaming NIC to: " + $vm_nicname)
+				Rename-VMNetworkAdapter -VMNetworkAdapter $vm_nic -NewName $vm_nicname
+			}
+
 			# set the VLAN on the NIC
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - configuring networking...")
 			If ($vm_vlan -gt 0) {
 				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...setting VLAN to: " + $vm_vlan)
 				$vm | Set-VMNetworkAdapterVlan -Access -VlanId $vm_vlan
