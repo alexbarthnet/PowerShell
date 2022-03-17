@@ -244,7 +244,7 @@ Function Initialize-LogToMultiple {
 	Param (
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ })]
 		[string]$ScriptPath,
-		[Parameter(Position = 1, Mandatory = $true)]
+		[Parameter(Position = 1)]
 		[string]$ScriptUser,
 		[Parameter(Position = 2)]
 		[string]$LogsPath = 'C:\Content\logs',
@@ -259,34 +259,6 @@ Function Initialize-LogToMultiple {
 		Write-Host 'ERROR: this function must be run as an administrator, exiting!'
 		Return
 	}
-
-	# get script user SID
-	Try {
-		$log_user_sid = (New-Object 'System.Security.Principal.NTAccount' $ScriptUser).Translate([System.Security.Principal.SecurityIdentifier])
-	}
-	Catch {
-		Write-Host "ERROR: could not retrieve SID for the '$ScriptUser' username, exiting!"
-		Return
-	}
-
-	# get script user full NT name
-	Try {
-		$log_user_name = (New-Object 'System.Security.Principal.SecurityIdentifier' $log_user_sid).Translate([System.Security.Principal.NTAccount])
-	}
-	Catch {
-		Write-Host "ERROR: could not retrieve full NTAcount for the '$ScriptUser' SID, exiting!"
-		Return
-	}
-
-	# check script user domain
-	If ($log_user_name.Value -match '^NT AUTHORITY') {
-		Write-Host "ERROR: provided username maps to an 'NT AUTHORITY' principal, exiting!"
-		Return
-	}
-
-	# build required strings
-	$log_base = (Get-Item -Path $ScriptPath).BaseName
-	$log_path = Join-Path -Path $LogsPath -ChildPath $log_base
 
 	# verify log path
 	Write-Host "Checking for log path: $log_path"
@@ -306,32 +278,64 @@ Function Initialize-LogToMultiple {
 		}
 	}
 
-	# verify log path permissions
-	Write-Host "Retrieved permissions on log path: $log_path"
-	$log_path_acl = Get-Acl -Path $log_path
-	$log_path_ace = $log_path_acl.Access | Where-Object {
-		$_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]) -eq $log_user_sid -and
-		$_.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and
-		$_.InheritanceFlags -eq @([System.Security.AccessControl.InheritanceFlags]::ContainerInherit, [System.Security.AccessControl.InheritanceFlags]::ObjectInherit) -and
-		($_.FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::Modify) -eq [System.Security.AccessControl.FileSystemRights]::Modify
-	}
-	# verify log path permissions
-	Write-Host "Verifying permissions on log path: $log_path"
-	If ($null -eq $log_path_ace) {
+	# check for scriptuser
+	If ($ScriptUser) {
+		# get script user SID
 		Try {
-			$log_path_ace = New-Object 'System.Security.AccessControl.FileSystemAccessRule' @($log_user_sid, 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
-			$log_path_acl.PurgeAccessRules($log_path_sid)
-			$log_path_acl.AddAccessRule($log_path_ace)
-			$log_path_acl | Set-Acl -Path $log_path
-			Write-Host '...log path permissions corrected'
+			$log_user_sid = (New-Object 'System.Security.Principal.NTAccount' $ScriptUser).Translate([System.Security.Principal.SecurityIdentifier])
 		}
 		Catch {
-			Write-Host 'ERROR: log path permissions NOT corrected, exiting '
+			Write-Host "ERROR: could not retrieve SID for the '$ScriptUser' username, exiting!"
 			Return
 		}
-	}
-	Else {
-		Write-Host '...log path permissions verified'
+
+		# get script user full NT name
+		Try {
+			$log_user_name = (New-Object 'System.Security.Principal.SecurityIdentifier' $log_user_sid).Translate([System.Security.Principal.NTAccount])
+		}
+		Catch {
+			Write-Host "ERROR: could not retrieve full NTAcount for the '$ScriptUser' SID, exiting!"
+			Return
+		}
+
+		# check script user domain
+		If ($log_user_name.Value -match '^NT AUTHORITY') {
+			Write-Host "ERROR: provided username maps to an 'NT AUTHORITY' principal, exiting!"
+			Return
+		}
+
+		# build required strings
+		$log_base = (Get-Item -Path $ScriptPath).BaseName
+		$log_path = Join-Path -Path $LogsPath -ChildPath $log_base
+
+
+		# verify log path permissions
+		Write-Host "Retrieved permissions on log path: $log_path"
+		$log_path_acl = Get-Acl -Path $log_path
+		$log_path_ace = $log_path_acl.Access | Where-Object {
+			$_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]) -eq $log_user_sid -and
+			$_.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and
+			$_.InheritanceFlags -eq @([System.Security.AccessControl.InheritanceFlags]::ContainerInherit, [System.Security.AccessControl.InheritanceFlags]::ObjectInherit) -and
+		($_.FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::Modify) -eq [System.Security.AccessControl.FileSystemRights]::Modify
+		}
+		# verify log path permissions
+		Write-Host "Verifying permissions on log path: $log_path"
+		If ($null -eq $log_path_ace) {
+			Try {
+				$log_path_ace = New-Object 'System.Security.AccessControl.FileSystemAccessRule' @($log_user_sid, 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+				$log_path_acl.PurgeAccessRules($log_path_sid)
+				$log_path_acl.AddAccessRule($log_path_ace)
+				$log_path_acl | Set-Acl -Path $log_path
+				Write-Host '...log path permissions corrected'
+			}
+			Catch {
+				Write-Host 'ERROR: log path permissions NOT corrected, exiting '
+				Return
+			}
+		}
+		Else {
+			Write-Host '...log path permissions verified'
+		}
 	}
 
 	# verify event log source
