@@ -195,7 +195,6 @@ $vm_list | ForEach-Object {
 	$vm_path_delete += $vm_on_hv.SmartPagingFilePath
 	$vm_path_delete += $vm_on_hv.SnapshotFileLocation
 	$vm_path_delete += $vm_on_hv.Path
-	$vm_path_delete += $vm_disk
 
 	# define paths to folders using CSV information
 	$vm_path_delete += Invoke-Command -ComputerName $vm_host -ScriptBlock { Join-Path -Path $using:vm_path -ChildPath $using:vm_name }
@@ -219,12 +218,18 @@ $vm_list | ForEach-Object {
 		ForEach ($vm_path in $vm_paths) {
 			If (Test-Path $vm_path) {
 				Write-Host ("$env_name,$env_host,$vm_label - ...located folder: " + $vm_path)
-				If (Get-ChildItem -Path $vm_path -Recurse -Force) {
+				$vm_files_match = Get-ChildItem -Path $vm_path -File -Recurse -Force | Where-Object { $_.BaseName -match "^$vm_label" }
+				$vm_files_other = Get-ChildItem -Path $vm_path -File -Recurse -Force | Where-Object { $_.BaseName -notmatch "^$vm_label" }
+				$vm_files_match | ForEach-Object {
+					Write-Host ("$env_name,$env_host,$vm_label - ...removing matching file: " + $_.FullName)
+					$_ | Remove-Item -Confirm:$false
+				}
+				If ($vm_files_other) {
 					Write-Host ("$env_name,$env_host,$vm_label - ...skipping non-empty folder: " + $vm_path)
 				}
 				Else {
 					Try {
-						$vm_path | Remove-Item -Confirm:$false
+						$vm_path | Remove-Item -Recurse -Confirm:$false
 						Write-Host ("$env_name,$env_host,$vm_label - ...removing empty folder: " + $vm_path)
 					}
 					Catch {
