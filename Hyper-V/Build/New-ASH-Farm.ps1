@@ -79,13 +79,13 @@ $nic_list | Sort-Object -Property 'Name' -Unique | ForEach-Object {
 		$nic_name = $_.Adapter
 		$nic_mode = $_.Mode
 		$nic_vlan = $_.Vlan
-		$nic_switch = $_.Switch
+		$nic_switch = $_.HostSwitch
 
 		# check for NIC
 		$vm_nic = $vm_nic_all | Where-Object { $_.Name -eq $nic_name }
-		If ($null = $vm_nic) {
+		If ($null -eq $vm_nic) {
 			Write-Host ("$env_comp_name,$vm_host,$vm_name,$nic_name - NIC not found, creating!")
-			$vm_nic = Add-VMNetworkAdapter -VMName $vm_name -Name $nic_name -SwitchName $nic_switch -Passthru
+			$vm_nic = $vm | Add-VMNetworkAdapter -Name $nic_name -SwitchName $nic_switch -Passthru
 		}
 		ElseIf ($vm_nic.SwitchName -ne $nic_switch) {
 			Write-Host ("$env_comp_name,$vm_host,$vm_name - NIC found but not connected to switch '$nic_switch', fixing!")
@@ -98,7 +98,7 @@ $nic_list | Sort-Object -Property 'Name' -Unique | ForEach-Object {
 		# set the NIC port mode
 		If ($nic_mode -eq 'Trunk') {
 			Write-Host ("$env_comp_name,$vm_host,$vm_name,$nic_name - NIC set to Trunk mode with native VLAN: $nic_vlan")
-			$vm_nic | Set-VMNetworkAdapterVlan -Trunk -NativeVlanId $nic_vlan -AllowedVlanIdList 1-4094
+			$vm_nic | Set-VMNetworkAdapterVlan -Trunk -NativeVlanId 0 -AllowedVlanIdList 1-4094
 		}
 		Else {
 			Write-Host ("$env_comp_name,$vm_host,$vm_name,$nic_name - NIC set to Access mode with VLAN: $nic_vlan")
