@@ -420,7 +420,8 @@ $vm_list | ForEach-Object {
 			# set the name of the NIC
 			If ($vm_nicname) {
 				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...renaming NIC to: " + $vm_nicname)
-				Rename-VMNetworkAdapter -VMNetworkAdapter $vm_nic -NewName $vm_nicname
+				$vm | Rename-VMNetworkAdapter -NewName $vm_nicname
+				$vm | Set-VMNetworkAdapter -DeviceNaming On
 			}
 
 			# set the VLAN on the NIC
