@@ -155,7 +155,7 @@ Try {
 			Write-Host ("$Hostname,$vswitch_name,$vnic_name - Virtual adapter VLAN mode set to Untagged")
 			$nic_virtual | Set-VMNetworkAdapterVlan -Untagged
 			If ($vnic_name -ne 'Management') {
-				Write-Host ("$Hostname,$vswitch_name,$vnic_name - Virtual adapter isolation mode set to VLAN and default ID set to VLAN ID")
+				Write-Host ("$Hostname,$vswitch_name,$vnic_name - Virtual adapter isolation mode set to VLAN and default ID set to VLAN ID: $vnic_vlan")
 				$nic_virtual | Set-VMNetworkAdapterIsolation -IsolationMode 'VLAN' -AllowUntaggedTraffic $true -DefaultIsolationID $vnic_vlan
 			}
 
