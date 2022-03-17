@@ -39,6 +39,7 @@ Try {
 
 		# get hardware info
 		$nic_hw_info = Get-NetAdapterHardwareInfo -Name $nic_old -ErrorAction 'SilentlyContinue'
+		$nic_adv_props = Get-NetAdapterAdvancedProperty -Name $nic_old -ErrorAction 'SilentlyContinue'
 
 		# try to build the name from slot and port information
 		If ($nic_hw_info.SlotNumber) {
@@ -58,7 +59,7 @@ Try {
 		}
 
 		# try to build the name from Hyper-V
-		$nic_adv = ($nic_hw_info | Where-Object { $_.RegistryKeyword -eq 'HyperVNetworkAdapterName' }).DisplayValue
+		$nic_adv = ($nic_adv_props | Where-Object { $_.RegistryKeyword -eq 'HyperVNetworkAdapterName' }).DisplayValue
 		If ($null -ne $nic_adv) {
 			$nic_new = $nic_adv
 			$nic_new_via = 'Hyper-V'
@@ -201,8 +202,13 @@ Try {
 					}
 
 					# current NIC has gateway, set the DNS servers
-					Write-Host ("$Hostname, $nic_name, $nic_addr - ...setting DNS servers: $nic_dns")
-					$nic_exists | Set-DnsClientServerAddress -ServerAddress $nic_dns.Split(';')
+					If ($nic_dns){
+						Write-Host ("$Hostname, $nic_name, $nic_addr - ...setting DNS servers: $nic_dns")
+						$nic_exists | Set-DnsClientServerAddress -ServerAddress $nic_dns.Split(';')
+					}
+					Else {
+						Write-Host ("$Hostname, $nic_name, $nic_addr - ...cannot set DNS servers: no value provided")
+					}
 					# requested NIC has gateway, enable DNS registration
 					Write-Host ("$Hostname, $nic_name, $nic_addr - ...enabling DNS registration")
 					$nic_exists | Set-DnsClient -RegisterThisConnectionsAddress $true
