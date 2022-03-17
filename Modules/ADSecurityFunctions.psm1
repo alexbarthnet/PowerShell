@@ -25,7 +25,7 @@ Function Get-ADSecurityIdentifier {
 				Return [System.Security.Principal.SecurityIdentifier]($Principal)
 			}
 			# a principal with domain prefix or suffix
-			{ ($_ -match '^[\w\.-]+\\[\w\.-]+$') -or ($_ -match '^[\w\.-]+@[\w\.-]+$') } {
+			{ ($_ -match '^[\w\s\.-]+\\[\w\s\.-]+$') -or ($_ -match '^[\w\.-]+@[\w\.-]+$') } {
 				Return ([System.Security.Principal.NTAccount]($Principal)).Translate([System.Security.Principal.SecurityIdentifier])
 			}
 			# a principal without domain prefix or suffix
