@@ -13,7 +13,7 @@ Param(
 	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$HostCsv,
 	[string]$HostName,
-	[uint16]$RoundTo
+	[uint16]$RoundTo = 2
 )
 
 Function Format-FileSize {
@@ -31,8 +31,9 @@ Function Format-FileSize {
 }
 
 # clear arrays
-$log_phys_disks = @()
-$log_virt_disks = @()
+$log_disks_base = @()
+$log_disks_phys = @()
+$log_disks_virt = @()
 
 # import host information
 $host_list = $null
@@ -57,8 +58,9 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 	Write-Host "======================== $host_name ========================"
 
 	# clear per-host objects
-	$out_phys_disks = $null
-	$out_virt_disks = $null
+	$out_disks_base = $null
+	$out_disks_phys = $null
+	$out_disks_virt = $null
 
 	# clear the DNS cache then resolve hostname
 	Write-Host "$host_name - resolving host..."
@@ -92,10 +94,15 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 
 	# run remote commands
 	Write-Host "$host_name - running commands..."
-	$log_phys_disks += $out_phys_disks = Invoke-Command -Session $pss_main -ScriptBlock {
+
+	# check if host is clustered
+	$log_disks_base += $out_disks_base = Invoke-Command -Session $pss_main -ScriptBlock {
+		Get-Disk | Where-Object { -not $_.IsBoot -and -not $_.IsSystem -and -not $_.IsClustered }
+	}
+	$log_disks_phys += $out_disks_phys = Invoke-Command -Session $pss_main -ScriptBlock {
 		Get-PhysicalDisk | Where-Object { [int]$_.DeviceId -ge 1000 } | Sort-Object { [int]$_.DeviceId }
 	}
-	$log_virt_disks += $out_virt_disks = Invoke-Command -Session $pss_main -ScriptBlock {
+	$log_disks_virt += $out_disks_virt = Invoke-Command -Session $pss_main -ScriptBlock {
 		Get-VirtualDisk
 	}
 
@@ -106,12 +113,14 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 		$host_review = Join-Path -Path $using:host_path.FullName -ChildPath ('ash-get-devices-' + (Get-Date -Format FileDateTime) + '.txt')
 		# build the file
 		$file_headers = "======================== $(Get-Date -Format 'FileDateTime') ========================"
-		$file_output1 = $using:out_phys_disks | Sort-Object -Property 'DeviceId', 'Model' | Format-Table 'DeviceId', 'FriendlyName', 'Model', 'BusType', 'PartitionStyle', 'Size', 'FirmwareVersion'
-		$file_output2 = $using:out_virt_disks | Sort-Object -Property 'FriendlyName'
+		$file_output1 = $using:out_disks_base | Sort-Object -Property 'Number' | Format-Table 'Number', 'FriendlyName', 'Model', 'FirmwareVersion', 'PartitionStyle', 'PhysicalSectorSize', 'LogicalSectorSize', 'AllocatedSize'
+		$file_output2 = $using:out_disks_phys | Sort-Object -Property 'DeviceId' | Format-Table 'DeviceId', 'FriendlyName', 'Model', 'FirmwareVersion', 'BusType', 'Size'
+		$file_output3 = $using:out_disks_virt | Sort-Object -Property 'FriendlyName'
 		# write the file
 		$file_headers | Out-File -FilePath $host_review -Append
 		$file_output1 | Out-File -FilePath $host_review -Append
 		$file_output2 | Out-File -FilePath $host_review -Append
+		$file_output3 | Out-File -FilePath $host_review -Append
 	}
 
 	# end session for files
@@ -122,8 +131,9 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 # declare results
 Write-Host ''
 Write-Host '======================== Results ========================'
-$log_phys_disks | Sort-Object -Property 'PSComputerName', 'DeviceId', 'Model' | Format-Table 'PSComputerName', 'DeviceId', 'FriendlyName', 'Model', 'BusType', 'PartitionStyle', @{Label = 'Size'; Expression = { Format-FileSize -Size $_.Size } }, 'FirmwareVersion'
-$log_virt_disks | Sort-Object -Property 'PSComputerName', 'FriendlyName' | Format-Table 'PSComputerName', 'FriendlyName', @{Label = 'Size'; Expression = { Format-FileSize -Size $_.Size }; Alignment = 'Right' }, @{Label = 'FootprintOnPool'; Expression = { Format-FileSize -Size $_.FootprintOnPool }; Alignment = 'Right' }
+$log_disks_base | Sort-Object -Property 'PSComputerName', 'Number' | Format-Table 'PSComputerName', 'Number', 'FriendlyName', 'Model', 'FirmwareVersion', 'PartitionStyle', 'PhysicalSectorSize', 'LogicalSectorSize', @{Label = 'Size'; Expression = { Format-FileSize -Size $_.Size }; Alignment = 'Right' }, @{Label = 'AllocatedSize'; Expression = { Format-FileSize -Size $_.AllocatedSize }; Alignment = 'Right' }
+$log_disks_phys | Sort-Object -Property 'PSComputerName', 'DeviceId' | Format-Table 'PSComputerName', 'DeviceId', 'FriendlyName', 'Model', 'FirmwareVersion', 'BusType', @{Label = 'Size'; Expression = { Format-FileSize -Size $_.Size }; Alignment = 'Right' }
+$log_disks_virt | Sort-Object -Property 'PSComputerName', 'FriendlyName' | Format-Table 'PSComputerName', 'FriendlyName', @{Label = 'Size'; Expression = { Format-FileSize -Size $_.Size }; Alignment = 'Right' }, @{Label = 'FootprintOnPool'; Expression = { Format-FileSize -Size $_.FootprintOnPool }; Alignment = 'Right' }
 
 # declare last run time
 Write-Host ''
