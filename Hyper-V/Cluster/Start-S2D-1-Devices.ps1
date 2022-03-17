@@ -13,14 +13,16 @@ https://github.com/alexbarthnet/PowerShell/
 
 Param(
 	[Parameter(DontShow = $True)][ValidateScript({ Test-Path -Path $_ })]
-	[string]$Script1 = (Join-Path -Path $PSScriptRoot -ChildPath 'Update-S2D-1-Devices.ps1'),
+	[string]$ScriptFile = 'Update-S2D-1-Devices.ps1',
+	[Parameter(DontShow = $True)][ValidateScript({ Test-Path -Path $_ })]
+	[string]$ScriptPath = (Split-Path -Path $PSCommandPath -Parent),
 	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$HostCsv,
 	[string]$HostName
 )
 
 # get array of file names
-$file_names = @($Script1, $HostCsv)
+$file_names = @((Join-Path -Path $ScriptPath -ChildPath $ScriptFile), $HostCsv)
 
 # import host information
 $host_list = $null
@@ -92,7 +94,7 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 	$pss_options = New-PSSessionOption -OutputBufferingMode 'Drop'
 	$pss_scripts = Invoke-Command -ComputerName $host_name -InDisconnectedSession -SessionOption $pss_options -ScriptBlock {
 		Set-Location -Path $using:host_path
-		Invoke-Expression -Command $using:Script1
+		Invoke-Expression -Command (Join-Path -Path $using:host_path -ChildPath $using:ScriptFile)
 	}
 
 	# declare session name
