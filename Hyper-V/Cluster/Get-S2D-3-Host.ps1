@@ -85,7 +85,7 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 		$nic_out = @()
 		$nic_list = Get-NetAdapter -Physical
 		ForEach ($nic in $nic_list) {
-			$nic_hw = $nic | Get-NetAdapterHardwareInfo
+			$nic_hw = $nic | Get-NetAdapterHardwareInfo -ErrorAction 'SilentlyContinue'
 			$nic_sr = $nic | Get-NetAdapterSriov -ErrorAction 'SilentlyContinue'
 			$nic_out += [pscustomobject]@{
 				Name        = $nic.Name;
