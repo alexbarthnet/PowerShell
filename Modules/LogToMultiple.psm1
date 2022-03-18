@@ -260,6 +260,10 @@ Function Initialize-LogToMultiple {
 		Return
 	}
 
+	# build required strings
+	$log_base = (Get-Item -Path $ScriptPath).BaseName
+	$log_path = Join-Path -Path $LogsPath -ChildPath $log_base
+
 	# verify log path
 	Write-Host "Checking for log path: $log_path"
 	If (Test-Path -Path $log_path) {
@@ -303,11 +307,6 @@ Function Initialize-LogToMultiple {
 			Write-Host "ERROR: provided username maps to an 'NT AUTHORITY' principal, exiting!"
 			Return
 		}
-
-		# build required strings
-		$log_base = (Get-Item -Path $ScriptPath).BaseName
-		$log_path = Join-Path -Path $LogsPath -ChildPath $log_base
-
 
 		# verify log path permissions
 		Write-Host "Retrieved permissions on log path: $log_path"
