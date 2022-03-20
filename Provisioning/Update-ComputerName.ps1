@@ -6,7 +6,7 @@ $log_path = Join-Path -Path $log_root -Child $log_file
 $os_name = (Get-CimInstance -Class 'Win32_ComputerSystem').Name
 $vm_name = (Get-Item 'HKLM:\SOFTWARE\Microsoft\Virtual Machine\Guest\Parameters').GetValue('VirtualMachineName')
 # check computer name
-If ($os_name -ne $vm_name) {
+If ($os_name -ne $vm_name -and -not [string]::IsNullOrEmpty($vm_name)) {
 	Start-Transcript -Path $log_path -Append
 	Write-Output "Found active computer name: $os_name"
 	Write-Output "Found virtual machine name: $vm_name"	
