@@ -18,24 +18,23 @@ Param(
 	[string]$ScriptPath = (Split-Path -Path $PSCommandPath -Parent),
 	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$NicCsv,
-	[string]$HostName
+	[string[]]$HostName
 )
 
 # get array of file names
 $file_names = @((Join-Path -Path $ScriptPath -ChildPath $ScriptFile), $NicCsv)
 
 # import host information
-$host_list = $null
+$host_list = @()
 If ($HostName) {
-	# process single host
-	$host_list = Import-Csv -Path $NicCsv | Where-Object { $_.Host -eq $HostName }
-	If ($host_list.Count -lt 1) {
-		Write-Host "...could not find '$HostName' in '$NicCsv'"
+	# process hostnames
+	ForEach ($host_name in $HostName) {
+		$host_list += Import-Csv -Path $HostCsv | Where-Object { $_.Host -eq $host_name } 
 	}
 }
 Else {
 	# process all hosts
-	$host_list = Import-Csv -Path $NicCsv
+	$host_list += Import-Csv -Path $HostCsv
 }
 
 # process the cluster mapping file

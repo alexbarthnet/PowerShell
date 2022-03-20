@@ -12,7 +12,7 @@ https://github.com/alexbarthnet/PowerShell/
 Param(
 	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$HostCsv,
-	[string]$HostName
+	[string[]]$HostName
 )
 
 # clear arrays
@@ -20,17 +20,16 @@ $log_vswitch = @()
 $log_virtual = @()
 
 # import host information
-$host_list = $null
+$host_list = @()
 If ($HostName) {
-	# process single host
-	$host_list = Import-Csv -Path $HostCsv | Where-Object { $_.Host -eq $HostName }
-	If ($host_list.Count -lt 1) {
-		Write-Host "...could not find '$HostName' in '$HostCsv'"
+	# process hostnames
+	ForEach ($host_name in $HostName) {
+		$host_list += Import-Csv -Path $HostCsv | Where-Object { $_.Host -eq $host_name } 
 	}
 }
 Else {
 	# process all hosts
-	$host_list = Import-Csv -Path $HostCsv
+	$host_list += Import-Csv -Path $HostCsv
 }
 
 # process the cluster mapping file
