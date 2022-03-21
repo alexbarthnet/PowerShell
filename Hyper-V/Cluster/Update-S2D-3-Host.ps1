@@ -159,7 +159,7 @@ Try {
 		Write-Host "$Hostname - verified SMB QoS policy"
 	}
 	Else {
-		$qos_policy_smb = Get-NetQosPolicy | Where-Object { $_.Name -eq $SmbLabel -or $_.NetDirectPort -eq 445 }
+		$qos_policy_smb = Get-NetQosPolicy | Where-Object { $_.Name -eq $SmbLabel -or $_.Template -ne $SmbLabel }
 		$qos_policy_smb | ForEach-Object {
 			If ($_.Name -ne $SmbLabel -or $_.PriorityValue -ne 3 -or $_.Template -ne $SmbLabel) {
 				Write-Host "$Hostname - removing errant SMB QoS policy: $($_.Name)"
