@@ -21,17 +21,16 @@ $log_vm_host = @()
 $log_qospols = @()
 $log_qostraf = @()
 
-# import host information
+# import file
 $host_list = @()
+$host_list += Import-Csv -Path $HostCsv
+
+# filter host information
 If ($HostName) {
 	# process hostnames
 	ForEach ($host_name in $HostName) {
-		$host_list += Import-Csv -Path $HostCsv | Where-Object { $_.Host -eq $host_name } 
+		$host_list += $host_list | Where-Object { $_.Host -eq $host_name } 
 	}
-}
-Else {
-	# process all hosts
-	$host_list += Import-Csv -Path $HostCsv
 }
 
 # process the cluster mapping file
