@@ -31,9 +31,11 @@ $host_list += Import-Csv -Path $HostCsv
 # filter host information
 If ($HostName) {
 	# process hostnames
+	$host_temp = @()
 	ForEach ($host_name in $HostName) {
-		$host_list += $host_list | Where-Object { $_.Host -eq $host_name } 
+		$host_temp += $host_list | Where-Object { $_.Host -eq $host_name } 
 	}
+	$host_list = $host_temp
 }
 
 # process the cluster mapping file
