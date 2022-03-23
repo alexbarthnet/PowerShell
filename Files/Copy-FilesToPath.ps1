@@ -19,7 +19,11 @@ Param(
 	[switch]$Purge,
 	[Parameter(ParameterSetName = 'Add')]
 	[switch]$CheckHash,
-	[Parameter()][ValidateScript({ Test-Path -Path (Split-Path -Path $_) -PathType 'Container'})]
+	[Parameter(ParameterSetName = 'Add')]
+	[switch]$CopyToCluster,
+	[Parameter(ParameterSetName = 'Add')]
+	[switch]$DoNotMakeTarget,
+	[Parameter()][ValidateScript({ Test-Path -Path (Split-Path -Path $_) -PathType 'Container' })]
 	[string]$Json
 )
 
@@ -29,7 +33,8 @@ Function Copy-FilesFromSourceToTarget {
 		[string]$Source,
 		[string]$Target,
 		[boolean]$Purge,
-		[boolean]$CheckHash
+		[boolean]$CheckHash,
+		[boolean]$DoNotMakeTarget
 	)
 
 	# trim inputs
@@ -37,10 +42,22 @@ Function Copy-FilesFromSourceToTarget {
 	$Target = $Target.TrimEnd('\')
 
 	# verify source and target
-	switch ($true) {
-		{ -not (Test-Path -Path $Source -PathType 'Container') } { Write-Output "Could not find folder '$Source' on host"; Return }
-		{ -not (Test-Path -Path $Target -PathType 'Container') } { Write-Output "Could not find folder '$Target' on host"; Return }
-		Default { Write-Output "Verified '$Source' and '$Target' on host" }
+	If (-not (Test-Path -Path $Source -PathType 'Container')) { 
+		Write-Output "Could not find folder '$Source' on host"; Return
+	}
+	ElseIf (-not (Test-Path -Path $Target -PathType 'Container') -and $DoNotMakeTarget) {
+		Write-Output "Could not find folder '$Target' on host"; Return
+	}
+	ElseIf (-not (Test-Path -Path $Target -PathType 'Container') -and -not $DoNotMakeTarget) {
+		Try {
+			$null = New-Item -ItemType 'Directory' -Path $Target
+		}
+		Catch {
+			Write-Output "Could not create folder '$Target' on host"; Return
+		}
+	}
+	Else {
+		Write-Output "Verified '$Source' and '$Target' on host"
 	}
 
 	# remove all files and folders from target if Purge is set
@@ -199,10 +216,12 @@ switch ($true) {
 	$Add {
 		# create custom object from parameters then add to object
 		$json_data += [pscustomobject]@{
-			Source    = $Source
-			Target    = $Target
-			Purge     = $Purge.ToBool()
-			CheckHash = $CheckHash.ToBool()
+			Source          = $Source
+			Target          = $Target
+			Purge           = $Purge.ToBool()
+			CheckHash       = $CheckHash.ToBool()
+			CopyToCluster   = $CopyToCluster.ToBool()
+			DoNotMakeTarget = $DoNotMakeTarget.ToBool()
 		}
 		$json_data | ConvertTo-Json | Set-Content -Path $json_path
 		# declare changes then show current state
@@ -221,12 +240,25 @@ switch ($true) {
 			}
 
 			# process configuration file
-			ForEach ($json_datum in $json_data) {
+			:json_datum ForEach ($json_datum in $json_data) {
 				If ([string]::IsNullOrEmpty($json_datum.Source) -or [string]::IsNullOrEmpty($json_datum.Target)) {
 					Write-Host "ERROR: invalid entry found in configuration file: $json_name"
 				}
 				Else {
-					Copy-FilesFromSourceToTarget -Source $json_datum.Source -Target $json_datum.Target -Purge $json_datum.Purge -CheckHash $json_datum.CheckHash
+					Copy-FilesFromSourceToTarget -Source $json_datum.Source -Target $json_datum.Target -Purge $json_datum.Purge -CheckHash $json_datum.CheckHash -DoNotMakeTarget $json_datum.DoNotMakeTarget
+					If ($json_datum.CopyToCluster) {
+						Try {
+							$cluster_nodes = (Get-ClusterNode).Name | Where-Object { $_ -ne [System.Environment]::MachineName }
+						}
+						Catch {
+							Write-Host 'ERROR: could not retrieve cluster nodes from local host'
+							Continue :json_datum 
+						}
+						ForEach ($cluster_node in $cluster_nodes) {
+							Invoke-Command -ComputerName $cluster_node -ScriptBlock ${function:Copy-FilesFromSourceToTarget} -ArgumentList $json_datum.Source, $json_datum.Target, $json_datum.Purge, $json_datum.CheckHash, $json_datum.DoNotMakeTarget
+						}
+					}
+					
 				}
 			}
 		}
