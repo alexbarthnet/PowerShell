@@ -22,7 +22,7 @@ Param(
 	[Parameter(ParameterSetName = 'Add')]
 	[switch]$CopyToCluster,
 	[Parameter(ParameterSetName = 'Add')]
-	[switch]$DoNotMakeTarget,
+	[switch]$SkipCreateTarget,
 	[Parameter()][ValidateScript({ Test-Path -Path (Split-Path -Path $_) -PathType 'Container' })]
 	[string]$Json
 )
@@ -34,7 +34,7 @@ Function Copy-FilesFromSourceToTarget {
 		[string]$Target,
 		[boolean]$Purge,
 		[boolean]$CheckHash,
-		[boolean]$DoNotMakeTarget
+		[boolean]$SkipCreateTarget
 	)
 
 	# trim inputs
@@ -45,10 +45,10 @@ Function Copy-FilesFromSourceToTarget {
 	If (-not (Test-Path -Path $Source -PathType 'Container')) { 
 		Write-Output "Could not find folder '$Source' on host"; Return
 	}
-	ElseIf (-not (Test-Path -Path $Target -PathType 'Container') -and $DoNotMakeTarget) {
+	ElseIf (-not (Test-Path -Path $Target -PathType 'Container') -and $SkipCreateTarget) {
 		Write-Output "Could not find folder '$Target' on host"; Return
 	}
-	ElseIf (-not (Test-Path -Path $Target -PathType 'Container') -and -not $DoNotMakeTarget) {
+	ElseIf (-not (Test-Path -Path $Target -PathType 'Container') -and -not $SkipCreateTarget) {
 		Try {
 			$null = New-Item -ItemType 'Directory' -Path $Target
 		}
@@ -221,7 +221,7 @@ switch ($true) {
 			Purge           = $Purge.ToBool()
 			CheckHash       = $CheckHash.ToBool()
 			CopyToCluster   = $CopyToCluster.ToBool()
-			DoNotMakeTarget = $DoNotMakeTarget.ToBool()
+			SkipCreateTarget = $SkipCreateTarget.ToBool()
 		}
 		$json_data | ConvertTo-Json | Set-Content -Path $json_path
 		# declare changes then show current state
@@ -245,7 +245,7 @@ switch ($true) {
 					Write-Host "ERROR: invalid entry found in configuration file: $json_name"
 				}
 				Else {
-					Copy-FilesFromSourceToTarget -Source $json_datum.Source -Target $json_datum.Target -Purge $json_datum.Purge -CheckHash $json_datum.CheckHash -DoNotMakeTarget $json_datum.DoNotMakeTarget
+					Copy-FilesFromSourceToTarget -Source $json_datum.Source -Target $json_datum.Target -Purge $json_datum.Purge -CheckHash $json_datum.CheckHash -SkipCreateTarget $json_datum.SkipCreateTarget
 					If ($json_datum.CopyToCluster) {
 						Try {
 							$cluster_nodes = (Get-ClusterNode).Name | Where-Object { $_ -ne [System.Environment]::MachineName }
@@ -255,7 +255,7 @@ switch ($true) {
 							Continue :json_datum 
 						}
 						ForEach ($cluster_node in $cluster_nodes) {
-							Invoke-Command -ComputerName $cluster_node -ScriptBlock ${function:Copy-FilesFromSourceToTarget} -ArgumentList $json_datum.Source, $json_datum.Target, $json_datum.Purge, $json_datum.CheckHash, $json_datum.DoNotMakeTarget
+							Invoke-Command -ComputerName $cluster_node -ScriptBlock ${function:Copy-FilesFromSourceToTarget} -ArgumentList $json_datum.Source, $json_datum.Target, $json_datum.Purge, $json_datum.CheckHash, $json_datum.SkipCreateTarget
 						}
 					}
 					
