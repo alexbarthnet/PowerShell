@@ -81,13 +81,13 @@ Function ConvertTo-SecurityIdentifier {
 	}
 }
 
-Function Get-CmsComputers {
+Function Get-ComputersFromParams {
 	<#
 	.SYNOPSIS
 	Creates a list of computers from inputs.
 
 	.DESCRIPTION
-	Creates a list of computers from inputs. Called by multiple functions in the CmsCredentials module.
+	Creates a list of computers from inputs. Called by multiple functions in this module.
 
 	.PARAMETER ComputerName
 	Specifies one or more remote computers.
@@ -117,7 +117,7 @@ Function Get-CmsComputers {
 	)
 
 	# define empty array
-	$CmsComputers = @()
+	$ComputersFromParams = @()
 
 	# retrieve local cluster name if requested
 	If ($Cluster) {
@@ -138,7 +138,7 @@ Function Get-CmsComputers {
 			Try {
 				$cluster_nodes = $null
 				$cluster_nodes = Invoke-Command -ComputerName $cluster_name -ScriptBlock { (Get-ClusterNode).Name }
-				$cluster_nodes | ForEach-Object { $CmsComputers += $_ }
+				$cluster_nodes | ForEach-Object { $ComputersFromParams += $_ }
 			}
 			Catch {
 				Write-Host "ERROR: could not retrieve list of cluster nodes from '$cluster_name'"
@@ -148,11 +148,11 @@ Function Get-CmsComputers {
 
 	# add computers to array from ComputerName argument
 	If ($ComputerName) {
-		$ComputerName | ForEach-Object { $CmsComputers += $_ }
+		$ComputerName | ForEach-Object { $ComputersFromParams += $_ }
 	}
 
 	# remove duplicate computers
-	$CmsComputers | Select-Object -Unique
+	$ComputersFromParams | Select-Object -Unique
 }
 
 Function Protect-CmsCredentialSecret {
@@ -588,7 +588,7 @@ Function Protect-CmsCredentials {
 
 	# get computer names
 	$CmsComputers = @()
-	$CmsComputers += Get-CmsComputers -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+	$CmsComputers += Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
 
 	# encrypt credentials to certificate
 	If ($CmsComputers.Count -gt 0) {
@@ -671,7 +671,7 @@ Function Remove-CmsCredentials {
 
 	# get computer names
 	$CmsComputers = @()
-	$CmsComputers += Get-CmsComputers -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+	$CmsComputers += Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
 
 	# encrypt credentials to certificate
 	If ($CmsComputers.Count -gt 0) {
@@ -843,7 +843,7 @@ Function Grant-CmsCredentialAccess {
 
 	# get computer names
 	$CmsComputers = @()
-	$CmsComputers += Get-CmsComputers -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+	$CmsComputers += Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
 
 	# encrypt credentials to certificate
 	If ($CmsComputers.Count -gt 0) {
@@ -918,7 +918,7 @@ Function Reset-CmsCredentialAccess {
 
 	# get computer names
 	$CmsComputers = @()
-	$CmsComputers += Get-CmsComputers -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+	$CmsComputers += Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
 
 	# encrypt credentials to certificate
 	If ($CmsComputers.Count -gt 0) {
@@ -998,7 +998,7 @@ Function Revoke-CmsCredentialAccess {
 
 	# get computer names
 	$CmsComputers = @()
-	$CmsComputers += Get-CmsComputers -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+	$CmsComputers += Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
 
 	# encrypt credentials to certificate
 	If ($CmsComputers.Count -gt 0) {
