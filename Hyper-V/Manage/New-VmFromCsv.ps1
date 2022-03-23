@@ -730,7 +730,6 @@ ForEach ($VmParams in $vm_list) {
 	If (-not $vm_in_the_cloud) {
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - checking if host is clustered...")
 		$vm_host_clustered = Get-Service -ComputerName $vm_host | Where-Object { $_.Name -eq 'ClusSvc' -and $_.StartType -eq 'Automatic' -and $_.Status -eq 'Running' }
-		
 		# check for VM on cluster
 		If ($vm_host_clustered) {
 			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...host is clustered")
@@ -774,7 +773,7 @@ ForEach ($VmParams in $vm_list) {
 			Return
 		}
 	}
-	Else {
+	ElseIf (-not $vm_in_the_cloud) {
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - skipping VM provisioning, VM already exists")
 		$vm = $vm_on_host
 	}
@@ -886,8 +885,10 @@ ForEach ($VmParams in $vm_list) {
 			}
 		}
 	}
-	ElseIf ($vm.State -ne 'Running' -and -not $vm_in_the_cloud) {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - starting VM on host")
-		$vm | Start-VM
+	ElseIf (-not $vm_in_the_cloud) {
+		If ($vm.State -ne 'Running') {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - starting VM on host")
+			$vm | Start-VM	
+		}
 	}
 }
