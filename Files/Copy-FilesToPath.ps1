@@ -258,7 +258,6 @@ switch ($true) {
 							Invoke-Command -ComputerName $cluster_node -ScriptBlock ${function:Copy-FilesFromSourceToTarget} -ArgumentList $json_datum.Source, $json_datum.Target, $json_datum.Purge, $json_datum.CheckHash, $json_datum.SkipCreateTarget
 						}
 					}
-					
 				}
 			}
 		}
