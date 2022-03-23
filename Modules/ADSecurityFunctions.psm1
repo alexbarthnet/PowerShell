@@ -65,9 +65,9 @@ Function Get-ADSecurityObjects {
 		# retrieve guids
 		If ($Force -or $null -eq $ad_guids_schema) { New-Variable -Force -Scope 'Private' -Option 'ReadOnly' -Name 'ad_guids_schema' -Value (Get-ADObject -SearchBase $ad_nc_schema -LDAPFilter '(schemaidguid=*)' -Properties 'lDAPDisplayName', 'schemaIDGUID') }
 		If ($Force -or $null -eq $ad_guids_rights) { New-Variable -Force -Scope 'Private' -Option 'ReadOnly' -Name 'ad_guids_rights' -Value (Get-ADObject -SearchBase $ad_nc_config -LDAPFilter '(&(objectclass=controlAccessRight)(rightsguid=*))' -Properties 'displayName', 'rightsGuid') }
- 
+
 		# create and populate hash tables
-		If ($Force -or $null -eq $ad_map_rights) { 
+		If ($Force -or $null -eq $ad_map_rights) {
 			New-Variable -Force -Scope 'Private' -Name 'ad_map_rights_to_guid' -Value @{}
 			ForEach ($guid in $ad_guids_rights) { $ad_map_rights_to_guid[$guid.displayName] = $guid.rightsGuid }
 			New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_map_rights' -Value $ad_map_rights_to_guid
@@ -78,7 +78,7 @@ Function Get-ADSecurityObjects {
 			New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_map_schema' -Value $ad_map_schema_to_guid
 		}
 		If ($Force -or $null -eq $ad_map_rights_reverse) {
-			New-Variable -Force -Scope 'Private' -Name 'ad_map_guid_to_rights' -Value @{} 
+			New-Variable -Force -Scope 'Private' -Name 'ad_map_guid_to_rights' -Value @{}
 			ForEach ($guid in $ad_guids_rights) { $ad_map_guid_to_rights[$guid.rightsGuid] = $guid.displayName }
 			New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_map_rights_reverse' -Value $ad_map_guid_to_rights
 		}
@@ -92,7 +92,7 @@ Function Get-ADSecurityObjects {
 		# see reference at https://docs.microsoft.com/en-us/dotnet/api/system.security.accesscontrol.accesscontroltype
 		If ($Force -or $null -eq $ad_accesstype_allow) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_accesstype_allow' -Value 'Allow' } #right(s) will be allowed
 		If ($Force -or $null -eq $ad_accesstype_deny) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_accesstype_deny' -Value 'Deny' } #right(s) will be denied
- 
+
 		# create strings for active directory rights
 		# see reference at https://docs.microsoft.com/en-us/dotnet/api/system.directoryservices.activedirectoryrights
 		If ($Force -or $null -eq $ad_rights_ga) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_rights_ga' -Value 'GenericAll' }
@@ -106,7 +106,7 @@ Function Get-ADSecurityObjects {
 		If ($Force -or $null -eq $ad_rights_dc) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_rights_dc' -Value 'DeleteChild' }
 		If ($Force -or $null -eq $ad_rights_ca) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_rights_ca' -Value 'ExtendedRight' }
 		If ($Force -or $null -eq $ad_rights_sw) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_rights_sw' -Value 'Self' }
-  
+
 		# create strings for active directory inheritances
 		# note: the spelling of "descendents" below is intentional by Microsoft
 		# see reference at https://docs.microsoft.com/en-us/dotnet/api/system.directoryservices.activedirectorysecurityinheritance
@@ -196,8 +196,8 @@ Function Remove-ADCustomPSDrive {
 Function Reset-ADSecurity {
 	[CmdletBinding()]
 	param (
-		[Parameter(Position = 0, Mandatory = $true)]
-		[string]$Identity,
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
+		[object[]]$Identity,
 		[Parameter(Position = 1)]
 		[string]$Server = $ad_dc_pdc
 	)
@@ -209,28 +209,62 @@ Function Reset-ADSecurity {
 		}
 		Catch {
 			Write-Host "ERROR: creating custom PSDrive for server: '$Server'"
-			Break
-		}	
+			Return
+		}
 	}
 	Else {
 		$ad_psdrive = 'AD'
 	}
 
-	# verify the AD object
-	$ad_class = $null
-	Try {
-		$ad_class = (Get-ADObject -Identity $Identity -Properties 'objectClass').objectClass
-	}
-	Catch {
-		Write-Host "WARNING: object not found: '$Identity'"
+	# crate empty objects
+	$ad_objects = @()
+	$ad_defaultsddl = @{}
+
+	# retrieve objects from input
+	:ad_identity ForEach ($ad_identity in $Identity) {
+		If ($ad_identity -is [Microsoft.ActiveDirectory.Management.ADObject]) {
+			# if an ADObject, retrieve the DN
+			$ad_objects += $ad_identity
+		}
+		ElseIf ($ad_object -is [System.String]) {
+			# if a string, assume value is the object DN
+			Try {
+				$ad_objects += Get-ADObject -Identity $ad_identity
+			}
+			Catch {
+				Write-Host "ERROR: could not retrieve object for '$ad_identity'"
+			}
+		}
+		Default {
+			# if any other object type, continue to next iteration of foreeach loop
+			Write-Host "ERROR: could not process object type: '[$($ad_identity.GetType().FullName)]'"
+		}
 	}
 
-	If ($null -ne $ad_class) {
-		# retrieve default SDDL for objectClass
-		$ad_sddl = (Get-ADObject -Filter "Name -eq '$ad_class'" -SearchBase $ad_nc_schema -Properties 'defaultSecurityDescriptor').defaultSecurityDescriptor
+	# process objects retrieved from input
+	:ad_object ForEach ($ad_object in $ad_objects) {
+		# retrieve object class
+		Try {
+			$ad_class = $ad_object.objectClass
+		}
+		Catch {
+			Write-Host "ERROR: could not retrieve object class for: '$($ad_object.DistinguishedName)'"
+		}
+		
+
+		# check hashtable for default security descriptor of object class
+		If ([string]::IsNullOrEmpty($ad_defaultsddl[$ad_class])) {
+			Try {
+				$ad_defaultsddl[$ad_class] = (Get-ADObject -Filter "Name -eq '$ad_class'" -SearchBase $ad_nc_schema -Properties 'defaultSecurityDescriptor').defaultSecurityDescriptor
+			}
+			Catch {
+				Write-Host "ERROR: could not retrieve default security descriptor for object class: '$ad_class'"
+				Continue ad_object
+			}
+		}
 
 		# get the ACL for the object
-		$ad_path = ($ad_psdrive + ':\' + $Identity)
+		$ad_path = $ad_psdrive, $ad_object.DistinguishedName -join ':\'
 		$ad_acl = Get-Acl -Path $ad_path
 		$ad_acl.SetAccessRuleProtection($true, $false)
 		$ad_acl.Access | ForEach-Object { $ad_acl.RemoveAccessRule($_) } | Out-Null
@@ -246,8 +280,7 @@ Function Reset-ADSecurity {
 		}
 		Catch {
 			Write-Host 'ERROR: removing custom PSDrive'
-			Break
-		}	
+		}
 	}
 }
 
@@ -275,7 +308,7 @@ Function Update-ADSecurity {
 		Catch {
 			Write-Host "ERROR: creating 'ADCustom' PSDrive for server: '$Server'"
 			Break
-		}	
+		}
 	}
 	Else {
 		$ad_psdrive = 'AD'
@@ -296,14 +329,14 @@ Function Update-ADSecurity {
 				$ad_object_fqdns += $ad_object
 			}
 			Default {
-				# if any other object type, continue to next iteration of foreeach loop 
+				# if any other object type, continue to next iteration of foreeach loop
 				Write-Host "ERROR: cannot process object type: '[$($ad_object.GetType().FullName)]'"
 			}
 		}
 	}
-	
+
 	# process DNs
-	ForEach ($ad_object_dn in $ad_object_fqdns) {
+	:ad_object_dn ForEach ($ad_object_dn in $ad_object_fqdns) {
 		# define path for AD filesystem provider
 		$ad_object_path = ($ad_psdrive + ':\' + $ad_object_dn)
 		# validate the AD file system provider can retrieve the object
@@ -321,30 +354,36 @@ Function Update-ADSecurity {
 			# $ad_object_acl.IsProtected
 			# $ad_object_acl.preserveInheritance
 			# check inheritance settings
-			switch ($Inheritance) {
-				'Enable' {
-					# enable inheritance
-					$ad_object_acl.SetAccessRuleProtection($false, $false) 
-				}
-				'Disable' {
-					# disable inheritance and copy inherited permissions
-					$ad_object_acl.SetAccessRuleProtection($true, $true) 
-				}
-				'Remove' { 
-					# remove inheritance if possible, disable otherwise
-					If ($Permissions.Count -ge 1) {
-						# disable inheritance and do not copy inherited permissions
-						$ad_object_acl.SetAccessRuleProtection($true, $false)
+			Try {
+				switch ($Inheritance) {
+					'Enable' {
+						# enable inheritance
+						$ad_object_acl.SetAccessRuleProtection($false, $false)
 					}
-					Else {
+					'Disable' {
 						# disable inheritance and copy inherited permissions
-						$ad_object_acl.SetAccessRuleProtection($true, $true) 
-						Write-Host 'WARNING: inherited access cannot be removed without replacement ACEs, inheritance disabled instead'
+						$ad_object_acl.SetAccessRuleProtection($true, $true)
+					}
+					'Remove' {
+						# remove inheritance if possible, disable otherwise
+						If ($Permissions.Count -ge 1) {
+							# disable inheritance and do not copy inherited permissions
+							$ad_object_acl.SetAccessRuleProtection($true, $false)
+						}
+						Else {
+							# disable inheritance and copy inherited permissions
+							$ad_object_acl.SetAccessRuleProtection($true, $true)
+							Write-Host 'WARNING: inherited access cannot be removed without replacement ACEs, inheritance disabled instead'
+						}
+					}
+					Default {
+						# leave inheritance as is
 					}
 				}
-				Default {
-					# leave inheritance as is
-				}
+			}
+			Catch {
+				Write-Host "ERROR: could set inheritance on ACL for: '$ad_object_dn'"
+				Continue ad_object_dn
 			}
 			# remove existing ACEs for any IdentityReference found in provided ACEs
 			If ($Reset -and $Permissions.Count -gt 0) {
@@ -365,8 +404,13 @@ Function Update-ADSecurity {
 				$ad_object_acl.AddAccessRule($ad_object_ace)
 			}
 			# update ACL
-			Set-Acl -AclObject $ad_object_acl -Path $ad_object_path
-			Write-Host "Updated ACL on object: '$ad_object_dn'"
+			Try {
+				Set-Acl -AclObject $ad_object_acl -Path $ad_object_path
+				Write-Host "Updated ACL on object: '$ad_object_dn'"	
+			} Catch {
+				Write-Host "ERROR: could set inheritance on ACL for: '$ad_object_dn'"
+				Continue ad_object_dn
+			}
 		}
 		Else {
 			Write-Host "WARNING: object not found: '$ad_object_dn'"
@@ -381,7 +425,7 @@ Function Update-ADSecurity {
 		Catch {
 			Write-Host 'ERROR: removing custom PSDrive'
 			Break
-		}	
+		}
 	}
 }
 
