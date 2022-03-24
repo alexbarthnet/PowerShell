@@ -16,7 +16,9 @@ Param(
 	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Path,
 	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Add')]
-	[int]$Days
+	[int]$Days,
+	[Parameter()]
+	[string]$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
 )
 
 Function Remove-ItemsFromPathByDays {
@@ -33,7 +35,7 @@ Function Remove-ItemsFromPathByDays {
 	If (Test-Path -Path $Path) {
 		Write-LogToMultiple -LogSubject $Path -Text 'directory found, setting date...'
 		$date_purge = (Get-Date).AddDays($Days * -1)
-	
+
 		# remove old files first
 		Write-LogToMultiple -LogSubject $Path -Text "removing files written before: '$date_purge'"
 		$old_files = @()
@@ -47,7 +49,7 @@ Function Remove-ItemsFromPathByDays {
 				Write-LogToMultiple -LogSubject $Path -Text "TESTING - would remove file: '$($old_file.FullName)'"
 			}
 		}
-	
+
 		# remove old folders last
 		Write-LogToMultiple -LogSubject $Path -Text "removing folders written before: '$date_purge'"
 		$old_paths = @()
@@ -78,48 +80,70 @@ Function Remove-ItemsFromPathByDays {
 	}
 }
 
-# define configuration file from script path then verify path
-$json_path = $PSCommandPath.Replace('.ps1', '.json')
-$json_test = Test-Path -Path $json_path
-
-# clear required objects then check file
-$json_data = @()
-If ($json_test) {
-	# retrieve JSON file name
-	$json_name = (Get-Item -Path $json_path).Name
-	# create object from JSON file
-	$json_data += Get-Content -Path $json_path | ConvertFrom-Json
-} 
-Else {
-	# define expected JSON file name
-	$json_name = Split-Path -Path $json_path -Leaf
+# verify JSON file
+If (-not (Test-Path -Path $Json)) {
+	If ($Add) {
+		Try {
+			$null = New-Item -ItemType 'File' -Path $Json
+		}
+		Catch {
+			Write-Output "`nERROR: could not create configuration file: '$Json'"
+			Return
+		}
+	}
+	If ($Clear -or $Remove -or $Test -or $Run) {
+		Write-Output "`nERROR: could not find configuration file: '$Json'"
+		Return
+	}
 }
+
+# import JSON data
+$json_data = @()
+$json_data += Get-Content -Path $Json | ConvertFrom-Json
 
 # evaluate parameters
 switch ($true) {
 	$Clear {
-		Write-Output "`nClearing '$json_name'`n"
-		If ($json_test) { Remove-Item -Path $json_path -Force }
+		# remove configuration file
+		If (Test-Path -Path $Json) {
+			Try {
+				Remove-Item -Path $Json -Force
+				Write-Output "`nCleared configuration file: '$Json'"
+			}
+			Catch {
+				Write-Output "`nERROR: could not clear configuration file: '$Json'"
+			}
+		}
 	}
 	$Remove {
 		# remove matching entries from object
-		$json_data = $json_data | Where-Object { $_.Path -ne $Path }
-		$json_data | ConvertTo-Json | Set-Content -Path $json_path
-		# declare changes then show current state
-		Write-Output "`nUpdated '$json_name' to remove '$Path':"
-		$json_data | Select-Object Days, Path, Updated
+		Try {
+			$json_data = $json_data | Where-Object {
+				$_.Path -ne $Path
+			}
+			$json_data | ConvertTo-Json | Set-Content -Path $Json
+			Write-Output "`nRemoved '$Path' from configuration file: '$Json'"
+			$json_data | Select-Object Days, Path, Updated
+		}
+		Catch {
+			Write-Output "`nERROR: could not update configuration file: '$Json'"
+		}
 	}
 	$Add {
 		# create custom object from parameters then add to object
-		$json_data += [pscustomobject]@{ 
-			Days    = $Days
-			Path    = $Path 
-			Updated = (Get-Date -Format FileDateTimeUniversal) 
+		Try {
+			$json_data += [pscustomobject]@{
+				Days    = $Days
+				Path    = $Path
+				Updated = (Get-Date -Format FileDateTimeUniversal)
+			}
+			$json_data | ConvertTo-Json | Set-Content -Path $Json
+			Write-Output "`nAdded '$Path' to configuration file: '$Json'"
+			$json_data | Select-Object Days, Path, Updated
 		}
-		$json_data | ConvertTo-Json | Set-Content -Path $json_path
-		# declare changes then show current state
-		Write-Output "`nUpdated '$json_name' to add '$Path':"
-		$json_data | Select-Object Days, Path, Updated
+		Catch {
+			Write-Output "`nERROR: could not update configuration file: '$Json'"
+		}
 	}
 	{ $Run -or $Test } {
 		Try {
@@ -134,9 +158,9 @@ switch ($true) {
 				Write-Host "ERROR: no entries found in configuration file: $json_name"
 				Return
 			}
-			
+
 			# process configuration file
-			ForEach ($json_datum in $json_data) { 
+			ForEach ($json_datum in $json_data) {
 				If ([string]::IsNullOrEmpty($json_datum.Path) -or [string]::IsNullOrEmpty($json_datum.Days)) {
 					Write-Host "ERROR: invalid entry found in configuration file: $json_name"
 				}
