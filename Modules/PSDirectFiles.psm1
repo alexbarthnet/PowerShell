@@ -6,7 +6,7 @@ Function Copy-PathFromPSDirect {
 		[string]$VMName,
 		[string]$Path,
 		[string]$Destination,
-		[boolean]$Purge
+		[switch]$Purge
 	)
 
 	# check for VM on local system
@@ -72,7 +72,7 @@ Function Copy-PathToPSDirect {
 		[string]$VMName,
 		[string]$Path,
 		[string]$Destination,
-		[boolean]$Purge
+		[switch]$Purge
 	)
 
 	# check for VM on local system
@@ -155,88 +155,100 @@ Function Export-FilesWithPSDirect {
 		[string]$Destination,
 		[Parameter(ParameterSetName = 'Add')]
 		[switch]$Purge,
-		[Parameter()][ValidateScript({ Test-Path -Path $_ })]
-		[string]$Json
+		[Parameter()]
+		[string]$Json = ($PSCommandPath.Replace('.psm1', '.json'))
 	)
 
-
-	# define configuration file from script path then verify path
-	If ([string]::IsNullOrEmpty($Json)) {
-		$json_path = $PSCommandPath.Replace('.ps1', '.json')	
+	# verify JSON file
+	If (-not (Test-Path -Path $Json)) {
+		If ($Add) {
+			Try {
+				$null = New-Item -ItemType 'File' -Path $Json
+			}
+			Catch {
+				Write-Output "`nERROR: could not create configuration file: '$Json'"
+				Return
+			}
+		}
+		If ($Clear -or $Remove) {
+			Write-Output "`nERROR: could not find configuration file: '$Json'"
+			Return
+		}
 	}
-	Else {
-		$json_path = $Json
-	}
-	$json_test = Test-Path -Path $json_path
 
-	# clear required objects then check file
+	# import JSON data
 	$json_data = @()
-	If ($json_test) {
-		# retrieve JSON file name
-		$json_name = (Get-Item -Path $json_path).Name
-		# create object from JSON file
-		$json_data += Get-Content -Path $json_path | ConvertFrom-Json
-	}
-	Else {
-		# define expected JSON file name
-		$json_name = Split-Path -Path $json_path -Leaf
-	}
+	$json_data += Get-Content -Path $Json -ErrorAction SilentlyContinue | ConvertFrom-Json -ErrorAction SilentlyContinue
 
 	# evaluate parameters
 	switch ($true) {
 		$Clear {
-			Write-Output "`nClearing '$json_name'`n"
-			If ($json_test) { Remove-Item -Path $json_path -Force }
+			Try {
+				Remove-Item -Path $Json -Force
+				Write-Output "`nClearing configuration file: '$Json'"
+			}
+			Catch {
+				Write-Output "`nERROR: could not clear configuration file: '$Json'"
+			}
 		}
 		$Remove {
-			# remove matching entries from object
-			$json_data = $json_data | Where-Object { $_.VMName -ne $VMName }
-			$json_data | ConvertTo-Json | Set-Content -Path $json_path
-			# declare changes then show current state
-			Write-Output "`nUpdated '$json_name' to remove '$VMName':"
-			$json_data | Select-Object VMName, Path, Destination, Purge
+			Try {
+				$json_data = $json_data | Where-Object {
+					$_.VMName -ne $VMName
+				}
+				$json_data | ConvertTo-Json | Set-Content -Path $Json
+				Write-Output "`nRemoved '$VMName' from configuration file: '$Json'"
+				$json_data | Select-Object VMName, Path, Destination, Purge
+			}
+			Catch {
+				Write-Output "`nERROR: could not update configuration file: '$Json'"
+			}	
 		}
 		$Add {
 			# create custom object from parameters then add to object
-			$json_data += [pscustomobject]@{
-				VMName = $VMName
-				Purge  = $Purge.ToBool()
-				Path = $Path
-				Destination = $Destination
+			Try {
+				$json_data += [pscustomobject]@{
+					VMName      = $VMName
+					Path        = $Path
+					Destination = $Destination
+					Purge       = $Purge.ToBool()
+				}
+				$json_data | ConvertTo-Json | Set-Content -Path $Json
+				Write-Output "`nAdded '$VMName' to configuration file: '$Json'"
+				$json_data | Select-Object VMName, Path, Destination, Purge
 			}
-			$json_data | ConvertTo-Json | Set-Content -Path $json_path
-			# declare changes then show current state
-			Write-Output "`nUpdated '$json_name' to add '$VMName':"
-			$json_data | Select-Object VMName, Path, Destination, Purge
+			Catch {
+				Write-Output "`nERROR: could not update configuration file: '$Json'"
+			}
 		}
 		$Export {
 			Try {
 				# define transcript file from script path and start transcript
-				Start-Transcript -Path $PSCommandPath.Replace('.ps1', '.txt') -Force
+				Start-Transcript -Path $Json.Replace('.json', '.txt') -Force
 
 				# check entry count in configuration file
 				If ($json_data.Count -eq 0) {
-					Write-Host "ERROR: no entries found in configuration file: $json_name"
+					Write-Output "`nERROR: no entries found in configuration file: '$Json'"
 					Return
 				}
 
 				# process configuration file
 				ForEach ($json_datum in $json_data) {
 					If ([string]::IsNullOrEmpty($json_datum.VMName) -or [string]::IsNullOrEmpty($json_datum.Path) -or [string]::IsNullOrEmpty($json_datum.Destination)) {
-						Write-Host "ERROR: invalid entry found in configuration file: $json_name"
+						Write-Output "`nERROR: invalid entry found in configuration file: '$Json'"
 					}
 					Else {
-						Copy-PathFromPSDirect -VMName $json_datum.VMName -Path $json_datum.Path -Destination $json_datum.Destination -Purge $json_datum.Purge
+						Copy-PathFromPSDirect -VMName $json_datum.VMName -Path $json_datum.Path -Destination $json_datum.Destination -Purge:$json_datum.Purge
 					}
 				}
 			}
 			Finally {
-				Write-Host ([string]::Empty)
+				Write-Output ([string]::Empty)
 				Stop-Transcript
 			}
 		}
 		Default {
-			Write-Output "`nDisplaying '$json_name':"
+			Write-Output "`nDisplaying configuration file: '$Json'"
 			$json_data | Select-Object VMName, Path, Destination, Purge
 		}
 	}
@@ -265,90 +277,103 @@ Function Import-FilesWithPSDirect {
 		[string]$Destination,
 		[Parameter(ParameterSetName = 'Add')]
 		[switch]$Purge,
-		[Parameter()][ValidateScript({ Test-Path -Path $_ })]
-		[string]$Json
+		[Parameter()]
+		[string]$Json = ($PSCommandPath.Replace('.psm1', '.json'))
 	)
-	
-	# define configuration file from script path then verify path
-	If ([string]::IsNullOrEmpty($Json)) {
-		$json_path = $PSCommandPath.Replace('.ps1', '.json')	
-	}
-	Else {
-		$json_path = $Json
-	}
-	$json_test = Test-Path -Path $json_path
 
-	# clear required objects then check file
+	# verify JSON file
+	If (-not (Test-Path -Path $Json)) {
+		If ($Add) {
+			Try {
+				$null = New-Item -ItemType 'File' -Path $Json
+			}
+			Catch {
+				Write-Output "`nERROR: could not create configuration file: '$Json'"
+				Return
+			}
+		}
+		If ($Clear -or $Remove) {
+			Write-Output "`nERROR: could not find configuration file: '$Json'"
+			Return
+		}
+	}
+
+	# import JSON data
 	$json_data = @()
-	If ($json_test) {
-		# retrieve JSON file name
-		$json_name = (Get-Item -Path $json_path).Name
-		# create object from JSON file
-		$json_data += Get-Content -Path $json_path | ConvertFrom-Json
-	}
-	Else {
-		# define expected JSON file name
-		$json_name = Split-Path -Path $json_path -Leaf
-	}
+	$json_data += Get-Content -Path $Json -ErrorAction SilentlyContinue | ConvertFrom-Json -ErrorAction SilentlyContinue
 
 	# evaluate parameters
 	switch ($true) {
 		$Clear {
-			Write-Output "`nClearing '$json_name'`n"
-			If ($json_test) { Remove-Item -Path $json_path -Force }
+			If (Test-Path -Path $Json) {
+				Try {
+					Remove-Item -Path $Json -Force
+					Write-Output "`nClearing configuration file: '$Json'"
+				}
+				Catch {
+					Write-Output "`nERROR: could not clear configuration file: '$Json'"
+				}
+			}
 		}
 		$Remove {
 			# remove matching entries from object
-			$json_data = $json_data | Where-Object { $_.VMName -ne $VMName }
-			$json_data | ConvertTo-Json | Set-Content -Path $json_path
-			# declare changes then show current state
-			Write-Output "`nUpdated '$json_name' to remove '$VMName':"
-			$json_data | Select-Object VMName, Path, Destination, Purge
+			Try {
+				$json_data = $json_data | Where-Object {
+					$_.VMName -ne $VMName
+				}
+				$json_data | ConvertTo-Json | Set-Content -Path $Json
+				Write-Output "`nRemoved '$VMName' from configuration file: '$Json'"
+				$json_data | Select-Object VMName, Path, Destination, Purge
+			}
+			Catch {
+				Write-Output "`nERROR: could not update configuration file: '$Json'"
+			}
 		}
 		$Add {
 			# create custom object from parameters then add to object
-			$json_data += [pscustomobject]@{
-				VMName = $VMName
-				Purge  = $Purge.ToBool()
-				Path = $Path
-				Destination = $Destination
+			Try {
+				$json_data += [pscustomobject]@{
+					VMName      = $VMName
+					Path        = $Path
+					Destination = $Destination
+					Purge       = $Purge.ToBool()
+				}
+				$json_data | ConvertTo-Json | Set-Content -Path $Json
+				Write-Output "`nAdded '$VMName' to configuration file: '$Json'"
+				$json_data | Select-Object VMName, Path, Destination, Purge
 			}
-			$json_data | ConvertTo-Json | Set-Content -Path $json_path
-			# declare changes then show current state
-			Write-Output "`nUpdated '$json_name' to add '$VMName':"
-			$json_data | Select-Object VMName, Path, Destination, Purge
+			Catch {
+				Write-Output "`nERROR: could not update configuration file: '$Json'"
+			}
 		}
 		$Import {
 			Try {
 				# define transcript file from script path and start transcript
-				Start-Transcript -Path $PSCommandPath.Replace('.ps1', '.txt') -Force
-
-				# # start logging
-				# Start-LogToMultiple -ScriptPath $PSCommandPath
+				Start-Transcript -Path $Json.Replace('.json', '.txt') -Force
 
 				# check entry count in configuration file
 				If ($json_data.Count -eq 0) {
-					Write-Host "ERROR: no entries found in configuration file: $json_name"
+					Write-Output "`nERROR: no entries found in configuration file: '$Json'"
 					Return
 				}
 
 				# process configuration file
 				ForEach ($json_datum in $json_data) {
 					If ([string]::IsNullOrEmpty($json_datum.VMName) -or [string]::IsNullOrEmpty($json_datum.Path) -or [string]::IsNullOrEmpty($json_datum.Destination)) {
-						Write-Host "ERROR: invalid entry found in configuration file: $json_name"
+						Write-Output "`nERROR: invalid entry found in configuration file: '$Json'"
 					}
 					Else {
-						Copy-PathToPSDirect -VMName $json_datum.VMName -Path $json_datum.Path -Destination $json_datum.Destination -Purge $json_datum.Purge
+						Copy-PathToPSDirect -VMName $json_datum.VMName -Path $json_datum.Path -Destination $json_datum.Destination -Purge:$json_datum.Purge
 					}
 				}
 			}
 			Finally {
-				Write-Host ([string]::Empty)
+				Write-Output ([string]::Empty)
 				Stop-Transcript
 			}
 		}
 		Default {
-			Write-Output "`nDisplaying '$json_name':"
+			Write-Output "`nDisplaying configuration file: '$Json'"
 			$json_data | Select-Object VMName, Path, Destination, Purge
 		}
 	}
