@@ -156,7 +156,7 @@ Function Export-FilesWithPSDirect {
 		[Parameter(ParameterSetName = 'Add')]
 		[switch]$Purge,
 		[Parameter()]
-		[string]$Json = ($PSCommandPath.Replace('.psm1', '.json'))
+		[string]$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
 	)
 
 	# verify JSON file
@@ -224,7 +224,7 @@ Function Export-FilesWithPSDirect {
 		$Export {
 			Try {
 				# define transcript file from script path and start transcript
-				Start-Transcript -Path $Json.Replace('.json', '.txt') -Force
+				Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.txt') -Force
 
 				# check entry count in configuration file
 				If ($json_data.Count -eq 0) {
@@ -278,7 +278,7 @@ Function Import-FilesWithPSDirect {
 		[Parameter(ParameterSetName = 'Add')]
 		[switch]$Purge,
 		[Parameter()]
-		[string]$Json = ($PSCommandPath.Replace('.psm1', '.json'))
+		[string]$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
 	)
 
 	# verify JSON file
@@ -349,7 +349,7 @@ Function Import-FilesWithPSDirect {
 		$Import {
 			Try {
 				# define transcript file from script path and start transcript
-				Start-Transcript -Path $Json.Replace('.json', '.txt') -Force
+				Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.txt') -Force
 
 				# check entry count in configuration file
 				If ($json_data.Count -eq 0) {
