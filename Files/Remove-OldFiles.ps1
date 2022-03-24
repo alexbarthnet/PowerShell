@@ -155,14 +155,14 @@ switch ($true) {
 
 			# check entry count in configuration file
 			If ($json_data.Count -eq 0) {
-				Write-Host "ERROR: no entries found in configuration file: $json_name"
+				Write-Host "ERROR: no entries found in configuration file: $Json"
 				Return
 			}
 
 			# process configuration file
 			ForEach ($json_datum in $json_data) {
 				If ([string]::IsNullOrEmpty($json_datum.Path) -or [string]::IsNullOrEmpty($json_datum.Days)) {
-					Write-Host "ERROR: invalid entry found in configuration file: $json_name"
+					Write-Host "ERROR: invalid entry found in configuration file: $Json"
 				}
 				Else {
 					Remove-ItemsFromPathByDays -Path $json_datum.Path -Days $json_datum.Days
@@ -175,7 +175,7 @@ switch ($true) {
 		}
 	}
 	Default {
-		Write-Output "`nDisplaying '$json_name'`n"
+		Write-Output "`nDisplaying configuration file: '$Json'"
 		$json_data | Select-Object Days, Path, Updated
 	}
 }
