@@ -207,11 +207,11 @@ Function Remove-LogToMultiple {
 
 
 	# verify log directory
-	If (Test-Path -Path $log_Path) {
-		Write-LogToMultiple -LogSubject $log_base -LogText "Found log folder: $log_Path"
+	If (Test-Path -Path $log_path) {
+		Write-LogToMultiple -LogSubject $log_base -LogText "Found log folder: $log_path"
 	}
 	Else {
-		Write-LogToMultiple -LogSubject $log_base -LogText "ERROR: could not locate log folder: $log_Path"
+		Write-LogToMultiple -LogSubject $log_base -LogText "ERROR: could not locate log folder: $log_path"
 		Return
 	}
 
@@ -227,7 +227,7 @@ Function Remove-LogToMultiple {
 	Write-LogToMultiple -LogSubject $log_base -LogText "Removing files older than: $($log_date_time | Get-Date -Format FileDateTime)"
 
 	# get files from date
-	$log_files_old = Get-ChildItem -Path $log_Path | Where-Object { $_.LastWriteTime -lt $log_date_time }
+	$log_files_old = Get-ChildItem -Path $log_path | Where-Object { $_.LastWriteTime -lt $log_date_time }
 	ForEach ($log_file in $log_files_old) {
 		Try {
 			Remove-Item -Path $log_file.FullName -Force
