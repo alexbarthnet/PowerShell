@@ -7,6 +7,99 @@ Param(
 	[switch]$UseDefaultPathOnHost
 )
 
+Function Remove-DeviceInSccm {
+	param (
+		[Parameter()]
+		[object]$VmParams,
+		[string]$VmMacAddress
+	)
+	
+	# define optional objects from CSV - OSD general parameters
+	$vm_hwid = $VmMacAddress
+	$vm_name = $VmParams.Name
+	$vm_osd_server = $VmParams.OsdServer
+
+	# connect to SCCM remotely
+	Write-Host ("$env_comp_name,$vm_host,$vm_name - connecting to SCCM: " + $vm_osd_server)
+	Invoke-Command -ComputerName $vm_osd_server -ScriptBlock {
+		# set local variables
+		$env_name = $using:env_comp_name
+		$sccm_srv = $using:vm_osd_server
+		$dev_name = $using:vm_name
+		$dev_hwid = $using:vm_hwid
+
+		# retrieve the psd1 file
+		$cm_psd1_path = 'HKLM:\SOFTWARE\Microsoft\SMS\Setup'
+		$cm_psd1_item = 'UI Installation Directory'
+		$cm_psd1 = (Get-ItemProperty -Path $cm_psd1_path -Name $cm_psd1_item).$($cm_psd1_item) + '\bin\ConfigurationManager.psd1'
+
+		# retrieve the site code
+		$cm_site_path = 'HKLM:\SOFTWARE\Microsoft\SMS\Identification'
+		$cm_site_item = 'Site Code'
+		$cm_site = (Get-ItemProperty -Path $cm_site_path -Name $cm_site_item).$($cm_site_item)
+
+		# connect to SCCM
+		Write-Host ("$env_name,$sccm_srv,$dev_name - importing SCCM module")
+		Import-Module $cm_psd1
+		Write-Host ("$env_name,$sccm_srv,$dev_name - setting location to site drive")
+		Set-Location ($cm_site + ':\')
+
+		# build strings for WMI query
+		$cm_space = 'Root\SMS\Site_' + $cm_site
+		$cm_class = 'SMS_R_System'
+
+		# empty variables
+		$dev_found = $null
+		$dev_resid = $null
+
+		# check for device by mac address via WMI call
+		If ($dev_hwid) {
+			Write-Host ("$env_name,$sccm_srv,$dev_name - retrieving device with MAC address: " + $dev_hwid)
+			$dev_found = Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.MacAddresses -eq $dev_hwid }
+			If ($dev_found.Count -gt 1) {
+				Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: multiple devices found with the same MAC address")
+				Write-Host ("$env_name,$sccm_srv,$dev_name - ...remove extra devices before continuing")
+				Break
+			}
+			Else {
+				# declare the device was found in SCCM
+				$dev_resid = $dev_found.ResourceId
+				Write-Host ("$env_name,$sccm_srv,$dev_name - ...found device by MAC address, resource ID: " + $dev_resid)
+			}
+		}
+
+		# check for device by mac address via WMI call
+		If ($null -eq $dev_resid) {
+			Write-Host ("$env_name,$sccm_srv,$dev_name - retrieving device with name: " + $dev_name)
+			$dev_found = Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.Name -eq $dev_name }
+			If ($dev_found.Count -gt 1) {
+				Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: multiple devices found with the same name")
+				Write-Host ("$env_name,$sccm_srv,$dev_name - ...remove extra devices before continuing")
+				Break
+			}
+			Else {
+				# declare the device was found
+				$dev_resid = $dev_found.ResourceId
+				Write-Host ("$env_name,$sccm_srv,$dev_name - ...found device by name, resource ID: " + $dev_resid)
+			}
+		}
+
+		# remove the device
+		If ($dev_resid) {
+			# reset PXE state
+			Write-Host ("$env_name,$sccm_srv,$dev_name - resetting PXE deployment status for VM")
+			Clear-CMPxeDeployment -ResourceId $dev_resid
+			# remove device
+			Write-Host ("$env_name,$sccm_srv,$dev_name - removing device")
+			Remove-CMDevice -ResourceId $dev_resid -Force
+		}
+		Else {
+			# declare device not found
+			Write-Host ("$env_name,$sccm_srv,$dev_name - ...device not found")
+		}
+	}
+}
+
 # create global objects
 $env_comp_name = $env:computername.ToLower()
 
