@@ -183,15 +183,17 @@ Function Export-FilesWithPSDirect {
 	# evaluate parameters
 	switch ($true) {
 		$Clear {
+			# remove configuration file
 			Try {
 				Remove-Item -Path $Json -Force
-				Write-Output "`nClearing configuration file: '$Json'"
+				Write-Output "`nCleared configuration file: '$Json'"
 			}
 			Catch {
 				Write-Output "`nERROR: could not clear configuration file: '$Json'"
 			}
 		}
 		$Remove {
+			# remove matching entries from object
 			Try {
 				$json_data = $json_data | Where-Object {
 					$_.VMName -ne $VMName
@@ -308,7 +310,7 @@ Function Import-FilesWithPSDirect {
 			If (Test-Path -Path $Json) {
 				Try {
 					Remove-Item -Path $Json -Force
-					Write-Output "`nClearing configuration file: '$Json'"
+					Write-Output "`nCleared configuration file: '$Json'"
 				}
 				Catch {
 					Write-Output "`nERROR: could not clear configuration file: '$Json'"

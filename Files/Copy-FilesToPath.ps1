@@ -42,7 +42,7 @@ Function Copy-FilesFromSourceToTarget {
 	$Target = $Target.TrimEnd('\')
 
 	# verify source and target
-	If (-not (Test-Path -Path $Source -PathType 'Container')) { 
+	If (-not (Test-Path -Path $Source -PathType 'Container')) {
 		Write-Output "Could not find folder '$Source' on host"; Return
 	}
 	ElseIf (-not (Test-Path -Path $Target -PathType 'Container') -and $SkipCreateTarget) {
@@ -188,7 +188,7 @@ If (-not (Test-Path -Path $Json)) {
 			Return
 		}
 	}
-	If ($Clear -or $Remove) {
+	If ($Clear -or $Remove -or $Copy) {
 		Write-Output "`nERROR: could not find configuration file: '$Json'"
 		Return
 	}
@@ -201,10 +201,11 @@ $json_data += Get-Content -Path $Json | ConvertFrom-Json
 # evaluate parameters
 switch ($true) {
 	$Clear {
+		# remove configuration file
 		If (Test-Path -Path $Json) {
 			Try {
 				Remove-Item -Path $Json -Force
-				Write-Output "`nClearing configuration file: '$Json'"
+				Write-Output "`nCleared configuration file: '$Json'"
 			}
 			Catch {
 				Write-Output "`nERROR: could not clear configuration file: '$Json'"
@@ -214,12 +215,10 @@ switch ($true) {
 	$Remove {
 		# remove matching entries from object
 		Try {
-			# remove matching entries from object
 			$json_data = $json_data | Where-Object {
 				$_.Source -ne $Source
 			}
-			$json_data | ConvertTo-Json | Set-Content -Path $json_path
-			# declare changes then show current state
+			$json_data | ConvertTo-Json | Set-Content -Path $Json
 			Write-Output "`nRemoved '$Source' from configuration file: '$Json'"
 			$json_data | Format-Table
 		}
@@ -228,7 +227,6 @@ switch ($true) {
 		}
 	}
 	$Add {
-
 		# create custom object from parameters then add to object
 		Try {
 			$json_data += [pscustomobject]@{
@@ -271,7 +269,7 @@ switch ($true) {
 						}
 						Catch {
 							Write-Output "`nERROR: could not retrieve cluster nodes from local host"
-							Continue :json_datum 
+							Continue :json_datum
 						}
 						ForEach ($cluster_node in $cluster_nodes) {
 							Invoke-Command -ComputerName $cluster_node -ScriptBlock ${function:Copy-FilesFromSourceToTarget} -ArgumentList $json_datum.Source, $json_datum.Target, $json_datum.Purge, $json_datum.CheckHash, $json_datum.SkipCreateTarget
