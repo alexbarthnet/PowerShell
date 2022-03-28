@@ -6,7 +6,7 @@ Function Write-LogToMultiple {
 		[Parameter()]
 		[string]$LogSubject,
 		[Parameter()]
-		[string]$LogFunction,
+		[string]$LogFunction = [string]$(Get-PSCallStack)[2],
 		[Parameter()]
 		[string]$LogLevel = 'information',
 		[Parameter()]
@@ -200,14 +200,18 @@ Function Remove-LogToMultiple {
 	$log_path = Join-Path -Path $LogsPath -ChildPath $log_base
 
 	# start log file
-	Try {
-		Start-LogToMultiple -ScriptPath $ScriptPath
+	If ($null -eq $global:LogToMultiple) {
+		Try {
+			Start-LogToMultiple -ScriptPath $ScriptPath
+		}
+		Catch {
+			Write-Host 'ERROR: could not start logging'
+			Exit $LASTERRORCODE
+		}
 	}
-	Catch {
-		Write-Host 'ERROR: could not start logging'
-		Exit $LASTERRORCODE
+	Else {
+		Write-LogToMultiple -LogFunction 'Remove-LogToMultiple' -LogText "Appending open log file: $($LogToMultiple.Logfile)"
 	}
-
 
 	# verify log directory
 	If (Test-Path -Path $log_path) {
