@@ -33,7 +33,7 @@ Function Write-LogToMultiple {
 	If ($global:LogToMultiple.Started) {
 		If ([string]::IsNullOrEmpty($EventLog)) { $EventLog = $global:LogToMultiple.LogEvent }
 		If ([string]::IsNullOrEmpty($EventSource)) { $EventSource = $global:LogToMultiple.LogSource }
-		If ([string]::IsNullOrEmpty($LogFunction)) { $LogEncoding = $global:LogToMultiple.LogSource }
+		If ([string]::IsNullOrEmpty($LogFunction)) { $LogFunction = $global:LogToMultiple.LogSource }
 		If ([string]::IsNullOrEmpty($LogEncoding)) { $LogEncoding = $global:LogToMultiple.LogEncoding }
 		If ([string]::IsNullOrEmpty($LogFile)) { $LogFile = $global:LogToMultiple.LogFile }
 		If ([string]::IsNullOrEmpty($LogHost)) { $LogHost = $global:LogToMultiple.LogHost }
