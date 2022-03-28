@@ -119,7 +119,7 @@ Function Start-LogToMultiple {
 			$log_headers = 'Time', 'Host', 'User', 'Level', 'Function', 'Subject', 'Message' -join ','
 			$log_headers | Out-File -Force -Append -Encoding $FileEncoding -FilePath $log_file
 			# report start to screen and new log file
-			Write-LogToMultiple -LogFile $log_file -LogFunction 'Start-LogToMultiple' -LogText 'script-start-newfile' -LogSubject
+			Write-LogToMultiple -LogFile $log_file -LogFunction 'Start-LogToMultiple' -LogText 'script-start-newfile'
 		}
 		Catch {
 			# report error to screen
