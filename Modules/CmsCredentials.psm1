@@ -209,10 +209,11 @@ Function Protect-CmsCredentialSecret {
 	$cms_cert = $null
 	$cms_make = $false
 	$cms_date = Get-Date -Format FileDateTimeUniversal
-
-	# verify cms folder
 	$cms_root = [System.Environment]::GetFolderPath('CommonApplicationData')
 	$cms_path = Join-Path -Path $cms_root -ChildPath ($Prefix, $Hostname -join '_')
+
+	# verify cms folder
+	Write-Host "Checking CMS directory: $cms_path"
 	If (!(Test-Path -Path $cms_path)) { New-Item -ItemType Directory -Path $cms_path | Out-Null }
 
 	# check if a new certificate should be made regardless of current certs
@@ -594,7 +595,7 @@ Function Protect-CmsCredentials {
 	If ($CmsComputers.Count -gt 0) {
 		ForEach ($CmsComputer in $CmsComputers) {
 			Try {
-				Invoke-Command -ComputerName $CmsComputer -ScriptBlock ${function:Protect-CmsCredentialSecret} -ArgumentList $Target, $cms_cred, $Prefix, $cms_template_text, $Reset
+				Invoke-Command -ComputerName $CmsComputer -ScriptBlock ${function:Protect-CmsCredentialSecret} -ArgumentList $Target, $cms_cred, $cms_template_text, $Prefix, $Reset
 			}
 			Catch {
 				Write-Host "ERROR: could not protect credentials on '$CmsComputer'"
