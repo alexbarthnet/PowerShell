@@ -200,9 +200,9 @@ Function Protect-CmsCredentialSecret {
 		[Parameter(Position = 3)]
 		[string]$Prefix = 'cms',
 		[Parameter(Position = 4)]
-		[string]$Hostname = [System.Environment]::MachineName,
+		[bool]$Reset,
 		[Parameter(Position = 5)]
-		[bool]$Reset
+		[string]$Hostname = [System.Environment]::MachineName
 	)
 
 	# define required objects
