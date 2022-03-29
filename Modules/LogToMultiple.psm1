@@ -6,7 +6,7 @@ Function Write-LogToMultiple {
 		[Parameter()]
 		[string]$LogSubject,
 		[Parameter()]
-		[string]$LogFunction = [string]$(Get-PSCallStack)[2],
+		[string]$LogFunction = ((Get-PSCallStack)[0].Command),
 		[Parameter()]
 		[string]$LogLevel = 'information',
 		[Parameter()]
@@ -102,11 +102,11 @@ Function Start-LogToMultiple {
 			# verify existing log file
 			$null = Get-Item -Path $log_file
 			# report start to screen and existing log file
-			Write-LogToMultiple -LogFile $log_file -LogFunction 'Start-LogToMultiple' -LogText 'script-start-append'
+			Write-LogToMultiple -LogFile $log_file -LogText 'script-start-append'
 		}
 		Catch {
 			# report error to screen
-			Write-LogToMultiple -LogLevel 'error' -LogFunction 'Start-LogToMultiple' -LogText 'script-start-append-ERROR'
+			Write-LogToMultiple -LogLevel 'error' -LogText 'script-start-append-ERROR'
 			# return error to caller
 			Return $_
 		}
@@ -119,11 +119,11 @@ Function Start-LogToMultiple {
 			$log_headers = 'Time', 'Host', 'User', 'Level', 'Function', 'Subject', 'Message' -join ','
 			$log_headers | Out-File -Force -Append -Encoding $FileEncoding -FilePath $log_file
 			# report start to screen and new log file
-			Write-LogToMultiple -LogFile $log_file -LogFunction 'Start-LogToMultiple' -LogText 'script-start-newfile'
+			Write-LogToMultiple -LogFile $log_file -LogText 'script-start-newfile'
 		}
 		Catch {
 			# report error to screen
-			Write-LogToMultiple -LogLevel 'error' -LogFunction 'Start-LogToMultiple' -LogText 'script-start-newfile-ERROR'
+			Write-LogToMultiple -LogLevel 'error' -LogText 'script-start-newfile-ERROR'
 			# return error to caller
 			Return $_
 		}
@@ -210,15 +210,15 @@ Function Remove-LogToMultiple {
 		}
 	}
 	Else {
-		Write-LogToMultiple -LogFunction 'Remove-LogToMultiple' -LogText "Appending open log file: $($LogToMultiple.Logfile)"
+		Write-LogToMultiple -LogText "Appending open log file: $($LogToMultiple.Logfile)"
 	}
 
 	# verify log directory
 	If (Test-Path -Path $log_path) {
-		Write-LogToMultiple -LogFunction 'Remove-LogToMultiple' -LogText "Found log folder: $log_path"
+		Write-LogToMultiple -LogText "Found log folder: $log_path"
 	}
 	Else {
-		Write-LogToMultiple -LogFunction 'Remove-LogToMultiple' -LogText "ERROR: could not locate log folder: $log_path"
+		Write-LogToMultiple -LogText "ERROR: could not locate log folder: $log_path"
 		Return
 	}
 
@@ -231,17 +231,17 @@ Function Remove-LogToMultiple {
 		'Months' { $log_date_time = (Get-Date).AddMonths(-1 * $OlderThanUnits) }
 		'Years' { $log_date_time = (Get-Date).AddYears(-1 * $OlderThanUnits) }
 	}
-	Write-LogToMultiple -LogFunction 'Remove-LogToMultiple' -LogText "Removing files older than: $($log_date_time | Get-Date -Format FileDateTime)"
+	Write-LogToMultiple -LogText "Removing files older than: $($log_date_time | Get-Date -Format FileDateTime)"
 
 	# get files from date
 	$log_files_old = Get-ChildItem -Path $log_path | Where-Object { $_.LastWriteTime -lt $log_date_time }
 	ForEach ($log_file in $log_files_old) {
 		Try {
 			Remove-Item -Path $log_file.FullName -Force
-			Write-LogToMultiple -LogFunction 'Remove-LogToMultiple' -LogText "Removing log file: $($log_file.FullName)"
+			Write-LogToMultiple -LogText "Removing log file: $($log_file.FullName)"
 		}
 		Catch {
-			Write-LogToMultiple -LogFunction 'Remove-LogToMultiple' -LogText "ERROR: removing log file: $($log_file.FullName)" -LogLevel Error
+			Write-LogToMultiple -LogText "ERROR: removing log file: $($log_file.FullName)" -LogLevel Error
 		}
 	}
 }
