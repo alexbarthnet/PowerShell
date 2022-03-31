@@ -43,17 +43,17 @@ Function Copy-FilesFromSourceToTarget {
 
 	# verify source and target
 	If (-not (Test-Path -Path $Source -PathType 'Container')) {
-		Write-Output "Could not find folder '$Source' on host"; Return
+		Write-Output "Could not find source folder '$Source' on host"; Return
 	}
 	ElseIf (-not (Test-Path -Path $Target -PathType 'Container') -and $SkipCreateTarget) {
-		Write-Output "Could not find folder '$Target' on host"; Return
+		Write-Output "Could not find target folder '$Target' on host"; Return
 	}
 	ElseIf (-not (Test-Path -Path $Target -PathType 'Container') -and -not $SkipCreateTarget) {
 		Try {
 			$null = New-Item -ItemType 'Directory' -Path $Target
 		}
 		Catch {
-			Write-Output "Could not create folder '$Target' on host"; Return
+			Write-Output "Could not create target folder '$Target' on host"; Return
 		}
 	}
 	Else {
@@ -184,12 +184,14 @@ If (-not (Test-Path -Path $Json)) {
 			$null = New-Item -ItemType 'File' -Path $Json
 		}
 		Catch {
-			Write-Output "`nERROR: could not create configuration file: '$Json'"
+			Write-Output "`nERROR: could not create configuration file:"
+			Write-Output "$Json`n"
 			Return
 		}
 	}
-	If ($Clear -or $Remove -or $Copy) {
-		Write-Output "`nERROR: could not find configuration file: '$Json'"
+	Else {
+		Write-Output "`nERROR: could not find configuration file:"
+		Write-Output "$Json`n"
 		Return
 	}
 }
@@ -218,8 +220,14 @@ switch ($true) {
 			$json_data = $json_data | Where-Object {
 				$_.Source -ne $Source
 			}
-			$json_data | ConvertTo-Json | Set-Content -Path $Json
-			Write-Output "`nRemoved '$Source' from configuration file: '$Json'"
+			If ($null -eq $json_data) {
+				[string]::Empty | Set-Content -Path $Json
+				Write-Output "`nRemoved '$Source' from configuration file: '$Json'"
+			}
+			Else {
+				$json_data | ConvertTo-Json | Set-Content -Path $Json
+				Write-Output "`nRemoved '$Source' from configuration file: '$Json'"
+			}
 			$json_data | Format-Table
 		}
 		Catch {
