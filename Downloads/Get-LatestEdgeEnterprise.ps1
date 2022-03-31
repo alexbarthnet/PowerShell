@@ -1,9 +1,9 @@
 [CmdletBinding()]
 Param (
-    [Parameter(Position = 0)][ValidateScript({Test-Path -Path $_})]
-    [string]$Destination = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path,
-    [Parameter(Position = 1)]
-    [switch]$Force
+	[Parameter(Position = 0)][ValidateScript({Test-Path -Path $_})]
+	[string]$Destination = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path,
+	[Parameter(Position = 1)]
+	[switch]$Force
 )
 
 # get JSON
@@ -23,32 +23,32 @@ $edge_pol_path = ($edge_json | Where-Object {$_.Product -eq "Policy"} | Select-O
 
 # do we have edge already and, if so, is it the same as current?
 If (Test-Path $edge_msi_file) {
-    If ($edge_msi_size -eq (Get-ItemProperty $edge_msi_file).Length -and -not $Force) {
-        Write-Host "Edge Enterprise X64 - skipping download!"
-    }
-    Else {
-        $edge_msi_down = $true
-    }
+	If ($edge_msi_size -eq (Get-ItemProperty $edge_msi_file).Length -and -not $Force) {
+		Write-Host "Edge Enterprise X64 - skipping download!"
+	}
+	Else {
+		$edge_msi_down = $true
+	}
 } 
 
 # do we have policy already and, if so, is it the same as current?
 If (Test-Path $edge_pol_file) {
-    If ($edge_pol_size -eq (Get-ItemProperty $edge_pol_file).Length -and -not $Force) {
-        Write-Host "Edge Template Files - skipping download!"
-    }
-    Else {
-        $edge_pol_down = $true
-    }
+	If ($edge_pol_size -eq (Get-ItemProperty $edge_pol_file).Length -and -not $Force) {
+		Write-Host "Edge Template Files - skipping download!"
+	}
+	Else {
+		$edge_pol_down = $true
+	}
 }
 
 # if we should get a new edge, get it!
 If ($Force -or $edge_msi_down) {
-    Write-Host "Edge Enterprise X64 - downloading!"
-    Invoke-WebRequest -Uri $edge_msi_path -OutFile $edge_msi_file
+	Write-Host "Edge Enterprise X64 - downloading!"
+	Invoke-WebRequest -Uri $edge_msi_path -OutFile $edge_msi_file
 }
 
 # if we should get a new policy, get it!
 If ($Force -or $edge_pol_down) {
-    Write-Host "Edge Template Files - downloading!"
-    Invoke-WebRequest -Uri $edge_pol_path -OutFile $edge_pol_file
+	Write-Host "Edge Template Files - downloading!"
+	Invoke-WebRequest -Uri $edge_pol_path -OutFile $edge_pol_file
 }
