@@ -199,6 +199,10 @@ Function Remove-LogToMultiple {
 	# build log path and file
 	$log_path = Join-Path -Path $LogsPath -ChildPath $log_base
 
+	# build counters for removed files
+	$log_removed_count = 0
+	$log_removed_error = 0
+
 	# start log file
 	If ($null -eq $global:LogToMultiple) {
 		Try {
@@ -210,7 +214,7 @@ Function Remove-LogToMultiple {
 		}
 	}
 	Else {
-		Write-LogToMultiple -LogText "Appending open log file: $($LogToMultiple.Logfile)"
+		Write-LogToMultiple -LogText "Appending open log file: $($global:LogToMultiple.Logfile)"
 	}
 
 	# verify log directory
@@ -231,18 +235,24 @@ Function Remove-LogToMultiple {
 		'Months' { $log_date_time = (Get-Date).AddMonths(-1 * $OlderThanUnits) }
 		'Years' { $log_date_time = (Get-Date).AddYears(-1 * $OlderThanUnits) }
 	}
-	Write-LogToMultiple -LogText "Removing files older than: $($log_date_time | Get-Date -Format FileDateTime)"
+	Write-LogToMultiple -LogText "Checking for files older than: $($log_date_time | Get-Date -Format FileDateTime)"
 
 	# get files from date
 	$log_files_old = Get-ChildItem -Path $log_path | Where-Object { $_.LastWriteTime -lt $log_date_time }
 	ForEach ($log_file in $log_files_old) {
 		Try {
 			Remove-Item -Path $log_file.FullName -Force
+			$log_removed_count++
 			Write-LogToMultiple -LogText "Removing log file: $($log_file.FullName)"
 		}
 		Catch {
+			$log_removed_error++
 			Write-LogToMultiple -LogText "ERROR: removing log file: $($log_file.FullName)" -LogLevel Error
 		}
+	}
+	Write-LogToMultiple -LogText "Removed '$log_removed_count' file(s)"
+	If ($log_removed_error -gt 0) {
+		Write-LogToMultiple -LogText "Could not remove '$log_removed_error' file(s)"
 	}
 }
 
