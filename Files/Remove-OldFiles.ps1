@@ -121,8 +121,14 @@ switch ($true) {
 			$json_data = $json_data | Where-Object {
 				$_.Path -ne $Path
 			}
-			$json_data | ConvertTo-Json | Set-Content -Path $Json
-			Write-Output "`nRemoved '$Path' from configuration file: '$Json'"
+			If ($null -eq $json_data) {
+				[string]::Empty | Set-Content -Path $Json
+				Write-Output "`nRemoved '$Path' from configuration file: '$Json'"
+			}
+			Else {
+				$json_data | ConvertTo-Json | Set-Content -Path $Json
+				Write-Output "`nRemoved '$Path' from configuration file: '$Json'"
+			}
 			$json_data | Select-Object Days, Path, Updated
 		}
 		Catch {
@@ -148,10 +154,16 @@ switch ($true) {
 	{ $Run -or $Test } {
 		Try {
 			# define transcript file from script path and start transcript
-			Start-Transcript -Path $PSCommandPath.Replace('.ps1', '.txt') -Force
+			Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.txt') -Force
 
-			# start logging
-			Start-LogToMultiple -ScriptPath $PSCommandPath
+			# start log file
+			Try {
+				Start-LogToMultiple -ScriptPath $PSCommandPath
+			}
+			Catch {
+				Write-Host 'ERROR: could not start logging'
+				Return $_
+			}
 
 			# check entry count in configuration file
 			If ($json_data.Count -eq 0) {
@@ -167,6 +179,15 @@ switch ($true) {
 				Else {
 					Remove-ItemsFromPathByDays -Path $json_datum.Path -Days $json_datum.Days
 				}
+			}
+
+			# start log cleanup
+			Try {
+				Remove-LogToMultiple -ScriptPath $PSCommandPath
+			}
+			Catch {
+				Write-LogToMultiple -LogText 'Could not cleanup logs' -LogLevel 'error'
+				Return $_
 			}
 		}
 		Finally {
