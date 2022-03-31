@@ -148,15 +148,27 @@ $vm_list | ForEach-Object {
 		$vm_path = $HostPath
 	}	
 
-	# check if host is valid
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - checking host...")
-	Try {
-		$null = Test-WSMan -ComputerName $vm_host -Authentication 'Default'
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...found host")
-	}
-	Catch {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not connect to host")
-		Return
+	# check host
+	switch ($vm_host){
+		'cloud' {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - WARNING: VM is in the cloud, skipping...")
+			Return
+		}
+		$null {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: host not defined for VM")
+			Return
+		}
+		Default {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - checking host...")
+			Try {
+				$null = Test-WSMan -ComputerName $vm_host -Authentication 'Default'
+				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...found host")
+			}
+			Catch {
+				Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not connect to host")
+				Return
+			}
+		}
 	}
 
 	# check if host is clustered

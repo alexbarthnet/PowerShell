@@ -709,20 +709,25 @@ ForEach ($VmParams in $vm_list) {
 	If ($HostPath) { $vm_path = $HostPath }
 
 	# check host
-	If ($vm_host -match 'cloud') {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - VM is in the cloud, skipping: host check, VM build, DHCP")
-		$vm_in_the_cloud = $true
-	}
-	# check if host is valid 
-	Else {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - checking host...")
-		Try {
-			$null = Test-WSMan -ComputerName $vm_host -Authentication 'Default'
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...found host")
+	switch ($vm_host){
+		'cloud' {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - VM is in the cloud, skipping: VM build and DHCP configuration")
+			$vm_in_the_cloud = $true	
 		}
-		Catch {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not connect to host")
+		$null {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: host not defined for VM")
 			Return
+		}
+		Default {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - checking host...")
+			Try {
+				$null = Test-WSMan -ComputerName $vm_host -Authentication 'Default'
+				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...found host")
+			}
+			Catch {
+				Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not connect to host")
+				Return
+			}
 		}
 	}
 
