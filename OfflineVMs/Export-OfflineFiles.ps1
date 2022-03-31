@@ -22,7 +22,7 @@ Param(
 	[string]$Target,
 	[Parameter(ParameterSetName = 'Add')]
 	[switch]$Purge,
-	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
+	[Parameter()]
 	[string]$Json
 )
 
@@ -92,41 +92,63 @@ Function Export-OfflineFilesFromVM {
 	}
 }
 
-# define configuration file from script path then verify path
-If ([string]::IsNullOrEmpty($Json)) {
-	$json_path = $PSCommandPath.Replace('.ps1', '.json')	
+# verify JSON file
+If (-not (Test-Path -Path $Json)) {
+	If ($Add) {
+		Try {
+			$null = New-Item -ItemType 'File' -Path $Json
+		}
+		Catch {
+			Write-Output "`nERROR: could not create configuration file:"
+			Write-Output "$Json`n"
+			Return
+		}
+	}
+	Else {
+		Write-Output "`nERROR: could not find configuration file:"
+		Write-Output "$Json`n"
+		Return
+	}
 }
-Else {
-	$json_path = $Json
-}
-$json_test = Test-Path -Path $json_path
 
-# clear required objects then check file
+# import JSON data
 $json_data = @()
-If ($json_test) {
-	# retrieve JSON file name
-	$json_name = (Get-Item -Path $json_path).Name
-	# create object from JSON file
-	$json_data += Get-Content -Path $json_path | ConvertFrom-Json
-}
-Else {
-	# define expected JSON file name
-	$json_name = Split-Path -Path $json_path -Leaf
-}
+$json_data += Get-Content -Path $Json | ConvertFrom-Json
 
 # evaluate parameters
 switch ($true) {
 	$Clear {
-		Write-Output "`nClearing '$json_name'`n"
-		If ($json_test) { Remove-Item -Path $json_path -Force }
+		# remove configuration file
+		If (Test-Path -Path $Json) {
+			Write-Warning -Message "Continuing will remove the configuration file '$Json'"
+			Try {
+				Remove-Item -Path $Json -Force
+				Write-Output "`nCleared configuration file: '$Json'"
+			}
+			Catch {
+				Write-Output "`nERROR: could not clear configuration file: '$Json'"
+			}
+		}
 	}
 	$Remove {
 		# remove matching entries from object
-		$json_data = $json_data | Where-Object { $_.VMName -ne $VMName }
-		$json_data | ConvertTo-Json | Set-Content -Path $json_path
-		# declare changes then show current state
-		Write-Output "`nUpdated '$json_name' to remove '$VMName':"
-		$json_data | Select-Object VMName, Source, Target, Purge
+		Try {
+			$json_data = $json_data | Where-Object {
+				$_.VMName -ne $VMName
+			}
+			If ($null -eq $json_data) {
+				[string]::Empty | Set-Content -Path $Json
+				Write-Output "`nRemoved '$VMName' from configuration file: '$Json'"
+			}
+			Else {
+				$json_data | ConvertTo-Json | Set-Content -Path $Json
+				Write-Output "`nRemoved '$VMName' from configuration file: '$Json'"
+			}
+			$json_data | Select-Object VMName, Source, Target, Purge
+		}
+		Catch {
+			Write-Output "`nERROR: could not update configuration file: '$Json'"
+		}
 	}
 	$Add {
 		# create custom object from parameters then add to object
@@ -136,26 +158,25 @@ switch ($true) {
 			Source = $Source
 			Target = $Target
 		}
-		$json_data | ConvertTo-Json | Set-Content -Path $json_path
-		# declare changes then show current state
-		Write-Output "`nUpdated '$json_name' to add '$VMName':"
+		$json_data | ConvertTo-Json | Set-Content -Path $Json
+		Write-Output "`nAdded '$VMName' to configuration file: '$Json'"
 		$json_data | Select-Object VMName, Source, Target, Purge
 	}
 	$Export {
 		Try {
 			# define transcript file from script path and start transcript
-			Start-Transcript -Path $PSCommandPath.Replace('.ps1', '.txt') -Force
+			Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.txt') -Force
 
 			# check entry count in configuration file
 			If ($json_data.Count -eq 0) {
-				Write-Host "ERROR: no entries found in configuration file: $json_name"
+				Write-Host "ERROR: no entries found in configuration file: $Json"
 				Return
 			}
 
 			# process configuration file
 			ForEach ($json_datum in $json_data) {
 				If ([string]::IsNullOrEmpty($json_datum.VMName) -or [string]::IsNullOrEmpty($json_datum.Source) -or [string]::IsNullOrEmpty($json_datum.Target)) {
-					Write-Host "ERROR: invalid entry found in configuration file: $json_name"
+					Write-Host "ERROR: invalid entry found in configuration file: $Json"
 				}
 				Else {
 					Export-OfflineFilesFromVM -VMName $json_datum.VMName -Source $json_datum.Source -Target $json_datum.Target -Purge $json_datum.Purge
@@ -168,7 +189,7 @@ switch ($true) {
 		}
 	}
 	Default {
-		Write-Output "`nDisplaying '$json_name':"
+		Write-Output "`nDisplaying '$Json':"
 		$json_data | Select-Object VMName, Source, Target, Purge
 	}
 }
