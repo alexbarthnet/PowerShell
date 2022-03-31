@@ -15,8 +15,8 @@ Param(
 	[string]$Storage,
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[string[]]$Principals,
-	[Parameter()][ValidateScript({ Test-Path -Path $_ })]
-	[string]$Json
+	[Parameter()]
+	[string]$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
 )
 
 Function Set-CertificatePermissions {
@@ -76,7 +76,7 @@ Function Set-CertificatePermissions {
 			ForEach ($cert_ace in $cert_aces) { $cert_acl.AddAccessRule($cert_ace) }
 			Try {
 				$cert_acl | Set-Acl -Path $cert_key
-				Write-Host "  - ACE Updated..."
+				Write-Host '  - ACE Updated...'
 			}
 			Catch {
 				Write-Host "ERROR: '$($Certificate.Subject)' - could not update private key"
@@ -226,7 +226,7 @@ Function Import-ChainCertificates {
 		$cert_subject_cn += $Certificate.Subject.Split(',') | Where-Object { $_ -match 'CN=' }
 
 		# add a final CN if no CNs are in the subject
-		$cert_subject_cn += "_default"
+		$cert_subject_cn += '_default'
 
 		# retrieve subject and NotBefore from input certificate
 		$cert_file_head = $cert_subject_cn[0].Replace('CN=', $null).Trim()
@@ -349,72 +349,98 @@ Function Import-PfxCertificateFromFolder {
 	}
 }
 
-# define configuration file from script path then verify path
-If ([string]::IsNullOrEmpty($Json)) {
-	$json_path = $PSCommandPath.Replace('.ps1', '.json')
+# verify JSON file
+If (-not (Test-Path -Path $Json)) {
+	If ($Add) {
+		Try {
+			$null = New-Item -ItemType 'File' -Path $Json
+		}
+		Catch {
+			Write-Output "`nERROR: could not create configuration file:"
+			Write-Output "$Json`n"
+			Return
+		}
+	}
+	Else {
+		Write-Output "`nERROR: could not find configuration file:"
+		Write-Output "$Json`n"
+		Return
+	}
 }
-Else {
-	$json_path = $Json
-}
-$json_test = Test-Path -Path $json_path
 
-# clear required objects then check file
+# import JSON data
 $json_data = @()
-If ($json_test) {
-	# retrieve JSON file name
-	$json_name = (Get-Item -Path $json_path).Name
-	# create object from JSON file
-	$json_data += Get-Content -Path $json_path | ConvertFrom-Json
-}
-Else {
-	# define expected JSON file name
-	$json_name = Split-Path -Path $json_path -Leaf
-}
+$json_data += Get-Content -Path $Json | ConvertFrom-Json
 
+# evaluate parameters
 switch ($true) {
 	$Clear {
-		Write-Output "Clearing '$json_name'"
-		If ($json_test) { Remove-Item -Path $json_path -Force }
+		# remove configuration file
+		If (Test-Path -Path $Json) {
+			Try {
+				Remove-Item -Path $Json -Force
+				Write-Output "`nCleared configuration file: '$Json'"
+			}
+			Catch {
+				Write-Output "`nERROR: could not clear configuration file: '$Json'"
+			}
+		}
 	}
 	$Remove {
 		# remove matching entries from object
-		$json_data = $json_data | Where-Object { $_.Subject -ne $Subject }
-		$json_data | ConvertTo-Json | Set-Content -Path $json_path
-		# declare changes then show current state
-		Write-Output "Updating '$json_name' to remove '$Subject'"
-		$json_data | Select-Object Subject, Storage, Principals, Updated | Format-Table
+		Try {
+			$json_data = $json_data | Where-Object {
+				$_.Subject -ne $Subject
+			}
+			If ($null -eq $json_data) {
+				[string]::Empty | Set-Content -Path $Json
+				Write-Output "`nRemoved '$Subject' from configuration file: '$Json'"
+			}
+			Else {
+				$json_data | ConvertTo-Json | Set-Content -Path $Json
+				Write-Output "`nRemoved '$Subject' from configuration file: '$Json'"
+			}
+			$json_data | Select-Object Subject, Storage, Principals, Updated
+		}
+		Catch {
+			Write-Output "`nERROR: could not update configuration file: '$Json'"
+		}
 	}
 	$Add {
 		# create custom object from parameters then add to object
-		$json_data += [pscustomobject]@{
-			Subject    = [string]$Subject
-			Storage    = [string]$Storage
-			Principals = [string[]]$Principals
-			Updated    = (Get-Date -Format FileDateTimeUniversal)
+		Try {
+			$json_data += [pscustomobject]@{
+				Subject    = [string]$Subject 
+				Storage    = [string]$Storage
+				Principals = [string[]]$Principals
+				Updated    = (Get-Date -Format FileDateTimeUniversal)
+			}
+			$json_data | ConvertTo-Json | Set-Content -Path $Json
+			Write-Output "`nAdded '$Subject' to configuration file: '$Json'"
+			$json_data | Select-Object Subject, Storage, Principals, Updated
 		}
-		$json_data | ConvertTo-Json | Set-Content -Path $json_path
-		# declare changes then show current state
-		Write-Output "Updating '$json_name' to add '$Subject'"
-		$json_data | Select-Object Subject, Storage, Principals, Updated | Format-Table
+		Catch {
+			Write-Output "`nERROR: could not update configuration file: '$Json'"
+		}
 	}
 	$Import {
 		Try {
 			# define transcript file from script path and start transcript
-			Start-Transcript -Path $PSCommandPath.Replace('.ps1', '.txt') -Force
+			Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.txt') -Force
 
 			# declare start
-			Write-Host "`nImporting certificates from '$json_name'"
+			Write-Host "`nImporting certificates from '$Json'"
 
 			# check entry count in configuration file
 			If ($json_data.Count -eq 0) {
-				Write-Host "ERROR: no entries found in configuration file: $json_name"
+				Write-Host "ERROR: no entries found in configuration file: $Json"
 				Return
 			}
 
 			# process configuration file
 			ForEach ($json_datum in $json_data) {
 				If ([string]::IsNullOrEmpty($json_datum.Subject) -or [string]::IsNullOrEmpty($json_datum.Storage)) {
-					Write-Host "ERROR: invalid entry found in configuration file: $json_name"
+					Write-Host "ERROR: invalid entry found in configuration file: $Json"
 				}
 				Else {
 					Write-Host " - subject    : '$($json_datum.Subject)'"
@@ -425,13 +451,13 @@ switch ($true) {
 			}
 		}
 		Finally {
-			# stop transscript
+			# stop transcript
 			Write-Host ([string]::Empty)
 			Stop-Transcript
 		}
 	}
 	Default {
-		Write-Output "Displaying '$json_name'"
+		Write-Output "Displaying '$Json'"
 		$json_data | Select-Object Subject, Storage, Principals, Updated | Format-Table
 	}
 }
