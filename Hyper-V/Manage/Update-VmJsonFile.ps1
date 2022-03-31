@@ -38,9 +38,9 @@ Param(
 	[Parameter(ParameterSetName = 'Add')]
 	[string]$NetworkAdapterName = 'Network Adapter',
 	[Parameter(ParameterSetName = 'Add')]
-	[string]$IPAddress,
-	[Parameter(ParameterSetName = 'Add')]
 	[string]$MacAddressPrefix,
+	[Parameter(ParameterSetName = 'Add')]
+	[string]$IPAddress,
 	[Parameter(ParameterSetName = 'Add')]
 	[string]$DhcpServer,
 	[Parameter(ParameterSetName = 'Add')]
@@ -58,7 +58,7 @@ Param(
 	[Parameter(ParameterSetName = 'Add')]
 	[string]$MaintenanceCollection,
 	[Parameter(ParameterSetName = 'Add')]
-	[string]$ClusterPriority = '2000',
+	[string]$ClusterPriority,
 	[Parameter()]
 	[string]$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
 )
@@ -124,7 +124,7 @@ switch ($true) {
 	$Add {
 		# create custom object from parameters then add to object
 		Try {
-			$json_data += [pscustomobject]@{
+			$json_data += [pscustomobject][ordered]@{
 				VMName                = $VMName
 				VMHost                = $VMHost
 				Path                  = $Path
@@ -140,8 +140,8 @@ switch ($true) {
 				SwitchName            = $SwitchName
 				VLAN                  = $VLAN
 				NetworkAdapterName    = $NetworkAdapterName
-				IPAddress             = $IPAddress
 				MacAddressPrefix      = $MacAddressPrefix
+				IPAddress             = $IPAddress
 				DhcpServer            = $DhcpServer
 				DhcpScope             = $DhcpScope
 				OsdMethod             = $OsdMethod
