@@ -16,7 +16,7 @@ Param(
 	[uint16]$RoundTo = 2
 )
 
-Function Format-FileSize {
+Function Format-Bytes {
 	Param (
 		[int64]$Size
 	)
@@ -131,9 +131,9 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 # declare results
 Write-Host ''
 Write-Host '======================== Results ========================'
-If ($log_disks_base.Count -gt 0) { $log_disks_base | Sort-Object -Property 'PSComputerName', 'Number' | Format-Table 'PSComputerName', 'Number', 'FriendlyName', 'Model', 'FirmwareVersion', 'PartitionStyle', 'PhysicalSectorSize', 'LogicalSectorSize', @{Label = 'Size'; Expression = { Format-FileSize -Size $_.Size }; Alignment = 'Right' }, @{Label = 'AllocatedSize'; Expression = { Format-FileSize -Size $_.AllocatedSize }; Alignment = 'Right' } }
-If ($log_disks_phys.Count -gt 0) { $log_disks_phys | Sort-Object -Property 'PSComputerName', 'DeviceId' | Format-Table 'PSComputerName', 'DeviceId', 'FriendlyName', 'Model', 'FirmwareVersion', 'BusType', @{Label = 'Size'; Expression = { Format-FileSize -Size $_.Size }; Alignment = 'Right' } }
-If ($log_disks_virt.Count -gt 0) { $log_disks_virt | Sort-Object -Property 'PSComputerName', 'FriendlyName' | Format-Table 'PSComputerName', 'FriendlyName', @{Label = 'Size'; Expression = { Format-FileSize -Size $_.Size }; Alignment = 'Right' }, @{Label = 'FootprintOnPool'; Expression = { Format-FileSize -Size $_.FootprintOnPool }; Alignment = 'Right' } }
+If ($log_disks_base.Count -gt 0) { $log_disks_base | Sort-Object -Property 'PSComputerName', 'Number' | Format-Table 'PSComputerName', 'Number', 'FriendlyName', 'Model', 'FirmwareVersion', 'PartitionStyle', 'PhysicalSectorSize', 'LogicalSectorSize', @{Label = 'Size'; Expression = { Format-Bytes -Size $_.Size }; Alignment = 'Right' }, @{Label = 'AllocatedSize'; Expression = { Format-Bytes -Size $_.AllocatedSize }; Alignment = 'Right' } }
+If ($log_disks_phys.Count -gt 0) { $log_disks_phys | Sort-Object -Property 'PSComputerName', 'DeviceId' | Format-Table 'PSComputerName', 'DeviceId', 'FriendlyName', 'Model', 'FirmwareVersion', 'BusType', @{Label = 'Size'; Expression = { Format-Bytes -Size $_.Size }; Alignment = 'Right' } }
+If ($log_disks_virt.Count -gt 0) { $log_disks_virt | Sort-Object -Property 'PSComputerName', 'FriendlyName' | Format-Table 'PSComputerName', 'FriendlyName', @{Label = 'Size'; Expression = { Format-Bytes -Size $_.Size }; Alignment = 'Right' }, @{Label = 'FootprintOnPool'; Expression = { Format-Bytes -Size $_.FootprintOnPool }; Alignment = 'Right' } }
 
 # declare last run time
 Write-Host ''
