@@ -676,7 +676,7 @@ Function New-VmFromParams {
 	}
 
 	# return VM object
-	Return [pscustomobject]@{VM = $vm; MacAddress = $vm_hw_address }
+	Return $vm
 }
 
 # create global objects
