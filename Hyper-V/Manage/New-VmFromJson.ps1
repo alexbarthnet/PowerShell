@@ -7,30 +7,43 @@ Param(
 	[switch]$UseDefaultPathOnHost
 )
 
-Function New-DeviceInSccm {
+Function Format-Bytes {
+	Param (
+		[int64]$Size
+	)
+	Switch ($Size) {
+		{ $_ -ge 1PB } { "$([math]::Round($Size / 1PB,$RoundTo)) PB"; Break }
+		{ $_ -ge 1TB } { "$([math]::Round($Size / 1TB,$RoundTo)) TB"; Break }
+		{ $_ -ge 1GB } { "$([math]::Round($Size / 1GB,$RoundTo)) GB"; Break }
+		{ $_ -ge 1MB } { "$([math]::Round($Size / 1MB,$RoundTo)) MB"; Break }
+		{ $_ -ge 1KB } { "$([math]::Round($Size / 1KB,$RoundTo)) KB"; Break }
+		Default { "$([math]::Round($Size,$RoundTo)) B" }
+	}
+}
+
+Function Add-DeviceToSccm {
 	param (
 		[Parameter()]
 		[object]$VmParams
 	)
 
-	# define required parameters
-	$vm_name = $VmParams.Name
-	$vm_host = $VmParams.Host
+	# define required strings
+	$vm_name = $VmParams.VMName
+	$vm_host = $VmParams.VMHost
+	$vm_switchname = $VmParams.SwitchName
+	$vm_deployment_path = $VmParams.DeploymentPath
+	$vm_deployment_server = $VmParams.DeploymentServer
+	$vm_deployment_domain = $VmParams.DeploymentDomain
+	$vm_deployment_collection = $VmParams.DeploymentCollection
+	$vm_maintenance_collection = $VmParams.MaintenanceCollection
 
-	# define general OSD parameters
-	$vm_osd_server = $VmParams.OsdServer
-	$vm_osd_domain = $VmParams.OsdDomain
-	$vm_osd_path = $VmParams.OsdPath
-
-	# define SCCM parameters
-	$vm_col_deploy = $VmParams.ColDeploy
-	$vm_col_window = $VmParams.ColWindow
-
-	If ($VmParams.Switch -eq 'Remove') {
+	# check switch
+	If ($vm_switchname -eq 'Remove') {
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - Switch is 'Remove', skipping SCCM provisioning...")
 		Return
 	}
 
+	# check host
 	If ($vm_host -eq 'cloud') {
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - creating SCCM device for VM in the cloud")
 	}
@@ -45,18 +58,18 @@ Function New-DeviceInSccm {
 	}
 
 	# connect to SCCM remotely
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - connecting to SCCM: " + $vm_osd_server)
-	Invoke-Command -ComputerName $vm_osd_server -ScriptBlock {
+	Write-Host ("$env_comp_name,$vm_host,$vm_name - connecting to SCCM: " + $vm_deployment_server)
+	Invoke-Command -ComputerName $vm_deployment_server -ScriptBlock {
 		# set local variables
 		$env_name = $using:env_comp_name
-		$sccm_srv = $using:vm_osd_server
+		$sccm_srv = $using:vm_deployment_server
 		$dev_name = $using:vm_name
 		$dev_host = $using:vm_host
 		$dev_hwid = $using:vm_mac_address
-		$dev_domain = $using:vm_osd_domain
-		$dev_oupath = $using:vm_osd_path
-		$cm_col_deploy = $using:vm_col_deploy
-		$cm_col_window = $using:vm_col_window
+		$dev_domain = $using:vm_deployment_domain
+		$dev_oupath = $using:vm_deployment_path
+		$cm_col_deploy = $using:vm_deployment_collection
+		$cm_col_window = $using:vm_maintenance_collection
 
 		# retrieve the psd1 file
 		$cm_psd1_path = 'HKLM:\SOFTWARE\Microsoft\SMS\Setup'
@@ -261,19 +274,15 @@ Function New-DeviceInSccm {
 	}
 }
 
-Function New-DeviceInWds {
+Function Add-DeviceToWds {
 	param (
 		[Parameter(Mandatory)]
 		[object]$VmParams
 	)
 
-	# define required parameters
-	$vm_name = $VmParams.Name
-	$vm_host = $VmParams.Host
-
-	# define general OSD parameters
-	$vm_osd_server = $VmParams.OsdServer
-	$vm_osd_path = $VmParams.OsdPath
+	# define required strings
+	$vm_deployment_server = $VmParams.DeploymentServer
+	$vm_deployment_path = $VmParams.DeploymentPath
 
 	# retrieve BIOS GUID
 	Try {
@@ -285,14 +294,14 @@ Function New-DeviceInWds {
 	}
 
 	# pre-stage VM in WDS
-	If ($vm_osd_server -and $vm_osd_path -and $vm_biosguid) {
-		Invoke-Command -ComputerName $vm_osd_server -ScriptBlock {
+	If ($vm_deployment_server -and $vm_deployment_path -and $vm_biosguid) {
+		Invoke-Command -ComputerName $vm_deployment_server -ScriptBlock {
 			# map objects to session
 			$env_name = $using:env_comp_name
-			$env_host = $using:vm_osd_server
+			$env_host = $using:vm_deployment_server
 			$dev_name = $using:vm_name
 			$dev_guid = $using:vm_biosguid
-			$dev_file = $using:vm_osd_path
+			$dev_file = $using:vm_deployment_path
 
 			# check if AD mode is disabled
 			If ((Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\WDSServer\Providers\WDSDCMGR\Providers\WDSADDC').Disabled) {
@@ -310,45 +319,70 @@ Function New-DeviceInWds {
 	}
 }
 
+Function Add-IsoToVm {
+	param (
+		[Parameter()]
+		[object]$VmParams
+	)
+
+	# define required strings
+	$vm_deployment_path = $VmParams.DeploymentPath
+
+	# get the mac address from the VM NIC
+	$vm = Get-VM -ComputerName $vm_host -Name $vm_name
+
+	# attach scsi controller for ISOs
+	Write-Host ("$env_comp_name,$vm_host,$vm_name - adding SCSI controller for ISO file")
+	$vm_dvd_scsi = Add-VMScsiController -VM $vm -Passthru
+	Write-Host ("$env_comp_name,$vm_host,$vm_name - adding DVD drive for ISO file")
+	$vm_dvd_drive = $vm_dvd_scsi | Add-VMDvdDrive -Passthru
+
+	# attach any additional drives
+	If ($vm_deployment_path) {
+		$vm_host_found_iso = $null
+		$vm_host_found_iso = Invoke-Command -ComputerName $vm_host -ScriptBlock { Test-Path -Path $using:vm_deployment_path }
+		If ($vm_host_found_iso) {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...attaching ISO file: " + $vm_deployment_path)
+			$vm_dvd_drive | Set-VMDvdDrive -Path $vm_deployment_path
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...setting DVD drive as first boot device")
+			$vm | Set-VMFirmware -FirstBootDevice $vm_dvd_drive
+		}
+		Else {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...skipping ISO attach, VM host could not find file: " + $vm_deployment_path)
+		}
+	}
+	Else {
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...skipping ISO attach, no file specified")
+	}
+}
+
 Function New-VmFromParams {
 	param (
 		[Parameter(Mandatory)]
 		[object]$VmParams
 	)
 
-	# define required parameters
-	$vm_name = $VmParams.Name
-	$vm_host = $VmParams.Host
-
-	# define optional objects from JSON - network configuration
-	$vm_cpu = $VmParams.CpuCount
-	$vm_mem = $VmParams.MemoryGB
+	# define required strings
 	$vm_path = $VmParams.Path
-	$vhd_os_gb = $VmParams.OsVhdGB
+	$vm_processor_count = $VmParams.ProcessorCount
 
-	# define optional objects from JSON - network configuration
+	# define required strings for memory
+	$vm_memory_startup_bytes = $VmParams.MemoryStartupBytes
+	$vm_memory_maximum_bytes = $VmParams.MemoryMaximumBytes
+	$vm_memory_minimum_bytes = $VmParams.MemoryMinimumBytes
+
+	# define required strings for storage
+	$vhd_size_bytes = $VmParams.VHDSizeBytes
+	$vhd_data_count = $VmParams.DataVHDCount
+	$vhd_data_size_bytes = $VmParams.DataVHDSizeBytes
+	$vhd_excluded_count = $VmParams.ExcludedVHDCount
+	$vhd_excluded_size_bytes = $VmParams.ExcludedVHDSizeBytes
+
+	# define required strings for networking
 	$vm_vlan = $VmParams.VLAN
-	$vm_switch = $VmParams.Switch
-	$vm_nicname = $VmParams.NicName
-	$vm_mac_prefix = $VmParams.MacPrefix
-
-	# define optional objects from JSON - additional storage
-	$vhd_data_ct = $VmParams.DataVhdCount
-	$vhd_data_gb = $VmParams.DataVhdGB
-	$vhd_excl_ct = $VmParams.ExclVhdCount
-	$vhd_excl_gb = $VmParams.ExclVhdGB
-
-	# define optional objects from JSON - dynamic memory range
-	$vm_mem_max = $VmParams.MemMaxGB
-	$vm_mem_min = $VmParams.MemMinGB
-
-	# create size objects
-	$vm_mem_size = [int64]([decimal]$vm_mem * 1GB)
-	$vm_mem_max_size = [int64]([decimal]$vm_mem_max * 1GB)
-	$vm_mem_min_size = [int64]([decimal]$vm_mem_min * 1GB)
-	$vhd_os_size = [int64]([decimal]$vhd_os_gb * 1GB)
-	$vhd_data_size = [int64]([decimal]$vhd_data_gb * 1GB)
-	$vhd_excl_size = [int64]([decimal]$vhd_excl_gb * 1GB)
+	$vm_switchname = $VmParams.SwitchName
+	$vm_network_adapter_name = $VmParams.NetworkAdapterName
+	$vm_mac_address_prefix = $VmParams.MacAddressPrefix
 
 	# verify path
 	Write-Host ("$env_comp_name,$vm_host,$vm_name - verifying paths...")
@@ -390,29 +424,27 @@ Function New-VmFromParams {
 
 	# define paths for any data VHDs
 	$vhd_data_files = @()
-	If ($vhd_data_ct) {
+	If ($vhd_data_count) {
 		# populate array of data VHDs
-		For ($vhd_addl = 1; $vhd_addl -le $vhd_data_ct; $vhd_addl++) {
+		For ($vhd_addl = 1; $vhd_addl -le $vhd_data_count; $vhd_addl++) {
 			$vhd_data_files += Invoke-Command -ComputerName $vm_host -ScriptBlock { Join-Path -Path $using:vm_path_hd -ChildPath ($using:vm_name + '-data-' + $using:vhd_addl + '.vhdx') }
 		}
 	}
 
 	# define paths for any excluded data VHDs
 	$vhd_excl_files = @()
-	If ($vhd_excl_ct) {
+	If ($vhd_excluded_count) {
 		# define path to excluded VHDs and add to array of paths
 		$vm_path_ex = Invoke-Command -ComputerName $vm_host -ScriptBlock { Join-Path -Path $using:vm_path -ChildPath ('Exclude\' + $using:vm_name) }
 		$vm_path_all += $vm_path_ex
 		# populate array of excluded VHDs
-		For ($vhd_excl = 1; $vhd_excl -le $vhd_excl_ct; $vhd_excl++) {
+		For ($vhd_excl = 1; $vhd_excl -le $vhd_excluded_count; $vhd_excl++) {
 			$vhd_excl_files += Invoke-Command -ComputerName $vm_host -ScriptBlock { Join-Path -Path $using:vm_path_ex -ChildPath ($using:vm_name + '-excl-' + $using:vhd_excl + '.vhdx') }
 		}
 	}
 
 	# check for OS vhdx
 	Write-Host ("$env_comp_name,$vm_host,$vm_name - creating OS disk...")
-	$vhd_size = $null
-	$vhd_size = $vhd_os_size
 	$vhd_os_file | ForEach-Object {
 		$vhd_data = $null
 		$vhd_data = $_
@@ -425,7 +457,7 @@ Function New-VmFromParams {
 		Else {
 			# create the VM hard disk
 			Try {
-				New-VHD -Computer $vm_host -SizeBytes $vhd_size -Path $vhd_data | Out-Null
+				New-VHD -Computer $vm_host -SizeBytes $vhd_size_bytes -Path $vhd_data | Out-Null
 				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...created OS disk: " + $vhd_data)
 			}
 			Catch {
@@ -437,8 +469,6 @@ Function New-VmFromParams {
 
 	# create any additional drives
 	If ($vhd_data_files) { Write-Host ("$env_comp_name,$vm_host,$vm_name - creating data disks...") }
-	$vhd_size = $null
-	$vhd_size = $vhd_data_size
 	$vhd_data_files | ForEach-Object {
 		$vhd_file = $null
 		$vhd_file = $_
@@ -450,7 +480,7 @@ Function New-VmFromParams {
 		}
 		Else {
 			Try {
-				New-VHD -Computer $vm_host -SizeBytes $vhd_size -Path $vhd_file | Out-Null
+				New-VHD -Computer $vm_host -SizeBytes $vhd_data_size_bytes -Path $vhd_file | Out-Null
 				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...created data disk: " + $vhd_file)
 			}
 			Catch {
@@ -462,8 +492,6 @@ Function New-VmFromParams {
 
 	# create any additional drives excluded from dedupe
 	If ($vhd_excl_files) { Write-Host ("$env_comp_name,$vm_host,$vm_name - creating excluded disks...") }
-	$vhd_size = $null
-	$vhd_size = $vhd_excl_size
 	$vhd_excl_files | ForEach-Object {
 		$vhd_file = $null
 		$vhd_file = $_
@@ -475,7 +503,7 @@ Function New-VmFromParams {
 		}
 		Else {
 			Try {
-				New-VHD -Computer $vm_host -SizeBytes $vhd_size -Path $vhd_file | Out-Null
+				New-VHD -Computer $vm_host -SizeBytes $vhd_excluded_size_bytes -Path $vhd_file | Out-Null
 				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...created disk: " + $vhd_file)
 			}
 			Catch {
@@ -486,10 +514,10 @@ Function New-VmFromParams {
 	}
 
 	# create the VM
-	If ($vm_switch -eq 'Remove') {
+	If ($vm_switchname -eq 'Remove') {
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - creating VM not connected to vSwitch")
 		Try {
-			$vm = New-VM -ComputerName $vm_host -Name $vm_name -Generation 2 -MemoryStartupBytes $vm_mem_size -Path $vm_path -VHDPath $vhd_os_file
+			$vm = New-VM -ComputerName $vm_host -Name $vm_name -Generation 2 -MemoryStartupBytes $vm_memory_startup_bytes -Path $vm_path -VHDPath $vhd_os_file
 			$vm_id = $vm.Id
 		}
 		Catch {
@@ -498,9 +526,9 @@ Function New-VmFromParams {
 		}
 	}
 	Else {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - creating VM connected to vSwitch: " + $vm_switch)
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - creating VM connected to vSwitch: " + $vm_switchname)
 		Try {
-			$vm = New-VM -ComputerName $vm_host -Name $vm_name -Generation 2 -MemoryStartupBytes $vm_mem_size -Path $vm_path -VHDPath $vhd_os_file -BootDevice NetworkAdapter -SwitchName $vm_switch
+			$vm = New-VM -ComputerName $vm_host -Name $vm_name -Generation 2 -MemoryStartupBytes $vm_memory_startup_bytes -Path $vm_path -VHDPath $vhd_os_file -BootDevice NetworkAdapter -SwitchName $vm_switchname
 		}
 		Catch {
 			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not create VM")
@@ -509,29 +537,21 @@ Function New-VmFromParams {
 	}
 
 	# configure the CPU
-	If ($null = $vm_cpu) { $vm_cpu = 2 }
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - ...setting CPU count: " + $vm_cpu)
-	$vm | Set-VMProcessor -Count $vm_cpu -ExposeVirtualizationExtensions $true
+	If ($null = $vm_processor_count) { $vm_processor_count = 2 }
+	Write-Host ("$env_comp_name,$vm_host,$vm_name - ...setting CPU count: " + $vm_processor_count)
+	$vm | Set-VMProcessor -Count $vm_processor_count -ExposeVirtualizationExtensions $true
 
 	# configure the memory
-	If ($vm_mem_min -and $vm_mem_max) {
-		# set check objects to false
-		$vm_mem_min_good = $false
-		$vm_mem_max_good = $false
-		# define dynamic memory minimum and maximum values
-		$vm_mem_dmin = 32MB
-		$vm_mem_dmax = 12TB
-		# minimum must be between 32MB and startup memory, inclusive
-		If (($vm_mem_min_size -ge $vm_mem_dmin) -and ($vm_mem_min_size -le $vm_mem_size)) { $vm_mem_min_good = $true }
-		# maximum must be between startup memory and 12TB, inclusive
-		If (($vm_mem_max_size -ge $vm_mem_size) -and ($vm_mem_max_size -le $vm_mem_dmax)) { $vm_mem_max_good = $true }
-		# enable dynamic memory if valid values
-		If ($vm_mem_min_good -and $vm_mem_max_good) {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...enabling dynamic memory (start, min, max): $vm_mem, $vm_mem_min, $vm_mem_max")
-			$vm | Set-VMMemory -DynamicMemoryEnabled $true -StartupBytes $vm_mem_size -MinimumBytes $vm_mem_min_size -MaximumBytes $vm_mem_max_size
+	If ($vm_memory_minimum_bytes -and $vm_memory_maximum_bytes) {
+		# enable dynamic memory if:
+		# - minimum must be between 32MB and startup memory, inclusive
+		# - maximum must be between startup memory and 12TB, inclusive
+		If (($vm_memory_minimum_bytes -ge 32MB) -and ($vm_memory_minimum_bytes -le $vm_memory_startup_bytes) -and ($vm_memory_maximum_bytes -ge $vm_memory_startup_bytes) -and ($vm_memory_maximum_bytes -le 12TB)) {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...enabling dynamic memory (start, min, max): $(Format-Bytes -Size $vm_memory), $(Format-Bytes -Size $vm_memory_minimum_bytes), $(Format-Bytes -Size $vm_memory_maximum_bytes)")
+			$vm | Set-VMMemory -DynamicMemoryEnabled $true -StartupBytes $vm_memory_startup_bytes -MinimumBytes $vm_memory_minimum_bytes -MaximumBytes $vm_memory_maximum_bytes
 		}
 		Else {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...skipping dynamic memory, bad values provided (start, min, max): $vm_mem, $vm_mem_min, $vm_mem_max")
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...skipping dynamic memory, bad values provided (start, min, max): $(Format-Bytes -Size $vm_memory_startup_bytes), $(Format-Bytes -Size $vm_memory_minimum_bytes), $(Format-Bytes -Size $vm_memory_maximum_bytes)")
 		}
 	}
 
@@ -604,16 +624,16 @@ Function New-VmFromParams {
 
 	# check if NIC should be removed
 	Write-Host ("$env_comp_name,$vm_host,$vm_name - configuring networking...")
-	If ($vm_switch -eq 'Remove') {
+	If ($vm_switchname -eq 'Remove') {
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...removing NIC; switch was defined as 'Remove'")
 		$vm_nic = Get-VMNetworkAdapter -VM $vm
 		$vm_nic | Remove-VMNetworkAdapter
 	}
 	Else {
 		# set the name of the NIC
-		If ($vm_nicname) {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...renaming NIC to: " + $vm_nicname)
-			$vm | Rename-VMNetworkAdapter -NewName $vm_nicname
+		If ($vm_network_adapter_name) {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...renaming NIC to: " + $vm_network_adapter_name)
+			$vm | Rename-VMNetworkAdapter -NewName $vm_network_adapter_name
 			$vm | Set-VMNetworkAdapter -DeviceNaming On
 		}
 
@@ -625,12 +645,12 @@ Function New-VmFromParams {
 
 		# set the MAC address
 		$vm_hw_address = $null
-		If (($vm_dhcp_server -and $vm_dhcp_scope) -or $vm_osd_method -eq 'sccm') {
+		If (($vm_dhcp_server -and $vm_dhcp_scope) -or $vm_deployment_method -eq 'sccm') {
 			Write-Host ("$env_comp_name,$vm_host,$vm_name - retriving MAC address for DHCP or OSD...")
-			If ($vm_mac_prefix -and $vm_ip_address) {
+			If ($vm_mac_address_prefix -and $vm_ip_address) {
 				# add logic for checking mac prefix (see https://en.wikipedia.org/wiki/MAC_address)
 				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...creating MAC address from prefix and IP")
-				$vm_hw_address = ($vm_mac_prefix + (($vm_ip_address.Split('.') | ForEach-Object { ([int]$_).ToString('X2') }) -join $null)).ToUpper()
+				$vm_hw_address = ($vm_mac_address_prefix + (($vm_ip_address.Split('.') | ForEach-Object { ([int]$_).ToString('X2') }) -join $null)).ToUpper()
 			}
 			Else {
 				# start the VM to get the mac address assigned
@@ -656,47 +676,47 @@ Function New-VmFromParams {
 	}
 
 	# return VM object
-	Return $vm
+	Return [pscustomobject]@{VM = $vm; MacAddress = $vm_hw_address }
 }
 
 # create global objects
 $env_comp_name = $env:computername.ToLower()
 
-# import VM information
+# verify JSON file
+If (-not (Test-Path -Path $VmJson)) {
+	Write-Output "`nERROR: could not find configuration file:"
+	Write-Output "$VmJson`n"
+	Return
+}
+
+# import and filter JSON data
 $vm_list = @()
 If ($VmName) {
-	# process requested VMs
-	$VmName | ForEach-Object {
-		$vm_temp = $null
-		$vm_temp = $_
-		$vm_list += Get-Content -Path $VmJson | ConvertFrom-Json | Where-Object { $_.Name -eq $vm_temp }
-	}
-	If ($vm_list.Name -notcontains $vm_temp) {
-		Write-Host ("$env_comp_name,$vm_name - VM not found in Json, exiting!")
+	$vm_list += (Get-Content -Path $VmJson | ConvertFrom-Json) | Where-Object { $_.VMHost -and $_.VMName -in $VMName }
+	If ($vm_list.Count -eq 0) {
+		Write-Host ("$env_comp_name - VM(s) not found in Json, exiting!")
 		Return
 	}
 }
 Else {
-	# process all VMs
-	$vm_list = Get-Content -Path $VmJson | ConvertFrom-Json | Where-Object { $_.Name -and $_.Host }
+	$vm_list += (Get-Content -Path $VmJson | ConvertFrom-Json) | Where-Object { $_.VMHost -and $_.VMName }
 }
 
 # process JSON
 ForEach ($VmParams in $vm_list) {
-	# define required objects from JSON
-	$vm_name = $VmParams.Name
-	$vm_host = $VmParams.Host
-	$vm_prio = $VmParams.Priority
+	# define required strings
+	$vm_name = $VmParams.VMName
+	$vm_host = $VmParams.VMHost
+	$vm_prio = $VmParams.ClusterPriority
 
-	# define optional objects from JSON - network configuration
+	# define optional strings for networking
+	$vm_switch_name = $VmParams.SwitchName
 	$vm_dhcp_server = $VmParams.DhcpServer
 	$vm_dhcp_scope = $VmParams.DhcpScope
-	$vm_ip_address = $VmParams.IpAddress
+	$vm_ip_address = $VmParams.IPAddress
 
-	# define general OSD parameters
-	$vm_osd_method = $VmParams.OsdMethod
-	$vm_osd_server = $VmParams.OsdServer
-	$vm_osd_path = $VmParams.OsdPath
+	# define optional strings for deployement
+	$vm_deployment_method = $VmParams.DeploymentMethod
 
 	# clear check objects
 	$vm_on_host = $null
@@ -709,10 +729,10 @@ ForEach ($VmParams in $vm_list) {
 	If ($HostPath) { $vm_path = $HostPath }
 
 	# check host
-	switch ($vm_host){
+	switch ($vm_host) {
 		'cloud' {
 			Write-Host ("$env_comp_name,$vm_host,$vm_name - VM is in the cloud, skipping: VM build and DHCP configuration")
-			$vm_in_the_cloud = $true	
+			$vm_in_the_cloud = $true
 		}
 		$null {
 			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: host not defined for VM")
@@ -745,8 +765,11 @@ ForEach ($VmParams in $vm_list) {
 			If ($vm_cluster_group) {
 				# verify the resource group is on the local node
 				$vm_node = $vm_cluster_group.OwnerNode.NodeName
-				If ($vm_host -ne $vm_node) {
-					Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM resource group found on different host in cluster, changing host to: " + $vm_node)
+				If ($vm_host -eq $vm_node) {
+					Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM resource group found on specified host in cluster")
+				}
+				Else {
+					Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM resource group found on different host in cluster, changing host to: $vm_node")
 					$vm_host = $vm_node
 				}
 			}
@@ -756,7 +779,7 @@ ForEach ($VmParams in $vm_list) {
 		}
 		Else {
 			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...host is standalone")
-		}	
+		}
 	}
 
 	# check for VM on host
@@ -767,7 +790,7 @@ ForEach ($VmParams in $vm_list) {
 	}
 
 	# start VM provisioning
-	If (-not $vm_on_host -and -not $vm_in_the_cloud) {
+	If (-not $vm_in_the_cloud -and -not $vm_on_host) {
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - ....VM not found on host")
 		Try {
 			Write-Host ("$env_comp_name,$vm_host,$vm_name - creating VM on host...")
@@ -781,6 +804,11 @@ ForEach ($VmParams in $vm_list) {
 	ElseIf (-not $vm_in_the_cloud) {
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - skipping VM provisioning, VM already exists")
 		$vm = $vm_on_host
+	}
+
+	# retrieve MAC address
+	If ($vm_switch_name -ne 'Remove' -and -not $vm_in_the_cloud) {
+		$vm_hw_address = ($vm.NetworkAdapters)[0].MacAddress
 	}
 
 	# start DHCP tasks unless cloud VM
@@ -802,7 +830,7 @@ ForEach ($VmParams in $vm_list) {
 
 		# create objects for DHCP reservation
 		$vm_mac_addr = ($vm_hw_address -split '(\w{2})' | Where-Object { $_ -ne '' }) -join '-'
-		$vm_dns_tail = ($vm_osd_oupath -split ',' | Where-Object { $_ -match 'DC=' }) -join '.' -replace 'DC=', ''
+		$vm_dns_tail = ($vm_deployment_oupath -split ',' | Where-Object { $_ -match 'DC=' }) -join '.' -replace 'DC=', ''
 		$vm_dns_name = ($vm_name + '.' + $vm_dns_tail).ToLower()
 
 		# declare values
@@ -826,46 +854,21 @@ ForEach ($VmParams in $vm_list) {
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - skipping DHCP configuration, required information not provided")
 	}
 
-	# start OSD tasks
-	If ($vm_osd_method) {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - VM will be provisioned via: '$($vm_osd_method.ToUpper())'")
-		switch ($vm_osd_method) {
+	# start deployement tasks
+	If ($vm_deployment_method) {
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - VM will be provisioned via: '$($vm_deployment_method.ToUpper())'")
+		switch ($vm_deployment_method) {
 			'iso' {
-				# get the mac address from the VM NIC
-				$vm = Get-VM -ComputerName $vm_host -Name $vm_name
-
-				# attach scsi controller for ISOs
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - adding SCSI controller for ISO file")
-				$vm_dvd_scsi = Add-VMScsiController -VM $vm -Passthru
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - adding DVD drive for ISO file")
-				$vm_dvd_drive = $vm_dvd_scsi | Add-VMDvdDrive -Passthru
-
-				# attach any additional drives
-				If ($vm_osd_path) {
-					$vm_host_found_iso = $null
-					$vm_host_found_iso = Invoke-Command -ComputerName $vm_host -ScriptBlock { Test-Path -Path $using:vm_osd_path }
-					If ($vm_host_found_iso) {
-						Write-Host ("$env_comp_name,$vm_host,$vm_name - ...attaching ISO file: " + $vm_osd_path)
-						$vm_dvd_drive | Set-VMDvdDrive -Path $vm_osd_path
-						Write-Host ("$env_comp_name,$vm_host,$vm_name - ...setting DVD drive as first boot device")
-						$vm | Set-VMFirmware -FirstBootDevice $vm_dvd_drive
-					}
-					Else {
-						Write-Host ("$env_comp_name,$vm_host,$vm_name - ...skipping ISO attach, VM host could not find file: " + $vm_osd_path)
-					}
-				}
-				Else {
-					Write-Host ("$env_comp_name,$vm_host,$vm_name - ...skipping ISO attach, no file specified")
-				}
+				Add-IsoToVm -VmParams $VmParams
 			}
 			'sccm' {
-				New-DeviceInSccm -VmParams $VmParams
+				Add-DeviceToSccm -VmParams $VmParams
 			}
 			'wds' {
-				New-DeviceInWds -VmParams $VmParams
+				Add-DeviceToWds -VmParams $VmParams
 			}
 			default {
-				Write-Host ("$env_comp_name,$vm_name - ...skipping OSD, unknown provisioning method provided: " + $vm_osd_method.ToUpper())
+				Write-Host ("$env_comp_name,$vm_name - ...skipping deployment, unknown provisioning method provided: " + $vm_deployment_method.ToUpper())
 			}
 		}
 	}
@@ -893,7 +896,7 @@ ForEach ($VmParams in $vm_list) {
 	ElseIf (-not $vm_in_the_cloud) {
 		If ($vm.State -ne 'Running') {
 			Write-Host ("$env_comp_name,$vm_host,$vm_name - starting VM on host")
-			$vm | Start-VM	
+			$vm | Start-VM
 		}
 	}
 }
