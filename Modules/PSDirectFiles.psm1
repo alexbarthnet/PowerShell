@@ -37,7 +37,7 @@ Function Copy-PathFromPSDirect {
 								Get-ChildItem -Path $Destination -Recurse -Force | Remove-Item -Force
 							}
 							# copy files from VM to Destination
-							ForEach ($file in $file_list) { Copy-Item -FromSession $vm_direct -Path $file -Destination $Destination -Force -Verbose }
+							ForEach ($file in $file_list.FullName) { Copy-Item -FromSession $vm_direct -Path $file -Destination $Destination -Force -Verbose }
 						}
 						Else {
 							Write-Output "Could not locate destination folder: '$Destination'"
@@ -103,7 +103,7 @@ Function Copy-PathToPSDirect {
 								Invoke-Command -Session $vm_direct -ScriptBlock { Get-ChildItem -Path $using:Destination -Recurse -Force | Remove-Item -Force }
 							}
 							# copy files from Path to VM
-							ForEach ($file in $file_list) { Copy-Item -ToSession $vm_direct -Path $file -Destination $Destination -Force -Verbose }
+							ForEach ($file in $file_list.FullName) { Copy-Item -ToSession $vm_direct -Path $file -Destination $Destination -Force -Verbose }
 						}
 						Else {
 							Write-Output "Could not find or create '$Destination' on VM"
