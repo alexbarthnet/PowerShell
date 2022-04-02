@@ -807,25 +807,35 @@ ForEach ($VmParams in $vm_list) {
 	}
 
 	# retrieve MAC address
-	If ($vm_switch_name -ne 'Remove' -and -not $vm_in_the_cloud) {
+	If (($vm_switch_name -ne 'Remove') -and -not $vm_in_the_cloud) {
 		$vm_hw_address = ($vm.NetworkAdapters)[0].MacAddress
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - retrieved MAC address from VM: '$vm_hw_address'")
 	}
 
 	# start DHCP tasks unless cloud VM
 	If ($vm_dhcp_server -and $vm_dhcp_scope -and $vm_ip_address -and $vm_hw_address -and -not $vm_in_the_cloud) {
+		# check for existing DHCP scope
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - checking for DHCP scope on: '$vm_dhcp_server'")
+		$vm_scope_exists = $null
+		$vm_scope_exists = Get-DhcpServerv4Scope -ComputerName $vm_dhcp_server | Where-Object { $_.ScopeId -eq $vm_dhcp_scope }
+		If ($null -eq $vm_scope_exists) {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: DHCP scope does not exist on DHCP server '$vm_dhcp_server'")
+			Return
+		}
+
 		# check for existing DHCP reservation
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - checking for DHCP reservation on: '$vm_dhcp_server'")
-		Try {
-			$vm_dhcp = $null
-			$vm_dhcp = Get-DhcpServerv4Reservation -ComputerName $vm_dhcp_server -ScopeId $vm_dhcp_scope | Where-Object { $_.IPAddress -eq $vm_ip_address }
-			If ($vm_dhcp) {
-				$vm_dhcp | Remove-DhcpServerv4Reservation -ComputerName $vm_dhcp_server
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - removed existing DHCP reservation on '$vm_dhcp_server'")
+		$vm_reservation_exists = $null
+		$vm_reservation_exists = Get-DhcpServerv4Reservation -ComputerName $vm_dhcp_server -ScopeId $vm_dhcp_scope | Where-Object { $_.IPAddress -eq $vm_ip_address }
+		If ($vm_reservation_exists) {
+			Try {
+				$vm_reservation_exists | Remove-DhcpServerv4Reservation -ComputerName $vm_dhcp_server
+				Write-Host ("$env_comp_name,$vm_host,$vm_name - removed existing DHCP reservation on: '$vm_dhcp_server'")
 			}
-		}
-		Catch {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: removing existing DHCP reservcation on '$vm_dhcp_server'")
-			Return
+			Catch {
+				Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: removing existing DHCP reservcation on: '$vm_dhcp_server'")
+				Return
+			}
 		}
 
 		# create objects for DHCP reservation
