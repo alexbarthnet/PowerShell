@@ -3,7 +3,7 @@ Param(
 	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Zone')][ValidatePattern('.in-addr.arpa[.]{0,1}$')]
 	[string]$Zone,
 	[Parameter(Position = 1)]
-	[string]$Prefix = "ip",
+	[string]$Prefix = 'ip',
 	[Parameter(Position = 2)]
 	[string]$Domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().Name,
 	[Parameter(Position = 3)]
@@ -15,13 +15,39 @@ Param(
 )
 
 # create array from zone and reverse
-$zone_array = $Zone.Replace('.in-addr.arpa',$null).Split('.',[System.StringSplitOptions]::RemoveEmptyEntries)
+$zone_array = $Zone.Replace('.in-addr.arpa', $null).Split('.', [System.StringSplitOptions]::RemoveEmptyEntries)
 [array]::Reverse($zone_array)
 
 # get components from array
-$address = [string]::Join('.',$zone_array).Split('-')[0]
-$netmask = [string]::Join('.',$zone_array).Split('-')[1]
-$counter = [Math]::Pow(2, (32-[uint32]$netmask))
+switch ($zone_array.Count) {
+	# class A
+	1 {
+		Write-Output 'Class A subnets not yet supported'
+		Return
+	}
+	# class B
+	2 {
+		Write-Output 'Class B subnets not yet supported'
+		Return
+	}
+	# class C
+	3 {
+		Write-Output 'Class C subnets not yet supported'
+		$address = [string]::Join('.', $zone_array) + '.0'
+		$counter = [Math]::Pow(2, 8)
+		# Return
+	}
+	# CIDR
+	4 {
+		$address = [string]::Join('.', $zone_array).Split('-')[0]
+		$netmask = [string]::Join('.', $zone_array).Split('-')[1]
+		$counter = [Math]::Pow(2, (32 - [uint32]$netmask))
+	}
+	Default {
+		Write-Output "Too many '.' in Zone parameter."
+		Return
+	}
+}
 
 # $address_array = @()
 For ($i = 0; $i -lt $counter; $i++) { 
@@ -29,15 +55,14 @@ For ($i = 0; $i -lt $counter; $i++) {
 	$record_array = $address.Split('.')
 	# update the record array
 	$record_array[-1] = [uint32]$record_array[-1] + $i
-	$last_octet = $record_array[-1]
+	$record_value = $record_array -join '.'
+	$record_label = $record_array -join '-'
 	# check the reserved hashtable
-	switch ($true) {
-		($null -ne $ReservedHosts -and $ReservedHosts.ContainsKey($last_octet) ) {
-			$record = "$($ReservedHosts[$last_octet]).$Domain"
-		}
-		Default {
-			$record = "$Prefix-$($record_array -join '-').reverse.$Domain"
-		}
+	If ($ReservedHosts.ContainsKey($record_value)) {
+		$record = "$($ReservedHosts[$record_value])"
+	}
+	Else {
+		$record = "$Prefix-$record_label.reverse.$Domain"
 	}
 	$record
 }
