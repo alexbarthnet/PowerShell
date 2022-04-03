@@ -213,6 +213,7 @@ ForEach ($VmParams in $vm_list) {
 	# get VM information
 	If (-not $vm_in_the_cloud -and -not $vm_on_host) {
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM not found on host")
+		$vm_guid = [guid]::Empty
 	}
 	ElseIf (-not $vm_in_the_cloud) {
 		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM found on host")
