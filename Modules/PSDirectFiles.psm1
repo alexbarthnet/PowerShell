@@ -29,18 +29,24 @@ Function Copy-PathFromPSDirect {
 					If ($file_list) {
 						# verify Destination
 						$destination_check = $null
-						$destination_check = { If ( Test-Path -Path $Destination ) { Get-Item -Path $Destination } Else { New-Item -ItemType Directory -Path $Destination } }
+						$destination_check = { Test-Path -Path $Destination -PathType Container }
 						If ($destination_check) {
-							# determine if Destination should be cleaned before writing files
+							# determine if Destination should be cleared before writing files
 							If ($Purge) {
-								Write-Output "Clearing '$Destination' before copy"
-								Get-ChildItem -Path $Destination -Recurse -Force | Remove-Item -Force
+								Get-ChildItem -Path $Destination -Recurse -Force | Remove-Item -Force -Verbose
 							}
 							# copy files from VM to Destination
-							ForEach ($file in $file_list.FullName) { Copy-Item -FromSession $vm_direct -Path $file -Destination $Destination -Force -Verbose }
+							Try {
+								ForEach ($file in $file_list.FullName) {
+									Copy-Item -FromSession $vm_direct -Path $file -Destination $Destination -Force -Verbose
+								}
+							}
+							Catch {
+								Write-Output "Could not copy files to destination folder '$Destination' on host"
+							}
 						}
 						Else {
-							Write-Output "Could not locate destination folder: '$Destination'"
+							Write-Output "Could not locate destination folder '$Destination' on host"
 						}
 					}
 					Else {
@@ -95,18 +101,24 @@ Function Copy-PathToPSDirect {
 					If ($file_list) {
 						# verify destination on VM
 						$destination_check = $null
-						$destination_check = Invoke-Command -Session $vm_direct -ScriptBlock { If ( Test-Path -Path $using:Destination ) { Get-Item -Path $using:Destination } Else { New-Item -ItemType Directory -Path $using:Destination } }
+						$destination_check = Invoke-Command -Session $vm_direct -ScriptBlock { Test-Path -Path $using:Destination -PathType Container }
 						If ($destination_check) {
-							# determine if Destination should be cleaned before writing files
+							# determine if Destination should be cleared before writing files
 							If ($Purge) {
-								Write-Output "Clearing '$Destination' before copy"
-								Invoke-Command -Session $vm_direct -ScriptBlock { Get-ChildItem -Path $using:Destination -Recurse -Force | Remove-Item -Force }
+								Invoke-Command -Session $vm_direct -ScriptBlock { Get-ChildItem -Path $using:Destination -Recurse -Force | Remove-Item -Force -Verbose }
 							}
-							# copy files from Path to VM
-							ForEach ($file in $file_list.FullName) { Copy-Item -ToSession $vm_direct -Path $file -Destination $Destination -Force -Verbose }
+							# copy files from VM to Destination
+							Try {
+								ForEach ($file in $file_list.FullName) {
+									Copy-Item -ToSession $vm_direct -Path $file -Destination $Destination -Force -Verbose
+								}
+							}
+							Catch {
+								Write-Output "Could not copy files to destination folder '$Destination' on VM"
+							}
 						}
 						Else {
-							Write-Output "Could not find or create '$Destination' on VM"
+							Write-Output "Could not locate destination folder '$Destination' on VM"
 						}
 					}
 					Else {
@@ -204,7 +216,7 @@ Function Export-FilesWithPSDirect {
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
-			}	
+			}
 		}
 		$Add {
 			# create custom object from parameters then add to object
