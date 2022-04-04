@@ -15,7 +15,7 @@ Function Remove-DeviceFromSccm {
 	)
 
 	# define optional objects from CSV - OSD general parameters
-	$vm_name = $VmParams.Name
+	$vm_name = $VmParams.VMName
 	$vm_deployment_server = $VmParams.DeploymentServer
 
 	# connect to SCCM remotely
@@ -54,32 +54,44 @@ Function Remove-DeviceFromSccm {
 		# check for device by mac address via WMI call
 		If ($dev_hwid) {
 			Write-Host ("$env_name,$sccm_srv,$dev_name - retrieving device with MAC address: " + $dev_hwid)
-			$dev_found = Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.MacAddresses -eq $dev_hwid }
-			If ($dev_found.Count -gt 1) {
-				Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: multiple devices found with the same MAC address")
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...remove extra devices before continuing")
-				Break
-			}
-			Else {
-				# declare the device was found in SCCM
-				$dev_resid = $dev_found.ResourceId
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...found device by MAC address, resource ID: " + $dev_resid)
+			$dev_found = @()
+			$dev_found += Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.MacAddresses -eq $dev_hwid }
+			switch ($dev_found.Count) {
+				1 {
+					$dev_resid = $dev_found.ResourceId
+					Write-Host ("$env_name,$sccm_srv,$dev_name - ...found device by MAC address, resource ID: $dev_resid")
+				}
+				0 {
+					$dev_resid = $null
+					Write-Host ("$env_name,$sccm_srv,$dev_name - ...could not find device by MAC address")
+				}
+				Default {
+					Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: multiple devices found with the same MAC address")
+					Write-Host ("$env_name,$sccm_srv,$dev_name - ...remove extra devices before continuing")
+					Break
+				}
 			}
 		}
 
 		# check for device by mac address via WMI call
 		If ($null -eq $dev_resid) {
 			Write-Host ("$env_name,$sccm_srv,$dev_name - retrieving device with name: " + $dev_name)
-			$dev_found = Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.Name -eq $dev_name }
-			If ($dev_found.Count -gt 1) {
-				Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: multiple devices found with the same name")
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...remove extra devices before continuing")
-				Break
-			}
-			Else {
-				# declare the device was found
-				$dev_resid = $dev_found.ResourceId
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...found device by name, resource ID: " + $dev_resid)
+			$dev_found = @()
+			$dev_found += Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.Name -eq $dev_name }
+			switch ($dev_found.Count) {
+				1 {
+					$dev_resid = $dev_found.ResourceId
+					Write-Host ("$env_name,$sccm_srv,$dev_name - ...found device by name, resource ID: $dev_resid")
+				}
+				0 {
+					$dev_resid = $null
+					Write-Host ("$env_name,$sccm_srv,$dev_name - ...could not find device by name")
+				}
+				Default {
+					Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: multiple devices found with the same name")
+					Write-Host ("$env_name,$sccm_srv,$dev_name - ...remove extra devices before continuing")
+					Break
+				}
 			}
 		}
 
@@ -90,11 +102,7 @@ Function Remove-DeviceFromSccm {
 			Clear-CMPxeDeployment -ResourceId $dev_resid
 			# remove device
 			Write-Host ("$env_name,$sccm_srv,$dev_name - removing device")
-			Remove-CMDevice -ResourceId $dev_resid -Force
-		}
-		Else {
-			# declare device not found
-			Write-Host ("$env_name,$sccm_srv,$dev_name - ...device not found")
+			Remove-CMResource -ResourceId $dev_resid -Force
 		}
 	}
 }
@@ -191,18 +199,6 @@ ForEach ($VmParams in $vm_list) {
 		}
 	}
 
-	# remove any resource group from the cluster
-	If ($vm_cluster_group) {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - removing cluster resource...")
-		Try {
-			$vm_cluster_group | Remove-ClusterGroup -RemoveResources -Force
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...cluster resource removed")
-		}
-		Catch {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not remove cluster resource")
-		}
-	}
-
 	# check for VM on host
 	If (-not $vm_in_the_cloud) {
 		# try to get VM from host
@@ -244,6 +240,58 @@ ForEach ($VmParams in $vm_list) {
 
 		# get unique paths
 		$vm_path_unique = $vm_path_delete | Select-Object -Unique
+	}
+
+	# remove device from OSD
+	switch ($vm_deployment_method) {
+		'sccm' {
+			Try {
+				Remove-DeviceFromSccm -VmParams $VmParams -VmMacAddress $vm_mac_address
+			}
+			Catch {
+				Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not remove device from SCCM")
+				Return
+			}
+		}
+		'wds' {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - skipping OSD cleanup...")
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...WDS devices are reset during provisioining")
+		}
+		default {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - skipping OSD cleanup...")
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...Deployment method not provided or not recognized")
+		}
+	}
+
+	# remove dhcp reservation
+	If ($vm_dhcp_server -and $vm_dhcp_scope -and $vm_ip_address) {
+		# check for existing DHCP reservation
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - checking for DHCP reservation on: " + $vm_dhcp_server)
+		$vm_dhcp = $null
+		$vm_dhcp = Get-DhcpServerv4Reservation -ComputerName $vm_dhcp_server -ScopeId $vm_dhcp_scope | Where-Object { $_.IPAddress -eq $vm_ip_address }
+		If ($vm_dhcp) {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...removing DHCP reservation")
+			$vm_dhcp | Remove-DhcpServerv4Reservation -ComputerName $vm_dhcp_server
+		}
+		Else {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...no DHCP reservation found")
+		}
+	}
+	Else {
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - skipping DHCP configuration...")
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...required information not provided")
+	}
+
+	# remove any resource group from the cluster
+	If ($vm_cluster_group) {
+		Write-Host ("$env_comp_name,$vm_host,$vm_name - removing cluster resource...")
+		Try {
+			$vm_cluster_group | Remove-ClusterGroup -RemoveResources -Force
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...cluster resource removed")
+		}
+		Catch {
+			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not remove cluster resource")
+		}
 	}
 
 	# remove VM from host
@@ -294,93 +342,61 @@ ForEach ($VmParams in $vm_list) {
 	}
 
 	# remove folders from host
-	Invoke-Command -ComputerName $vm_host -ScriptBlock {
-		# map objects into session
-		$env_name = $using:env_comp_name
-		$env_host = $using:vm_host
-		$vm_label = $using:vm_name
-		$vm_ident = $using:vm_guid
-		$vm_paths = $using:vm_path_unique
+	If ($vm_guid -and $vm_path_unique) {
+		Invoke-Command -ComputerName $vm_host -ScriptBlock {
+			# map objects into session
+			$env_name = $using:env_comp_name
+			$env_host = $using:vm_host
+			$vm_label = $using:vm_name
+			$vm_ident = $using:vm_guid
+			$vm_paths = $using:vm_path_unique
 
-		# remove the VM folder and all files
-		Write-Host ("$env_name,$env_host,$vm_label - locating VM folders on host...")
-		ForEach ($vm_path in $vm_paths) {
-			If (Test-Path -Path $vm_path) {
-				Write-Host ("$env_name,$env_host,$vm_label - ...located folder: $vm_path")
-				# remove files that match the VM name or GUID
-				$vm_files_match = Get-ChildItem -Path $vm_path -File -Recurse -Force | Where-Object { $_.BaseName -eq $vm_label -or $_.BaseName -eq $vm_ident }
-				$vm_files_match | ForEach-Object {
-					Write-Host ("$env_name,$env_host,$vm_label - ...removing matching file: $($_.FullName)")
-					$_ | Remove-Item -Confirm:$false
-				}
-
-				# remove folders that match the VM name or GUID
-				$vm_paths_match = Get-ChildItem -Path $vm_path -Directory -Recurse -Force | Where-Object { $_.BaseName -eq $vm_label -or $_.BaseName -eq $vm_ident }
-				$vm_paths_match | ForEach-Object {
-					$vm_path_files = Get-ChildItem -Path $_ -Recurse -Force
-					If ($vm_path_files) {
-						Write-Host ("$env_name,$env_host,$vm_label - ...removing empty matching folder: $($_.FullName)")
+			# remove the VM folder and all files
+			Write-Host ("$env_name,$env_host,$vm_label - locating VM folders on host...")
+			ForEach ($vm_path in $vm_paths) {
+				If (Test-Path -Path $vm_path) {
+					Write-Host ("$env_name,$env_host,$vm_label - ...located folder: $vm_path")
+					# remove files that match the VM name or GUID
+					$vm_files_match = Get-ChildItem -Path $vm_path -File -Recurse -Force | Where-Object { $_.BaseName -eq $vm_label -or $_.BaseName -eq $vm_ident }
+					$vm_files_match | ForEach-Object {
+						Write-Host ("$env_name,$env_host,$vm_label - ...removing matching file: $($_.FullName)")
 						$_ | Remove-Item -Confirm:$false
 					}
-					Else {
-						Write-Host ("$env_name,$env_host,$vm_label - ...skipping matching folder with child objects: $($_.FullName)")
-					}
-				}
 
-				# check for any remaining files or folders in the path
-				$vm_files_other = Get-ChildItem -Path $vm_path -File -Recurse -Force | Where-Object { $_.BaseName -ne $vm_label -and $_.BaseName -notmatch $vm_ident }
-				$vm_paths_other = Get-ChildItem -Path $vm_path -Directory -Recurse -Force | Where-Object { $_.BaseName -notmatch "^$vm_label" -and $_.BaseName -notmatch "^$vm_ident" }
-				If ($vm_files_other -or $vm_paths_other) {
-					Write-Host ("$env_name,$env_host,$vm_label - ...skipping non-empty folder: $vm_path")
+					# remove folders that match the VM name or GUID
+					$vm_paths_match = Get-ChildItem -Path $vm_path -Directory -Recurse -Force | Where-Object { $_.BaseName -eq $vm_label -or $_.BaseName -eq $vm_ident }
+					$vm_paths_match | ForEach-Object {
+						$vm_path_files = Get-ChildItem -Path $_ -Recurse -Force
+						If ($vm_path_files) {
+							Write-Host ("$env_name,$env_host,$vm_label - ...removing empty matching folder: $($_.FullName)")
+							$_ | Remove-Item -Confirm:$false
+						}
+						Else {
+							Write-Host ("$env_name,$env_host,$vm_label - ...skipping matching folder with child objects: $($_.FullName)")
+						}
+					}
+
+					# check for any remaining files or folders in the path
+					$vm_files_other = Get-ChildItem -Path $vm_path -File -Recurse -Force | Where-Object { $_.BaseName -ne $vm_label -and $_.BaseName -notmatch $vm_ident }
+					$vm_paths_other = Get-ChildItem -Path $vm_path -Directory -Recurse -Force | Where-Object { $_.BaseName -notmatch "^$vm_label" -and $_.BaseName -notmatch "^$vm_ident" }
+					If ($vm_files_other -or $vm_paths_other) {
+						Write-Host ("$env_name,$env_host,$vm_label - ...skipping non-empty folder: $vm_path")
+					}
+					Else {
+						Try {
+							$vm_path | Remove-Item -Recurse -Confirm:$false
+							Write-Host ("$env_name,$env_host,$vm_label - ...removing empty folder: $vm_path")
+						}
+						Catch {
+							Write-Host ("$env_name,$env_host,$vm_label - ERROR: could not remove folder: $vm_path")
+						}
+					}
 				}
 				Else {
-					Try {
-						$vm_path | Remove-Item -Recurse -Confirm:$false
-						Write-Host ("$env_name,$env_host,$vm_label - ...removing empty folder: $vm_path")
-					}
-					Catch {
-						Write-Host ("$env_name,$env_host,$vm_label - ERROR: could not remove folder: $vm_path")
-					}
+					Write-Host ("$env_name,$env_host,$vm_label - ...folder not found: $vm_path")
 				}
 			}
-			Else {
-				Write-Host ("$env_name,$env_host,$vm_label - ...folder not found: $vm_path")
-			}
 		}
-	}
-
-	# remove device from OSD
-	switch ($vm_deployment_method) {
-		'sccm' {
-			Remove-DeviceFromSccm -VmParams $VmParams -VmMacAddress $vm_mac_address
-		}
-		'wds' {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - skipping OSD cleanup...")
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...WDS devices are reset during provisioining")
-		}
-		default {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - skipping OSD cleanup...")
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...Deployment method not provided or not recognized")
-		}
-	}
-
-	# remove dhcp reservation
-	If ($vm_dhcp_server -and $vm_dhcp_scope -and $vm_ip_address) {
-		# check for existing DHCP reservation
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - checking for DHCP reservation on: " + $vm_dhcp_server)
-		$vm_dhcp = $null
-		$vm_dhcp = Get-DhcpServerv4Reservation -ComputerName $vm_dhcp_server -ScopeId $vm_dhcp_scope | Where-Object { $_.IPAddress -eq $vm_ip_address }
-		If ($vm_dhcp) {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...removing DHCP reservation")
-			$vm_dhcp | Remove-DhcpServerv4Reservation -ComputerName $vm_dhcp_server
-		}
-		Else {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...no DHCP reservation found")
-		}
-	}
-	Else {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - skipping DHCP configuration...")
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...required information not provided")
 	}
 
 	# get AD objects
