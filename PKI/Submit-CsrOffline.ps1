@@ -1,41 +1,76 @@
 Param(
-    [Parameter(Mandatory = $True)]
-    [ValidateScript({Test-Path -Path $_})]
-    [string]$Request,
-    [switch]$Chain
+	[Parameter(Mandatory = $True)]
+	[ValidateScript({ Test-Path -Path $_ })]
+	[string]$Path
 )
 
-# define transcript file and start transcript
-$log_file = $PSCommandPath.Replace('.ps1', '.txt')
-Start-Transcript -Path $log_file -Force
+# define transcript file from script path and start transcript
+Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.txt') -Force
 
-# submit request 
-$certreq_response = Invoke-Expression -Command "certreq -f -q -config - -submit $Request"
-If ($certreq_response -join "," -notmatch "pending") { Exit }
-Write-Output "Submitted certificate request"
+# retrieve requests from path
+$certreq_files = @()
+$certreq_files = Get-ChildItem -Path $Path -Filter *.req
 
-# retrieve requests
-$requests = $null
-$requests = Invoke-Expression -Command "certutil -view -out RequestId,CommonName queue csv" | ConvertFrom-Csv
-If ($null -eq $requests) { Exit } Else { $request_id = ($requests | Select-Object -Last 1)."Issued Request ID" }
-Write-Output "Retrieved request ID: $request_id"
+# proocess requests
+ForEach ($certreq_file in $certreq_files) {
+	# submit request
+	$certreq_response = [string]::Empty
+	$certreq_response = Invoke-Expression -Command "certreq -f -q -config - -submit $($certreq_file.FullName)"
+	If (($certreq_response -join ',') -notmatch 'pending') {
+		Write-Output 'ERROR: submitting certificate request'
+		$certreq_response -join ','
+		Return
+	}
+	Else {
+		Write-Output 'Submitted certificate request'
+	}
 
-# issue certificate
-$reissue = ""
-$reissue = Invoke-Expression -Command "certutil -resubmit $request_id"
-If ($reissue -join "," -notmatch "successfully") { Exit }
-Write-Output "Issued certificate"
+	# retrieve requests
+	$certreq_submitted = $null
+	$certreq_submitted = Invoke-Expression -Command 'certutil -view -out RequestId,CommonName queue csv' | ConvertFrom-Csv
+	If ($null -eq $certreq_submitted) {
+		Write-Output 'ERROR: retrieving request IDs'
+		Return
+	}
+	Else {
+		$certreq_id = ($certreq_submitted | Select-Object -Last 1).'Issued Request ID'
+		Write-Output "Retrieved request ID: $certreq_id"
+	}
 
-# retrieve certificate
-$cert_cer = $Request.Replace((Get-Item -Path $Request).Extension,".cer")
-$cert_p7b = $Request.Replace((Get-Item -Path $Request).Extension,".p7b")
-Invoke-Expression -Command "certreq -f -q -config - -retrieve $request_id $cert_cer $cert_p7b"
-Write-Output "Exported signed certificate: $cert_cer"
-Write-Output "Exported complete P7B chain: $cert_p7b"
+	# issue certificate via resubmit
+	$certreq_resubmit = [string]::Empty
+	$certreq_resubmit = Invoke-Expression -Command "certutil -resubmit $certreq_id"
+	If (($certreq_resubmit -join ',') -notmatch 'successfully') { 
+		Write-Output 'ERROR: issuing certificate'
+		$certreq_resubmit -join ','
+		Return
+	}
+	Else {
+		Write-Output 'Issued certificate'
+	}
+	
+	# define certificate file
+	$certreq_cer = $certreq_file.FullName.Replace($certreq_file.Extension, '.cer')
+	$certreq_p7b = $certreq_file.FullName.Replace($certreq_file.Extension, '.p7b')
+	
+	# retrieve certificate
+	$certreq_retrieve = [string]::Empty
+	$certreq_retrieve = Invoke-Expression -Command "certreq -f -q -config - -retrieve $certreq_id $certreq_cer $certreq_p7b"
+	If ((Test-Path -Path $certreq_cer) -and (Test-Path -Path $certreq_p7b)) {
+		# report certificates
+		Write-Output "Retrieved signed certificate: $certreq_cer"
+		Write-Output "Retrieved complete P7B chain: $certreq_p7b"
 
-# remove request
-Remove-Item -Path $Request -Force
-Write-Output "Deleted certificate request: $Request"
+		# remove request
+		$certreq_file | Remove-Item -Force
+		Write-Output "Deleted certificate request: $certreq_file"
+	}
+	Else {
+		Write-Output 'ERROR: retrieving certificate'
+		$certreq_retrieve -join ','
+		Return
+	}
+}
 
 # start transcript
 Stop-Transcript
