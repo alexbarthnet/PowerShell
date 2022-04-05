@@ -1,6 +1,6 @@
 # define logging
 $log_root = (Get-CimInstance -Class Win32_OperatingSystem).WindowsDirectory
-$log_file = $PSCommandPath.Split('\')[-1].Replace('.ps1', '.txt')
+$log_file = (Split-Path -Path $PSCommandPath -Leaf).Replace((Get-Item -Path $PSCommandPath).Extension, '.txt')
 $log_path = Join-Path -Path $log_root -Child $log_file
 # retrieve computer and virtual machine names
 $os_name = (Get-CimInstance -Class 'Win32_ComputerSystem').Name
