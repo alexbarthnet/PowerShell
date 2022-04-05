@@ -29,7 +29,7 @@ Function Copy-PathFromPSDirect {
 					If ($file_list) {
 						# verify Destination
 						$destination_check = $null
-						$destination_check = { Test-Path -Path $Destination -PathType Container }
+						$destination_check = Test-Path -Path $Destination -PathType Container
 						If ($destination_check) {
 							# determine if Destination should be cleared before writing files
 							If ($Purge) {
