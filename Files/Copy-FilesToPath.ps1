@@ -32,9 +32,9 @@ Function Copy-FilesFromSourceToTarget {
 	param (
 		[string]$Source,
 		[string]$Target,
-		[boolean]$Purge,
-		[boolean]$CheckHash,
-		[boolean]$SkipCreateTarget
+		[switch]$Purge,
+		[switch]$CheckHash,
+		[switch]$SkipCreateTarget
 	)
 
 	# trim inputs
@@ -270,7 +270,7 @@ switch ($true) {
 					Write-Output "`nERROR: invalid entry found in configuration file: $Json"
 				}
 				Else {
-					Copy-FilesFromSourceToTarget -Source $json_datum.Source -Target $json_datum.Target -Purge $json_datum.Purge -CheckHash $json_datum.CheckHash -SkipCreateTarget $json_datum.SkipCreateTarget
+					Copy-FilesFromSourceToTarget -Source $json_datum.Source -Target $json_datum.Target -Purge:$json_datum.Purge -CheckHash:$json_datum.CheckHash -SkipCreateTarget:$json_datum.SkipCreateTarget
 					If ($json_datum.CopyToCluster) {
 						Try {
 							$cluster_nodes = (Get-ClusterNode).Name | Where-Object { $_ -ne [System.Environment]::MachineName }
