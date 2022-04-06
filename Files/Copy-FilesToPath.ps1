@@ -18,13 +18,17 @@ Param(
 	[Parameter(ParameterSetName = 'Add')]
 	[switch]$Purge,
 	[Parameter(ParameterSetName = 'Add')]
+	[switch]$Recurse,
+	[Parameter(ParameterSetName = 'Add')]
 	[switch]$CheckHash,
 	[Parameter(ParameterSetName = 'Add')]
-	[switch]$CopyToCluster,
+	[switch]$SkipFiles,
 	[Parameter(ParameterSetName = 'Add')]
 	[switch]$SkipCreateTarget,
+	[Parameter(ParameterSetName = 'Add')]
+	[switch]$CopyToCluster,
 	[Parameter()]
-	[string]$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
+	[string]$Json
 )
 
 Function Copy-FilesFromSourceToTarget {
@@ -33,7 +37,9 @@ Function Copy-FilesFromSourceToTarget {
 		[string]$Source,
 		[string]$Target,
 		[switch]$Purge,
+		[switch]$Recurse,
 		[switch]$CheckHash,
+		[switch]$SkipFiles,
 		[switch]$SkipCreateTarget
 	)
 
@@ -72,109 +78,108 @@ Function Copy-FilesFromSourceToTarget {
 		}
 	}
 
-	# retrieve folders from source
-	$source_folders = Get-ChildItem -Path $Source -Recurse -Directory | Select-Object -ExpandProperty 'FullName'
-	$target_folders = Get-ChildItem -Path $Target -Recurse -Directory | Select-Object -ExpandProperty 'FullName'
+	# process folder structure if Recurse is true
+	If ($Recurse) {
+		# retrieve folders from source
+		$source_folders = Get-ChildItem -Path $Source -Recurse:$Recurse -Directory | Select-Object -ExpandProperty 'FullName'
+		$target_folders = Get-ChildItem -Path $Target -Recurse:$Recurse -Directory | Select-Object -ExpandProperty 'FullName'
 
-	# trim folders to relative paths
-	If ($source_folders.Count) { $source_folders_relative = $source_folders.Replace($Source, $null) } Else { $source_folders_relative = @() }
-	If ($target_folders.Count) { $target_folders_relative = $target_folders.Replace($Target, $null) } Else { $target_folders_relative = @() }
+		# trim folders to relative paths
+		If ($source_folders.Count) { $source_folders_relative = $source_folders.Replace($Source, $null) } Else { $source_folders_relative = @() }
+		If ($target_folders.Count) { $target_folders_relative = $target_folders.Replace($Target, $null) } Else { $target_folders_relative = @() }
 
-	# retrieve folders that are missing
-	$folders_missing += [array][System.Linq.Enumerable]::Except([string[]]$source_folders_relative, [string[]]$target_folders_relative)
+		# retrieve folders that are missing
+		$folders_missing += [array][System.Linq.Enumerable]::Except([string[]]$source_folders_relative, [string[]]$target_folders_relative)
 
-	# retrieve folders that are invalid
-	$folders_invalid += [array][System.Linq.Enumerable]::Except([string[]]$target_folders_relative, [string[]]$source_folders_relative)
+		# retrieve folders that are invalid
+		$folders_invalid += [array][System.Linq.Enumerable]::Except([string[]]$target_folders_relative, [string[]]$source_folders_relative)
 
-	# create any missing folders
-	ForEach ($folder in $folders_missing) {
-		$target_folder = Join-Path -Path $Target -ChildPath $folder
-		Try {
-			$null = New-Item -Path $target_folder -ItemType 'Directory' -Force -Verbose
-		}
-		Catch {
-			Write-Output "ERROR: could not create folder '$target_folder'"
-			Return
-		}
-	}
-
-	# remove any invalid folders
-	ForEach ($folder in $folders_invalid) {
-		$target_folder = Join-Path -Path $Target -ChildPath $folder
-		Try {
-			$null = Remove-Item -Path $target_folder -Recurse -Force -Verbose
-		}
-		Catch {
-			Write-Output "ERROR: could not remove folder '$target_folder'"
-			Return
-		}
-	}
-
-	# retrieve files from source
-	$source_files = Get-ChildItem -Path $Source -Recurse -File | Select-Object -ExpandProperty 'FullName'
-	$target_files = Get-ChildItem -Path $Target -Recurse -File | Select-Object -ExpandProperty 'FullName'
-
-	# trim files to relative paths
-	If ($source_files.Count) { $source_files_relative = $source_files.Replace($Source, $null) } Else { $source_files_relative = @() }
-	If ($target_files.Count) { $target_files_relative = $target_files.Replace($Target, $null) } Else { $target_files_relative = @() }
-
-	# retrieve files that are missing
-	$files_missing += [array][System.Linq.Enumerable]::Except([string[]]$source_files_relative, [string[]]$target_files_relative)
-
-	# retrieve files that are invalid
-	$files_invalid += [array][System.Linq.Enumerable]::Except([string[]]$target_files_relative, [string[]]$source_files_relative)
-
-	# copy any missing files
-	ForEach ($file in $files_missing) {
-		$source_file = Join-Path -Path $Source -ChildPath $file
-		$target_file = Join-Path -Path $Target -ChildPath $file
-		Try {
-			Copy-Item -Path $source_file -Destination $target_file -Force -Verbose
-		}
-		Catch {
-			Write-Output "ERROR: could not copy file '$source_file' to file '$target_file'"
-		}
-	}
-
-	# remove any invalid files
-	ForEach ($file in $files_invalid) {
-		$target_file = Join-Path -Path $Target -ChildPath $file
-		Try {
-			$null = Remove-Item -Path $target_file -Force -Verbose
-		}
-		Catch {
-			Write-Output "ERROR: could not remove file '$target_file'"
-		}
-	}
-
-	# retrieve files that are present
-	$files_present += [array][System.Linq.Enumerable]::Intersect([string[]]$source_files_relative, [string[]]$target_files_relative)
-
-	# copy any present files when hash or lastwritetime are different
-	ForEach ($file in $files_present) {
-		$source_file = Join-Path -Path $Source -ChildPath $file
-		$target_file = Join-Path -Path $Target -ChildPath $file
-		# compare target file with source file
-		If ($CheckHash) {
-			If ((Get-FileHash -Path $source_file).Hash -eq (Get-FileHash -Path $target_file).Hash) {
-				Write-Output "Skipping '$source_file' as '$target_file' has same file hash"
-				Continue
+		# create any missing folders
+		ForEach ($folder in $folders_missing) {
+			$target_folder = Join-Path -Path $Target -ChildPath $folder
+			Try {
+				$null = New-Item -Path $target_folder -ItemType 'Directory' -Force -Verbose
+			}
+			Catch {
+				Write-Output "ERROR: could not create folder '$target_folder'"
+				Return
 			}
 		}
-		Else {
-			If ((Get-Item -Path $source_file).LastWriteTime -eq (Get-Item -Path $target_file).LastWriteTime) {
-				Write-Output "Skipping '$source_file' as '$target_file' has same LastWriteTime"
-				Continue
+	}
+
+	# process files if SkipFiles is false
+	If (-not $SkipFiles) {
+		# retrieve files from source
+		$source_files = Get-ChildItem -Path $Source -Recurse:$Recurse -File | Select-Object -ExpandProperty 'FullName'
+		$target_files = Get-ChildItem -Path $Target -Recurse:$Recurse -File | Select-Object -ExpandProperty 'FullName'
+
+		# trim files to relative paths
+		If ($source_files.Count) { $source_files_relative = $source_files.Replace($Source, $null) } Else { $source_files_relative = @() }
+		If ($target_files.Count) { $target_files_relative = $target_files.Replace($Target, $null) } Else { $target_files_relative = @() }
+
+		# retrieve files that are missing
+		$files_missing += [array][System.Linq.Enumerable]::Except([string[]]$source_files_relative, [string[]]$target_files_relative)
+
+		# retrieve files that are invalid
+		$files_invalid += [array][System.Linq.Enumerable]::Except([string[]]$target_files_relative, [string[]]$source_files_relative)
+
+		# copy any missing files
+		ForEach ($file in $files_missing) {
+			$source_file = Join-Path -Path $Source -ChildPath $file
+			$target_file = Join-Path -Path $Target -ChildPath $file
+			Try {
+				Copy-Item -Path $source_file -Destination $target_file -Force -Verbose
+			}
+			Catch {
+				Write-Output "ERROR: could not copy file '$source_file' to file '$target_file'"
 			}
 		}
-		# copy the file
-		Try {
-			Copy-Item -Path $source_file -Destination $target_file -Force -Verbose
+
+		# remove any invalid files
+		ForEach ($file in $files_invalid) {
+			$target_file = Join-Path -Path $Target -ChildPath $file
+			Try {
+				$null = Remove-Item -Path $target_file -Force -Verbose
+			}
+			Catch {
+				Write-Output "ERROR: could not remove file '$target_file'"
+			}
 		}
-		Catch {
-			Write-Output "ERROR: could not copy file '$source_file' to file '$target_file'"
+
+		# retrieve files that are present
+		$files_present += [array][System.Linq.Enumerable]::Intersect([string[]]$source_files_relative, [string[]]$target_files_relative)
+
+		# copy any present files when hash or lastwritetime are different
+		ForEach ($file in $files_present) {
+			$source_file = Join-Path -Path $Source -ChildPath $file
+			$target_file = Join-Path -Path $Target -ChildPath $file
+			# compare target file with source file
+			If ($CheckHash) {
+				If ((Get-FileHash -Path $source_file).Hash -eq (Get-FileHash -Path $target_file).Hash) {
+					Write-Output "Skipping '$source_file' as '$target_file' has same file hash"
+					Continue
+				}
+			}
+			Else {
+				If ((Get-Item -Path $source_file).LastWriteTime -eq (Get-Item -Path $target_file).LastWriteTime) {
+					Write-Output "Skipping '$source_file' as '$target_file' has same LastWriteTime"
+					Continue
+				}
+			}
+			# copy the file
+			Try {
+				Copy-Item -Path $source_file -Destination $target_file -Force -Verbose
+			}
+			Catch {
+				Write-Output "ERROR: could not copy file '$source_file' to file '$target_file'"
+			}
 		}
 	}
+}
+
+# define JSON file
+If ($null -eq $Json) {
+	$PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
 }
 
 # verify JSON file
@@ -241,9 +246,11 @@ switch ($true) {
 				Source           = $Source
 				Target           = $Target
 				Purge            = $Purge.ToBool()
+				Recurse          = $Recurse.ToBool()
 				CheckHash        = $CheckHash.ToBool()
-				CopyToCluster    = $CopyToCluster.ToBool()
+				SkipFiles        = $SkipFiles.ToBool()
 				SkipCreateTarget = $SkipCreateTarget.ToBool()
+				CopyToCluster    = $CopyToCluster.ToBool()
 			}
 			$json_data | ConvertTo-Json | Set-Content -Path $Json
 			Write-Output "`nAdded '$Source' to configuration file: '$Json'"
@@ -270,7 +277,7 @@ switch ($true) {
 					Write-Output "`nERROR: invalid entry found in configuration file: $Json"
 				}
 				Else {
-					Copy-FilesFromSourceToTarget -Source $json_datum.Source -Target $json_datum.Target -Purge:$json_datum.Purge -CheckHash:$json_datum.CheckHash -SkipCreateTarget:$json_datum.SkipCreateTarget
+					Copy-FilesFromSourceToTarget -Source $json_datum.Source -Target $json_datum.Target -Purge:$json_datum.Purge -Recurse:$json_datum.Recurse -CheckHash:$json_datum.CheckHash -SkipFiles:$json_datum.SkipFiles -SkipCreateTarget:$json_datum.SkipCreateTarget
 					If ($json_datum.CopyToCluster) {
 						Try {
 							$cluster_nodes = (Get-ClusterNode).Name | Where-Object { $_ -ne [System.Environment]::MachineName }
@@ -280,7 +287,7 @@ switch ($true) {
 							Continue :json_datum
 						}
 						ForEach ($cluster_node in $cluster_nodes) {
-							Invoke-Command -ComputerName $cluster_node -ScriptBlock ${function:Copy-FilesFromSourceToTarget} -ArgumentList $json_datum.Source, $json_datum.Target, $json_datum.Purge, $json_datum.CheckHash, $json_datum.SkipCreateTarget
+							Invoke-Command -ComputerName $cluster_node -ScriptBlock ${function:Copy-FilesFromSourceToTarget} -ArgumentList $json_datum.Source, $json_datum.Target, $json_datum.Purge, $json_datum.Recurse, $json_datum.CheckHash, $json_datum.SkipFiles, $json_datum.SkipCreateTarget
 						}
 					}
 				}
