@@ -22,10 +22,10 @@ Write-Output "`n"
 # get the OneDrive path(s)
 $onedrive_directory = $null
 switch ($Identity) {
-	{ 'OneDrive' -or 'Personal' } {
-		Write-Output ('Searching for OneDrive directory...')
-		$onedrive_directory = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object { $_.Name -eq 'OneDrive' }
-	}
+	# { 'OneDrive' -or 'Personal' } {
+	# 	Write-Output ('Searching for OneDrive directory...')
+	# 	$onedrive_directory = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object { $_.Name -eq 'OneDrive' }
+	# }
 	$null {
 		Write-Output ('Searching for OneDrive directory...')
 		$onedrive_directory = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object { $_.Name -match 'OneDrive' }
@@ -39,15 +39,15 @@ switch ($Identity) {
 # test for 0 (can't junction) or 2+ (can't determine which to junction) OneDrive directories
 switch (($onedrive_directory).Count) {
 	1 { Write-Output ('...found the OneDrive directory: ' + $onedrive_directory.FullName) }
-	0 { Write-Output ('...found no OneDrive directories; exiting!'); Exit }
+	0 { Write-Output ('...found no OneDrive directories; exiting!'); Return }
 	Default {
 		If ([string]::IsNullOrEmpty($Identity)) {
 			Write-Output ('...found multiple OneDrive directories and no arguments were provided to limit scope to single directory, exiting!')
-			Exit
+			Return
 		}
 		Else {
 			Write-Output ('...found multiple OneDrive directories and the provided argument did not limit scope to single directory, exiting!')
-			Exit
+			Return
 		}
 	}
 }
@@ -58,7 +58,7 @@ If ($onedrive_directory.PSIsContainer) {
 }
 Else {
 	Write-Output '...unable to determine if the object found is a directory, exiting!'
-	Exit
+	Return
 }
 
 # buffer output
