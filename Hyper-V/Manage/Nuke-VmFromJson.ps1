@@ -3,8 +3,12 @@ Param(
 	[string]$VmJson,
 	[Parameter(Mandatory = $True)]
 	[string[]]$VmName,
-	[string]$HostName,
-	[switch]$UseDefaultPathOnHost
+	[Parameter()]
+	[string]$VMHost,
+	[Parameter()]
+	[switch]$UseDefaultPathOnHost,
+	[Parameter(DontShow)]
+	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 )
 
 Function Remove-DeviceFromSccm {
@@ -19,10 +23,10 @@ Function Remove-DeviceFromSccm {
 	$vm_deployment_server = $VmParams.DeploymentServer
 
 	# connect to SCCM remotely
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - connecting to SCCM: " + $vm_deployment_server)
+	Write-Host ("$Hostname,$vm_host,$vm_name - connecting to SCCM: " + $vm_deployment_server)
 	Invoke-Command -ComputerName $vm_deployment_server -ScriptBlock {
 		# set local variables
-		$env_name = $using:env_comp_name
+		$env_name = $using:Hostname
 		$sccm_srv = $using:vm_deployment_server
 		$dev_name = $using:vm_name
 		$dev_hwid = $using:VmMacAddress
@@ -107,9 +111,6 @@ Function Remove-DeviceFromSccm {
 	}
 }
 
-# create global objects
-$env_comp_name = $env:computername.ToLower()
-
 # verify JSON file
 If (-not (Test-Path -Path $VmJson)) {
 	Write-Output "`nERROR: could not find configuration file:"
@@ -122,7 +123,7 @@ $vm_list = @()
 If ($VmName) {
 	$vm_list += (Get-Content -Path $VmJson | ConvertFrom-Json) | Where-Object { $_.VMHost -and $_.VMName -in $VMName }
 	If ($vm_list.Count -eq 0) {
-		Write-Host ("$env_comp_name - VM(s) not found in Json, exiting!")
+		Write-Host ("$Hostname - VM(s) not found in Json, exiting!")
 		Return
 	}
 }
@@ -150,26 +151,26 @@ ForEach ($VmParams in $vm_list) {
 	$vm_host_clustered = $null
 
 	# check for host overrides
-	If ($HostName) { $vm_host = $HostName }
+	If ($VMHost) { $vm_host = $VMHost }
 
 	# check host
 	switch ($vm_host) {
 		'cloud' {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - WARNING: VM is in the cloud, skipping...")
+			Write-Host ("$Hostname,$vm_host,$vm_name - WARNING: VM is in the cloud, skipping...")
 			$vm_in_the_cloud = $true
 		}
 		$null {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: host not defined for VM")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: host not defined for VM")
 			Return
 		}
 		Default {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - checking host...")
+			Write-Host ("$Hostname,$vm_host,$vm_name - checking host...")
 			Try {
 				$null = Test-WSMan -ComputerName $vm_host -Authentication 'Default'
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...found host")
+				Write-Host ("$Hostname,$vm_host,$vm_name - ...found host")
 			}
 			Catch {
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not connect to host")
+				Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: could not connect to host")
 				Return
 			}
 		}
@@ -177,22 +178,22 @@ ForEach ($VmParams in $vm_list) {
 
 	# check if host is clustered
 	If (-not $vm_in_the_cloud) {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - checking if host is clustered...")
+		Write-Host ("$Hostname,$vm_host,$vm_name - checking if host is clustered...")
 		$vm_host_clustered = Get-Service -ComputerName $vm_host | Where-Object { $_.Name -eq 'ClusSvc' -and $_.StartType -eq 'Automatic' -and $_.Status -eq 'Running' }
 		If ($vm_host_clustered) {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...host is clustered")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...host is clustered")
 			# check for VM on cluster
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - checking cluster for VM resource group...")
+			Write-Host ("$Hostname,$vm_host,$vm_name - checking cluster for VM resource group...")
 			$vm_cluster = Invoke-Command -ComputerName $vm_host { (Get-Cluster).Name }
 			$vm_cluster_group = Get-ClusterGroup -Cluster $vm_cluster | Where-Object { $_.Name -eq $vm_name -and $_.GroupType -eq 'VirtualMachine' }
 			If ($vm_cluster_group) {
 				# verify the resource group is on the local node
 				$vm_node = $vm_cluster_group.OwnerNode.NodeName
 				If ($vm_host -eq $vm_node) {
-					Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM resource group found on specified host in cluster")
+					Write-Host ("$Hostname,$vm_host,$vm_name - ...VM resource group found on specified host in cluster")
 				}
 				Else {
-					Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM resource group found on different host in cluster, changing host to: $vm_node")
+					Write-Host ("$Hostname,$vm_host,$vm_name - ...VM resource group found on different host in cluster, changing host to: $vm_node")
 					$vm_host = $vm_node
 				}
 			}
@@ -202,17 +203,17 @@ ForEach ($VmParams in $vm_list) {
 	# check for VM on host
 	If (-not $vm_in_the_cloud) {
 		# try to get VM from host
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - checking for VM on host...")
+		Write-Host ("$Hostname,$vm_host,$vm_name - checking for VM on host...")
 		$vm_on_host = Get-VM -ComputerName $vm_host | Where-Object { $_.Name -eq $vm_name }
 	}
 
 	# get VM information
 	If (-not $vm_in_the_cloud -and -not $vm_on_host) {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM not found on host")
+		Write-Host ("$Hostname,$vm_host,$vm_name - ...VM not found on host")
 		$vm_guid = [guid]::Empty
 	}
 	ElseIf (-not $vm_in_the_cloud) {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM found on host")
+		Write-Host ("$Hostname,$vm_host,$vm_name - ...VM found on host")
 
 		# get path information
 		$vm_path_delete = @()
@@ -249,68 +250,68 @@ ForEach ($VmParams in $vm_list) {
 				Remove-DeviceFromSccm -VmParams $VmParams -VmMacAddress $vm_mac_address
 			}
 			Catch {
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not remove device from SCCM")
+				Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: could not remove device from SCCM")
 				Return
 			}
 		}
 		'wds' {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - skipping OSD cleanup...")
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...WDS devices are reset during provisioining")
+			Write-Host ("$Hostname,$vm_host,$vm_name - skipping OSD cleanup...")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...WDS devices are reset during provisioining")
 		}
 		default {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - skipping OSD cleanup...")
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...Deployment method not provided or not recognized")
+			Write-Host ("$Hostname,$vm_host,$vm_name - skipping OSD cleanup...")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...Deployment method not provided or not recognized")
 		}
 	}
 
 	# remove dhcp reservation
 	If ($vm_dhcp_server -and $vm_dhcp_scope -and $vm_ip_address) {
 		# check for existing DHCP reservation
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - checking for DHCP reservation on: " + $vm_dhcp_server)
+		Write-Host ("$Hostname,$vm_host,$vm_name - checking for DHCP reservation on: " + $vm_dhcp_server)
 		$vm_dhcp = $null
 		$vm_dhcp = Get-DhcpServerv4Reservation -ComputerName $vm_dhcp_server -ScopeId $vm_dhcp_scope | Where-Object { $_.IPAddress -eq $vm_ip_address }
 		If ($vm_dhcp) {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...removing DHCP reservation")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...removing DHCP reservation")
 			$vm_dhcp | Remove-DhcpServerv4Reservation -ComputerName $vm_dhcp_server
 		}
 		Else {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...no DHCP reservation found")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...no DHCP reservation found")
 		}
 	}
 	Else {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - skipping DHCP configuration...")
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...required information not provided")
+		Write-Host ("$Hostname,$vm_host,$vm_name - skipping DHCP configuration...")
+		Write-Host ("$Hostname,$vm_host,$vm_name - ...required information not provided")
 	}
 
 	# remove any resource group from the cluster
 	If ($vm_cluster_group) {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - removing cluster resource...")
+		Write-Host ("$Hostname,$vm_host,$vm_name - removing cluster resource...")
 		Try {
 			$vm_cluster_group | Remove-ClusterGroup -RemoveResources -Force
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...cluster resource removed")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...cluster resource removed")
 		}
 		Catch {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not remove cluster resource")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: could not remove cluster resource")
 		}
 	}
 
 	# remove VM from host
 	If ($vm_on_host) {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - removing VM from host...")
+		Write-Host ("$Hostname,$vm_host,$vm_name - removing VM from host...")
 
 		# turn off the VM if running
 		If ($vm_on_host.State -ne 'Off') { $vm_on_host | Stop-VM -TurnOff }
 
 		# remove the VM
 		$vm_on_host | Remove-VM -Force -Confirm:$false
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM removed from host")
+		Write-Host ("$Hostname,$vm_host,$vm_name - ...VM removed from host")
 	}
 
 	# remove VHDs from host
 	If ($vm_on_host -and $vhd_paths) {
 		Invoke-Command -ComputerName $vm_host -ScriptBlock {
 			# map objects into session
-			$env_name = $using:env_comp_name
+			$env_name = $using:Hostname
 			$env_host = $using:vm_host
 			$vm_label = $using:vm_name
 			$vm_drive = $using:vhd_paths
@@ -345,7 +346,7 @@ ForEach ($VmParams in $vm_list) {
 	If ($vm_guid -and $vm_path_unique) {
 		Invoke-Command -ComputerName $vm_host -ScriptBlock {
 			# map objects into session
-			$env_name = $using:env_comp_name
+			$env_name = $using:Hostname
 			$env_host = $using:vm_host
 			$vm_label = $using:vm_name
 			$vm_ident = $using:vm_guid
@@ -408,33 +409,33 @@ ForEach ($VmParams in $vm_list) {
 	# check OSD and NBT domains
 	If ($nbt -eq $vm_deployment_domain -or $null -eq $vm_deployment_domain) {
 		# remove computer object from AD
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - checking for VM in AD")
+		Write-Host ("$Hostname,$vm_host,$vm_name - checking for VM in AD")
 		$vm_ad = Get-ADObject -Server $pdc -Filter "Name -eq '$($vm_name)' -and ObjectClass -eq 'computer'"
 		If ($vm_ad) {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...AD object found")
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - removing AD object...")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...AD object found")
+			Write-Host ("$Hostname,$vm_host,$vm_name - removing AD object...")
 			$vm_ad | Remove-ADObject -Server $pdc -Recursive -Confirm:$false
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...removed AD object")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...removed AD object")
 		}
 		Else {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...AD object not found")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...AD object not found")
 		}
 
 		# remove computer records from DNS
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - checking for VM in DNS")
-		$vm_dns = Get-DnsServerResourceRecord -ComputerName $pdc -ZoneName $dns -RRType A | Where-Object { $_.HostName -eq $vm_name }
+		Write-Host ("$Hostname,$vm_host,$vm_name - checking for VM in DNS")
+		$vm_dns = Get-DnsServerResourceRecord -ComputerName $pdc -ZoneName $dns -RRType A | Where-Object { $_.VMHost -eq $vm_name }
 		If ($vm_dns) {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...DNS records found")
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - removing DNS records...")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...DNS records found")
+			Write-Host ("$Hostname,$vm_host,$vm_name - removing DNS records...")
 			$vm_dns | Remove-DnsServerResourceRecord -ComputerName $pdc -ZoneName $dns -Force
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...removed DNS records")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...removed DNS records")
 		}
 		Else {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...DNS records not found")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...DNS records not found")
 		}
 	}
 	Else {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - skipping AD and DNS cleanup...")
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM not in same domain as script host")
+		Write-Host ("$Hostname,$vm_host,$vm_name - skipping AD and DNS cleanup...")
+		Write-Host ("$Hostname,$vm_host,$vm_name - ...VM not in same domain as script host")
 	}
 }
