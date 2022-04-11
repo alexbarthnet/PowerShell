@@ -28,7 +28,9 @@ Param(
 	[Parameter(ParameterSetName = 'Add')]
 	[switch]$CopyToCluster,
 	[Parameter()]
-	[string]$Json
+	[string]$Json,
+	[Parameter(DontShow)]
+	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
 )
 
 Function Copy-FilesFromSourceToTarget {
@@ -178,8 +180,8 @@ Function Copy-FilesFromSourceToTarget {
 }
 
 # define JSON file
-If ($null -eq $Json) {
-	$PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
+If ([string]::IsNullOrEmpty($Json)) {
+	$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
 }
 
 # verify JSON file
@@ -263,7 +265,7 @@ switch ($true) {
 	$Copy {
 		Try {
 			# define transcript file from script path and start transcript
-			Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.txt') -Force
+			Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, "_$Hostname.txt") -Force
 
 			# check entry count in configuration file
 			If ($json_data.Count -eq 0) {

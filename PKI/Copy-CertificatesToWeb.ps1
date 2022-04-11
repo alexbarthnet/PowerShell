@@ -1,5 +1,12 @@
+Param(
+	[Parameter(DontShow)]
+	[string]$DomainFqdn = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().Name,
+	[Parameter(DontShow)]
+	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
+)
+
 # define transcript file from script path and start transcript
-Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.txt') -Force
+Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, "_$HostName.txt") -Force
 
 # define paths
 $dir_array = @()
@@ -16,8 +23,7 @@ If (Test-Path -Path $pki_certs) { Get-ChildItem -Path $pki_certs | Copy-Item -De
 If (Test-Path -Path $pki_pages) { Get-ChildItem -Path $pki_pages | Copy-Item -Destination $iis_pages -Force -Verbose }
  
 # define path for root certificates
-$ad_fqdn = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().Name
-$ad_path = ('\\' + $ad_fqdn + '\sysvol\' + $ad_fqdn + '\certificates\root')
+$ad_path = ('\\' + $DomainFqdn + '\sysvol\' + $DomainFqdn + '\certificates\root')
  
 # copy AD files to IIS
 If (Test-Path -Path $ad_path) { Get-ChildItem -Path $ad_path | Copy-Item -Destination $iis_certs -Force -Verbose }

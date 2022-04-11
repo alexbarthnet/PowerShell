@@ -1,11 +1,12 @@
 Param(
-	[Parameter(Mandatory = $True)]
-	[ValidateScript({ Test-Path -Path $_ })]
-	[string]$Path
+	[Parameter(Position = 0, Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
+	[string]$Path,
+	[Parameter(DontShow)]
+	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
 )
 
 # define transcript file from script path and start transcript
-Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.txt') -Force
+Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, "_$HostName.txt") -Force
 
 # retrieve requests from path
 $certreq_files = @()

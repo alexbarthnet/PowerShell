@@ -23,7 +23,9 @@ Param(
 	[Parameter(ParameterSetName = 'Add')]
 	[switch]$Purge,
 	[Parameter()]
-	[string]$Json
+	[string]$Json,
+	[Parameter(DontShow)]
+	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
 )
 
 Function Export-OfflineFilesFromVM {
@@ -165,7 +167,7 @@ switch ($true) {
 	$Export {
 		Try {
 			# define transcript file from script path and start transcript
-			Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.txt') -Force
+			Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, "_$HostName.txt") -Force
 
 			# check entry count in configuration file
 			If ($json_data.Count -eq 0) {

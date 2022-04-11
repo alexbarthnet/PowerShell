@@ -1,12 +1,14 @@
 Param(
-	[Parameter(Mandatory = $True)]
+	[Parameter(Position = 0,Mandatory = $True)]
 	[string]$Url,
-	[switch]$Root
+	[Parameter(Position = 1)]
+	[switch]$Root,
+	[Parameter(DontShow)]
+	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
 )
 
-# define transcript file and start transcript
-$log_file = $PSCommandPath.Replace('.ps1', '.txt')
-Start-Transcript -Path $log_file -Force
+# define transcript file from script path and start transcript
+Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, "_$HostName.txt") -Force
 
 # stop service
 Write-Output "`nStopping CertSvc before CA configuration..."
