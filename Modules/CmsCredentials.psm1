@@ -23,64 +23,6 @@ ValidityPeriodUnits = "100"
 %szOID_ENHANCED_KEY_USAGE% = "{text}%szOID_DOCUMENT_ENCRYPTION%"
 "@
 
-Function ConvertTo-SecurityIdentifier {
-	<#
-	.SYNOPSIS
-	Converts an input into a security identifier.
-
-	.DESCRIPTION
-	Converts an input such as a Windows principal or a security identifier object into the string representation of security identifier.
-
-	.PARAMETER Principal
-	Specifies a Windows principal.
-
-	.INPUTS
-	String or System.Security.Principal.SecurityIdentifier
-
-	.OUTPUTS
-	String
-
-	#>
-
-	[CmdletBinding()]
-	param (
-		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
-		[object]$Principal
-	)
-
-	# verify the input
-	If ($Principal -isnot [System.String] -and $Principal -is [System.Security.Principal.SecurityIdentifier]) {
-		$Principal = $Principal.Value
-	}
-
-	# translate principal to SID
-	Try {
-		# check for specific well-known SIDs or translate the SID
-		switch ($Principal) {
-			# the Windows Authorization Access Group is a built-in SID that only resolves correctly on a domain controller
-			{ ($_ -eq 'Windows Authorization Access Group') -or ($_ -eq "$([System.Environment]::UserDomainName)\Windows Authorization Access Group") } {
-				Return [System.Security.Principal.SecurityIdentifier]('S-1-5-32-560')
-			}
-			# SID in string format
-			{ ($_ -match 'S-1-\d{1,2}-\d*') } {
-				Return [System.Security.Principal.SecurityIdentifier]($Principal)
-			}
-			# username in DOMAIN\USERNAME format
-			{ $_ -match '^[\w\.-]*\\[\w\.-]*$' } {
-				Return ([System.Security.Principal.NTAccount]($Principal)).Translate([System.Security.Principal.SecurityIdentifier])
-			}
-			# any other username
-			Default {
-				Return ([System.Security.Principal.NTAccount]([System.Environment]::UserDomainName, $Principal)).Translate([System.Security.Principal.SecurityIdentifier])
-			}
-		}
-	}
-	Catch {
-		# return error
-		Return $_
-	}
-}
-
 Function Get-ComputersFromParams {
 	<#
 	.SYNOPSIS
@@ -432,18 +374,41 @@ Function Update-CmsCredentialAccess {
 
 	# retrieve SIDs for principals
 	$cms_sids = @()
-	switch ($Mode) {
-		'Reset' {
-			$cms_sids += [System.Security.Principal.SecurityIdentifier]('S-1-5-18') # add NT AUTHORITY\SYSTEM
-			$cms_sids += [System.Security.Principal.SecurityIdentifier]('S-1-5-32-544') # add BUILTIN\Administrators
-		}
-		Default {
-			ForEach ($cms_principal in $Principals) {
+	If ($Mode -eq 'Reset') {
+		$cms_sids += [System.Security.Principal.SecurityIdentifier]('S-1-5-18') # add NT AUTHORITY\SYSTEM
+		$cms_sids += [System.Security.Principal.SecurityIdentifier]('S-1-5-32-544') # add BUILTIN\Administrators
+	}
+	Else {
+		ForEach ($cms_principal in $Principals) {
+			# verify the input
+			If ($cms_principal -isnot [System.String] -and $cms_principal -is [System.Security.Principal.SecurityIdentifier]) {
+				$cms_sids += $cms_principal
+			}
+			Else {
 				Try {
-					$cms_sids += ConvertTo-SecurityIdentifier -Principal $cms_principal
+					# check for specific well-known SIDs or translate the SID
+					switch ($cms_principal) {
+						# well-known built-in SID that only translates on a domain controller
+						{ ($_ -eq 'Windows Authorization Access Group') -or ($_ -eq "$([System.Environment]::UserDomainName)\Windows Authorization Access Group") } {
+							$cms_sids += [System.Security.Principal.SecurityIdentifier]('S-1-5-32-560')
+						}
+						# a SID in string format
+						{ ($_ -match 'S-1-\d{1,2}-\d+') } {
+							$cms_sids += [System.Security.Principal.SecurityIdentifier]($_)
+						}
+						# a principal with domain prefix or suffix
+						{ ($_ -match '^[\w\s\.-]+\\[\w\s\.-]+$') -or ($_ -match '^[\w\.-]+@[\w\.-]+$') } {
+							$cms_sids += ([System.Security.Principal.NTAccount]($_)).Translate([System.Security.Principal.SecurityIdentifier])
+						}
+						# any other username
+						Default {
+							$cms_sids += ([System.Security.Principal.NTAccount]("$([System.Environment]::UserDomainName)\$_")).Translate([System.Security.Principal.SecurityIdentifier])
+						}
+					}
 				}
 				Catch {
-					Write-Host "WARNING: unable to translate principal to SID: '$cms_principal'"
+					Write-Output "Could not translate principal to SID: '$cms_principal'"
+					Return
 				}
 			}
 		}
@@ -501,11 +466,12 @@ Function Update-CmsCredentialAccess {
 			}
 		}
 		Catch {
-			$_
+			Return $_
 		}
 	}
 	Else {
-		Write-Error "CMS certificate not found: '$($cms_cert.Subject)'"
+		Write-Output "CMS certificate not found: '$($cms_cert.Subject)'"
+		Return
 	}
 }
 
@@ -591,11 +557,24 @@ Function Protect-CmsCredentials {
 	$CmsComputers = @()
 	$CmsComputers += Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
 
+	# define parameter hashtable
+	$ProtectParameters = @{
+		Target   = $Target
+		Cred     = $cms_cred
+		Prefix   = $Prefix
+		Template = $cms_template_text
+		Reset    = $Reset
+	}
+
 	# encrypt credentials to certificate
 	If ($CmsComputers.Count -gt 0) {
+		$ProtectFunction = "function Protect-CmsCredentialSecret {${function:Protect-CmsCredentialSecret}}"
 		ForEach ($CmsComputer in $CmsComputers) {
 			Try {
-				Invoke-Command -ComputerName $CmsComputer -ScriptBlock ${function:Protect-CmsCredentialSecret} -ArgumentList $Target, $cms_cred, $cms_template_text, $Prefix, $Reset
+				Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
+					. ([ScriptBlock]::Create($using:ProtectFunction))
+					Protect-CmsCredentialSecret @using:ProtectParameters
+				}
 			}
 			Catch {
 				Write-Host "ERROR: could not protect credentials on '$CmsComputer'"
@@ -603,7 +582,12 @@ Function Protect-CmsCredentials {
 		}
 	}
 	Else {
-		Protect-CmsCredentialSecret -Target $Target -Cred $cms_cred -Prefix $Prefix -Template $cms_template_text -Reset:$Reset
+		Try {
+			Protect-CmsCredentialSecret @ProtectParameters
+		}
+		Catch {
+			Write-Host 'ERROR: could not protect credentials on local computer'
+		}
 	}
 }
 
@@ -674,11 +658,21 @@ Function Remove-CmsCredentials {
 	$CmsComputers = @()
 	$CmsComputers += Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
 
+	# define parameter hashtable
+	$RemoveParameters = @{
+		Target = $Target
+		Prefix = $Prefix
+	}
+
 	# encrypt credentials to certificate
 	If ($CmsComputers.Count -gt 0) {
 		ForEach ($CmsComputer in $CmsComputers) {
+			$RemoveFunction = "function Remove-CmsCredentialSecret {${function:Remove-CmsCredentialSecret}}"
 			Try {
-				Invoke-Command -ComputerName $CmsComputer -ScriptBlock ${function:Remove-CmsCredentialSecret} -ArgumentList $Target, $Prefix
+				Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
+					. ([ScriptBlock]::Create($using:RemoveFunction))
+					Remove-CmsCredentialSecret @using:RemoveParameters
+				}
 			}
 			Catch {
 				Write-Host "ERROR: could not remove credentials on '$CmsComputer'"
@@ -686,7 +680,12 @@ Function Remove-CmsCredentials {
 		}
 	}
 	Else {
-		Remove-CmsCredentialSecret $Target $Prefix
+		Try {
+			Remove-CmsCredentialSecret @RemoveParameters
+		}
+		Catch {
+			Write-Host 'ERROR: could not remove credentials on local computer'
+		}
 	}
 }
 
@@ -846,19 +845,35 @@ Function Grant-CmsCredentialAccess {
 	$CmsComputers = @()
 	$CmsComputers += Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
 
+	# define parameter hashtable
+	$UpdateParameters = @{
+		Mode       = 'Grant'
+		Target     = $Target
+		Principals = $Principals
+	}
+
 	# encrypt credentials to certificate
 	If ($CmsComputers.Count -gt 0) {
+		$UpdateFunction = "function Update-CmsCredentialAccess {${function:Update-CmsCredentialAccess}}"
 		ForEach ($CmsComputer in $CmsComputers) {
-			Try {
-				Invoke-Command -ComputerName $CmsComputer -ScriptBlock ${function:Update-CmsCredentialAccess} -ArgumentList 'Grant', $Target, $Principals
-			}
-			Catch {
-				Write-Host "ERROR: could not grant credential access on '$CmsComputer'"
+			Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
+				Try {
+					. ([ScriptBlock]::Create($using:UpdateFunction))
+					Update-CmsCredentialAccess @using:UpdateParameters
+				}
+				Catch {
+					Write-Host "ERROR: could not grant credential access on '$using:CmsComputer'"
+				}
 			}
 		}
 	}
 	Else {
-		Update-CmsCredentialAccess -Mode 'Grant' -Target $Target -Principals $Principals
+		Try {
+			Update-CmsCredentialAccess @UpdateParameters
+		}
+		Catch {
+			Write-Host 'ERROR: could not grant credential access on local computer'
+		}
 	}
 }
 
@@ -921,19 +936,34 @@ Function Reset-CmsCredentialAccess {
 	$CmsComputers = @()
 	$CmsComputers += Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
 
+	# define parameter hashtable
+	$UpdateParameters = @{
+		Mode   = 'Reset'
+		Target = $Target
+	}
+
 	# encrypt credentials to certificate
 	If ($CmsComputers.Count -gt 0) {
+		$UpdateFunction = "function Update-CmsCredentialAccess {${function:Update-CmsCredentialAccess}}"
 		ForEach ($CmsComputer in $CmsComputers) {
-			Try {
-				Invoke-Command -ComputerName $CmsComputer -ScriptBlock ${function:Update-CmsCredentialAccess} -ArgumentList 'Reset', $Target
-			}
-			Catch {
-				Write-Host "ERROR: could not Reset credential access on '$CmsComputer'"
+			Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
+				Try {
+					. ([ScriptBlock]::Create($using:UpdateFunction))
+					Update-CmsCredentialAccess @using:UpdateParameters
+				}
+				Catch {
+					Write-Host "ERROR: could not reset credential access on '$using:CmsComputer'"
+				}
 			}
 		}
 	}
 	Else {
-		Update-CmsCredentialAccess -Mode 'Reset' -Target $Target
+		Try {
+			Update-CmsCredentialAccess @UpdateParameters
+		}
+		Catch {
+			Write-Host 'ERROR: could not reset credential access on local computer'
+		}
 	}
 }
 
@@ -1001,30 +1031,49 @@ Function Revoke-CmsCredentialAccess {
 	$CmsComputers = @()
 	$CmsComputers += Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
 
+	# define parameter hashtable
+	$UpdateParameters = @{
+		Mode       = 'Revoke'
+		Target     = $Target
+		Principals = $Principals
+	}
+
 	# encrypt credentials to certificate
 	If ($CmsComputers.Count -gt 0) {
+		$UpdateFunction = "function Update-CmsCredentialAccess {${function:Update-CmsCredentialAccess}}"
 		ForEach ($CmsComputer in $CmsComputers) {
-			Try {
-				Invoke-Command -ComputerName $CmsComputer -ScriptBlock ${function:Update-CmsCredentialAccess} -ArgumentList 'Revoke', $Target, $Principals
-			}
-			Catch {
-				Write-Host "ERROR: could not revoke credential access on '$CmsComputer'"
+			Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
+				Try {
+					. ([ScriptBlock]::Create($using:UpdateFunction))
+					Update-CmsCredentialAccess @using:UpdateParameters
+				}
+				Catch {
+					Write-Host "ERROR: could not grant credential access on '$using:CmsComputer'"
+				}
 			}
 		}
 	}
 	Else {
-		Update-CmsCredentialAccess -Mode 'Revoke' -Target $Target -Principals $Principals
+		Try {
+			Update-CmsCredentialAccess @UpdateParameters
+		}
+		Catch {
+			Write-Host 'ERROR: could not revoke credential access on local computer'
+		}
 	}
 }
 
 # define functions to export
 $functions_to_export = @()
+$functions_to_export += 'Protect-CmsCredentialSecret'
+$functions_to_export += 'Remove-CmsCredentialSecret'
 $functions_to_export += 'Protect-CmsCredentials'
 $functions_to_export += 'Remove-CmsCredentials'
 $functions_to_export += 'Unprotect-CmsCredentials'
 $functions_to_export += 'Grant-CmsCredentialAccess'
 $functions_to_export += 'Reset-CmsCredentialAccess'
 $functions_to_export += 'Revoke-CmsCredentialAccess'
+$functions_to_export += 'Update-CmsCredentialAccess'
 
 # export module members
 Export-ModuleMember -Function $functions_to_export -Variable $CmsTemplate
