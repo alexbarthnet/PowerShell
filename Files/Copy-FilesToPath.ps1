@@ -279,7 +279,16 @@ switch ($true) {
 					Write-Output "`nERROR: invalid entry found in configuration file: $Json"
 				}
 				Else {
-					Copy-FilesFromSourceToTarget -Source $json_datum.Source -Target $json_datum.Target -Purge:$json_datum.Purge -Recurse:$json_datum.Recurse -CheckHash:$json_datum.CheckHash -SkipFiles:$json_datum.SkipFiles -SkipCreateTarget:$json_datum.SkipCreateTarget
+					$json_hashtable = @{
+						Source           = $json_datum.Source
+						Target           = $json_datum.Target
+						Purge            = $json_datum.Purge
+						Recurse          = $json_datum.Recurse
+						CheckHash        = $json_datum.CheckHash
+						SkipFiles        = $json_datum.SkipFiles
+						SkipCreateTarget = $json_datum.SkipCreateTarget
+					}
+					Copy-FilesFromSourceToTarget @json_hashtable
 					If ($json_datum.CopyToCluster) {
 						Try {
 							$cluster_nodes = (Get-ClusterNode).Name | Where-Object { $_ -ne [System.Environment]::MachineName }
@@ -288,8 +297,12 @@ switch ($true) {
 							Write-Output "`nERROR: could not retrieve cluster nodes from local host"
 							Continue :json_datum
 						}
+						$RemoteFunction = "function Copy-FilesFromSourceToTarget {${function:Copy-FilesFromSourceToTarget}}"
 						ForEach ($cluster_node in $cluster_nodes) {
-							Invoke-Command -ComputerName $cluster_node -ScriptBlock ${function:Copy-FilesFromSourceToTarget} -ArgumentList $json_datum.Source, $json_datum.Target, $json_datum.Purge, $json_datum.Recurse, $json_datum.CheckHash, $json_datum.SkipFiles, $json_datum.SkipCreateTarget
+							Invoke-Command -ComputerName $cluster_node -ScriptBlock {
+								. ([ScriptBlock]::Create($using:RemoteFunction))
+								Copy-FilesFromSourceToTarget @using:json_hashtable
+							}
 						}
 					}
 				}
