@@ -104,9 +104,7 @@ switch ($true) {
 	$Remove {
 		# remove matching entries from object
 		Try {
-			$json_data = $json_data | Where-Object {
-				$_.VMName -ne $VMName
-			}
+			$json_data = $json_data | Where-Object { $_.VMName -ne $VMName }
 			If ($null -eq $json_data) {
 				[string]::Empty | Set-Content -Path $Json
 				Write-Output "`nRemoved '$VMName' from configuration file: '$Json'"
@@ -124,6 +122,10 @@ switch ($true) {
 	$Add {
 		# create custom object from parameters then add to object
 		Try {
+			If ($json_data | Where-Object { $_.VMName -eq $VMName } ) { 
+				$json_replace = $true
+				$json_data = $json_data | Where-Object { $_.VMName -ne $VMName }
+			}
 			$json_data += [pscustomobject][ordered]@{
 				VMName                = $VMName
 				VMHost                = $VMHost
@@ -153,7 +155,12 @@ switch ($true) {
 				ClusterPriority       = $ClusterPriority
 			}
 			$json_data | ConvertTo-Json | Set-Content -Path $Json
-			Write-Output "`nAdded '$VMName' to configuration file: '$Json'"
+			If ($json_replace) {
+				Write-Output "`nReplaced '$VMName' in configuration file: '$Json'"
+			}
+			Else {
+				Write-Output "`nAdded '$VMName' to configuration file: '$Json'"
+			}
 			$json_data | Format-List
 		}
 		Catch {
