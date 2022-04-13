@@ -13,12 +13,15 @@ Param(
 	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$HostCsv,
 	[string[]]$HostName,
-	[uint16]$RoundTo = 2
+	[byte]$RoundTo
 )
 
 Function Format-Bytes {
 	Param (
-		[int64]$Size
+		[Parameter(Position = 0,Mandatory = $true)]
+		[uint64]$Size,
+		[Parameter(Position = 1)]
+		[byte]$RoundTo = 2
 	)
 	Switch ($Size) {
 		{ $_ -ge 1PB } { "$([math]::Round($Size / 1PB,$RoundTo)) PB"; Break }
