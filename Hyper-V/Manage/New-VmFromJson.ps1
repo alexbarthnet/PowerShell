@@ -67,13 +67,13 @@ Function Add-DeviceToSccm {
 	Write-Host ("$Hostname,$vm_host,$vm_name - connecting to SCCM: " + $vm_deployment_server)
 	Invoke-Command -ComputerName $vm_deployment_server -ScriptBlock {
 		# set local variables
-		$env_name = $using:Hostname
-		$sccm_srv = $using:vm_deployment_server
-		$dev_name = $using:vm_name
-		$dev_host = $using:vm_host
-		$dev_hwid = $using:vm_mac_address
-		$dev_domain = $using:vm_deployment_domain
-		$dev_oupath = $using:vm_deployment_path
+		$script_host = $using:Hostname
+		$remote_host = $using:vm_deployment_server
+		$device_name = $using:vm_name
+		$device_host = $using:vm_host
+		$device_hwid = $using:vm_mac_address
+		$device_domain = $using:vm_deployment_domain
+		$device_oupath = $using:vm_deployment_path
 		$cm_col_deploy = $using:vm_deployment_collection
 		$cm_col_window = $using:vm_maintenance_collection
 
@@ -88,9 +88,9 @@ Function Add-DeviceToSccm {
 		$cm_site = (Get-ItemProperty -Path $cm_site_path -Name $cm_site_item).$($cm_site_item)
 
 		# connect to SCCM
-		Write-Host ("$env_name,$sccm_srv,$dev_name - ...importing SCCM module")
+		Write-Host ("$script_host,$remote_host,$device_name - ...importing SCCM module")
 		Import-Module $cm_psd1
-		Write-Host ("$env_name,$sccm_srv,$dev_name - ...setting location to site drive")
+		Write-Host ("$script_host,$remote_host,$device_name - ...setting location to site drive")
 		Set-Location ($cm_site + ':\')
 
 		# build strings for WMI query
@@ -104,178 +104,178 @@ Function Add-DeviceToSccm {
 		$col_deploy = $null
 
 		# retrieve device
-		Write-Host ("$env_name,$sccm_srv,$dev_name - checking device location...")
-		If ($dev_host -match 'cloud') {
+		Write-Host ("$script_host,$remote_host,$device_name - checking device location...")
+		If ($device_host -match 'cloud') {
 			# check for device by name via PowerShell
-			Write-Host ("$env_name,$sccm_srv,$dev_name - ...device is VM in the cloud, retrieving device by name")
-			$dev_found = Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.Name -eq $dev_name }
+			Write-Host ("$script_host,$remote_host,$device_name - ...device is VM in the cloud, retrieving device by name")
+			$dev_found = Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.Name -eq $device_name }
 			If ($dev_found.Count -gt 1) {
-				Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: multiple devices found with the same name")
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...remove extra devices before continuing")
+				Write-Host ("$script_host,$remote_host,$device_name - EXCEPTION: multiple devices found with the same name")
+				Write-Host ("$script_host,$remote_host,$device_name - ...remove extra devices before continuing")
 				Break
 			}
 			ElseIf ($dev_found.IsClient) {
 				# declare the device was found and the client is installed
 				$dev_resid = $dev_found.ResourceId
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...found device by name with client installed, resource ID: " + $dev_resid)
+				Write-Host ("$script_host,$remote_host,$device_name - ...found device by name with client installed, resource ID: " + $dev_resid)
 			}
 			ElseIf ($dev_found) {
 				# declare the device was found but the client is NOT installed
-				Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: device found WITHOUT client installed")
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...install SCCM agent then wait for SCCM to merge the objects")
+				Write-Host ("$script_host,$remote_host,$device_name - EXCEPTION: device found WITHOUT client installed")
+				Write-Host ("$script_host,$remote_host,$device_name - ...install SCCM agent then wait for SCCM to merge the objects")
 				Break
 			}
 			Else {
 				# declare issue and end early
-				Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: device for cloud VM not found")
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...join VM to domain then install SCCM agent")
+				Write-Host ("$script_host,$remote_host,$device_name - EXCEPTION: device for cloud VM not found")
+				Write-Host ("$script_host,$remote_host,$device_name - ...join VM to domain then install SCCM agent")
 				Break
 			}
 		}
-		ElseIf ($dev_hwid) {
+		ElseIf ($device_hwid) {
 			# check for device by MAC via WMI, import if not found
-			Write-Host ("$env_name,$sccm_srv,$dev_name - ...device is VM on-premises, retrieving device by MAC address: " + $dev_hwid)
+			Write-Host ("$script_host,$remote_host,$device_name - ...device is VM on-premises, retrieving device by MAC address: " + $device_hwid)
 			# check for device via WMI, import if not found
-			$dev_found = Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.Name -eq $dev_name }
+			$dev_found = Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.Name -eq $device_name }
 			If ($dev_found.Count -gt 1) {
-				Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: multiple devices found with the same MAC address")
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...remove extra devices before continuing")
+				Write-Host ("$script_host,$remote_host,$device_name - EXCEPTION: multiple devices found with the same MAC address")
+				Write-Host ("$script_host,$remote_host,$device_name - ...remove extra devices before continuing")
 				Break
 			}
 			ElseIf ($dev_found.IsClient) {
 				# declare the device was found but the client is installed
-				Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: device found WITH client installed")
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...verify any previous device has been removed from SCCM")
+				Write-Host ("$script_host,$remote_host,$device_name - EXCEPTION: device found WITH client installed")
+				Write-Host ("$script_host,$remote_host,$device_name - ...verify any previous device has been removed from SCCM")
 				Break
 			}
 			ElseIf ($dev_found) {
 				# declare the device was found in SCCM
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...found existing device with resource ID: " + $dev_resid)
+				Write-Host ("$script_host,$remote_host,$device_name - ...found existing device with resource ID: " + $dev_resid)
 				$dev_resid = $dev_found.ResourceId
 			}
 			Else {
 				# import the device into SCCM
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...adding device to SCCM")
-				Import-CMComputerInformation -ComputerName ($dev_name.ToLower()) -MacAddress $dev_hwid
+				Write-Host ("$script_host,$remote_host,$device_name - ...adding device to SCCM")
+				Import-CMComputerInformation -ComputerName ($device_name.ToLower()) -MacAddress $device_hwid
 
 				# wait until device is visible in SCCM
-				Write-Host ("$env_name,$sccm_srv,$dev_name - waiting for device to be visible in SCCM...")
+				Write-Host ("$script_host,$remote_host,$device_name - waiting for device to be visible in SCCM...")
 				Do { Start-Sleep -Seconds 5 }
-				Until (Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.MacAddresses -eq $dev_hwid })
+				Until (Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.MacAddresses -eq $device_hwid })
 
 				# declare the device was found in SCCN
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...retrieving resource ID for device")
-				$dev_found = Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.MacAddresses -eq $dev_hwid }
+				Write-Host ("$script_host,$remote_host,$device_name - ...retrieving resource ID for device")
+				$dev_found = Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.MacAddresses -eq $device_hwid }
 				$dev_resid = $dev_found.ResourceId
 			}
 		}
 		Else {
-			Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: on-premises VM found but no MAC address available")
+			Write-Host ("$script_host,$remote_host,$device_name - EXCEPTION: on-premises VM found but no MAC address available")
 			Break
 		}
 
 		# retrieve the all systems collection
-		Write-Host ("$env_name,$sccm_srv,$dev_name - retrieving collection for All Systems")
+		Write-Host ("$script_host,$remote_host,$device_name - retrieving collection for All Systems")
 		$col_systems = Get-CMDeviceCollection -Name 'All Systems'
 		If ($col_systems) {
-			Write-Host ("$env_name,$sccm_srv,$dev_name - ...found All Systems collection")
+			Write-Host ("$script_host,$remote_host,$device_name - ...found All Systems collection")
 		}
 		Else {
-			Write-Host ("$env_name,$sccm_srv,$dev_name - ERROR: All Systems collection not found")
+			Write-Host ("$script_host,$remote_host,$device_name - ERROR: All Systems collection not found")
 			Break
 		}
 
 		# retrieve the maintenance window collection
-		Write-Host ("$env_name,$sccm_srv,$dev_name - retrieving collection for maintenance window: " + $cm_col_window)
+		Write-Host ("$script_host,$remote_host,$device_name - retrieving collection for maintenance window: " + $cm_col_window)
 		$col_window = Get-CMDeviceCollection -Name $cm_col_window
 		If ($col_window) {
-			Write-Host ("$env_name,$sccm_srv,$dev_name - ...found maintenance window collection")
+			Write-Host ("$script_host,$remote_host,$device_name - ...found maintenance window collection")
 		}
 		Else {
-			Write-Host ("$env_name,$sccm_srv,$dev_name - ERROR: maintenance window collection not found")
+			Write-Host ("$script_host,$remote_host,$device_name - ERROR: maintenance window collection not found")
 			Break
 		}
 
 		# check for device in maintenance window collection
 		If ($col_window | Get-CMDeviceCollectionDirectMembershipRule -ResourceId $dev_resid) {
 			# declare the device was found in the collection
-			Write-Host ("$env_name,$sccm_srv,$dev_name - ...found direct membership rule for device in maintenance window")
+			Write-Host ("$script_host,$remote_host,$device_name - ...found direct membership rule for device in maintenance window")
 		}
 		Else {
 			# add the device to the collection
-			Write-Host ("$env_name,$sccm_srv,$dev_name - ...adding direct membership rule for device to maintenance window")
+			Write-Host ("$script_host,$remote_host,$device_name - ...adding direct membership rule for device to maintenance window")
 			$null = $col_window | Add-CMDeviceCollectionDirectMembershipRule -ResourceId $dev_resid
 
 			# update the All Systems collection manually
-			Write-Host ("$env_name,$sccm_srv,$dev_name - ...updating the All Systems Collection")
+			Write-Host ("$script_host,$remote_host,$device_name - ...updating the All Systems Collection")
 			$null = $col_systems | Invoke-CMCollectionUpdate
 
 			# wait until device is visible in collection
-			Write-Host ("$env_name,$sccm_srv,$dev_name - waiting for device to be visible in All Systems")
+			Write-Host ("$script_host,$remote_host,$device_name - waiting for device to be visible in All Systems")
 			Do { Start-Sleep -Seconds 5 }
 			Until ($col_systems | Get-CMCollectionMember -ResourceId $dev_resid)
 
 			# declare the device was found in the collection
-			Write-Host ("$env_name,$sccm_srv,$dev_name - ...found device in All Systems")
+			Write-Host ("$script_host,$remote_host,$device_name - ...found device in All Systems")
 
 			# update the deploy collection manually
-			Write-Host ("$env_name,$sccm_srv,$dev_name - ...updating maintenance window")
+			Write-Host ("$script_host,$remote_host,$device_name - ...updating maintenance window")
 			$null = $col_window | Invoke-CMCollectionUpdate
 
 			# wait until device is visible in collection
-			Write-Host ("$env_name,$sccm_srv,$dev_name - waiting for device to be visible in maintenance window")
+			Write-Host ("$script_host,$remote_host,$device_name - waiting for device to be visible in maintenance window")
 			Do { Start-Sleep -Seconds 5 }
 			Until ($col_window | Get-CMCollectionMember -ResourceId $dev_resid)
 
 			# declare the device was found in the collection
-			Write-Host ("$env_name,$sccm_srv,$dev_name - ...found device in maintenance window")
+			Write-Host ("$script_host,$remote_host,$device_name - ...found device in maintenance window")
 		}
 
 		# check for device in deploy collection for on-premises VMs
-		If ($dev_host -match 'cloud') {
-			Write-Host ("$env_name,$sccm_srv,$dev_name - skipping deploy collection for cloud VM")
+		If ($device_host -match 'cloud') {
+			Write-Host ("$script_host,$remote_host,$device_name - skipping deploy collection for cloud VM")
 		}
 		Else {
 			# retrieve the deploy collection
-			Write-Host ("$env_name,$sccm_srv,$dev_name - retrieving collection for OS deployment: " + $cm_col_deploy)
+			Write-Host ("$script_host,$remote_host,$device_name - retrieving collection for OS deployment: " + $cm_col_deploy)
 			$col_deploy = Get-CMDeviceCollection -Name $cm_col_deploy
 			If ($col_deploy) {
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...found collection")
+				Write-Host ("$script_host,$remote_host,$device_name - ...found collection")
 			}
 			Else {
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ERROR: collection not found")
+				Write-Host ("$script_host,$remote_host,$device_name - ERROR: collection not found")
 				Break
 			}
 
 			# check for device in specified collection
 			If ($col_deploy | Get-CMDeviceCollectionDirectMembershipRule -ResourceId $dev_resid) {
 				# declare the device was found in the collection
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...found direct membership rule for device in deploy collection")
+				Write-Host ("$script_host,$remote_host,$device_name - ...found direct membership rule for device in deploy collection")
 			}
 			Else {
 				# import the device into the collection
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...adding direct membership rule for device to deploy collection")
+				Write-Host ("$script_host,$remote_host,$device_name - ...adding direct membership rule for device to deploy collection")
 				$null = $col_deploy | Add-CMDeviceCollectionDirectMembershipRule -ResourceId $dev_resid
 
 				# update the deploy collection manually
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...updating deploy collection")
+				Write-Host ("$script_host,$remote_host,$device_name - ...updating deploy collection")
 				$null = $col_deploy | Invoke-CMCollectionUpdate
 
 				# wait until device is visible in collection
-				Write-Host ("$env_name,$sccm_srv,$dev_name - waiting for device to be visible in deploy collection...")
+				Write-Host ("$script_host,$remote_host,$device_name - waiting for device to be visible in deploy collection...")
 				Do { Start-Sleep -Seconds 5 }
 				Until ($col_deploy | Get-CMCollectionMember -ResourceId $dev_resid)
 
 				# declare the device was found in the collection
-				Write-Host ("$env_name,$sccm_srv,$dev_name - ...found device in collection")
+				Write-Host ("$script_host,$remote_host,$device_name - ...found device in collection")
 			}
 
 			# update the device with the domain and LDAP path of the computer object
-			Write-Host ("$env_name,$sccm_srv,$dev_name - setting OSD variables for local VM")
-			Write-Host ("$env_name,$sccm_srv,$dev_name - ...setting OSD domain to: " + $dev_domain)
-			$null = New-CMDeviceVariable -DeviceId $dev_resid -VariableName 'OSDDOMAIN' -VariableValue $dev_domain
-			Write-Host ("$env_name,$sccm_srv,$dev_name - ...setting OSD OU name to: " + $dev_oupath)
-			$null = New-CMDeviceVariable -DeviceId $dev_resid -VariableName 'OSDDOMAINOUNAME' -VariableValue $dev_oupath
+			Write-Host ("$script_host,$remote_host,$device_name - setting OSD variables for local VM")
+			Write-Host ("$script_host,$remote_host,$device_name - ...setting OSD domain to: " + $device_domain)
+			$null = New-CMDeviceVariable -DeviceId $dev_resid -VariableName 'OSDDOMAIN' -VariableValue $device_domain
+			Write-Host ("$script_host,$remote_host,$device_name - ...setting OSD OU name to: " + $device_oupath)
+			$null = New-CMDeviceVariable -DeviceId $dev_resid -VariableName 'OSDDOMAINOUNAME' -VariableValue $device_oupath
 		}
 	}
 }
@@ -295,7 +295,7 @@ Function Add-DeviceToWds {
 		$vm_biosguid = (Get-WmiObject -ComputerName $vm_host -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_VirtualSystemSettingData' -Filter "ElementName = '$vm_name'").BIOSGUID
 	}
 	Catch {
-		Write-Host ("$env_name,$env_host,$dev_name - WARNING: could not retrieve BIOS GUID for VM")
+		Write-Host ("$Hostname,$vm_host,$vm_name - WARNING: could not retrieve BIOS GUID for VM")
 		Return
 	}
 
@@ -303,20 +303,20 @@ Function Add-DeviceToWds {
 	If ($vm_deployment_server -and $vm_deployment_path -and $vm_biosguid) {
 		Invoke-Command -ComputerName $vm_deployment_server -ScriptBlock {
 			# map objects to session
-			$env_name = $using:Hostname
-			$env_host = $using:vm_deployment_server
-			$dev_name = $using:vm_name
-			$dev_guid = $using:vm_biosguid
-			$dev_file = $using:vm_deployment_path
+			$script_host = $using:Hostname
+			$remote_host = $using:vm_deployment_server
+			$device_name = $using:vm_name
+			$device_guid = $using:vm_biosguid
+			$device_file = $using:vm_deployment_path
 
 			# check if AD mode is disabled
 			If ((Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\WDSServer\Providers\WDSDCMGR\Providers\WDSADDC').Disabled) {
-				Get-WdsClient | Where-Object { $_.DeviceName -eq $dev_name.ToUpper() } | Remove-WdsClient
-				New-WdsClient -DeviceName $dev_name.ToUpper() -DeviceID $dev_guid -WdsClientUnattend $dev_file | Out-Null
-				Write-Host ("$env_name,$env_host,$dev_name - creating WDS device")
+				Get-WdsClient | Where-Object { $_.DeviceName -eq $device_name.ToUpper() } | Remove-WdsClient
+				New-WdsClient -DeviceName $device_name.ToUpper() -DeviceID $device_guid -WdsClientUnattend $device_file | Out-Null
+				Write-Host ("$script_host,$remote_host,$device_name - creating WDS device")
 			}
 			Else {
-				Write-Host ("$env_name,$env_host,$dev_name - WDS server is AD-integrated, skipping WDS provisioning...")
+				Write-Host ("$script_host,$remote_host,$device_name - WDS server is AD-integrated, skipping WDS provisioning...")
 			}
 		}
 	}

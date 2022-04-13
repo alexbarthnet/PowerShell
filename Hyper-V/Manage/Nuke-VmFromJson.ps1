@@ -26,10 +26,10 @@ Function Remove-DeviceFromSccm {
 	Write-Host ("$Hostname,$vm_host,$vm_name - connecting to SCCM: " + $vm_deployment_server)
 	Invoke-Command -ComputerName $vm_deployment_server -ScriptBlock {
 		# set local variables
-		$env_name = $using:Hostname
-		$sccm_srv = $using:vm_deployment_server
-		$dev_name = $using:vm_name
-		$dev_hwid = $using:VmMacAddress
+		$script_host = $using:Hostname
+		$sccm_server = $using:vm_deployment_server
+		$device_name = $using:vm_name
+		$device_hwid = $using:VmMacAddress
 
 		# retrieve the psd1 file
 		$cm_psd1_path = 'HKLM:\SOFTWARE\Microsoft\SMS\Setup'
@@ -42,9 +42,9 @@ Function Remove-DeviceFromSccm {
 		$cm_site = (Get-ItemProperty -Path $cm_site_path -Name $cm_site_item).$($cm_site_item)
 
 		# connect to SCCM
-		Write-Host ("$env_name,$sccm_srv,$dev_name - importing SCCM module")
+		Write-Host ("$script_host,$sccm_server,$device_name - importing SCCM module")
 		Import-Module $cm_psd1
-		Write-Host ("$env_name,$sccm_srv,$dev_name - setting location to site drive")
+		Write-Host ("$script_host,$sccm_server,$device_name - setting location to site drive")
 		Set-Location ($cm_site + ':\')
 
 		# build strings for WMI query
@@ -56,22 +56,22 @@ Function Remove-DeviceFromSccm {
 		$dev_resid = $null
 
 		# check for device by mac address via WMI call
-		If ($dev_hwid) {
-			Write-Host ("$env_name,$sccm_srv,$dev_name - retrieving device with MAC address: " + $dev_hwid)
+		If ($device_hwid) {
+			Write-Host ("$script_host,$sccm_server,$device_name - retrieving device with MAC address: " + $device_hwid)
 			$dev_found = @()
-			$dev_found += Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.MacAddresses -eq $dev_hwid }
+			$dev_found += Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.MacAddresses -eq $device_hwid }
 			switch ($dev_found.Count) {
 				1 {
 					$dev_resid = $dev_found.ResourceId
-					Write-Host ("$env_name,$sccm_srv,$dev_name - ...found device by MAC address, resource ID: $dev_resid")
+					Write-Host ("$script_host,$sccm_server,$device_name - ...found device by MAC address, resource ID: $dev_resid")
 				}
 				0 {
 					$dev_resid = $null
-					Write-Host ("$env_name,$sccm_srv,$dev_name - ...could not find device by MAC address")
+					Write-Host ("$script_host,$sccm_server,$device_name - ...could not find device by MAC address")
 				}
 				Default {
-					Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: multiple devices found with the same MAC address")
-					Write-Host ("$env_name,$sccm_srv,$dev_name - ...remove extra devices before continuing")
+					Write-Host ("$script_host,$sccm_server,$device_name - EXCEPTION: multiple devices found with the same MAC address")
+					Write-Host ("$script_host,$sccm_server,$device_name - ...remove extra devices before continuing")
 					Break
 				}
 			}
@@ -79,21 +79,21 @@ Function Remove-DeviceFromSccm {
 
 		# check for device by mac address via WMI call
 		If ($null -eq $dev_resid) {
-			Write-Host ("$env_name,$sccm_srv,$dev_name - retrieving device with name: " + $dev_name)
+			Write-Host ("$script_host,$sccm_server,$device_name - retrieving device with name: " + $device_name)
 			$dev_found = @()
-			$dev_found += Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.Name -eq $dev_name }
+			$dev_found += Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.Name -eq $device_name }
 			switch ($dev_found.Count) {
 				1 {
 					$dev_resid = $dev_found.ResourceId
-					Write-Host ("$env_name,$sccm_srv,$dev_name - ...found device by name, resource ID: $dev_resid")
+					Write-Host ("$script_host,$sccm_server,$device_name - ...found device by name, resource ID: $dev_resid")
 				}
 				0 {
 					$dev_resid = $null
-					Write-Host ("$env_name,$sccm_srv,$dev_name - ...could not find device by name")
+					Write-Host ("$script_host,$sccm_server,$device_name - ...could not find device by name")
 				}
 				Default {
-					Write-Host ("$env_name,$sccm_srv,$dev_name - EXCEPTION: multiple devices found with the same name")
-					Write-Host ("$env_name,$sccm_srv,$dev_name - ...remove extra devices before continuing")
+					Write-Host ("$script_host,$sccm_server,$device_name - EXCEPTION: multiple devices found with the same name")
+					Write-Host ("$script_host,$sccm_server,$device_name - ...remove extra devices before continuing")
 					Break
 				}
 			}
@@ -102,10 +102,10 @@ Function Remove-DeviceFromSccm {
 		# remove the device
 		If ($dev_resid) {
 			# reset PXE state
-			Write-Host ("$env_name,$sccm_srv,$dev_name - resetting PXE deployment status for VM")
+			Write-Host ("$script_host,$sccm_server,$device_name - resetting PXE deployment status for VM")
 			Clear-CMPxeDeployment -ResourceId $dev_resid
 			# remove device
-			Write-Host ("$env_name,$sccm_srv,$dev_name - removing device")
+			Write-Host ("$script_host,$sccm_server,$device_name - removing device")
 			Remove-CMResource -ResourceId $dev_resid -Force
 		}
 	}
@@ -311,32 +311,32 @@ ForEach ($VmParams in $vm_list) {
 	If ($vm_on_host -and $vhd_paths) {
 		Invoke-Command -ComputerName $vm_host -ScriptBlock {
 			# map objects into session
-			$env_name = $using:Hostname
-			$env_host = $using:vm_host
-			$vm_label = $using:vm_name
-			$vm_drive = $using:vhd_paths
+			$script_host = $using:Hostname
+			$remote_host = $using:vm_host
+			$remote_name = $using:vm_name
+			$remote_vhds = $using:vhd_paths
 
 			# dismount VHDs to unlock files for delete
-			Write-Host ("$env_name,$env_host,$vm_label - dismounting VHDs on host...")
-			ForEach ($vm_vhd_path in $vm_drive) {
+			Write-Host ("$script_host,$remote_host,$remote_name - dismounting VHDs on host...")
+			ForEach ($vm_vhd_path in $remote_vhds) {
 				Try {
 					Dismount-DiskImage -ImagePath $vm_vhd_path
-					Write-Host ("$env_name,$env_host,$vm_label - ...dismounting: " + $vm_vhd_path)
+					Write-Host ("$script_host,$remote_host,$remote_name - ...dismounting: " + $vm_vhd_path)
 				}
 				Catch {
-					Write-Host ("$env_name,$env_host,$vm_label - ERROR: could not dismount VHD: " + $vm_vhd_path)
+					Write-Host ("$script_host,$remote_host,$remote_name - ERROR: could not dismount VHD: " + $vm_vhd_path)
 				}
 			}
 
 			# remove VHD files
-			Write-Host ("$env_name,$env_host,$vm_label - deleting VHDs on host...")
-			ForEach ($vm_vhd_path in $vm_drive) {
+			Write-Host ("$script_host,$remote_host,$remote_name - deleting VHDs on host...")
+			ForEach ($vm_vhd_path in $remote_vhds) {
 				Try {
 					Remove-Item -Path $vm_vhd_path -Force
-					Write-Host ("$env_name,$env_host,$vm_label - ...deleting: " + $vm_vhd_path)
+					Write-Host ("$script_host,$remote_host,$remote_name - ...deleting: " + $vm_vhd_path)
 				}
 				Catch {
-					Write-Host ("$env_name,$env_host,$vm_label - ERROR: could not delete VHD: " + $vm_vhd_path)
+					Write-Host ("$script_host,$remote_host,$remote_name - ERROR: could not delete VHD: " + $vm_vhd_path)
 				}
 			}
 		}
@@ -346,55 +346,55 @@ ForEach ($VmParams in $vm_list) {
 	If ($vm_guid -and $vm_path_unique) {
 		Invoke-Command -ComputerName $vm_host -ScriptBlock {
 			# map objects into session
-			$env_name = $using:Hostname
-			$env_host = $using:vm_host
-			$vm_label = $using:vm_name
-			$vm_ident = $using:vm_guid
-			$vm_paths = $using:vm_path_unique
+			$script_host = $using:Hostname
+			$remote_host = $using:vm_host
+			$remote_name = $using:vm_name
+			$remote_guid = $using:vm_guid
+			$remote_dirs = $using:vm_path_unique
 
 			# remove the VM folder and all files
-			Write-Host ("$env_name,$env_host,$vm_label - locating VM folders on host...")
-			ForEach ($vm_path in $vm_paths) {
+			Write-Host ("$script_host,$remote_host,$remote_name - locating VM folders on host...")
+			ForEach ($vm_path in $remote_dirs) {
 				If (Test-Path -Path $vm_path) {
-					Write-Host ("$env_name,$env_host,$vm_label - ...located folder: $vm_path")
+					Write-Host ("$script_host,$remote_host,$remote_name - ...located folder: $vm_path")
 					# remove files that match the VM name or GUID
-					$vm_files_match = Get-ChildItem -Path $vm_path -File -Recurse -Force | Where-Object { $_.BaseName -eq $vm_label -or $_.BaseName -eq $vm_ident }
+					$vm_files_match = Get-ChildItem -Path $vm_path -File -Recurse -Force | Where-Object { $_.BaseName -eq $remote_name -or $_.BaseName -eq $remote_guid }
 					$vm_files_match | ForEach-Object {
-						Write-Host ("$env_name,$env_host,$vm_label - ...removing matching file: $($_.FullName)")
+						Write-Host ("$script_host,$remote_host,$remote_name - ...removing matching file: $($_.FullName)")
 						$_ | Remove-Item -Confirm:$false
 					}
 
 					# remove folders that match the VM name or GUID
-					$vm_paths_match = Get-ChildItem -Path $vm_path -Directory -Recurse -Force | Where-Object { $_.BaseName -eq $vm_label -or $_.BaseName -eq $vm_ident }
+					$vm_paths_match = Get-ChildItem -Path $vm_path -Directory -Recurse -Force | Where-Object { $_.BaseName -eq $remote_name -or $_.BaseName -eq $remote_guid }
 					$vm_paths_match | ForEach-Object {
 						$vm_path_files = Get-ChildItem -Path $_ -Recurse -Force
 						If ($vm_path_files) {
-							Write-Host ("$env_name,$env_host,$vm_label - ...removing empty matching folder: $($_.FullName)")
+							Write-Host ("$script_host,$remote_host,$remote_name - ...removing empty matching folder: $($_.FullName)")
 							$_ | Remove-Item -Confirm:$false
 						}
 						Else {
-							Write-Host ("$env_name,$env_host,$vm_label - ...skipping matching folder with child objects: $($_.FullName)")
+							Write-Host ("$script_host,$remote_host,$remote_name - ...skipping matching folder with child objects: $($_.FullName)")
 						}
 					}
 
 					# check for any remaining files or folders in the path
-					$vm_files_other = Get-ChildItem -Path $vm_path -File -Recurse -Force | Where-Object { $_.BaseName -ne $vm_label -and $_.BaseName -notmatch $vm_ident }
-					$vm_paths_other = Get-ChildItem -Path $vm_path -Directory -Recurse -Force | Where-Object { $_.BaseName -notmatch "^$vm_label" -and $_.BaseName -notmatch "^$vm_ident" }
+					$vm_files_other = Get-ChildItem -Path $vm_path -File -Recurse -Force | Where-Object { $_.BaseName -ne $remote_name -and $_.BaseName -notmatch $remote_guid }
+					$vm_paths_other = Get-ChildItem -Path $vm_path -Directory -Recurse -Force | Where-Object { $_.BaseName -notmatch "^$remote_name" -and $_.BaseName -notmatch "^$remote_guid" }
 					If ($vm_files_other -or $vm_paths_other) {
-						Write-Host ("$env_name,$env_host,$vm_label - ...skipping non-empty folder: $vm_path")
+						Write-Host ("$script_host,$remote_host,$remote_name - ...skipping non-empty folder: $vm_path")
 					}
 					Else {
 						Try {
 							$vm_path | Remove-Item -Recurse -Confirm:$false
-							Write-Host ("$env_name,$env_host,$vm_label - ...removing empty folder: $vm_path")
+							Write-Host ("$script_host,$remote_host,$remote_name - ...removing empty folder: $vm_path")
 						}
 						Catch {
-							Write-Host ("$env_name,$env_host,$vm_label - ERROR: could not remove folder: $vm_path")
+							Write-Host ("$script_host,$remote_host,$remote_name - ERROR: could not remove folder: $vm_path")
 						}
 					}
 				}
 				Else {
-					Write-Host ("$env_name,$env_host,$vm_label - ...folder not found: $vm_path")
+					Write-Host ("$script_host,$remote_host,$remote_name - ...folder not found: $vm_path")
 				}
 			}
 		}

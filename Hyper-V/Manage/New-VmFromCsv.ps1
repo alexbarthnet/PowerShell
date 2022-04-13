@@ -1,10 +1,16 @@
 Param(
 	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$VmCsv,
+	[Parameter()]
 	[string[]]$VmName,
-	[string]$HostName,
-	[string]$HostPath,
-	[switch]$UseDefaultPathOnHost
+	[Parameter()]
+	[string]$VMHost,
+	[Parameter()]
+	[string]$VMHostPath,
+	[Parameter()]
+	[switch]$UseDefaultPathOnHost,
+	[Parameter(DontShow)]
+	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 )
 
 Function New-DeviceInSccm {
@@ -27,12 +33,12 @@ Function New-DeviceInSccm {
 	$vm_col_window = $VmParams.ColWindow
 
 	If ($VmParams.Switch -eq 'Remove') {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - Switch is 'Remove', skipping SCCM provisioning...")
+		Write-Host ("$Hostname,$vm_host,$vm_name - Switch is 'Remove', skipping SCCM provisioning...")
 		Return
 	}
 
 	If ($vm_host -eq 'cloud') {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - creating SCCM device for VM in the cloud")
+		Write-Host ("$Hostname,$vm_host,$vm_name - creating SCCM device for VM in the cloud")
 	}
 	Else {
 		# get the mac address from the VM NIC
@@ -41,14 +47,14 @@ Function New-DeviceInSccm {
 
 		# create objects for invoked commands
 		$vm_mac_address = ($vm_hw_address -split '(\w{2})' | Where-Object { $_ -ne '' }) -join ':'
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - creating SCCM device with MAC: " + $vm_mac_address)
+		Write-Host ("$Hostname,$vm_host,$vm_name - creating SCCM device with MAC: " + $vm_mac_address)
 	}
 
 	# connect to SCCM remotely
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - connecting to SCCM: " + $vm_osd_server)
+	Write-Host ("$Hostname,$vm_host,$vm_name - connecting to SCCM: " + $vm_osd_server)
 	Invoke-Command -ComputerName $vm_osd_server -ScriptBlock {
 		# set local variables
-		$env_name = $using:env_comp_name
+		$env_name = $using:Hostname
 		$sccm_srv = $using:vm_osd_server
 		$dev_name = $using:vm_name
 		$dev_host = $using:vm_host
@@ -288,7 +294,7 @@ Function New-DeviceInWds {
 	If ($vm_osd_server -and $vm_osd_path -and $vm_biosguid) {
 		Invoke-Command -ComputerName $vm_osd_server -ScriptBlock {
 			# map objects to session
-			$env_name = $using:env_comp_name
+			$env_name = $using:Hostname
 			$env_host = $using:vm_osd_server
 			$dev_name = $using:vm_name
 			$dev_guid = $using:vm_biosguid
@@ -306,7 +312,7 @@ Function New-DeviceInWds {
 		}
 	}
 	Else {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - WDS server or OSD path not provided, skipping WDS provisioning...")
+		Write-Host ("$Hostname,$vm_host,$vm_name - WDS server or OSD path not provided, skipping WDS provisioning...")
 	}
 }
 
@@ -351,13 +357,13 @@ Function New-VmFromParams {
 	$vhd_excl_size = [int64]([decimal]$vhd_excl_gb * 1GB)
 
 	# verify path
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - verifying paths...")
+	Write-Host ("$Hostname,$vm_host,$vm_name - verifying paths...")
 	If ($vm_path -and $UseDefaultPathOnHost) {
 		$vm_path = (Get-VMHost -ComputerName $vm_host).VirtualMachinePath
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...using default VM path: " + $vm_path)
+		Write-Host ("$Hostname,$vm_host,$vm_name - ...using default VM path: " + $vm_path)
 	}
 	Else {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...using provided VM path: " + $vm_path)
+		Write-Host ("$Hostname,$vm_host,$vm_name - ...using provided VM path: " + $vm_path)
 	}
 
 	# define required folders
@@ -365,20 +371,20 @@ Function New-VmFromParams {
 	$vm_path_hd = Invoke-Command -ComputerName $vm_host -ScriptBlock { Join-Path -Path $using:vm_path_vm -ChildPath 'Virtual Hard Disks' }
 
 	# verify required folders
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - checking folders...")
+	Write-Host ("$Hostname,$vm_host,$vm_name - checking folders...")
 	Invoke-Command -ComputerName $vm_host -ScriptBlock {
 		@($using:vm_path_vm, $using:vm_path_hd) | ForEach-Object {
 			$vm_path_local = $_
 			If (Test-Path $vm_path_local) {
-				Write-Host ("$using:env_comp_name,$using:vm_host,$using:vm_name - ...found folder: " + $vm_path_local)
+				Write-Host ("$using:Hostname,$using:vm_host,$using:vm_name - ...found folder: " + $vm_path_local)
 			}
 			Else {
 				Try {
 					New-Item -ItemType Directory -Path $vm_path_local | Out-Null
-					Write-Host ("$using:env_comp_name,$using:vm_host,$using:vm_name - ...created VM folder: " + $vm_path_local)
+					Write-Host ("$using:Hostname,$using:vm_host,$using:vm_name - ...created VM folder: " + $vm_path_local)
 				}
 				Catch {
-					Write-Host ("$using:env_comp_name,$using:vm_host,$using:vm_name - ERROR: could not create VM folder: " + $vm_path_local)
+					Write-Host ("$using:Hostname,$using:vm_host,$using:vm_name - ERROR: could not create VM folder: " + $vm_path_local)
 					Exit
 				}
 			}
@@ -410,7 +416,7 @@ Function New-VmFromParams {
 	}
 
 	# check for OS vhdx
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - creating OS disk...")
+	Write-Host ("$Hostname,$vm_host,$vm_name - creating OS disk...")
 	$vhd_size = $null
 	$vhd_size = $vhd_os_size
 	$vhd_os_file | ForEach-Object {
@@ -419,24 +425,24 @@ Function New-VmFromParams {
 		$vhd_exists = $null
 		$vhd_exists = Invoke-Command -ComputerName $vm_host -ScriptBlock { Test-Path $using:vhd_data }
 		If ($vhd_exists) {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: found existing OS disk: " + $vhd_data)
+			Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: found existing OS disk: " + $vhd_data)
 			Break
 		}
 		Else {
 			# create the VM hard disk
 			Try {
 				New-VHD -Computer $vm_host -SizeBytes $vhd_size -Path $vhd_data | Out-Null
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...created OS disk: " + $vhd_data)
+				Write-Host ("$Hostname,$vm_host,$vm_name - ...created OS disk: " + $vhd_data)
 			}
 			Catch {
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not create OS disk: " + $vhd_data)
+				Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: could not create OS disk: " + $vhd_data)
 				Exit
 			}
 		}
 	}
 
 	# create any additional drives
-	If ($vhd_data_files) { Write-Host ("$env_comp_name,$vm_host,$vm_name - creating data disks...") }
+	If ($vhd_data_files) { Write-Host ("$Hostname,$vm_host,$vm_name - creating data disks...") }
 	$vhd_size = $null
 	$vhd_size = $vhd_data_size
 	$vhd_data_files | ForEach-Object {
@@ -445,23 +451,23 @@ Function New-VmFromParams {
 		$vhd_exists = $null
 		$vhd_exists = Invoke-Command -ComputerName $vm_host -ScriptBlock { Test-Path $using:vhd_file }
 		If ($vhd_exists) {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: found existing data disk: " + $vhd_file)
+			Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: found existing data disk: " + $vhd_file)
 			Break
 		}
 		Else {
 			Try {
 				New-VHD -Computer $vm_host -SizeBytes $vhd_size -Path $vhd_file | Out-Null
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...created data disk: " + $vhd_file)
+				Write-Host ("$Hostname,$vm_host,$vm_name - ...created data disk: " + $vhd_file)
 			}
 			Catch {
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not create data disk: " + $vhd_file)
+				Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: could not create data disk: " + $vhd_file)
 				Exit
 			}
 		}
 	}
 
 	# create any additional drives excluded from dedupe
-	If ($vhd_excl_files) { Write-Host ("$env_comp_name,$vm_host,$vm_name - creating excluded disks...") }
+	If ($vhd_excl_files) { Write-Host ("$Hostname,$vm_host,$vm_name - creating excluded disks...") }
 	$vhd_size = $null
 	$vhd_size = $vhd_excl_size
 	$vhd_excl_files | ForEach-Object {
@@ -470,16 +476,16 @@ Function New-VmFromParams {
 		$vhd_exists = $null
 		$vhd_exists = Invoke-Command -ComputerName $vm_host -ScriptBlock { Test-Path $using:vhd_file }
 		If ($vhd_exists) {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: found existing excluded data disk: " + $vhd_file)
+			Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: found existing excluded data disk: " + $vhd_file)
 			Break
 		}
 		Else {
 			Try {
 				New-VHD -Computer $vm_host -SizeBytes $vhd_size -Path $vhd_file | Out-Null
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...created disk: " + $vhd_file)
+				Write-Host ("$Hostname,$vm_host,$vm_name - ...created disk: " + $vhd_file)
 			}
 			Catch {
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not create disk: " + $vhd_file)
+				Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: could not create disk: " + $vhd_file)
 				Exit
 			}
 		}
@@ -487,30 +493,30 @@ Function New-VmFromParams {
 
 	# create the VM
 	If ($vm_switch -eq 'Remove') {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - creating VM not connected to vSwitch")
+		Write-Host ("$Hostname,$vm_host,$vm_name - creating VM not connected to vSwitch")
 		Try {
 			$vm = New-VM -ComputerName $vm_host -Name $vm_name -Generation 2 -MemoryStartupBytes $vm_mem_size -Path $vm_path -VHDPath $vhd_os_file
 			$vm_id = $vm.Id
 		}
 		Catch {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not create VM")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: could not create VM")
 			Exit
 		}
 	}
 	Else {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - creating VM connected to vSwitch: " + $vm_switch)
+		Write-Host ("$Hostname,$vm_host,$vm_name - creating VM connected to vSwitch: " + $vm_switch)
 		Try {
 			$vm = New-VM -ComputerName $vm_host -Name $vm_name -Generation 2 -MemoryStartupBytes $vm_mem_size -Path $vm_path -VHDPath $vhd_os_file -BootDevice NetworkAdapter -SwitchName $vm_switch
 		}
 		Catch {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not create VM")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: could not create VM")
 			Exit
 		}
 	}
 
 	# configure the CPU
 	If ($null = $vm_cpu) { $vm_cpu = 2 }
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - ...setting CPU count: " + $vm_cpu)
+	Write-Host ("$Hostname,$vm_host,$vm_name - ...setting CPU count: " + $vm_cpu)
 	$vm | Set-VMProcessor -Count $vm_cpu -ExposeVirtualizationExtensions $true
 
 	# configure the memory
@@ -527,25 +533,25 @@ Function New-VmFromParams {
 		If (($vm_mem_max_size -ge $vm_mem_size) -and ($vm_mem_max_size -le $vm_mem_dmax)) { $vm_mem_max_good = $true }
 		# enable dynamic memory if valid values
 		If ($vm_mem_min_good -and $vm_mem_max_good) {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...enabling dynamic memory (start, min, max): $vm_mem, $vm_mem_min, $vm_mem_max")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...enabling dynamic memory (start, min, max): $vm_mem, $vm_mem_min, $vm_mem_max")
 			$vm | Set-VMMemory -DynamicMemoryEnabled $true -StartupBytes $vm_mem_size -MinimumBytes $vm_mem_min_size -MaximumBytes $vm_mem_max_size
 		}
 		Else {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...skipping dynamic memory, bad values provided (start, min, max): $vm_mem, $vm_mem_min, $vm_mem_max")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...skipping dynamic memory, bad values provided (start, min, max): $vm_mem, $vm_mem_min, $vm_mem_max")
 		}
 	}
 
 	# enable all services
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - ...enabling guest services")
+	Write-Host ("$Hostname,$vm_host,$vm_name - ...enabling guest services")
 	$vm | Enable-VMIntegrationService -Name 'Guest Service Interface'
 
 	# attach any additional drives
 	If ($vhd_data_files) {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - adding SCSI controller for data VHDs")
+		Write-Host ("$Hostname,$vm_host,$vm_name - adding SCSI controller for data VHDs")
 		$vhd_data_scsi = Add-VMScsiController -VM $vm -Passthru
 		$vhd_data_files | ForEach-Object {
 			$vhd_data_name = $_
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...attaching data VHD: " + $vhd_data_name)
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...attaching data VHD: " + $vhd_data_name)
 			# create new VHD and attach to VM
 			$vhd_data_lun = [int](($vhd_data_name -split '.vhdx')[0] -split '-')[-1]
 			$vhd_data_scsi | Add-VMHardDiskDrive -Path $vhd_data_name -ControllerLocation $vhd_data_lun
@@ -554,11 +560,11 @@ Function New-VmFromParams {
 
 	# attach any additional drives
 	If ($vhd_excl_files) {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - adding SCSI controller for excluded VHDs")
+		Write-Host ("$Hostname,$vm_host,$vm_name - adding SCSI controller for excluded VHDs")
 		$vhd_excl_scsi = Add-VMScsiController -VM $vm -Passthru
 		$vhd_excl_files | ForEach-Object {
 			$vhd_excl_name = $_
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...attaching excluded VHD: " + $vhd_excl_name)
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...attaching excluded VHD: " + $vhd_excl_name)
 			# create new VHD and attach to VM
 			$vhd_excl_lun = [int](($vhd_excl_name -split '.vhdx')[0] -split '-')[-1]
 			$vhd_excl_scsi | Add-VMHardDiskDrive -Path $vhd_excl_name -ControllerLocation $vhd_excl_lun
@@ -566,75 +572,75 @@ Function New-VmFromParams {
 	}
 
 	# retrieve VM Id
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - retrieving VM id for WMI...")
+	Write-Host ("$Hostname,$vm_host,$vm_name - retrieving VM id for WMI...")
 	$vm_id = $vm.Id
 
 	# retrieve HV management objects and method parameters via WMI
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - retrieving settings via WMI...")
+	Write-Host ("$Hostname,$vm_host,$vm_name - retrieving settings via WMI...")
 	$vm_data_object = Get-WmiObject -ComputerName $vm_host -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_VirtualSystemSettingData' -Filter "ConfigurationId = '$vm_id'"
 	$vm_host_object = Get-WmiObject -ComputerName $vm_host -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_VirtualSystemManagementService'
 	$vm_host_params = $vm_host_object.GetMethodParameters('ModifySystemSettings')
 
 	# modify VM firmware settings to fix NumLock on boot
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - ...setting NumLock to True")
+	Write-Host ("$Hostname,$vm_host,$vm_name - ...setting NumLock to True")
 	$vm_data_object.BIOSNumLock = $true
 
 	# update method parameters with modified VM firmware settings
 	$vm_host_params.SystemSettings = $vm_data_object.GetText([System.Management.TextFormat]::CimDtd20)
 
 	# update VM via call to VSMS
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - applying updated firmware settings via WMI...")
+	Write-Host ("$Hostname,$vm_host,$vm_name - applying updated firmware settings via WMI...")
 	$vm_host_output = Invoke-WmiMethod -InputObject $vm_host_object -Name 'ModifySystemSettings' -ArgumentList ($vm_host_params.SystemSettings)
 
 	# check WMI out
 	If ($vm_host_output.ReturnValue -eq 0) {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...firmware settings updated...")
+		Write-Host ("$Hostname,$vm_host,$vm_name - ...firmware settings updated...")
 	}
 	Else {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: firmware settings not updated")
+		Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: firmware settings not updated")
 	}
 
 	# retrieve updated firmware settings from WMI
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - retrieving updated settings via WMI...")
+	Write-Host ("$Hostname,$vm_host,$vm_name - retrieving updated settings via WMI...")
 	$vm_data_object = Get-WmiObject -ComputerName $vm_host -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_VirtualSystemSettingData' -Filter "ElementName = '$vm_name'"
 
 	# display updated firmware settings from WMI
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - ...BIOSGUID value: " + $vm_data_object.BIOSGUID)
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - ...NumLock status: " + $vm_data_object.BIOSNumLock)
+	Write-Host ("$Hostname,$vm_host,$vm_name - ...BIOSGUID value: " + $vm_data_object.BIOSGUID)
+	Write-Host ("$Hostname,$vm_host,$vm_name - ...NumLock status: " + $vm_data_object.BIOSNumLock)
 
 	# check if NIC should be removed
-	Write-Host ("$env_comp_name,$vm_host,$vm_name - configuring networking...")
+	Write-Host ("$Hostname,$vm_host,$vm_name - configuring networking...")
 	If ($vm_switch -eq 'Remove') {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...removing NIC; switch was defined as 'Remove'")
+		Write-Host ("$Hostname,$vm_host,$vm_name - ...removing NIC; switch was defined as 'Remove'")
 		$vm_nic = Get-VMNetworkAdapter -VM $vm
 		$vm_nic | Remove-VMNetworkAdapter
 	}
 	Else {
 		# set the name of the NIC
 		If ($vm_nicname) {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...renaming NIC to: " + $vm_nicname)
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...renaming NIC to: " + $vm_nicname)
 			$vm | Rename-VMNetworkAdapter -NewName $vm_nicname
 			$vm | Set-VMNetworkAdapter -DeviceNaming On
 		}
 
 		# set the VLAN on the NIC
 		If ($vm_vlan -gt 0) {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...setting VLAN to: " + $vm_vlan)
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...setting VLAN to: " + $vm_vlan)
 			$vm | Set-VMNetworkAdapterVlan -Access -VlanId $vm_vlan
 		}
 
 		# set the MAC address
 		$vm_hw_address = $null
 		If (($vm_dhcp_server -and $vm_dhcp_scope) -or $vm_osd_method -eq 'sccm') {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - retriving MAC address for DHCP or OSD...")
+			Write-Host ("$Hostname,$vm_host,$vm_name - retriving MAC address for DHCP or OSD...")
 			If ($vm_mac_prefix -and $vm_ip_address) {
 				# add logic for checking mac prefix (see https://en.wikipedia.org/wiki/MAC_address)
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...creating MAC address from prefix and IP")
+				Write-Host ("$Hostname,$vm_host,$vm_name - ...creating MAC address from prefix and IP")
 				$vm_hw_address = ($vm_mac_prefix + (($vm_ip_address.Split('.') | ForEach-Object { ([int]$_).ToString('X2') }) -join $null)).ToUpper()
 			}
 			Else {
 				# start the VM to get the mac address assigned
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...getting MAC address from VM")
+				Write-Host ("$Hostname,$vm_host,$vm_name - ...getting MAC address from VM")
 				$vm | Start-VM
 				$vm | Stop-VM -Force; Start-Sleep -Seconds 5
 				$vm | Set-VM -AutomaticStartAction Start
@@ -645,12 +651,12 @@ Function New-VmFromParams {
 			}
 		}
 		Else {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...skipping MAC address, OSD method is not 'sccm' or required DHCP values are not defined")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...skipping MAC address, OSD method is not 'sccm' or required DHCP values are not defined")
 		}
 
 		# statically assign the mac address to the NIC
 		If ($vm_hw_address) {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...setting static mac address: " + $vm_hw_address)
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...setting static mac address: " + $vm_hw_address)
 			$vm | Set-VMNetworkAdapter -StaticMacAddress $vm_hw_address
 		}
 	}
@@ -658,9 +664,6 @@ Function New-VmFromParams {
 	# return VM object
 	Return $vm
 }
-
-# create global objects
-$env_comp_name = $env:computername.ToLower()
 
 # import VM information
 $vm_list = @()
@@ -672,7 +675,7 @@ If ($VmName) {
 		$vm_list += Import-Csv -Path $VmCsv | Where-Object { $_.Name -eq $vm_temp }
 	}
 	If ($vm_list.Name -notcontains $vm_temp) {
-		Write-Host ("$env_comp_name,$vm_name - VM not found in CSV, exiting!")
+		Write-Host ("$Hostname,$vm_name - VM not found in CSV, exiting!")
 		Return
 	}
 }
@@ -705,27 +708,27 @@ ForEach ($VmParams in $vm_list) {
 	$vm_host_clustered = $null
 
 	# check for host overrides
-	If ($HostName) { $vm_host = $HostName }
-	If ($HostPath) { $vm_path = $HostPath }
+	If ($VMHost) { $vm_host = $VMHost }
+	If ($VMHostPath) { $vm_path = $VMHostPath }
 
 	# check host
 	switch ($vm_host){
 		'cloud' {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - VM is in the cloud, skipping: VM build and DHCP configuration")
+			Write-Host ("$Hostname,$vm_host,$vm_name - VM is in the cloud, skipping: VM build and DHCP configuration")
 			$vm_in_the_cloud = $true	
 		}
 		$null {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: host not defined for VM")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: host not defined for VM")
 			Return
 		}
 		Default {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - checking host...")
+			Write-Host ("$Hostname,$vm_host,$vm_name - checking host...")
 			Try {
 				$null = Test-WSMan -ComputerName $vm_host -Authentication 'Default'
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...found host")
+				Write-Host ("$Hostname,$vm_host,$vm_name - ...found host")
 			}
 			Catch {
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: could not connect to host")
+				Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: could not connect to host")
 				Return
 			}
 		}
@@ -733,70 +736,70 @@ ForEach ($VmParams in $vm_list) {
 
 	# check if host is clustered
 	If (-not $vm_in_the_cloud) {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - checking if host is clustered...")
+		Write-Host ("$Hostname,$vm_host,$vm_name - checking if host is clustered...")
 		$vm_host_clustered = Get-Service -ComputerName $vm_host | Where-Object { $_.Name -eq 'ClusSvc' -and $_.StartType -eq 'Automatic' -and $_.Status -eq 'Running' }
 		# check for VM on cluster
 		If ($vm_host_clustered) {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...host is clustered")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...host is clustered")
 			# check for VM on cluster
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - checking cluster for VM resource group...")
+			Write-Host ("$Hostname,$vm_host,$vm_name - checking cluster for VM resource group...")
 			$vm_cluster = Invoke-Command -ComputerName $vm_host { (Get-Cluster).Name }
 			$vm_cluster_group = Get-ClusterGroup -Cluster $vm_cluster | Where-Object { $_.Name -eq $vm_name -and $_.GroupType -eq 'VirtualMachine' }
 			If ($vm_cluster_group) {
 				# verify the resource group is on the local node
 				$vm_node = $vm_cluster_group.OwnerNode.NodeName
 				If ($vm_host -ne $vm_node) {
-					Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM resource group found on different host in cluster, changing host to: " + $vm_node)
+					Write-Host ("$Hostname,$vm_host,$vm_name - ...VM resource group found on different host in cluster, changing host to: " + $vm_node)
 					$vm_host = $vm_node
 				}
 			}
 			Else {
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - ...VM resource group not found on cluster")
+				Write-Host ("$Hostname,$vm_host,$vm_name - ...VM resource group not found on cluster")
 			}
 		}
 		Else {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ...host is standalone")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...host is standalone")
 		}	
 	}
 
 	# check for VM on host
 	If (-not $vm_in_the_cloud) {
 		# try to get VM from host
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - checking for VM on host...")
+		Write-Host ("$Hostname,$vm_host,$vm_name - checking for VM on host...")
 		$vm_on_host = Get-VM -ComputerName $vm_host | Where-Object { $_.Name -eq $vm_name }
 	}
 
 	# start VM provisioning
 	If (-not $vm_on_host -and -not $vm_in_the_cloud) {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ....VM not found on host")
+		Write-Host ("$Hostname,$vm_host,$vm_name - ....VM not found on host")
 		Try {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - creating VM on host...")
+			Write-Host ("$Hostname,$vm_host,$vm_name - creating VM on host...")
 			$vm = New-VmFromParams -VmParams $VmParams
 		}
 		Catch {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: creating VM on host...")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: creating VM on host...")
 			Return
 		}
 	}
 	ElseIf (-not $vm_in_the_cloud) {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - skipping VM provisioning, VM already exists")
+		Write-Host ("$Hostname,$vm_host,$vm_name - skipping VM provisioning, VM already exists")
 		$vm = $vm_on_host
 	}
 
 	# start DHCP tasks unless cloud VM
 	If ($vm_dhcp_server -and $vm_dhcp_scope -and $vm_ip_address -and $vm_hw_address -and -not $vm_in_the_cloud) {
 		# check for existing DHCP reservation
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - checking for DHCP reservation on: '$vm_dhcp_server'")
+		Write-Host ("$Hostname,$vm_host,$vm_name - checking for DHCP reservation on: '$vm_dhcp_server'")
 		Try {
 			$vm_dhcp = $null
 			$vm_dhcp = Get-DhcpServerv4Reservation -ComputerName $vm_dhcp_server -ScopeId $vm_dhcp_scope | Where-Object { $_.IPAddress -eq $vm_ip_address }
 			If ($vm_dhcp) {
 				$vm_dhcp | Remove-DhcpServerv4Reservation -ComputerName $vm_dhcp_server
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - removed existing DHCP reservation on '$vm_dhcp_server'")
+				Write-Host ("$Hostname,$vm_host,$vm_name - removed existing DHCP reservation on '$vm_dhcp_server'")
 			}
 		}
 		Catch {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: removing existing DHCP reservcation on '$vm_dhcp_server'")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: removing existing DHCP reservcation on '$vm_dhcp_server'")
 			Return
 		}
 
@@ -806,38 +809,38 @@ ForEach ($VmParams in $vm_list) {
 		$vm_dns_name = ($vm_name + '.' + $vm_dns_tail).ToLower()
 
 		# declare values
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - creating DHCP reservation...")
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...Reservation name : $vm_dns_name")
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...Hardare address  : $vm_mac_addr")
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - ...IP Address       : $vm_ip_address")
+		Write-Host ("$Hostname,$vm_host,$vm_name - creating DHCP reservation...")
+		Write-Host ("$Hostname,$vm_host,$vm_name - ...Reservation name : $vm_dns_name")
+		Write-Host ("$Hostname,$vm_host,$vm_name - ...Hardare address  : $vm_mac_addr")
+		Write-Host ("$Hostname,$vm_host,$vm_name - ...IP Address       : $vm_ip_address")
 
 		# create DHCP reservation
 		Try {
 			Add-DhcpServerv4Reservation -ComputerName $vm_dhcp_server -Name $vm_dns_name -ScopeId $vm_dhcp_scope -IPAddress $vm_ip_address -ClientId $vm_mac_addr
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - created DHCP reservation on '$vm_dhcp_server'")
+			Write-Host ("$Hostname,$vm_host,$vm_name - created DHCP reservation on '$vm_dhcp_server'")
 		}
 		Catch {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - ERROR: creating DHCP reservcation on '$vm_dhcp_server'")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: creating DHCP reservcation on '$vm_dhcp_server'")
 			Return
 		}
 
 	}
 	Else {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - skipping DHCP configuration, required information not provided")
+		Write-Host ("$Hostname,$vm_host,$vm_name - skipping DHCP configuration, required information not provided")
 	}
 
 	# start OSD tasks
 	If ($vm_osd_method) {
-		Write-Host ("$env_comp_name,$vm_host,$vm_name - VM will be provisioned via: '$($vm_osd_method.ToUpper())'")
+		Write-Host ("$Hostname,$vm_host,$vm_name - VM will be provisioned via: '$($vm_osd_method.ToUpper())'")
 		switch ($vm_osd_method) {
 			'iso' {
 				# get the mac address from the VM NIC
 				$vm = Get-VM -ComputerName $vm_host -Name $vm_name
 
 				# attach scsi controller for ISOs
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - adding SCSI controller for ISO file")
+				Write-Host ("$Hostname,$vm_host,$vm_name - adding SCSI controller for ISO file")
 				$vm_dvd_scsi = Add-VMScsiController -VM $vm -Passthru
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - adding DVD drive for ISO file")
+				Write-Host ("$Hostname,$vm_host,$vm_name - adding DVD drive for ISO file")
 				$vm_dvd_drive = $vm_dvd_scsi | Add-VMDvdDrive -Passthru
 
 				# attach any additional drives
@@ -845,17 +848,17 @@ ForEach ($VmParams in $vm_list) {
 					$vm_host_found_iso = $null
 					$vm_host_found_iso = Invoke-Command -ComputerName $vm_host -ScriptBlock { Test-Path -Path $using:vm_osd_path }
 					If ($vm_host_found_iso) {
-						Write-Host ("$env_comp_name,$vm_host,$vm_name - ...attaching ISO file: " + $vm_osd_path)
+						Write-Host ("$Hostname,$vm_host,$vm_name - ...attaching ISO file: " + $vm_osd_path)
 						$vm_dvd_drive | Set-VMDvdDrive -Path $vm_osd_path
-						Write-Host ("$env_comp_name,$vm_host,$vm_name - ...setting DVD drive as first boot device")
+						Write-Host ("$Hostname,$vm_host,$vm_name - ...setting DVD drive as first boot device")
 						$vm | Set-VMFirmware -FirstBootDevice $vm_dvd_drive
 					}
 					Else {
-						Write-Host ("$env_comp_name,$vm_host,$vm_name - ...skipping ISO attach, VM host could not find file: " + $vm_osd_path)
+						Write-Host ("$Hostname,$vm_host,$vm_name - ...skipping ISO attach, VM host could not find file: " + $vm_osd_path)
 					}
 				}
 				Else {
-					Write-Host ("$env_comp_name,$vm_host,$vm_name - ...skipping ISO attach, no file specified")
+					Write-Host ("$Hostname,$vm_host,$vm_name - ...skipping ISO attach, no file specified")
 				}
 			}
 			'sccm' {
@@ -865,7 +868,7 @@ ForEach ($VmParams in $vm_list) {
 				New-DeviceInWds -VmParams $VmParams
 			}
 			default {
-				Write-Host ("$env_comp_name,$vm_name - ...skipping OSD, unknown provisioning method provided: " + $vm_osd_method.ToUpper())
+				Write-Host ("$Hostname,$vm_name - ...skipping OSD, unknown provisioning method provided: " + $vm_osd_method.ToUpper())
 			}
 		}
 	}
@@ -874,25 +877,25 @@ ForEach ($VmParams in $vm_list) {
 	If ($vm_host_clustered -and -not $vm_in_the_cloud) {
 		# cluster VM if necessary
 		If ($null -eq $vm_cluster_group) {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - VM ready to be clustered, adding to cluster: " + $vm_cluster)
+			Write-Host ("$Hostname,$vm_host,$vm_name - VM ready to be clustered, adding to cluster: " + $vm_cluster)
 			$vm_cluster_group = Add-ClusterVirtualMachineRole -Cluster $vm_cluster -VMId $vm.Id
 		}
 		If ($vm_cluster_group) {
 			# power on VM if necessary
 			If ($vm_cluster_group.State -ne 'Online') {
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - VM powered off, starting VM on cluster...")
+				Write-Host ("$Hostname,$vm_host,$vm_name - VM powered off, starting VM on cluster...")
 				$vm_cluster_group | Start-ClusterGroup | Out-Null
 			}
 			# set VM priority if defined
 			If ($vm_prio) {
-				Write-Host ("$env_comp_name,$vm_host,$vm_name - VM priority defined, setting to: " + $vm_prio)
+				Write-Host ("$Hostname,$vm_host,$vm_name - VM priority defined, setting to: " + $vm_prio)
 				$vm_cluster_group.Priority = $vm_prio
 			}
 		}
 	}
 	ElseIf (-not $vm_in_the_cloud) {
 		If ($vm.State -ne 'Running') {
-			Write-Host ("$env_comp_name,$vm_host,$vm_name - starting VM on host")
+			Write-Host ("$Hostname,$vm_host,$vm_name - starting VM on host")
 			$vm | Start-VM	
 		}
 	}
