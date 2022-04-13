@@ -1,3 +1,20 @@
+Function Get-PreviousDate {
+	Param (
+		[Parameter(Mandatory = $true, Position = 0)][ValidateRange(1, 65535)]
+		[uint16]$OlderThanUnits,
+		[Parameter(Mandatory = $true, Position = 1)][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
+		[string]$OlderThanType
+	)
+	Switch ($OlderThanType) {
+		'Minutes' { Return (Get-Date).AddMinutes(-1 * $OlderThanUnits) }
+		'Hours' { Return (Get-Date).AddHours(-1 * $OlderThanUnits) }
+		'Days' { Return (Get-Date).AddDays(-1 * $OlderThanUnits) }
+		'Weeks' { Return (Get-Date).AddWeeks(-1 * $OlderThanUnits) }
+		'Months' { Return (Get-Date).AddMonths(-1 * $OlderThanUnits) }
+		'Years' { Return (Get-Date).AddYears(-1 * $OlderThanUnits) }
+	}
+}
+
 Function Write-LogToMultiple {
 	[CmdletBinding()]
 	Param (
@@ -227,15 +244,8 @@ Function Remove-LogToMultiple {
 	}
 
 	# get date from inputs
-	switch ($OlderThanType) {
-		'Minutes' { $log_date_time = (Get-Date).AddMinutes(-1 * $OlderThanUnits) }
-		'Hours' { $log_date_time = (Get-Date).AddHours(-1 * $OlderThanUnits) }
-		'Days' { $log_date_time = (Get-Date).AddDays(-1 * $OlderThanUnits) }
-		'Weeks' { $log_date_time = (Get-Date).AddWeeks(-1 * $OlderThanUnits) }
-		'Months' { $log_date_time = (Get-Date).AddMonths(-1 * $OlderThanUnits) }
-		'Years' { $log_date_time = (Get-Date).AddYears(-1 * $OlderThanUnits) }
-	}
-	Write-LogToMultiple -LogText "Checking for files older than: $($log_date_time | Get-Date -Format FileDateTime)"
+	$log_date_time = Get-PreviousDate -OlderThanUnits $OlderThanUnits -OlderThanType $OlderThanType
+	Write-LogToMultiple -LogText "Checking for files older than $OlderThanUnits $OlderThanType ($($log_date_time.ToString()))"
 
 	# get files from date
 	$log_files_old = Get-ChildItem -Path $log_path | Where-Object { $_.LastWriteTime -lt $log_date_time }
