@@ -6,6 +6,7 @@ Function Get-PreviousDate {
 		[string]$OlderThanType
 	)
 	Switch ($OlderThanType) {
+		'Seconds' { Return (Get-Date).AddSeconds(-1 * $OlderThanUnits) }
 		'Minutes' { Return (Get-Date).AddMinutes(-1 * $OlderThanUnits) }
 		'Hours' { Return (Get-Date).AddHours(-1 * $OlderThanUnits) }
 		'Days' { Return (Get-Date).AddDays(-1 * $OlderThanUnits) }
