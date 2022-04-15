@@ -114,14 +114,17 @@ Function Protect-CmsCredentialSecret {
 	.PARAMETER Template
 	Specifies the certificate template for the CMS certificate.
 
+	.PARAMETER Reset
+	Specifies that a new CMS certificate is required.
+
 	.PARAMETER Prefix
 	Specifies the prefix for the CMS credential file. Set to 'cms' by default.
 
 	.PARAMETER Hostname
 	Specifies the hostname in the CMS credential. Set to the local hostname by default.
 
-	.PARAMETER Reset
-	Specifies that a new CMS certificate is required.
+	.PARAMETER ParentPath
+	Specifies the parent path of the CMS credential folder. Set to the ProgramData folder by default.
 
 	.INPUTS
 	None.
@@ -140,19 +143,20 @@ Function Protect-CmsCredentialSecret {
 		[Parameter(Position = 2)]
 		[string]$Template,
 		[Parameter(Position = 3)]
-		[string]$Prefix = 'cms',
-		[Parameter(Position = 4)]
 		[bool]$Reset,
+		[Parameter(Position = 4)]
+		[string]$Prefix = 'cms',
 		[Parameter(Position = 5)]
-		[string]$Hostname = [System.Environment]::MachineName
+		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
+		[Parameter(Position = 6)]
+		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData')
 	)
 
 	# define required objects
 	$cms_cert = $null
 	$cms_make = $false
 	$cms_date = Get-Date -Format FileDateTimeUniversal
-	$cms_root = [System.Environment]::GetFolderPath('CommonApplicationData')
-	$cms_path = Join-Path -Path $cms_root -ChildPath ($Prefix, $Hostname -join '_')
+	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_')
 
 	# verify cms folder
 	Write-Host "Checking CMS directory: $cms_path"
@@ -295,6 +299,9 @@ Function Remove-CmsCredentialSecret {
 	.PARAMETER Hostname
 	Specifies the hostname in the CMS credential. Set to the local hostname by default.
 
+	.PARAMETER ParentPath
+	Specifies the parent path of the CMS credential folder. Set to the ProgramData folder by default.
+
 	.INPUTS
 	None.
 
@@ -310,12 +317,13 @@ Function Remove-CmsCredentialSecret {
 		[Parameter(Position = 1)]
 		[string]$Prefix = 'cms',
 		[Parameter(Position = 2)]
-		[string]$Hostname = [System.Environment]::MachineName
+		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
+		[Parameter(Position = 3)]
+		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData')
 	)
 
 	# define strings
-	$cms_root = [System.Environment]::GetFolderPath('CommonApplicationData')
-	$cms_path = Join-Path -Path $cms_root -ChildPath ($Prefix, $Hostname -join '_')
+	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_')
 	$cms_cert_regex = ("CN=$Hostname", $Target, '\d{8}') -join '-'
 	$cms_file_regex = ($Prefix, $Hostname, $Target, '-\d{8}') -join '_'
 
@@ -351,6 +359,9 @@ Function Update-CmsCredentialAccess {
 	.PARAMETER Principals
 	Specifies one or more Active Directory principals.
 
+	.PARAMETER Hostname
+	Specifies the hostname in the CMS credential. Set to the local hostname by default.
+
 	.INPUTS
 	None.
 
@@ -366,11 +377,13 @@ Function Update-CmsCredentialAccess {
 		[Parameter(Position = 1)]
 		[string]$Target,
 		[Parameter(Position = 2)]
-		[string[]]$Principals
+		[string[]]$Principals,
+		[Parameter(Position = 3)]
+		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
 	# create regex to match expected CMS certificate name of machinename followed by the target name then either a simple date or a FileDateTimeUniversal
-	$cms_regx = "CN=$([System.Environment]::MachineName)-$Target-\d{8}"
+	$cms_regx = "CN=$Hostname-$Target-\d{8}"
 
 	# retrieve SIDs for principals
 	$cms_sids = @()
@@ -700,11 +713,17 @@ Function Unprotect-CmsCredentials {
 	.PARAMETER Target
 	Specifies the identity of a CMS credential.
 
+	.PARAMETER PasswordOnly
+	Specifies the credential should be returned as a plain-text password. This changes the output to a PSCustomObject with Username and Password properties.
+
 	.PARAMETER Prefix
 	Specifies the prefix for the CMS credential file. Set to 'cms' by default.
 
-	.PARAMETER PasswordOnly
-	Specifies the credential should be returned as a plain-text password. This changes the output to a PSCustomObject with Username and Password properties.
+	.PARAMETER Hostname
+	Specifies the hostname in the CMS credential. Set to the local hostname by default.
+
+	.PARAMETER ParentPath
+	Specifies the parent path of the CMS credential folder. Set to the ProgramData folder by default.
 
 	.INPUTS
 	None.
@@ -731,20 +750,22 @@ Function Unprotect-CmsCredentials {
 		[Parameter(Position = 0, Mandatory = $True)]
 		[string]$Target,
 		[Parameter(Position = 1)]
-		[string]$Prefix = 'cms',
+		[switch]$PasswordOnly,
 		[Parameter(Position = 2)]
-		[switch]$PasswordOnly
+		[string]$Prefix = 'cms',
+		[Parameter(Position = 3)]
+		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
+		[Parameter(Position = 4)]
+		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData')
 	)
 
 	# define required strings
-	$cms_host = [System.Environment]::MachineName
-	$cms_root = [System.Environment]::GetFolderPath('CommonApplicationData')
-	$cms_path = Join-Path -Path $cms_root -ChildPath ($Prefix + '_' + $cms_host)
+	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix + '_' + $Hostname)
 
 	# verify cms folder
 	If (Test-Path -Path $cms_path) {
 		# get cms file matching the host and target
-		$cms_file = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $Target -and $_.BaseName -match $cms_host } | Sort-Object BaseName | Select-Object -Last 1
+		$cms_file = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $Target -and $_.BaseName -match $Hostname } | Sort-Object BaseName | Select-Object -Last 1
 		If ($cms_file) {
 			# convert the encrypted file into an object
 			Try {
