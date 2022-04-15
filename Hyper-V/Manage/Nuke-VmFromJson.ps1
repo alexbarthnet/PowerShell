@@ -52,21 +52,20 @@ Function Remove-DeviceFromSccm {
 		$cm_class = 'SMS_R_System'
 
 		# empty variables
-		$dev_found = $null
-		$dev_resid = $null
+		$device_resid = $null
 
 		# check for device by mac address via WMI call
 		If ($device_hwid) {
 			Write-Host ("$script_host,$sccm_server,$device_name - retrieving device with MAC address: " + $device_hwid)
-			$dev_found = @()
-			$dev_found += Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.MacAddresses -eq $device_hwid }
-			switch ($dev_found.Count) {
+			$device_found_by_mac = @()
+			$device_found_by_mac += Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.MacAddresses -eq $device_hwid }
+			switch ($device_found_by_mac.Count) {
 				1 {
-					$dev_resid = $dev_found.ResourceId
-					Write-Host ("$script_host,$sccm_server,$device_name - ...found device by MAC address, resource ID: $dev_resid")
+					$device_resid = $device_found_by_mac.ResourceId
+					Write-Host ("$script_host,$sccm_server,$device_name - ...found device by MAC address, resource ID: $device_resid")
 				}
 				0 {
-					$dev_resid = $null
+					$device_resid = $null
 					Write-Host ("$script_host,$sccm_server,$device_name - ...could not find device by MAC address")
 				}
 				Default {
@@ -78,17 +77,17 @@ Function Remove-DeviceFromSccm {
 		}
 
 		# check for device by mac address via WMI call
-		If ($null -eq $dev_resid) {
+		If ($null -eq $device_resid) {
 			Write-Host ("$script_host,$sccm_server,$device_name - retrieving device with name: " + $device_name)
-			$dev_found = @()
-			$dev_found += Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.Name -eq $device_name }
-			switch ($dev_found.Count) {
+			$device_found_by_name = @()
+			$device_found_by_name += Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.Name -eq $device_name }
+			switch ($device_found_by_name.Count) {
 				1 {
-					$dev_resid = $dev_found.ResourceId
-					Write-Host ("$script_host,$sccm_server,$device_name - ...found device by name, resource ID: $dev_resid")
+					$device_resid = $device_found_by_name.ResourceId
+					Write-Host ("$script_host,$sccm_server,$device_name - ...found device by name, resource ID: $device_resid")
 				}
 				0 {
-					$dev_resid = $null
+					$device_resid = $null
 					Write-Host ("$script_host,$sccm_server,$device_name - ...could not find device by name")
 				}
 				Default {
@@ -100,13 +99,13 @@ Function Remove-DeviceFromSccm {
 		}
 
 		# remove the device
-		If ($dev_resid) {
+		If ($device_resid) {
 			# reset PXE state
 			Write-Host ("$script_host,$sccm_server,$device_name - resetting PXE deployment status for VM")
-			Clear-CMPxeDeployment -ResourceId $dev_resid
+			Clear-CMPxeDeployment -ResourceId $device_resid
 			# remove device
 			Write-Host ("$script_host,$sccm_server,$device_name - removing device")
-			Remove-CMResource -ResourceId $dev_resid -Force
+			Remove-CMResource -ResourceId $device_resid -Force
 		}
 	}
 }
