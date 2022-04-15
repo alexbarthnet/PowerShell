@@ -262,20 +262,22 @@ Function Protect-CmsCredentialSecret {
 		# if CMS was made, clean up files and certificates
 		If ($cms_made) {
 			# retrieve old certificates files
+			Write-Host "Checking for old CMS certificates: 'Cert:\LocalMachine\My'"
 			$cms_cert_old = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_cert_regex } | Sort-Object -Property 'NotBefore' | Select-Object -SkipLast 1
 
 			# remove old certificates files
 			$cms_cert_old | ForEach-Object {
-				Write-Host "Removing old CMS certificate: '$($_.Subject)'"
+				Write-Host "...removing old CMS certificate: '$($_.Subject)'"
 				$_ | Remove-Item -Force
 			}
 
 			# retrieve old credential files
+			Write-Host "Checking for old CMS credentials: $cms_path"
 			$cms_file_old = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $cms_file_regex } | Sort-Object -Property 'BaseName' | Select-Object -SkipLast 1
 
 			# remove old credential files
 			$cms_file_old | ForEach-Object {
-				Write-Host "Removing old CMS credential: '$($_.FullName)'"
+				Write-Host "...removing old CMS credential: '$($_.FullName)'"
 				$_ | Remove-Item -Force
 			}
 		}
