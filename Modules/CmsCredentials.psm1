@@ -239,7 +239,7 @@ Function Protect-CmsCredentialSecret {
 		# define required strings
 		$cms_name = ($Prefix, $Hostname, $Target, $cms_date) -join '_'
 		$cms_file = Join-Path -Path $cms_path -ChildPath "$cms_name.txt"
-		$cms_file_regex = ($Prefix, $Hostname, $Target, '-\d{8}') -join '_'
+		$cms_file_regex = ($Prefix, $Hostname, $Target, '\d{8}') -join '_'
 
 		# create custom object for export
 		$cms_cred = $null
