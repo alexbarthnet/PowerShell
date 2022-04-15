@@ -148,7 +148,7 @@ Function Protect-CmsCredentialSecret {
 		[string]$Prefix = 'cms',
 		[Parameter(Position = 5)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
-		[Parameter(Position = 6)]
+		[Parameter(Position = 6)][ValidateScript({Test-Path -Path $_})]
 		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData')
 	)
 
@@ -318,7 +318,7 @@ Function Remove-CmsCredentialSecret {
 		[string]$Prefix = 'cms',
 		[Parameter(Position = 2)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
-		[Parameter(Position = 3)]
+		[Parameter(Position = 3)][ValidateScript({Test-Path -Path $_})]
 		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData')
 	)
 
@@ -505,8 +505,8 @@ Function Protect-CmsCredentials {
 	.PARAMETER Password
 	Specifies the password of a new credential to be protected with CMS.
 
-	.PARAMETER Template
-	Specifies the certificate template for the CMS certificate.
+	.PARAMETER TemplatePath
+	Specifies the path to the certificate template for the CMS certificate.
 
 	.PARAMETER Prefix
 	Specifies the prefix for the CMS credential file. Set to 'cms' by default.
@@ -542,7 +542,7 @@ Function Protect-CmsCredentials {
 		[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Pass')]
 		[securestring]$Password,
 		[ValidateScript({ Test-Path -Path $_ })]
-		[string]$Template,
+		[string]$TemplatePath,
 		[string]$Prefix = 'cms',
 		[string[]]$ComputerName,
 		[string[]]$ClusterName,
@@ -551,19 +551,22 @@ Function Protect-CmsCredentials {
 	)
 
 	# check credentials
-	If ($null -ne $Cred) {
-		$cms_cred = $Cred
-	}
-	Else {
-		$cms_cred = New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $Password
+	If ($null -eq $Cred) {
+		Try {
+			$Cred = New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $Password
+		}
+		Catch {
+			Write-Host 'ERROR: could not create credential from username and password'
+			Return
+		}
 	}
 
 	# import template if requested
-	If ([string]::IsNullOrEmpty($Template)) {
-		$cms_template_text = $CmsTemplate
+	If ([string]::IsNullOrEmpty($TemplatePath)) {
+		$Template = $CmsTemplate
 	}
 	Else {
-		$cms_template_text = Get-Content -Path $Template
+		$Template = Get-Content -Path $TemplatePath
 	}
 
 	# get computer names
@@ -573,9 +576,9 @@ Function Protect-CmsCredentials {
 	# define parameter hashtable
 	$ProtectParameters = @{
 		Target   = $Target
-		Cred     = $cms_cred
+		Cred     = $Cred
 		Prefix   = $Prefix
-		Template = $cms_template_text
+		Template = $Template
 		Reset    = $Reset
 	}
 
@@ -755,7 +758,7 @@ Function Unprotect-CmsCredentials {
 		[string]$Prefix = 'cms',
 		[Parameter(Position = 3)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
-		[Parameter(Position = 4)]
+		[Parameter(Position = 4)][ValidateScript({Test-Path -Path $_})]
 		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData')
 	)
 
@@ -1069,7 +1072,7 @@ Function Revoke-CmsCredentialAccess {
 					Update-CmsCredentialAccess @using:UpdateParameters
 				}
 				Catch {
-					Write-Host "ERROR: could not grant credential access on '$using:CmsComputer'"
+					Write-Host "ERROR: could not revoke credential access on '$using:CmsComputer'"
 				}
 			}
 		}
