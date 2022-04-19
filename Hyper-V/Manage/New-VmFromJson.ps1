@@ -115,7 +115,7 @@ Function Add-DeviceToSccm {
 				Write-Host ("$script_host,$remote_host,$device_name - ...remove extra devices before continuing")
 				Return
 			}
-			ElseIf ($device_found_by_name.Client = 1) {
+			ElseIf ($device_found_by_name.Client -eq 1) {
 				# declare the device was found and the client is installed
 				$device_resid = $device_found_by_name.ResourceId
 				Write-Host ("$script_host,$remote_host,$device_name - ...found device by name with client installed, resource ID: " + $device_resid)
@@ -144,7 +144,7 @@ Function Add-DeviceToSccm {
 				Write-Host ("$script_host,$remote_host,$device_name - ...remove extra devices before continuing")
 				Return
 			}
-			ElseIf ($device_found_by_name.Client = 1) {
+			ElseIf ($device_found_by_name.Client -eq 1) {
 				# declare the device was found but the client is installed
 				Write-Host ("$script_host,$remote_host,$device_name - EXCEPTION: device found WITH client installed")
 				Write-Host ("$script_host,$remote_host,$device_name - ...verify any previous device has been removed from SCCM")
