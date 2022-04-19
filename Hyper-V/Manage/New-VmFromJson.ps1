@@ -609,7 +609,7 @@ Function New-VmFromParams {
 		# - minimum must be between 32MB and startup memory, inclusive
 		# - maximum must be between startup memory and 12TB, inclusive
 		If (($vm_memory_minimum_bytes -ge 32MB) -and ($vm_memory_minimum_bytes -le $vm_memory_startup_bytes) -and ($vm_memory_maximum_bytes -ge $vm_memory_startup_bytes) -and ($vm_memory_maximum_bytes -le 12TB)) {
-			Write-Host ("$Hostname,$vm_host,$vm_name - ...enabling dynamic memory (start, min, max): $(Format-Bytes -Size $vm_memory), $(Format-Bytes -Size $vm_memory_minimum_bytes), $(Format-Bytes -Size $vm_memory_maximum_bytes)")
+			Write-Host ("$Hostname,$vm_host,$vm_name - ...enabling dynamic memory (start, min, max): $(Format-Bytes -Size $vm_memory_startup_bytes), $(Format-Bytes -Size $vm_memory_minimum_bytes), $(Format-Bytes -Size $vm_memory_maximum_bytes)")
 			$vm | Set-VMMemory -DynamicMemoryEnabled $true -StartupBytes $vm_memory_startup_bytes -MinimumBytes $vm_memory_minimum_bytes -MaximumBytes $vm_memory_maximum_bytes
 		}
 		Else {
