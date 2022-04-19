@@ -951,8 +951,14 @@ ForEach ($VmParams in $vm_list) {
 	If ($vm_host_clustered -and -not $vm_in_the_cloud) {
 		# cluster VM if necessary
 		If ($null -eq $vm_cluster_group) {
-			Write-Host ("$Hostname,$vm_host,$vm_name - VM ready to be clustered, adding to cluster: " + $vm_cluster)
-			$vm_cluster_group = Add-ClusterVirtualMachineRole -Cluster $vm_cluster -VMId $vm.Id
+			Write-Host ("$Hostname,$vm_host,$vm_name - VM ready to be clustered, adding to cluster: $vm_cluster")
+			Try {
+				$vm_cluster_group = Add-ClusterVirtualMachineRole -Cluster $vm_cluster -VMId $vm.Id
+			}
+			Catch {
+				Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: adding VM to cluster: '$vm_cluster'")
+				Return	
+			}
 		}
 		If ($vm_cluster_group) {
 			# power on VM if necessary
@@ -962,7 +968,7 @@ ForEach ($VmParams in $vm_list) {
 			}
 			# set VM priority if defined
 			If ($vm_prio) {
-				Write-Host ("$Hostname,$vm_host,$vm_name - VM priority defined, setting to: " + $vm_prio)
+				Write-Host ("$Hostname,$vm_host,$vm_name - VM priority defined, setting to: $vm_prio")
 				$vm_cluster_group.Priority = $vm_prio
 			}
 		}
