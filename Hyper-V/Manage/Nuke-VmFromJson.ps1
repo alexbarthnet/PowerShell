@@ -27,6 +27,9 @@ Function Remove-DeviceFromSccm {
 		$vm_mac_address = ($VmMacAddress -split '(\w{2})' | Where-Object { $_ -ne '' }) -join ':'
 		Write-Host ("$Hostname,$vm_host,$vm_name - formatted MAC address for SCCM: " + $vm_mac_address)
 	}
+	Else {
+		$vm_mac_address = $VmMacAddress
+	}
 
 	# connect to SCCM remotely
 	Write-Host ("$Hostname,$vm_host,$vm_name - connecting to SCCM: " + $vm_deployment_server)
