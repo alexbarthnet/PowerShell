@@ -22,6 +22,12 @@ Function Remove-DeviceFromSccm {
 	$vm_name = $VmParams.VMName
 	$vm_deployment_server = $VmParams.DeploymentServer
 
+	# format mac address for SCCM
+	If ($VmMacAddress -like '*:*') {
+		$vm_mac_address = ($VmMacAddress -split '(\w{2})' | Where-Object { $_ -ne '' }) -join ':'
+		Write-Host ("$Hostname,$vm_host,$vm_name - formatted MAC address for SCCM: " + $vm_mac_address)
+	}
+
 	# connect to SCCM remotely
 	Write-Host ("$Hostname,$vm_host,$vm_name - connecting to SCCM: " + $vm_deployment_server)
 	Invoke-Command -ComputerName $vm_deployment_server -ScriptBlock {
@@ -29,7 +35,7 @@ Function Remove-DeviceFromSccm {
 		$script_host = $using:Hostname
 		$sccm_server = $using:vm_deployment_server
 		$device_name = $using:vm_name
-		$device_hwid = $using:VmMacAddress
+		$device_hwid = $using:vm_mac_address
 
 		# retrieve the psd1 file
 		$cm_psd1_path = 'HKLM:\SOFTWARE\Microsoft\SMS\Setup'
@@ -110,24 +116,19 @@ Function Remove-DeviceFromSccm {
 	}
 }
 
-# verify JSON file
-If (-not (Test-Path -Path $VmJson)) {
-	Write-Output "`nERROR: could not find configuration file:"
-	Write-Output "$VmJson`n"
-	Return
-}
-
-# import and filter JSON data
+# create VM list from parameters
 $vm_list = @()
 If ($VmName) {
 	$vm_list += (Get-Content -Path $VmJson | ConvertFrom-Json) | Where-Object { $_.VMHost -and $_.VMName -in $VMName }
-	If ($vm_list.Count -eq 0) {
-		Write-Host ("$Hostname - VM(s) not found in Json, exiting!")
-		Return
-	}
 }
 
-# import VM information
+# check VM list
+If ($vm_list.Count -eq 0) {
+	Write-Host ("$Hostname - VM(s) not found in Json, exiting!")
+	Return
+}
+
+# process VM list
 ForEach ($VmParams in $vm_list) {
 	# define required strings
 	$vm_name = $VmParams.VMName
@@ -155,7 +156,6 @@ ForEach ($VmParams in $vm_list) {
 	# check host
 	switch ($vm_host) {
 		'cloud' {
-			Write-Host ("$Hostname,$vm_host,$vm_name - WARNING: VM is in the cloud, skipping...")
 			$vm_in_the_cloud = $true
 		}
 		$null {
@@ -163,16 +163,20 @@ ForEach ($VmParams in $vm_list) {
 			Return
 		}
 		Default {
-			Write-Host ("$Hostname,$vm_host,$vm_name - checking host...")
 			Try {
 				$null = Test-WSMan -ComputerName $vm_host -Authentication 'Default'
-				Write-Host ("$Hostname,$vm_host,$vm_name - ...found host")
+				Write-Host ("$Hostname,$vm_host,$vm_name - connected to host")
 			}
 			Catch {
 				Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: could not connect to host")
 				Return
 			}
 		}
+	}
+
+	# check if VM is in the cloud
+	If ($vm_in_the_cloud) {
+		Write-Host ("$Hostname,$vm_host,$vm_name - WARNING: VM is in the cloud, skipping VM removal...")
 	}
 
 	# check if host is clustered
