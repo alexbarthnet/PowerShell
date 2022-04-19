@@ -211,8 +211,13 @@ Function Add-DeviceToSccm {
 
 			# wait until device is visible in All Systems collection
 			Write-Host ("$script_host,$remote_host,$device_name - waiting for device to be visible in All Systems collection")
-			Do { Start-Sleep -Seconds 5 }
-			Until ($col_systems | Get-CMCollectionMember -ResourceId $device_resid)
+			Try {
+				Do { Start-Sleep -Seconds 5 }
+				Until ($col_systems | Get-CMCollectionMember -ResourceId $device_resid)	
+			}
+			Catch {
+				Write-Host ("$script_host,$remote_host,$device_name - ERROR: retrieving device from All Systems Collection")
+			}
 
 			# declare the device was found in the collection
 			Write-Host ("$script_host,$remote_host,$device_name - ...found device in All Systems")
@@ -261,9 +266,14 @@ Function Add-DeviceToSccm {
 
 				# wait until device is visible in collection
 				Write-Host ("$script_host,$remote_host,$device_name - waiting for device to be visible in OS deployment collection...")
-				Do { Start-Sleep -Seconds 5 }
-				Until ($col_deploy | Get-CMCollectionMember -ResourceId $device_resid)
-
+				Try {
+					Do { Start-Sleep -Seconds 5 }
+					Until ($col_deploy | Get-CMCollectionMember -ResourceId $device_resid)	
+				}
+				Catch {
+					Write-Host ("$script_host,$remote_host,$device_name - ERROR: retrieving device from OS deployment Collection")
+				}
+	
 				# declare the device was found in the collection
 				Write-Host ("$script_host,$remote_host,$device_name - ...found device in OS deployment collection")
 			}
