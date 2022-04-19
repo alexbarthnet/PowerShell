@@ -731,27 +731,28 @@ Function New-VmFromParams {
 	Return $vm
 }
 
-# verify JSON file
-If (-not (Test-Path -Path $VmJson)) {
-	Write-Output "`nERROR: could not find configuration file:"
-	Write-Output "$VmJson`n"
-	Return
-}
-
-# import and filter JSON data
+# create VM list from parameters
 $vm_list = @()
-If ($VmName) {
+If ($VmHost -and $VmName) {
+	$vm_list += (Get-Content -Path $VmJson | ConvertFrom-Json) | Where-Object { $_.VMHost -eq $VMHost -and $_.VMName -in $VMName }
+}
+ElseIf ($VmHost) {
+	$vm_list += (Get-Content -Path $VmJson | ConvertFrom-Json) | Where-Object { $_.VMHost -eq $VMHost -and $_.VMName }
+}
+ElseIf ($VmName) {
 	$vm_list += (Get-Content -Path $VmJson | ConvertFrom-Json) | Where-Object { $_.VMHost -and $_.VMName -in $VMName }
-	If ($vm_list.Count -eq 0) {
-		Write-Host ("$Hostname - VM(s) not found in Json, exiting!")
-		Return
-	}
 }
 Else {
 	$vm_list += (Get-Content -Path $VmJson | ConvertFrom-Json) | Where-Object { $_.VMHost -and $_.VMName }
 }
 
-# process JSON
+# check VM list
+If ($vm_list.Count -eq 0) {
+	Write-Host ("$Hostname - VM(s) not found in Json, exiting!")
+	Return
+}
+
+# process VM list
 ForEach ($VmParams in $vm_list) {
 	# define required strings
 	$vm_name = $VmParams.VMName
@@ -780,7 +781,7 @@ ForEach ($VmParams in $vm_list) {
 	# check host
 	switch ($vm_host) {
 		'cloud' {
-			Write-Host ("$Hostname,$vm_host,$vm_name - VM is in the cloud, skipping: VM build and DHCP configuration")
+			Write-Host ("$Hostname,$vm_host,$vm_name - WARNING: VM is in the cloud, skipping some steps...")
 			$vm_in_the_cloud = $true
 		}
 		$null {
@@ -788,16 +789,20 @@ ForEach ($VmParams in $vm_list) {
 			Return
 		}
 		Default {
-			Write-Host ("$Hostname,$vm_host,$vm_name - checking host...")
 			Try {
 				$null = Test-WSMan -ComputerName $vm_host -Authentication 'Default'
-				Write-Host ("$Hostname,$vm_host,$vm_name - ...found host")
+				Write-Host ("$Hostname,$vm_host,$vm_name - connected to host")
 			}
 			Catch {
 				Write-Host ("$Hostname,$vm_host,$vm_name - ERROR: could not connect to host")
 				Return
 			}
 		}
+	}
+
+	# check if VM is in the cloud
+	If ($vm_in_the_cloud) {
+		Write-Host ("$Hostname,$vm_host,$vm_name - WARNING: VM is in the cloud, skipping some OS and DHCP provisioning...")
 	}
 
 	# check if host is clustered
