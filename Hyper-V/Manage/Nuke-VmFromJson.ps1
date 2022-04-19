@@ -7,6 +7,8 @@ Param(
 	[string]$VMHost,
 	[Parameter()]
 	[switch]$UseDefaultPathOnHost,
+	[Parameter()]
+	[switch]$RemoveMultipleDevices,
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 )
@@ -60,61 +62,76 @@ Function Remove-DeviceFromSccm {
 		$cm_space = 'Root\SMS\Site_' + $cm_site
 		$cm_class = 'SMS_R_System'
 
-		# empty variables
-		$device_resid = $null
-
 		# check for device by mac address via WMI call
 		If ($device_hwid) {
 			Write-Host ("$script_host,$sccm_server,$device_name - retrieving device with MAC address: " + $device_hwid)
-			$device_found_by_mac = @()
-			$device_found_by_mac += Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.MacAddresses -eq $device_hwid }
-			switch ($device_found_by_mac.Count) {
+			$devices_found_by_mac = @()
+			$devices_found_by_mac += Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.MacAddresses -eq $device_hwid }
+			switch ($devices_found_by_mac.Count) {
 				1 {
-					$device_resid = $device_found_by_mac.ResourceId
-					Write-Host ("$script_host,$sccm_server,$device_name - ...found device by MAC address, resource ID: $device_resid")
+					Write-Host ("$script_host,$sccm_server,$device_name - ...found device by MAC address with resource ID: $($devices_found_by_mac.ResourceId)")
 				}
 				0 {
-					$device_resid = $null
 					Write-Host ("$script_host,$sccm_server,$device_name - ...could not find device by MAC address")
 				}
 				Default {
-					Write-Host ("$script_host,$sccm_server,$device_name - EXCEPTION: multiple devices found with the same MAC address")
-					Write-Host ("$script_host,$sccm_server,$device_name - ...remove extra devices before continuing")
-					Break
+					If ($using:RemoveMultipleDevices) {
+						Write-Host ("$script_host,$sccm_server,$device_name - ...found multiple devices by MAC address, resource ID: $(($devices_found_by_mac.ResourceId) -join ',')")
+					}
+					Else {
+						Write-Host ("$script_host,$sccm_server,$device_name - EXCEPTION: multiple devices found with the same MAC address and RemoveMultipleDevices not set")
+						Write-Host ("$script_host,$sccm_server,$device_name - ...remove extra devices before continuing")
+						Return
+					}
 				}
+			}
+			# remove the device(s)
+			ForEach ($device_found in $devices_found_by_mac) {
+				# retrieve resource ID
+				$device_resid = $device_found.ResourceId
+				# reset PXE state
+				Write-Host ("$script_host,$sccm_server,$device_name - resetting PXE deployment for resource ID: $device_resid")
+				Clear-CMPxeDeployment -ResourceId $device_resid
+				# remove device
+				Write-Host ("$script_host,$sccm_server,$device_name - removing device with resource ID: $device_resid")
+				Remove-CMResource -ResourceId $device_resid -Force
 			}
 		}
 
 		# check for device by mac address via WMI call
 		If ($null -eq $device_resid) {
 			Write-Host ("$script_host,$sccm_server,$device_name - retrieving device with name: " + $device_name)
-			$device_found_by_name = @()
-			$device_found_by_name += Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.Name -eq $device_name }
-			switch ($device_found_by_name.Count) {
+			$devices_found_by_name = @()
+			$devices_found_by_name += Get-WmiObject -Namespace $cm_space -Class $cm_class | Where-Object { $_.Name -eq $device_name }
+			switch ($devices_found_by_name.Count) {
 				1 {
-					$device_resid = $device_found_by_name.ResourceId
-					Write-Host ("$script_host,$sccm_server,$device_name - ...found device by name, resource ID: $device_resid")
+					Write-Host ("$script_host,$sccm_server,$device_name - ...found device by name, resource ID: $($devices_found_by_name.ResourceId)")
 				}
 				0 {
-					$device_resid = $null
 					Write-Host ("$script_host,$sccm_server,$device_name - ...could not find device by name")
 				}
 				Default {
-					Write-Host ("$script_host,$sccm_server,$device_name - EXCEPTION: multiple devices found with the same name")
-					Write-Host ("$script_host,$sccm_server,$device_name - ...remove extra devices before continuing")
-					Break
+					If ($using:RemoveMultipleDevices) {
+						Write-Host ("$script_host,$sccm_server,$device_name - ...found multiple devices by name, resource IDs: $(($devices_found_by_name.ResourceId) -join ',')")
+					}
+					Else {
+						Write-Host ("$script_host,$sccm_server,$device_name - EXCEPTION: multiple devices found with the same name and RemoveMultipleDevices not set")
+						Write-Host ("$script_host,$sccm_server,$device_name - ...remove extra devices before continuing")
+						Return
+					}
 				}
 			}
-		}
-
-		# remove the device
-		If ($device_resid) {
-			# reset PXE state
-			Write-Host ("$script_host,$sccm_server,$device_name - resetting PXE deployment status for VM")
-			Clear-CMPxeDeployment -ResourceId $device_resid
-			# remove device
-			Write-Host ("$script_host,$sccm_server,$device_name - removing device")
-			Remove-CMResource -ResourceId $device_resid -Force
+			# remove the device(s)
+			ForEach ($device_found in $devices_found_by_name) {
+				# retrieve resource ID
+				$device_resid = $device_found.ResourceId
+				# reset PXE state
+				Write-Host ("$script_host,$sccm_server,$device_name - resetting PXE deployment for resource ID: $device_resid")
+				Clear-CMPxeDeployment -ResourceId $device_resid
+				# remove device
+				Write-Host ("$script_host,$sccm_server,$device_name - removing device with resource ID: $device_resid")
+				Remove-CMResource -ResourceId $device_resid -Force
+			}
 		}
 	}
 }
