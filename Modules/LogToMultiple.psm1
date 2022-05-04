@@ -64,7 +64,7 @@ Function Write-LogToMultiple {
 	If ([string]::IsNullOrEmpty($LogEncoding)) { $LogEncoding = 'ascii' }
 
 	# combine strings
-	$text_withdate = @($LogTime, $LogHost, $LogUser, $LogLevel, $LogFunction, $LogSubject, $LogText) -join ','
+	$text_withdate = @($LogTime, "$LogHost", "$LogUser", "$LogLevel", "$LogFunction", "$LogSubject", "$LogText") -join ','
 
 	# write to file
 	If ( [string]::IsNullOrEmpty($LogFile) -eq $false ) {
@@ -134,7 +134,7 @@ Function Start-LogToMultiple {
 			# create new log file
 			$null = New-Item -Path $log_path -Name $log_name -ItemType 'File' -Force
 			# write headers to log file
-			$log_headers = 'Time', 'Host', 'User', 'Level', 'Function', 'Subject', 'Message' -join ','
+			$log_headers = 'time', 'hostname', 'user', 'level', 'function', 'subject', 'message' -join ','
 			$log_headers | Out-File -Force -Append -Encoding $FileEncoding -FilePath $log_file
 			# report start to screen and new log file
 			Write-LogToMultiple -LogFile $log_file -LogText 'script-start-newfile'
