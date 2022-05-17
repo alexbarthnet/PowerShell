@@ -64,7 +64,7 @@ Function Write-LogToMultiple {
 	If ([string]::IsNullOrEmpty($LogEncoding)) { $LogEncoding = 'ascii' }
 
 	# combine strings
-	$text_withdate = @($LogTime, "$LogHost", "$LogUser", "$LogLevel", "$LogFunction", "$LogSubject", "$LogText") -join ','
+	$text_withdate = @($LogTime, """$LogHost""", """$LogUser""", """$LogLevel""", """$LogFunction""", """$LogSubject""", """$LogText""") -join ','
 
 	# write to file
 	If ( [string]::IsNullOrEmpty($LogFile) -eq $false ) {
