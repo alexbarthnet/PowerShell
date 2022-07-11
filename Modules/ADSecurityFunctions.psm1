@@ -199,6 +199,8 @@ Function Reset-ADSecurity {
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		[object[]]$Identity,
 		[Parameter(Position = 1)]
+		[string]$Owner,
+		[Parameter(Position = 2)]
 		[string]$Server = $ad_dc_pdc
 	)
 
@@ -216,9 +218,20 @@ Function Reset-ADSecurity {
 		$ad_psdrive = 'AD'
 	}
 
-	# crate empty objects
+	# create empty objects
+	$ad_owner = $null
 	$ad_objects = @()
 	$ad_defaultsddl = @{}
+
+	# retrieve owner SID if requested
+	If ([string]::IsNullOrEmpty($Owner)) {
+		Try {
+			$ad_owner = ([System.Security.Principal.NTAccount]($Owner)).Translate([System.Security.Principal.SecurityIdentifier])
+		}
+		Catch {
+			Write-Host "ERROR: could not retrieve SID for owner: '$Owner'"
+		}
+	}
 
 	# retrieve objects from input
 	:ad_identity ForEach ($ad_identity in $Identity) {
@@ -263,13 +276,26 @@ Function Reset-ADSecurity {
 			}
 		}
 
-		# get the ACL for the object
+		# get ACL for object
 		$ad_path = $ad_psdrive, $ad_object.DistinguishedName -join ':\'
 		$ad_acl = Get-Acl -Path $ad_path
+
+		# remove inheritance from object
 		$ad_acl.SetAccessRuleProtection($true, $false)
+
+		# remove existing ACEs from object
 		$ad_acl.Access | ForEach-Object { $ad_acl.RemoveAccessRule($_) } | Out-Null
+		
+		# add default SDDL to ACL
 		$ad_acl.SetSecurityDescriptorSddlForm($ad_sddl)
+		
+		# enable inheritance on object
 		$ad_acl.SetAccessRuleProtection($false, $false)
+
+		# set owner on ACL if provided
+		If ($null -ne $ad_owner) { $ad_acl.SetOwner($ad_owner) }
+		
+		# set ACL for object
 		$ad_acl | Set-Acl -Path $ad_path
 	}
 
@@ -286,7 +312,7 @@ Function Reset-ADSecurity {
 
 Function Update-ADSecurity {
 	Param (
-		[Parameter(Position = 0, Mandatory = $true)]
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		[object[]]$Objects,
 		[Parameter(Position = 1)]
 		[object[]]$Permissions,
@@ -407,7 +433,8 @@ Function Update-ADSecurity {
 			Try {
 				Set-Acl -AclObject $ad_object_acl -Path $ad_object_path
 				Write-Host "Updated ACL on object: '$ad_object_dn'"	
-			} Catch {
+			}
+			Catch {
 				Write-Host "ERROR: could set inheritance on ACL for: '$ad_object_dn'"
 				Continue ad_object_dn
 			}
