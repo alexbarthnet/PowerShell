@@ -15,7 +15,31 @@ Param(
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[ValidatePattern('^[^\*]+$')]
 	[string]$Destination,
-	[Parameter(ParameterSetName = 'Add')][ValidateSet('Sync', 'Contribute', 'Clone', 'Merge')]
+	# Sync -
+	#  -  copy unmatched items in Path to Destination
+	#  -  copy unmatched items in Destination to Path
+	#  -  copy existing items from Path to Destination if newer found in Path
+	#  -  copy existing items from Destination to Path if newer found in Destination
+	#  -  delete unmatched items in Path
+	#  -  delete unmatched items in Destination
+	# Merge - covert to flag
+	#  -  copy unmatched items in Path to Destination
+	#  -  copy unmatched in Destination to Path
+	#  -  copy existing items from Path to Destination if newer found in Path
+	#  -  copy existing items from Destination to Path if newer found in Destination
+	#  -  delete nothing
+	# Mirror
+	#  -  copy unmatched items from Path to Destination
+	#  -  copy existing items from Path to Destination if newer found in Path
+	#  -  delete unmatched items in Destination
+	# Contribute
+	#  -  copy unmatched items from Path to Destination
+	#  -  copy existing items from Path to Destination if newer found in Path
+	#  -  delete nothing
+	# Missing
+	#  -  copy unmatched items in Path to Destination
+	#  -  delete nothing
+	[Parameter(ParameterSetName = 'Add')][ValidateSet('Sync', 'Contribute', 'Mirror', 'Merge')]
 	[string]$Mode = 'Sync',
 	[Parameter(ParameterSetName = 'Add')]
 	[switch]$Purge,
@@ -38,14 +62,23 @@ Param(
 Function Sync-ItemsInPathWithDestination {
 	[CmdletBinding()]
 	param (
+		[Parameter()]
 		[string]$Path,
+		[Parameter()]
 		[string]$Destination,
+		[Parameter()][ValidateSet('Sync', 'Contribute', 'Mirror', 'Merge')]
 		[string]$Mode,
+		[Parameter()]
 		[switch]$Purge,
+		[Parameter()]
 		[switch]$Recurse,
+		[Parameter()]
 		[switch]$CheckHash,
+		[Parameter()]
 		[switch]$SkipFiles,
+		[Parameter()]
 		[switch]$SkipCreateTarget,
+		[Parameter()]
 		[uint64]$LastSyncTime = 0
 	)
 
@@ -183,8 +216,8 @@ Function Sync-ItemsInPathWithDestination {
 		}
 	}
 
-	# process files if SkipFiles is false
-	If (-not $SkipFiles) {
+	# process files if Mode is not Missing and SkipFiles is false
+	If ($Mode -ne 'Missing' -and -not $SkipFiles) {
 		# retrieve fullname of all files
 		$all_files_on_source = $file_items_on_source | Select-Object -ExpandProperty 'FullName'
 		$all_files_on_target = $file_items_on_target | Select-Object -ExpandProperty 'FullName'
@@ -205,18 +238,18 @@ Function Sync-ItemsInPathWithDestination {
 			# compare files
 			If ($CheckHash) {
 				If ((Get-FileHash -Path $file_path_on_source).Hash -eq (Get-FileHash -Path $file_path_on_target).Hash) {
-					Write-Output "Skipping '$file_path_on_source' as '$file_path_on_target' has same file hash"
+					Write-Verbose "Skipping '$file_path_on_source' as '$file_path_on_target' has same file hash"
 					Continue
 				}
 			}
 			Else {
 				If ($file_item_on_source.LastWriteTime -eq $file_item_on_target.LastWriteTime) {
-					Write-Output "Skipping '$file_path_on_source' as '$file_path_on_target' has same LastWriteTime"
+					Write-Verbose "Skipping '$file_path_on_source' as '$file_path_on_target' has same LastWriteTime"
 					Continue
 				}
 			}
-			# copy file from Path to Destination
-			If ($file_item_on_source.LastWriteTime -gt $file_item_on_target.LastWriteTime -or $Mode -eq 'Clone') {
+			# copy file from Path to Destination if newer or Mode is Mirror
+			If ($file_item_on_source.LastWriteTime -gt $file_item_on_target.LastWriteTime -or $Mode -eq 'Mirror') {
 				Try {
 					Copy-Item -Path $file_path_on_source -Destination $file_path_on_target -Force -Verbose
 				}
@@ -224,9 +257,8 @@ Function Sync-ItemsInPathWithDestination {
 					Write-Output "ERROR: could not copy file '$file_path_on_source' to file '$file_path_on_target'"
 				}
 			}
-			# copy file from Destination to Path
-			ElseIf ($file_item_on_source.LastWriteTime -lt $file_item_on_target.LastWriteTime -and $Mode -eq 'Sync') {
-				# copy the file
+			# copy file from Destination to Path if newer and Mode is Sync or Merge
+			ElseIf ($file_item_on_source.LastWriteTime -lt $file_item_on_target.LastWriteTime -and ($Mode -eq 'Sync' -or $Mode -eq 'Merge')) {
 				Try {
 					Copy-Item -Path $file_path_on_target -Destination $file_path_on_source -Force -Verbose
 				}
@@ -237,41 +269,24 @@ Function Sync-ItemsInPathWithDestination {
 		}
 	}
 
-	# remove old files if SkipFiles is false and Mode is Sync
-	If (-not $SkipFiles -and $Mode -eq 'Sync') {
+	# remove files if Mode is Mirror and SkipFiles is false
+	If ($Mode -eq 'Mirror' -and -not $SkipFiles) {
 		# retrieve file objects
 		$file_items_on_source = Get-ChildItem -Path $source_path -Recurse:$Recurse -File
 		$file_items_on_target = Get-ChildItem -Path $target_path -Recurse:$Recurse -File
 
 		# retrieve fullname of files
-		$old_files_on_source = $file_items_on_source | Where-Object { $_.LastWriteTime.Ticks -lt $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
-		$old_files_on_target = $file_items_on_target | Where-Object { $_.LastWriteTime.Ticks -lt $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
+		$all_files_on_source = $file_items_on_source | Select-Object -ExpandProperty 'FullName'
+		$all_files_on_target = $file_items_on_target | Select-Object -ExpandProperty 'FullName'
 
 		# trim files to relative paths
-		If ($old_files_on_source.Count) { $old_files_on_source_relative = $old_files_on_source.Replace($source_path, $null) } Else { $old_files_on_source_relative = @() }
-		If ($old_files_on_target.Count) { $old_files_on_target_relative = $old_files_on_target.Replace($target_path, $null) } Else { $old_files_on_target_relative = @() }
+		If ($all_files_on_source.Count) { $all_files_on_source_relative = $all_files_on_source.Replace($source_path, $null) } Else { $all_files_on_source_relative = @() }
+		If ($all_files_on_target.Count) { $all_files_on_target_relative = $all_files_on_target.Replace($target_path, $null) } Else { $all_files_on_target_relative = @() }
 
-		# retrieve files in both Path and Destination
-		$files_in_both_paths += [array][System.Linq.Enumerable]::Intersect([string[]]$all_files_on_source_relative, [string[]]$all_files_on_target_relative)
+		# retrieve files that are only in Destination
+		$files_to_remove_from_target += [array][System.Linq.Enumerable]::Except([string[]]$all_files_on_target_relative, [string[]]$all_files_on_source_relative)
 
-		# retrieve old files only in Path
-		$files_to_remove_from_source += [array][System.Linq.Enumerable]::Except([string[]]$old_files_on_source_relative, [string[]]$files_in_both_paths)
-
-		# remove old files only in Path
-		ForEach ($file_to_remove in $files_to_remove_from_source) {
-			$file_path_to_remove = Join-Path -Path $source_path -ChildPath $file_to_remove
-			Try {
-				$null = Remove-Item -Path $file_path_to_remove -Force -Verbose
-			}
-			Catch {
-				Write-Output "ERROR: could not remove file '$file_path_to_remove'"
-			}
-		}
-
-		# retrieve old files only in Destination
-		$files_to_remove_from_target += [array][System.Linq.Enumerable]::Except([string[]]$old_files_on_target_relative, [string[]]$files_in_both_paths)
-
-		# remove old files only in Destination
+		# remove files that are only in Destination
 		ForEach ($file_to_remove in $files_to_remove_from_target) {
 			$file_path_to_remove = Join-Path -Path $target_path -ChildPath $file_to_remove
 			Try {
@@ -283,8 +298,87 @@ Function Sync-ItemsInPathWithDestination {
 		}
 	}
 
-	# remove old paths if Recurse is true and Mode is Sync
-	If ($Recurse -and $Mode -eq 'Sync') {
+	# remove paths if Mode is Mirror and Recurse is true
+	If ($Mode -eq 'Mirror' -and $Recurse) {
+		# retrieve path objects
+		$folder_items_on_source = Get-ChildItem -Path $source_path -Recurse:$Recurse -Directory
+		$folder_items_on_target = Get-ChildItem -Path $target_path -Recurse:$Recurse -Directory
+
+		# retrieve fullname of paths
+		$all_folders_on_source = $folder_items_on_source | Select-Object -ExpandProperty 'FullName'
+		$all_folders_on_target = $folder_items_on_target | Select-Object -ExpandProperty 'FullName'
+
+		# trim paths to relative paths
+		If ($all_folders_on_source.Count) { $all_folders_on_source_relative = $all_folders_on_source.Replace($source_path, $null) } Else { $all_folders_on_source_relative = @() }
+		If ($all_folders_on_target.Count) { $all_folders_on_target_relative = $all_folders_on_target.Replace($target_path, $null) } Else { $all_folders_on_target_relative = @() }
+
+		# retrieve paths that are only in Destination
+		$folders_to_remove_from_target += [array][System.Linq.Enumerable]::Except([string[]]$all_folders_on_target_relative, [string[]]$all_folders_on_source_relative)
+
+		# remove paths that are only in Destination
+		ForEach ($folder_to_remove in $folders_to_remove_from_target) {
+			$folder_path_to_remove = Join-Path -Path $target_path -ChildPath $folder_to_remove
+			Try {
+				$null = Remove-Item -Path $folder_path_to_remove -Force -Verbose
+			}
+			Catch {
+				Write-Output "ERROR: could not remove path '$folder_path_to_remove'"
+			}
+		}
+	}
+
+	# remove old files if Mode is Sync and SkipFiles is false
+	If ($Mode -eq 'Sync' -and -not $SkipFiles) {
+		# retrieve file objects
+		$file_items_on_source = Get-ChildItem -Path $source_path -Recurse:$Recurse -File
+		$file_items_on_target = Get-ChildItem -Path $target_path -Recurse:$Recurse -File
+
+		# retrieve fullname of files
+		$all_files_on_source = $file_items_on_source | Select-Object -ExpandProperty 'FullName'
+		$all_files_on_target = $file_items_on_target | Select-Object -ExpandProperty 'FullName'
+		$old_files_on_source = $file_items_on_source | Where-Object { $_.LastWriteTime.Ticks -lt $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
+		$old_files_on_target = $file_items_on_target | Where-Object { $_.LastWriteTime.Ticks -lt $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
+
+		# trim files to relative paths
+		If ($all_files_on_source.Count) { $all_files_on_source_relative = $all_files_on_source.Replace($source_path, $null) } Else { $all_files_on_source_relative = @() }
+		If ($all_files_on_target.Count) { $all_files_on_target_relative = $all_files_on_target.Replace($target_path, $null) } Else { $all_files_on_target_relative = @() }
+		If ($old_files_on_source.Count) { $old_files_on_source_relative = $old_files_on_source.Replace($source_path, $null) } Else { $old_files_on_source_relative = @() }
+		If ($old_files_on_target.Count) { $old_files_on_target_relative = $old_files_on_target.Replace($target_path, $null) } Else { $old_files_on_target_relative = @() }
+
+		# retrieve files in both Path and Destination
+		$files_in_both_paths += [array][System.Linq.Enumerable]::Intersect([string[]]$all_files_on_source_relative, [string[]]$all_files_on_target_relative)
+
+		# retrieve old files that are only in Path
+		$files_to_remove_from_source += [array][System.Linq.Enumerable]::Except([string[]]$old_files_on_source_relative, [string[]]$files_in_both_paths)
+
+		# remove old files that are only in Path
+		ForEach ($file_to_remove in $files_to_remove_from_source) {
+			$file_path_to_remove = Join-Path -Path $source_path -ChildPath $file_to_remove
+			Try {
+				$null = Remove-Item -Path $file_path_to_remove -Force -Verbose
+			}
+			Catch {
+				Write-Output "ERROR: could not remove file '$file_path_to_remove'"
+			}
+		}
+
+		# retrieve old files that are only in Destination
+		$files_to_remove_from_target += [array][System.Linq.Enumerable]::Except([string[]]$old_files_on_target_relative, [string[]]$files_in_both_paths)
+
+		# remove old files that are only in Destination
+		ForEach ($file_to_remove in $files_to_remove_from_target) {
+			$file_path_to_remove = Join-Path -Path $target_path -ChildPath $file_to_remove
+			Try {
+				$null = Remove-Item -Path $file_path_to_remove -Force -Verbose
+			}
+			Catch {
+				Write-Output "ERROR: could not remove file '$file_path_to_remove'"
+			}
+		}
+	}
+
+	# remove old paths if Mode is Sync and Recurse is true
+	If ($Mode -eq 'Sync' -and $Recurse) {
 		# retrieve path objects
 		$folder_items_on_source = Get-ChildItem -Path $source_path -Recurse:$Recurse -Directory
 		$folder_items_on_target = Get-ChildItem -Path $target_path -Recurse:$Recurse -Directory
@@ -333,20 +427,22 @@ Function Sync-ItemsInPathWithDestination {
 		}
 	}
 
-	# update JSON file
-	$json_data = [array]($json_data | Where-Object { $_.Path -ne $source_path })
-	$json_data += [pscustomobject]@{
-		Path             = $source_path.TrimEnd('\')
-		Destination      = $target_path.TrimEnd('\')
-		Mode             = $Mode
-		Purge            = $Purge.ToBool()
-		Recurse          = $Recurse.ToBool()
-		CheckHash        = $CheckHash.ToBool()
-		SkipFiles        = $SkipFiles.ToBool()
-		SkipCreateTarget = $SkipCreateTarget.ToBool()
-		LastSyncTime     = $sync_time_ticks
+	# update JSON file if Mode is Sync
+	If ($Mode -eq 'Sync') {
+		$json_data = [array]($json_data | Where-Object { $_.Path -ne $source_path })
+		$json_data += [pscustomobject]@{
+			Path             = $source_path.TrimEnd('\')
+			Destination      = $target_path.TrimEnd('\')
+			Mode             = $Mode
+			Purge            = $Purge.ToBool()
+			Recurse          = $Recurse.ToBool()
+			CheckHash        = $CheckHash.ToBool()
+			SkipFiles        = $SkipFiles.ToBool()
+			SkipCreateTarget = $SkipCreateTarget.ToBool()
+			LastSyncTime     = $sync_time_ticks
+		}
+		$json_data | ConvertTo-Json | Set-Content -Path $Json
 	}
-	$json_data | ConvertTo-Json | Set-Content -Path $Json
 }
 
 # define JSON file
