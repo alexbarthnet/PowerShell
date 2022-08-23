@@ -268,7 +268,7 @@ Function Reset-ADSecurity {
 		# check hashtable for default security descriptor of object class
 		If ([string]::IsNullOrEmpty($ad_defaultsddl[$ad_class])) {
 			Try {
-				$ad_defaultsddl[$ad_class] = (Get-ADObject -Filter "Name -eq '$ad_class'" -SearchBase $ad_nc_schema -Properties 'defaultSecurityDescriptor').defaultSecurityDescriptor
+				$ad_defaultsddl[$ad_class] = (Get-ADObject -Filter "ldapDisplayName -eq '$ad_class'" -SearchBase $ad_nc_schema -Properties 'defaultSecurityDescriptor').defaultSecurityDescriptor
 			}
 			Catch {
 				Write-Host "ERROR: could not retrieve default security descriptor for object class: '$ad_class'"
