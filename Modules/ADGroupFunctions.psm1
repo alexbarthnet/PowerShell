@@ -4,7 +4,7 @@ Function Find-ADGroup {
 	[CmdletBinding()]
 	Param (
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ $_ -is [Microsoft.ActiveDirectory.Management.ADObject] -or $_ -is [System.String] })]
-		[object]$Identity,    
+		[object]$Identity,
 		[Parameter(Position = 1)]
 		[string[]]$Attributes = @('*'),
 		[Parameter(Position = 2)]
@@ -15,7 +15,7 @@ Function Find-ADGroup {
 	If ('*' -notin $Attributes) {
 		If ('whenChanged' -notin $Attributes) { $Attributes += 'whenChanged' }
 		If ('whenCreated' -notin $Attributes) { $Attributes += 'whenCreated' }
-	}    
+	}
 
 	# check for group
 	Try {
@@ -89,7 +89,7 @@ Function Update-ADMembers {
 
 	# process changes
 	If ($null -ne $ad_members_object) {
-		# create empty arrays 
+		# create empty arrays
 		$ad_members_current = @()
 		$ad_members_desired = @()
 		$ad_members_exclude = @()
@@ -99,7 +99,7 @@ Function Update-ADMembers {
 		ForEach ($MemberDN in $ad_members_object.Member) {
 			If ($MemberDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberDN)) { $ad_members_current += $MemberDN }
 		}
-		
+
 		# retrieve desired members
 		ForEach ($MemberDN in $MemberDNs) {
 			If ($MemberDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberDN)) { $ad_members_desired += $MemberDN }
@@ -115,7 +115,7 @@ Function Update-ADMembers {
 
 		# retrieve missing members, linq will ensure that the output is of unique values
 		$ad_members_missing += [array][System.Linq.Enumerable]::Except([string[]]$ad_members_trimmed, [string[]]$ad_members_current)
-		
+
 		# retrieve extra members, linq will ensure that the output is of unique values
 		$ad_members_invalid += [array][System.Linq.Enumerable]::Except([string[]]$ad_members_current, [string[]]$ad_members_trimmed)
 
@@ -211,27 +211,27 @@ Function Update-ADMembersOf {
 			Try { Write-Error -Message 'Invalid Object Class' -ErrorAction 'Stop' } Catch { $ad_membersof_error = $_ }
 		}
 	}
-	
+
 	# process changes
 	If ($null -ne $ad_membersof_object) {
 		# create empty arrays
 		$ad_membersof_current = @()
 		$ad_membersof_desired = @()
-		
+
 		# retrieve current membership
 		ForEach ($MemberOfDN in $ad_membersof_object.MemberOf) {
 			If ($MemberOfDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberOfDN)) { $ad_membersof_current += $MemberOfDN }
 		}
-		
+
 		# retrieve desired membership
 		ForEach ($MemberOfDN in $MemberOfDNs) {
 			If ($MemberOfDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberOfDN)) { $ad_membersof_desired += $MemberOfDN }
 		}
-		
+
 		# retrieve missing and extra memberships
 		$ad_membersof_missing += [array][System.Linq.Enumerable]::Except([string[]]$ad_membersof_desired, [string[]]$ad_membersof_current)
 		$ad_membersof_invalid += [array][System.Linq.Enumerable]::Except([string[]]$ad_membersof_current, [string[]]$ad_membersof_desired)
-		
+
 		# report current, desired, missing, and extra memberships
 		If ($VerbosePreference -eq 'Continue') {
 			ForEach ($ad_memberof_fqdn in $ad_membersof_current) { Write-Verbose "Current MemberOf: $ad_memberof_fqdn" }
