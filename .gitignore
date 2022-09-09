@@ -10,3 +10,5 @@ Personal/*
 Private/*
 # ignore shortcut files
 Shortcuts/*
+# ignore Mac specific files
+.DS_Store
