@@ -107,7 +107,7 @@ Get-ChildItem -Path $onedrive_directory.FullName | Where-Object { $_.PSIsContain
 	Write-Output (' ')
 	Write-Output ("Found OneDrive folder: '" + $folder_cloud + "'")
 	# check if current folder matching the block list
-	If ($excludedfolders_default -contains $folder_short) {
+	If ($ExcludedFolders -contains $folder_short) {
 		Write-Output ("...'" + $folder_short + "' explicitly blocked, skipping!")
 	}
 	Else {
