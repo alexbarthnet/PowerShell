@@ -1,31 +1,25 @@
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
 	[string]$Identity,
-	[switch]$SkipExcludedFoldersCheck,
 	[switch]$ExcludeFolders,
-	[string[]]$ExcludedFolders
+	[string[]]$FoldersToExclude
 )
 
 # define the default OneDrive excluded folders list
-$excludedfolders_default = @()
-$excludedfolders_default += 'AppData'
-$excludedfolders_default += 'Attachments'
-$excludedfolders_default += 'Email Attachments'
-$excludedfolders_default += 'Microsoft Teams Chat Files'
-$excludedfolders_default += 'Microsoft Teams Data'
-$excludedfolders_default += 'Notebooks'
-$excludedfolders_default += 'Public'
+$FoldersToExclude_default = @()
+$FoldersToExclude_default += 'AppData'
+$FoldersToExclude_default += 'Attachments'
+$FoldersToExclude_default += 'Microsoft Teams Chat Files'
+$FoldersToExclude_default += 'Microsoft Teams Data'
+$FoldersToExclude_default += 'Notebooks'
+$FoldersToExclude_default += 'Public'
 
 # buffer output
 Write-Output "`n"
 
-# get the OneDrive path(s)
+# get the OneDrive path(s) so we can filter which path(s) to junction
 $onedrive_directory = $null
 switch ($Identity) {
-	# { 'OneDrive' -or 'Personal' } {
-	# 	Write-Output ('Searching for OneDrive directory...')
-	# 	$onedrive_directory = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object { $_.Name -eq 'OneDrive' }
-	# }
 	$null {
 		Write-Output ('Searching for OneDrive directory...')
 		$onedrive_directory = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object { $_.Name -match 'OneDrive' }
@@ -67,27 +61,26 @@ Write-Output "`n"
 # define OneDrive directories that will *NOT* be junctioned
 If ($ExcludeFolders) {
 	Write-Output ('Checking the excluded folders...')
-	If ($ExcludedFolders.Count -ge 1) {
-		If (-not $SkipExcludedFoldersCheck) {
-			ForEach ($ExcludedFolder in $ExcludedFolders) {
-				$ExcludedFolder_path = Join-Path -Path $onedrive_directory -ChildPath $ExcludedFolder
-				If (Test-Path $ExcludedFolder_path) {
-					Write-Output ("`t Located: $ExcludedFolder_path")
-				} Else {
-					Write-Output ("`t Missing: $ExcludedFolder_path")
-					Write-Output ('WARNING: the folder above was defined in the ExcludedFolders parameter but not found in OneDrive, exiting!')
-					Return
-				}
+	If ($FoldersToExclude.Count -ge 1) {
+		ForEach ($FolderToExclude in $FoldersToExclude) {
+			$FolderToExclude_path = Join-Path -Path $onedrive_directory -ChildPath $FolderToExclude
+			If (Test-Path $FolderToExclude_path) {
+				Write-Output ("`t Located: $FolderToExclude_path")
+			}
+			Else {
+				Write-Output ("`t Missing: $FolderToExclude_path")
+				Write-Output ('WARNING: the folder above was defined in the FoldersToExclude parameter but not found in OneDrive, exiting!')
+				Return
 			}
 		}
 	}
 	Else {
 		Write-Output ('NOTICE: no excluded folders were explicitly defined')
 		Write-Output ('...the following default folders will be excluded from junctioning:')
-		$ExcludedFolders = $excludedfolders_default
-		ForEach ($ExcludedFolder in $ExcludedFolders) {
-			$ExcludedFolder_path = Join-Path -Path $onedrive_directory -ChildPath $ExcludedFolder
-			Write-Output ("`t $ExcludedFolder_path")
+		$FoldersToExclude = $FoldersToExclude_default
+		ForEach ($FolderToExclude in $FoldersToExclude) {
+			$FolderToExclude_path = Join-Path -Path $onedrive_directory -ChildPath $FolderToExclude
+			Write-Output ("`t $FolderToExclude_path")
 		}
 		# insert warning here!
 	}
@@ -99,6 +92,7 @@ Write-Output ('-----')
 
 # loop through directories inside OneDrive directories
 Get-ChildItem -Path $onedrive_directory.FullName | Where-Object { $_.PSIsContainer } | ForEach-Object {
+	# define variables and declare folder
 	$folder_hidden = $null
 	$folder_ready = $false
 	$folder_short = ($_.BaseName)
@@ -106,8 +100,9 @@ Get-ChildItem -Path $onedrive_directory.FullName | Where-Object { $_.PSIsContain
 	$folder_local = ($env:USERPROFILE + '\' + $folder_short)
 	Write-Output (' ')
 	Write-Output ("Found OneDrive folder: '" + $folder_cloud + "'")
+	
 	# check if current folder matching the block list
-	If ($ExcludedFolders -contains $folder_short) {
+	If ($FoldersToExclude -contains $folder_short) {
 		Write-Output ("...'" + $folder_short + "' explicitly blocked, skipping!")
 	}
 	Else {
