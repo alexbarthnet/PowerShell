@@ -63,7 +63,7 @@ Function Write-LogToMultiple {
 	If ([string]::IsNullOrEmpty($LogUser)) { $LogUser = [System.Environment]::UserName.ToLower() }
 	If ([string]::IsNullOrEmpty($LogEncoding)) { $LogEncoding = 'ascii' }
 
-	# combine strings
+	# create log text
 	$text_withdate = @($LogTime, """$LogHost""", """$LogUser""", """$LogLevel""", """$LogFunction""", """$LogSubject""", """$LogText""") -join ','
 
 	# write to file
@@ -89,10 +89,10 @@ Function Write-LogToMultiple {
 Function Start-LogToMultiple {
 	[CmdletBinding()]
 	Param (
-		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ })]
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf'})]
 		[string]$ScriptPath,
-		[Parameter(Position = 1)]
-		[string]$LogsPath = 'C:\Content\logs',
+		[Parameter(Position = 1)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
+		[string]$LogsPath = [System.Environment]::GetFolderPath('CommonApplicationData'),
 		[Parameter(Position = 2)][ValidateSet('ascii', 'bigendianunicode', 'unicode', 'utf7', 'utf8', 'utf32')]
 		[string]$FileEncoding = 'ascii',
 		[Parameter(Position = 4)][ValidateSet('FileDate', 'FileDateUniversal', 'FileDateTime', 'FileDateTimeUniversal')]
@@ -103,15 +103,16 @@ Function Start-LogToMultiple {
 		[switch]$EventLog
 	)
 
-	# build required strings for log path and file
+	# build required strings
 	$log_base = (Get-Item -Path $ScriptPath).BaseName
 	$log_date = (Get-Date -Format 'FileDateTimeUniversal')
 	$log_host = [System.Environment]::MachineName.ToLower()
 	$log_user = [System.Environment]::UserName.ToLower()
 	$log_name = ($log_date, $log_base, $log_host -join '_') + '.txt'
 
-	# build log path and file
-	$log_path = Join-Path -Path $LogsPath -ChildPath $log_base
+	# build paths
+	$log_parent = Join-Path -Path $LogsPath -ChildPath 'LogToMultiple'
+	$log_path = Join-Path -Path $log_parent -ChildPath $log_base
 	$log_file = Join-Path -Path $log_path -ChildPath $log_name
 
 	# verify log file
@@ -201,21 +202,22 @@ Function Start-LogToMultiple {
 Function Remove-LogToMultiple {
 	[CmdletBinding()]
 	Param (
-		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ })]
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf'})]
 		[string]$ScriptPath,
 		[Parameter(Position = 1)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
-		[string]$LogsPath = 'C:\Content\logs',
+		[string]$LogsPath = [System.Environment]::GetFolderPath('CommonApplicationData'),
 		[Parameter(Position = 2)][ValidateSet('Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
 		[string]$OlderThanType = 'Days',
 		[Parameter(Position = 3)][ValidateRange(1, 32767)]
 		[int16]$OlderThanUnits = 30
 	)
 
-	# build required strings for log path and file
+	# build required strings
 	$log_base = (Get-Item -Path $ScriptPath).BaseName
 
-	# build log path and file
-	$log_path = Join-Path -Path $LogsPath -ChildPath $log_base
+	# build paths
+	$log_parent = Join-Path -Path $LogsPath -ChildPath 'LogToMultiple'
+	$log_path = Join-Path -Path $log_parent -ChildPath $log_base
 
 	# build counters for removed files
 	$log_removed_count = 0
@@ -270,12 +272,12 @@ Function Remove-LogToMultiple {
 Function Initialize-LogToMultiple {
 	[CmdletBinding()]
 	Param (
-		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ })]
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf'})]
 		[string]$ScriptPath,
-		[Parameter(Position = 1)]
-		[string]$ScriptUser,
+		[Parameter(Position = 1)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
+		[string]$LogsPath = [System.Environment]::GetFolderPath('CommonApplicationData'),
 		[Parameter(Position = 2)]
-		[string]$LogsPath = 'C:\Content\logs',
+		[string]$ScriptUser,
 		[Parameter(Position = 3)]
 		[switch]$EventLog,
 		[Parameter(Position = 4)]
@@ -290,7 +292,10 @@ Function Initialize-LogToMultiple {
 
 	# build required strings
 	$log_base = (Get-Item -Path $ScriptPath).BaseName
-	$log_path = Join-Path -Path $LogsPath -ChildPath $log_base
+
+	# build paths
+	$log_parent = Join-Path -Path $LogsPath -ChildPath 'LogToMultiple'
+	$log_path = Join-Path -Path $log_parent -ChildPath $log_base
 
 	# verify log path
 	Write-Host "Checking for log path: $log_path"
