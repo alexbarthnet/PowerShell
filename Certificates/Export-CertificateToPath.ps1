@@ -28,6 +28,7 @@ Begin {
 		# ...define transcript file from script path and start transcript
 		Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, "_$Hostname.txt") -Force
 	}
+
 	Function Export-CertificateChainFiles {
 		[CmdletBinding()]
 		Param(
