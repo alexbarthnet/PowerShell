@@ -20,13 +20,12 @@ Param(
 	# local hostname
 	[Parameter(DontShow)]
 	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
-
 )
 
 Begin {
 	# if result exists...
 	If ($null -ne $Result) {
-		# ...define transcript file from script path and start transcript 
+		# ...define transcript file from script path and start transcript
 		Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, "_$Hostname.txt") -Force
 	}
 	Function Export-CertificateChainFiles {
@@ -39,7 +38,7 @@ Begin {
 			[Parameter(Position = 2)]
 			[string]$Prefix = [string]::Empty
 		)
-	
+
 		# build prefix if not provided
 		If ([string]::IsNullOrEmpty($Prefix)) {
 			# retrieve subject and NotBefore from input certificate
@@ -48,19 +47,19 @@ Begin {
 			# define prefix for exported certificates from input certificate
 			$Prefix = $cert_file_head, $cert_file_date -join '_'
 		}
-	
+
 		# create certificate chain object
 		$cert_chain = New-Object System.Security.Cryptography.X509Certificates.X509Chain
 		$cert_chain.ChainPolicy.RevocationMode = 'NoCheck'
-	
+
 		# build certificate chain
 		If ($cert_chain.Build($Certificate)) {
 			# start certificate chain counter
 			$cert_counter = 0
-	
+
 			# define format for certificate chain counter string
 			$cert_counter_string_format = "d$($cert_chain.ChainElements.Certificate.Count.ToString().Length)"
-	
+
 			# export certificate chain to storage
 			ForEach ($cert_element in $cert_chain.ChainElements.Certificate) {
 				switch ($cert_element.Subject) {
@@ -94,7 +93,7 @@ Begin {
 			Write-Host "ERROR: building certificate chain for '$($Certificate.Subject)'"
 		}
 	}
-	
+
 	Function Export-PfxCertificateToPrincipals {
 		[CmdletBinding()]
 		Param(
@@ -109,14 +108,14 @@ Begin {
 			[Parameter(Position = 4, Mandatory = $true)]
 			[string[]]$Principals
 		)
-	
+
 		# declare start
 		Write-Host "`nExporting private key and certificate chain"
-	
+
 		# retrieve certificate
 		$cert_object = $null
 		$cert_object = Get-ChildItem -Path 'Cert:\LocalMachine\My' | Where-Object { $_.Thumbprint -eq $Hash } | Sort-Object NotBefore | Select-Object -Last 1
-	
+
 		# export certificate and certificate chain to storage
 		If ($cert_object) {
 			# define full path to pfx
@@ -125,18 +124,18 @@ Begin {
 			$cert_file_tail = 'cert.pfx'
 			$cert_file_name = $cert_file_head, $cert_file_date, $cert_file_tail -join '_'
 			$cert_file_path = Join-Path -Path $Storage -ChildPath $cert_file_name
-	
+
 			# export PFX to storage
 			Write-Host " - exporting keypair to PFX   : $cert_file_path"
 			$null = $cert_object | Export-PfxCertificate -FilePath $cert_file_path -ProtectTo $Principals -ChainOption EndEntityCertOnly -CryptoAlgorithmOption AES256_SHA256
-	
+
 			# export certificate chain to storage
 			$cert_object | Export-CertificateChainFiles -Path $Storage
 		}
 		Else {
 			Write-Host "ERROR: certificate not found with hash: '$Hash'"
 		}
-	}	
+	}
 }
 
 Process {
@@ -201,7 +200,7 @@ Process {
 			# create custom object from parameters then add to object
 			Try {
 				$json_data += [pscustomobject]@{
-					Subject    = [string]$Subject 
+					Subject    = [string]$Subject
 					Storage    = [string]$Storage
 					Principals = [string[]]$Principals
 					Updated    = (Get-Date -Format FileDateTimeUniversal)
