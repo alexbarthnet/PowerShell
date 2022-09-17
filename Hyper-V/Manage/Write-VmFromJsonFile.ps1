@@ -60,8 +60,14 @@ Param(
 	[Parameter(ParameterSetName = 'Add')]
 	[string]$ClusterPriority,
 	[Parameter()]
-	[string]$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
+	[string]$Json
 )
+
+# if JSON file not provided...
+If ([string]::IsNullOrEmpty($Json)) {
+	# ...define default JSON file
+	$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
+}
 
 # verify JSON file
 If (-not (Test-Path -Path $Json)) {
@@ -122,7 +128,7 @@ switch ($true) {
 	$Add {
 		# create custom object from parameters then add to object
 		Try {
-			If ($json_data | Where-Object { $_.VMName -eq $VMName } ) { 
+			If ($json_data | Where-Object { $_.VMName -eq $VMName } ) {
 				$json_replace = $true
 				$json_data = $json_data | Where-Object { $_.VMName -ne $VMName }
 			}

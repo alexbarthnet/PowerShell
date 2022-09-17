@@ -16,17 +16,23 @@ Param(
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[string[]]$Principals,
 	[Parameter()]
-	[string]$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json'),
+	[string]$Json,
 	# local hostname
 	[Parameter(DontShow)]
 	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
 )
 
 Begin {
+	# if JSON file not provided...
+	If ([string]::IsNullOrEmpty($Json)) {
+		# ...define default JSON file
+		$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
+	}
+
 	# if importing...
 	If ($Import) {
 		# ...define transcript file from script path and start transcript
-		Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, "_$Hostname.txt") -Force
+		Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, "_$HostName.txt") -Force
 	}
 
 	Function Set-CertificatePermissions {

@@ -16,13 +16,19 @@ Param(
 	[Parameter(Position = 3, Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')]
 	[string[]]$Principals,
 	[Parameter()]
-	[string]$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json'),
+	[string]$Json,
 	# local hostname
 	[Parameter(DontShow)]
 	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
 )
 
 Begin {
+	# if JSON file not provided...
+	If ([string]::IsNullOrEmpty($Json)) {
+		# ...define default JSON file
+		$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
+	}
+
 	# if result exists...
 	If ($null -ne $Result) {
 		# ...define transcript file from script path and start transcript
