@@ -1,11 +1,5 @@
 [CmdletBinding()]
 Param (
-	[Parameter(DontShow)][ValidateScript({ Test-Path -Path $_ })]
-	[string]$DefaultPath = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path,
-	[Parameter(DontShow)]
-	[string]$FileName = 'SysinternalsSuite.zip',
-	[Parameter(DontShow)]
-	[string]$Uri = 'https://download.sysinternals.com/files/SysinternalsSuite.zip',
 	[Parameter(Position = 0)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Destination,
 	[Parameter(Position = 1)]
@@ -13,7 +7,17 @@ Param (
 	[Parameter(Position = 2)]
 	[switch]$SkipDownload,
 	[Parameter(Position = 3)]
-	[switch]$Force
+	[switch]$ExtractHere,	
+	[Parameter(Position = 4)]
+	[switch]$Force,
+	[Parameter(DontShow)][ValidateScript({ Test-Path -Path $_ })]
+	[string]$DefaultPath = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path,
+	[Parameter(DontShow)]
+	[string]$FileName = 'SysinternalsSuite.zip',
+	[Parameter(DontShow)]
+	[string]$Uri = 'https://download.sysinternals.com/files/SysinternalsSuite.zip',
+	[Parameter(DontShow)]
+	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
 )
 
 # set file path based upon inputs
@@ -50,13 +54,15 @@ If ($Force -or -not $SkipDownload) {
 
 # extract files to destination
 If ((Test-Path -Path $FilePath) -and $Extract) {
-	If ($Destination) {
+	If ($ExtractHere) {
 		# extract files to the path in the parameter
 		$Folder = $Destination
 	}
 	Else {
+		# get path from file
+		$FolderPath = (Get-Item -Path $FilePath).DirectoryName
 		# extract files to a subfolder of the default Downloads folder
-		$Folder = Join-Path -Path $DefaultPath -ChildPath (Get-Item -Path $FilePath).BaseName
+		$Folder = Join-Path -Path $FolderPath -ChildPath (Get-Item -Path $FilePath).BaseName
 	}
 	# create folder
 	If (-not (Test-Path -Path $Folder)) {
