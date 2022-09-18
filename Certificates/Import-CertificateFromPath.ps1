@@ -328,6 +328,10 @@ Begin {
 			$cert_found.Certificate | Get-CertificateDetails
 			$cert_found.Certificate | Set-CertificatePermissions -Principals $Principals
 			$cert_found.Certificate | Import-ChainCertificates -Path $cert_pfx_file.DirectoryName
+			If ($Replace) {
+				# get last two certs matching subject
+				# call switch-certificate, no piping
+			}
 		}
 	}
 
