@@ -329,8 +329,16 @@ Begin {
 			$cert_found.Certificate | Set-CertificatePermissions -Principals $Principals
 			$cert_found.Certificate | Import-ChainCertificates -Path $cert_pfx_file.DirectoryName
 			If ($Replace) {
-				# get last two certs matching subject
-				# call switch-certificate, no piping
+				# get certs matching subject and sort by descending issue date
+				$cert_with_same_subject = @()
+				$cert_with_same_subject += Get-ChildItem -Path 'Cert:\LocalMachine\My' | Where-Object { $_.Subject -eq $cert_found.Certificate.Subject } | Sort-Object -Property 'NotBefore' -Descending
+				# if at least two certs with the same subject...
+				If ($cert_with_same_subject.Count -ge 2) {
+					# ...get second cert
+					$cert_to_replace = $cert_with_same_subject[1]
+					# replace old cert with new
+					Switch-Certificate -OldCert $cert_to_replace -NewCert $cert_found.Certificate
+				}
 			}
 		}
 	}
