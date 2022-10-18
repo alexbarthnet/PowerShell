@@ -87,6 +87,17 @@ ForEach ($Image in $WdsInstallImage) {
 		Return
 	}
 
+	# create defender exclusions
+	Try {
+		# add temp folders to defender exclusion lists
+		Add-MpPreference -ExclusionPath $wds_temp_root
+	}
+	Catch {
+		Write-Error 'Could not create defender exclusion for temporary folders'
+		$_
+		Return
+	}
+
 	# define files based upon folders
 	$wim_file_old = Join-Path -Path $wds_temp_files -ChildPath "$wds_image_base-old.wim"
 	$wim_file_new = Join-Path -Path $wds_temp_files -ChildPath "$wds_image_base-new.wim"
@@ -140,7 +151,8 @@ ForEach ($Image in $WdsInstallImage) {
 		Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 		Write-Host ''
 		Try {
-			$null = Get-WindowsOptionalFeature -Path $wds_temp_mount | Where-Object { $_.FeatureName -in $Features -and $_.State -eq 'Disabled' } | Enable-WindowsOptionalFeature
+			$wim_features = Get-WindowsOptionalFeature -Path $wds_temp_mount | Where-Object { $_.FeatureName -in $Features -and $_.State -eq 'Disabled' }
+			$null = $wim_features | Enable-WindowsOptionalFeature
 		}
 		Catch {
 			Write-Error 'Could not add features to the image'
@@ -156,7 +168,8 @@ ForEach ($Image in $WdsInstallImage) {
 		Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 		Write-Host ''
 		Try {
-			$null = Get-AppxProvisionedPackage -Path $wds_temp_mount | Where-Object { $_.DisplayName -in $AppXPackages } | Remove-AppxProvisionedPackage
+			$wim_packages = Get-AppxProvisionedPackage -Path $wds_temp_mount | Where-Object { $_.DisplayName -in $AppXPackages }
+			$null = $wim_packages | Remove-AppxProvisionedPackage
 		}
 		Catch {
 			Write-Error 'Could not remove packages from the image'
@@ -251,6 +264,17 @@ ForEach ($Image in $WdsInstallImage) {
 	If ($WdsInstallImage.UnattendFilePresent) {
 		New-Item -Path $wds_files_path -ItemType 'Directory' -Force
 		Move-Item -Path $wds_files_xml -Destination $wds_files_path
+	}
+
+	# remove defender exclusions
+	Try {
+		# add temp folders to defender exclusion lists
+		Remove-MpPreference -ExclusionPath $wds_temp_root
+	}
+	Catch {
+		Write-Error 'Could not remove defender exclusion for temporary folders'
+		$_
+		Return
 	}
 
 	# remove WIM files and get finish time
