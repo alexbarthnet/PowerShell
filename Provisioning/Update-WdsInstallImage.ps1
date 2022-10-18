@@ -7,7 +7,7 @@ Param(
 	[Parameter(Position = 1)][ValidateScript({ (Test-Path -PathType 'Container' -Path $_) -and ((Get-ChildItem -Path $_).Count -eq 0) } )]
 	[string]$TempPath = ([System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')),
 	[Parameter(Position = 1)][ValidateScript({ Test-Path -PathType 'Container' -Path $_ } )]
-	[string]$UpdatePath = '.\Updates'
+	[string]$UpdatePath = '..\updates'
 )
 
 # get start time
