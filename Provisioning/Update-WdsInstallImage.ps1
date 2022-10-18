@@ -7,47 +7,7 @@ Param(
 	[Parameter(Position = 1)][ValidateScript({ (Test-Path -PathType 'Container' -Path $_) -and ((Get-ChildItem -Path $_).Count -eq 0) } )]
 	[string]$TempPath = ([System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')),
 	[Parameter(Position = 1)][ValidateScript({ Test-Path -PathType 'Container' -Path $_ } )]
-	[string]$UpdatePath = '.\Updates',
-	[Parameter(Position = 1)]
-	[switch]$AddFeatures,
-	[Parameter(Position = 2)]
-	[string[]]$Features = @(
-		'TelnetClient'
-		'WirelessNetworking'
-	),
-	[Parameter(Position = 3)]
-	[switch]$RemoveAppXPackages,
-	[Parameter(Position = 4)]
-	[string[]]$AppXPackages = @(
-		'Microsoft.BingWeather',
-		'Microsoft.GetHelp',
-		'Microsoft.Getstarted',
-		'Microsoft.Messaging',
-		'Microsoft.Microsoft3DViewer',
-		'Microsoft.MicrosoftOfficeHub',
-		'Microsoft.MicrosoftSolitaireCollection',
-		'Microsoft.MicrosoftStickyNotes',
-		'Microsoft.MixedReality.Portal',
-		'Microsoft.Office.OneNote',
-		'Microsoft.OneConnect',
-		'Microsoft.People',
-		'Microsoft.Print3D',
-		'Microsoft.SkypeApp',
-		'Microsoft.Wallet',
-		'Microsoft.WindowsAlarms',
-		'Microsoft.WindowsCamera',
-		'microsoft.windowscommunicationsapps',
-		'Microsoft.WindowsSoundRecorder',
-		'Microsoft.Xbox.TCUI',
-		'Microsoft.XboxApp',
-		'Microsoft.XboxGameOverlay',
-		'Microsoft.XboxGamingOverlay',
-		'Microsoft.XboxIdentityProvider',
-		'Microsoft.XboxSpeechToTextOverlay',
-		'Microsoft.YourPhone',
-		'Microsoft.ZuneMusic',
-		'Microsoft.ZuneVideo'
-	)
+	[string]$UpdatePath = '.\Updates'
 )
 
 # get start time
@@ -59,6 +19,7 @@ ForEach ($Image in $WdsInstallImage) {
 	Try {
 		$wds_image_order = $WdsInstallImage.DisplayOrder
 		$wds_image_group = $WdsInstallImage.ImageGroup
+		$wds_image_index = $WdsInstallImage.Index
 		$wds_image_name = $WdsInstallImage.ImageName
 		$wds_image_file = $WdsInstallImage.FileName
 		$wds_image_base = $WdsInstallImage.FileName.Replace('.wim', $null)
@@ -122,7 +83,7 @@ ForEach ($Image in $WdsInstallImage) {
 	Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 	Write-Host ''
 	Try {
-		$null = Mount-WindowsImage -Path $wds_temp_mount -ImagePath $wim_file_old -Index 1 -CheckIntegrity -Verbose
+		$null = Mount-WindowsImage -Path $wds_temp_mount -ImagePath $wim_file_old -Index $wds_image_index -CheckIntegrity -Verbose
 	}
 	Catch {
 		Write-Error 'Could not mount the image'
@@ -142,40 +103,6 @@ ForEach ($Image in $WdsInstallImage) {
 		Write-Error 'Could not patch the image'
 		$_
 		Return
-	}
-
-	# enable features in WIM
-	If ($AddFeatures) {
-		Write-Host '================================'
-		Write-Host 'Adding features to image...'
-		Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-		Write-Host ''
-		Try {
-			$wim_features = Get-WindowsOptionalFeature -Path $wds_temp_mount | Where-Object { $_.FeatureName -in $Features -and $_.State -eq 'Disabled' }
-			$null = $wim_features | Enable-WindowsOptionalFeature
-		}
-		Catch {
-			Write-Error 'Could not add features to the image'
-			$_
-			Return
-		}
-	}
-
-	# remove AppX packages from WIM
-	If ($RemoveAppXPackages) {
-		Write-Host '================================'
-		Write-Host 'Removing packages from image...'
-		Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-		Write-Host ''
-		Try {
-			$wim_packages = Get-AppxProvisionedPackage -Path $wds_temp_mount | Where-Object { $_.DisplayName -in $AppXPackages }
-			$null = $wim_packages | Remove-AppxProvisionedPackage
-		}
-		Catch {
-			Write-Error 'Could not remove packages from the image'
-			$_
-			Return
-		}
 	}
 
 	# clean up superseded components in image
@@ -212,7 +139,7 @@ ForEach ($Image in $WdsInstallImage) {
 	Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 	Write-Host ''
 	Try {
-		$null = Export-WindowsImage -Verbose -SourceImagePath $wim_file_old -SourceIndex 1 -CheckIntegrity -DestinationImagePath $wim_file_new
+		$null = Export-WindowsImage -Verbose -SourceImagePath $wim_file_old -SourceIndex $wds_image_index -CheckIntegrity -DestinationImagePath $wim_file_new
 	}
 	Catch {
 		Write-Error 'Could not export the patched image'
