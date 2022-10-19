@@ -9,6 +9,8 @@ Param(
 	[string]$VMHostPath,
 	[Parameter()]
 	[switch]$UseDefaultPathOnHost,
+	[Parameter()]
+	[switch]$SkipProvisioning,
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 )
@@ -929,7 +931,7 @@ ForEach ($VmParams in $vm_list) {
 	}
 
 	# start deployement tasks
-	If ($vm_deployment_method) {
+	If ($vm_deployment_method -and -not $SkipProvisioning) {
 		Write-Host ("$Hostname,$vm_host,$vm_name - VM will be provisioned via: '$($vm_deployment_method.ToUpper())'")
 		switch ($vm_deployment_method) {
 			'iso' {
@@ -945,6 +947,9 @@ ForEach ($VmParams in $vm_list) {
 				Write-Host ("$Hostname,$vm_name - ...skipping deployment, unknown provisioning method provided: " + $vm_deployment_method.ToUpper())
 			}
 		}
+	}
+	ElseIf ($vm_deployment_method -and -not $SkipProvisioning) {
+		Write-Host ("$Hostname,$vm_name - skipping deployment due to runtime Parameter")
 	}
 
 	# start cluster tasks
