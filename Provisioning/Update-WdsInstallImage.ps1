@@ -4,10 +4,12 @@
 Param(
 	[Parameter(Position = 0, Mandatory = $True, ValueFromPipeline = $true)]
 	[object[]]$WdsInstallImage,
-	[Parameter(Position = 1)][ValidateScript({ (Test-Path -PathType 'Container' -Path $_) -and ((Get-ChildItem -Path $_).Count -eq 0) } )]
+	[Parameter()][ValidateScript({ (Test-Path -PathType 'Container' -Path $_) -and ((Get-ChildItem -Path $_).Count -eq 0) } )]
 	[string]$TempPath = ([System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')),
-	[Parameter(Position = 1)][ValidateScript({ Test-Path -PathType 'Container' -Path $_ } )]
-	[string]$UpdatePath = '..\updates'
+	[Parameter()][ValidateScript({ Test-Path -PathType 'Container' -Path $_ } )]
+	[string]$UpdatePath = '..\updates',
+	[Parameter()]
+	[switch]$UseDefenderExclusions
 )
 
 # get start time
@@ -49,14 +51,25 @@ ForEach ($Image in $WdsInstallImage) {
 	}
 
 	# create defender exclusions
-	Try {
-		# add temp folders to defender exclusion lists
-		Add-MpPreference -ExclusionPath $wds_temp_root
-	}
-	Catch {
-		Write-Error 'Could not create defender exclusion for temporary folders'
-		$_
-		Return
+	If ($UseDefenderExclusions) {
+		# define path exclusions
+		$mp_path = @()
+		$mp_path += $wds_temp_root
+		$mp_path += $UpdatePath
+		# define process exclusions
+		$mp_processes = @()
+		$mp_processes += 'DismHost.exe'
+		$mp_processes += 'WimServ.exe'
+		# add exclusions to defender
+		Try {
+			Add-MpPreference -ExclusionPath $mp_path
+			Add-MpPreference -ExclusionProcess $mp_processes
+		}
+		Catch {
+			Write-Error 'Could not create defender exclusion for temporary folders'
+			$_
+			Return
+		}
 	}
 
 	# define files based upon folders
@@ -194,18 +207,20 @@ ForEach ($Image in $WdsInstallImage) {
 	}
 
 	# remove defender exclusions
-	Try {
-		# add temp folders to defender exclusion lists
-		Remove-MpPreference -ExclusionPath $wds_temp_root
-	}
-	Catch {
-		Write-Error 'Could not remove defender exclusion for temporary folders'
-		$_
-		Return
+	If ($UseDefenderExclusions) {
+		Try {
+			Remove-MpPreference -ExclusionPath $mp_path
+			Remove-MpPreference -ExclusionProcess $mp_processes
+		}
+		Catch {
+			Write-Error 'Could not remove defender exclusion for temporary folders'
+			$_
+			Return
+		}
 	}
 
 	# remove WIM files and get finish time
-	Remove-Item -Path $wds_temp_root -Force
+	Remove-Item -Path $wds_temp_root -Force -Recurse
 	$time_stop = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 }
 
