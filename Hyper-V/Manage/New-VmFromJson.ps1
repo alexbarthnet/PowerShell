@@ -948,8 +948,8 @@ ForEach ($VmParams in $vm_list) {
 			}
 		}
 	}
-	ElseIf ($vm_deployment_method -and -not $SkipProvisioning) {
-		Write-Host ("$Hostname,$vm_name - skipping deployment due to runtime Parameter")
+	ElseIf ($vm_deployment_method -and $SkipProvisioning) {
+		Write-Host ("$Hostname,$vm_name - skipping deployment, SkipProvisioning")
 	}
 
 	# start cluster tasks
