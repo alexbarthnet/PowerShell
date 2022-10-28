@@ -148,7 +148,7 @@ Function Protect-CmsCredentialSecret {
 		[string]$Prefix = 'cms',
 		[Parameter(Position = 5)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
-		[Parameter(Position = 6)][ValidateScript({Test-Path -Path $_})]
+		[Parameter(Position = 6)][ValidateScript({ Test-Path -Path $_ })]
 		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData')
 	)
 
@@ -210,9 +210,21 @@ Function Protect-CmsCredentialSecret {
 		$cert_txt = $Template.Replace('CN=<SUBJECT>', $cms_subject)
 		$cert_txt | Out-File -FilePath $cert_inf
 
+		# define certificate values
+		$SelfSignedCertificate = @{
+			Subject         = $cms_subject
+			Type            = 'DocumentEncryptionCert'
+			KeyExportPolicy = 'NonExportable'
+			HashAlgorithm   = 'SHA512'
+			KeyLength       = 4096
+			NotBefore       = [datetime]::Now
+			NotAfter        = [datetime]::Now.AddYears(100)
+		}
+
 		# create certificate
 		Try {
-			certreq.exe -new -f -q $cert_inf $cert_cer | Out-Null
+			# certreq.exe -new -f -q $cert_inf $cert_cer | Out-Null
+			$null = New-SelfSignedCertificate @SelfSignedCertificate
 		}
 		Catch {
 			# figure out what to put here!
@@ -320,7 +332,7 @@ Function Remove-CmsCredentialSecret {
 		[string]$Prefix = 'cms',
 		[Parameter(Position = 2)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
-		[Parameter(Position = 3)][ValidateScript({Test-Path -Path $_})]
+		[Parameter(Position = 3)][ValidateScript({ Test-Path -Path $_ })]
 		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData')
 	)
 
@@ -760,7 +772,7 @@ Function Unprotect-CmsCredentials {
 		[string]$Prefix = 'cms',
 		[Parameter(Position = 3)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
-		[Parameter(Position = 4)][ValidateScript({Test-Path -Path $_})]
+		[Parameter(Position = 4)][ValidateScript({ Test-Path -Path $_ })]
 		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData')
 	)
 
