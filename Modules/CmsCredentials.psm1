@@ -356,6 +356,72 @@ Function Remove-CmsCredentialSecret {
 	}
 }
 
+Function Show-CmsCredentialSecret {
+	<#
+	.SYNOPSIS
+	Internal function for retrieving a CMS credential.
+
+	.DESCRIPTION
+	Internal function for retrieving a CMS credential. This function is called by Show-CmsCredentials.
+
+	.PARAMETER Target
+	Specifies the identity of a CMS credential.
+
+	.PARAMETER Prefix
+	Specifies the prefix for the CMS credential file. Set to 'cms' by default.
+
+	.PARAMETER Hostname
+	Specifies the hostname in the CMS credential. Set to the local hostname by default.
+
+	.PARAMETER ParentPath
+	Specifies the parent path of the CMS credential folder. Set to the ProgramData folder by default.
+
+	.INPUTS
+	None.
+
+	.OUTPUTS
+	None.
+
+	#>
+
+	[CmdletBinding()]
+	Param (
+		[Parameter(Position = 0)]
+		[string]$Target,
+		[Parameter(Position = 1)]
+		[string]$Prefix = 'cms',
+		[Parameter(Position = 2)]
+		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
+		[Parameter(Position = 3)][ValidateScript({ Test-Path -Path $_ })]
+		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData')
+	)
+
+	# define strings
+	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_')
+	If ([string]::IsNullOrEmpty($Target)) {
+		$cms_cert_regex = ("CN=$Hostname", '\w+', '\w+') -join '-'
+		$cms_file_regex = ($Prefix, $Hostname, '\w+', '\w+') -join '_'
+	}
+	Else {
+		$cms_cert_regex = ("CN=$Hostname", $Target, '\w+') -join '-'
+		$cms_file_regex = ($Prefix, $Hostname, $Target, '\w+') -join '_'	
+	}
+
+	# remove certificates
+	$cms_cert_current = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_cert_regex }
+	$cms_cert_current | ForEach-Object {
+		Write-Host "Found CMS certificate: '$($_.Subject)'"
+		# $_ | Remove-Item -Force
+	}
+
+	# remove credential files
+	$cms_file_current = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $cms_file_regex }
+	$cms_file_current | ForEach-Object {
+		Write-Host "Found CMS credential: '$($_.FullName)'"
+		# $_ | Remove-Item -Force
+	}
+}
+
 Function Update-CmsCredentialAccess {
 	<#
 	.SYNOPSIS
@@ -719,6 +785,104 @@ Function Remove-CmsCredentials {
 	}
 }
 
+Function Show-CmsCredentials {
+	<#
+	.SYNOPSIS
+	Display a credential protected by CMS.
+
+	.DESCRIPTION
+	Display the certificate and encrypted file for a credential protected by CMS.
+
+	.PARAMETER Target
+	Specifies the identity of a CMS credential.
+
+	.PARAMETER Prefix
+	Specifies the prefix for the CMS credential file. Set to 'cms' by default.
+
+	.PARAMETER ComputerName
+	Specifies one or more remote computers.
+
+	.PARAMETER ClusterName
+	Specifies the nodes of one or more remote clusters.
+
+	.PARAMETER Cluster
+	Specifies the nodes of the cluster which the local machine is a member of.
+
+	.INPUTS
+	None.
+
+	.OUTPUTS
+	None.
+
+	.EXAMPLE
+	PS> Show-CmsCredentials -Target "testcredential"
+
+	.EXAMPLE
+	PS> Show-CmsCredentials -Target "testcredential" -Prefix "private"
+
+	.EXAMPLE
+	PS> Show-CmsCredentials -Target "testcredential" -ComputerName "server1", "server2"
+
+	.EXAMPLE
+	PS> Show-CmsCredentials -Target "testcredential" -ClusterName "cluster1", "cluster2"
+
+	.EXAMPLE
+	PS> Show-CmsCredentials -Target "testcredential" -Cluster
+
+	.EXAMPLE
+	PS> Show-CmsCredentials -Target "testcredential" -Prefix "private" -ComputerName "server1", "server2" -ClusterName "cluster1", "cluster2" -Cluster
+
+	#>
+
+	[CmdletBinding()]
+	Param(
+		[Parameter(Position = 0)][AllowEmptyString()]
+		[string]$Target,
+		[Parameter(Position = 1)]
+		[string]$Prefix = 'cms',
+		[Parameter(Position = 2)]
+		[string[]]$ComputerName,
+		[Parameter(Position = 3)]
+		[string[]]$ClusterName,
+		[Parameter(Position = 4)]
+		[switch]$Cluster
+	)
+
+	# get computer names
+	$CmsComputers = @()
+	$CmsComputers += Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+
+	# define parameter hashtable
+	$ShowParameters = @{
+		Target = $Target
+		Prefix = $Prefix
+	}
+
+	# encrypt credentials to certificate
+	If ($CmsComputers.Count -gt 0) {
+		ForEach ($CmsComputer in $CmsComputers) {
+			$ShowFunction = "function Show-CmsCredentialSecret {${function:Show-CmsCredentialSecret}}"
+			Try {
+				Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
+					. ([ScriptBlock]::Create($using:ShowFunction))
+					Show-CmsCredentialSecret @using:ShowParameters
+				}
+			}
+			Catch {
+				Write-Host "ERROR: could not display credentials on '$CmsComputer'"
+			}
+		}
+	}
+	Else {
+		Try {
+			Show-CmsCredentialSecret @ShowParameters
+		}
+		Catch {
+			Write-Host 'ERROR: could not display credentials on local computer'
+		}
+	}
+}
+
 Function Unprotect-CmsCredentials {
 	<#
 	.SYNOPSIS
@@ -1078,11 +1242,38 @@ Function Revoke-CmsCredentialAccess {
 
 	# encrypt credentials to certificate
 	If ($CmsComputers.Count -gt 0) {
+		# start work on multi-module remote import
+		# $Modules = @('CmsCredentials')
+		# $ModuleAliases = @{}
+		$ModuleFunctions = @{}
+		ForEach ($ModuleName in $Modules) {
+			ForEach ($ModuleFunction in (Get-Module -Name $ModuleName).ExportedCommands.Keys) {
+				$ModuleFunctions[$ModuleFunction] = (Get-Item -Path function:$ModuleFunction).Definition
+			}
+		}
+
 		$UpdateFunction = "function Update-CmsCredentialAccess {${function:Update-CmsCredentialAccess}}"
 		ForEach ($CmsComputer in $CmsComputers) {
 			Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
+				# load components of local modules in remote session
+				ForEach ($ModuleFunction in $using:ModuleFunctions.Keys) {
+					Try {
+						. ([ScriptBlock]::Create("function $ModuleFunction {$using:ModuleFunctions[$ModuleFunction]}"))
+					}
+					Catch {
+						Write-Host "ERROR: could not load function '$ModuleFunction' on '$using:CmsComputer'"
+						Return
+					}
+				}
 				Try {
 					. ([ScriptBlock]::Create($using:UpdateFunction))
+				}
+				Catch {
+					Write-Host "ERROR: could not load module(s) on '$using:CmsComputer'"
+					Return
+				}
+				# run commands in remote session
+				Try {
 					Update-CmsCredentialAccess @using:UpdateParameters
 				}
 				Catch {
