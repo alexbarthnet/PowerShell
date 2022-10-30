@@ -338,8 +338,8 @@ Function Remove-CmsCredentialSecret {
 
 	# define strings
 	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_')
-	$cms_cert_regex = ("CN=$Hostname", $Target, '\d{8}') -join '-'
-	$cms_file_regex = ($Prefix, $Hostname, $Target, '-\d{8}') -join '_'
+	$cms_cert_regex = ("CN=$Hostname", $Target, '\w+') -join '-'
+	$cms_file_regex = ($Prefix, $Hostname, $Target, '\w+') -join '_'
 
 	# remove certificates
 	$cms_cert_old = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_cert_regex }
@@ -411,14 +411,12 @@ Function Show-CmsCredentialSecret {
 	$cms_cert_current = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_cert_regex }
 	$cms_cert_current | ForEach-Object {
 		Write-Host "Found CMS certificate: '$($_.Subject)'"
-		# $_ | Remove-Item -Force
 	}
 
 	# remove credential files
 	$cms_file_current = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $cms_file_regex }
 	$cms_file_current | ForEach-Object {
 		Write-Host "Found CMS credential: '$($_.FullName)'"
-		# $_ | Remove-Item -Force
 	}
 }
 
@@ -1296,8 +1294,10 @@ Function Revoke-CmsCredentialAccess {
 $functions_to_export = @()
 $functions_to_export += 'Protect-CmsCredentialSecret'
 $functions_to_export += 'Remove-CmsCredentialSecret'
+$functions_to_export += 'Show-CmsCredentialSecret'
 $functions_to_export += 'Protect-CmsCredentials'
 $functions_to_export += 'Remove-CmsCredentials'
+$functions_to_export += 'Show-CmsCredentials'
 $functions_to_export += 'Unprotect-CmsCredentials'
 $functions_to_export += 'Grant-CmsCredentialAccess'
 $functions_to_export += 'Reset-CmsCredentialAccess'
