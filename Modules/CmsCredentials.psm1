@@ -338,8 +338,10 @@ Function Remove-CmsCredentialSecret {
 
 	# define strings
 	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_')
-	$cms_cert_regex = ("CN=$Hostname", $Target, '\w+') -join '-'
-	$cms_file_regex = ($Prefix, $Hostname, $Target, '\w+') -join '_'
+	$cms_name_regex = '[0-9A-Za-z]+'
+	$cms_date_regex = '[0-9TZ]+'
+	$cms_cert_regex = ("CN=$Hostname", $cms_name_regex, $cms_date_regex) -join '-'
+	$cms_file_regex = ($Prefix, $Hostname, $cms_name_regex, $cms_date_regex) -join '_'
 
 	# remove certificates
 	$cms_cert_old = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_cert_regex }
@@ -398,13 +400,15 @@ Function Show-CmsCredentialSecret {
 
 	# define strings
 	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_')
+	$cms_name_regex = '[0-9A-Za-z]+'
+	$cms_date_regex = '[0-9TZ]+'
 	If ([string]::IsNullOrEmpty($Target)) {
-		$cms_cert_regex = ("CN=$Hostname", '\w+', '\w+') -join '-'
-		$cms_file_regex = ($Prefix, $Hostname, '\w+', '\w+') -join '_'
+		$cms_cert_regex = ("CN=$Hostname", '\w+', $cms_date_regex) -join '-'
+		$cms_file_regex = ($Prefix, $Hostname, '\w+', $cms_date_regex) -join '_'
 	}
 	Else {
-		$cms_cert_regex = ("CN=$Hostname", $Target, '\w+') -join '-'
-		$cms_file_regex = ($Prefix, $Hostname, $Target, '\w+') -join '_'	
+		$cms_cert_regex = ("CN=$Hostname", $cms_name_regex, $cms_date_regex) -join '-'
+		$cms_file_regex = ($Prefix, $Hostname, $cms_name_regex, $cms_date_regex) -join '_'
 	}
 
 	# remove certificates
