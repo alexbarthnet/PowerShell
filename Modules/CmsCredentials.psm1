@@ -155,7 +155,6 @@ Function Protect-CmsCredentialSecret {
 	# define required objects
 	$cms_cert = $null
 	$cms_make = $false
-	$cms_date = Get-Date -Format FileDateTimeUniversal
 	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_')
 
 	# verify cms folder
@@ -172,10 +171,11 @@ Function Protect-CmsCredentialSecret {
 	}
 	Else {
 		# define required strings
-		$cms_cert_regex = ("CN=$Hostname", $Target, '\d{8}') -join '-'
+		$cms_date_regex = '[0-9TZ]+'
+		$cms_cert_regex = ("CN=$Hostname", $Target, $cms_date_regex) -join '-'
 
 		# retrieve any certificates matching regex
-		$cms_cert = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_cert_regex } | Sort-Object 'Subject' | Select-Object -Last 1
+		$cms_cert = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_cert_regex } | Sort-Object NotBefore | Select-Object -Last 1
 
 		# check certificates
 		If ($cms_cert) {
@@ -200,15 +200,8 @@ Function Protect-CmsCredentialSecret {
 	# create the certificate
 	If ($cms_make) {
 		# define certificate subject
+		$cms_date = Get-Date -Format FileDateTimeUniversal
 		$cms_subject = "CN=$($Hostname, $Target, $cms_date -join '-')"
-
-		# create temporary files
-		$cert_inf = New-TemporaryFile
-		$cert_cer = New-TemporaryFile
-
-		# create certificate template
-		$cert_txt = $Template.Replace('CN=<SUBJECT>', $cms_subject)
-		$cert_txt | Out-File -FilePath $cert_inf
 
 		# define certificate values
 		$SelfSignedCertificate = @{
@@ -230,12 +223,8 @@ Function Protect-CmsCredentialSecret {
 			# figure out what to put here!
 		}
 
-		# remove temporary files
-		Remove-Item -Path $cert_inf -Force
-		Remove-Item -Path $cert_cer -Force
-
 		# check local machine store for new certificate
-		$cms_cert = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -eq $cms_subject } | Select-Object -Last 1
+		$cms_cert = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -eq $cms_subject } | Sort-Object NotBefore | Select-Object -Last 1
 		If ($cms_cert) {
 			# declare certificate subject
 			Write-Host "CMS certificate created, subject: '$($cms_subject)'"
@@ -249,9 +238,10 @@ Function Protect-CmsCredentialSecret {
 	# if a CMS cert exists...
 	If ($cms_cert) {
 		# define required strings
-		$cms_name = ($Prefix, $Hostname, $Target, $cms_date) -join '_'
+		$cms_name = $cms_cert.Subject.Replace('CN=',$null)
 		$cms_file = Join-Path -Path $cms_path -ChildPath "$cms_name.txt"
-		$cms_file_regex = ($Prefix, $Hostname, $Target, '\d{8}') -join '_'
+		$cms_date_regex = '[0-9TZ]+'
+		$cms_file_regex = ($Prefix, $Hostname, $Target, $cms_date_regex) -join '_'
 
 		# create custom object for export
 		$cms_cred = $null
