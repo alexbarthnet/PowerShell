@@ -27,7 +27,7 @@ Try {
 		$RemoteCertificateValidationCallback = { param($delegate_sender, $delegate_certificate, $delegate_chain, $delegate_sslPolicyErrors) return $true }
 		# negotiate secure connection
 		$SSLStream = New-Object -TypeName 'System.Net.Security.SSLStream' -ArgumentList @($TcpSocketStream, $true, $RemoteCertificateValidationCallback)
-		$SSLStream.AuthenticateAsClient($Server)
+		$SSLStream.AuthenticateAsClient($Hostname)
 		Try {
 			# get certificate sent by remote server
 			$Certificate = New-Object -TypeName 'System.Security.Cryptography.X509Certificates.X509Certificate2' -ArgumentList $SSLStream.RemoteCertificate
