@@ -241,6 +241,7 @@ Function Protect-CmsCredentialSecret {
 		$cms_name = $cms_cert.Subject.Replace('CN=',$null)
 		$cms_file = Join-Path -Path $cms_path -ChildPath "$cms_name.txt"
 		$cms_date_regex = '[0-9TZ]+'
+		$cms_cert_regex = ($Prefix, $Hostname, $Target, $cms_date_regex) -join '_'
 		$cms_file_regex = ($Prefix, $Hostname, $Target, $cms_date_regex) -join '_'
 
 		# create custom object for export
