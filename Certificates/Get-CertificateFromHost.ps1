@@ -67,7 +67,7 @@ If ($Chain -or $Validate) {
 		$X509Chain = New-Object -TypeName 'System.Security.Cryptography.X509Certificates.X509Chain'
 		$X509Chain.ChainPolicy.RevocationMode = 'NoCheck'
 		# build certificate chain from remote server certificate
-		$X509ChainValid = $X509Chain.Build($Certificate) 
+		$X509ChainValid = $X509Chain.Build($Certificate)
 	}
 	Catch {
 		Write-Host 'Could not build certificate chain'
@@ -86,7 +86,17 @@ If ($Chain) {
 		# return certificate chain information
 		$X509Chain.ChainElements.Certificate | Format-List Thumbprint, Subject, Issuer, DnsNameList
 		# declare if certificate chain is trusted
-		If ($Validate) { Write-Host "Certificate chain is trusted: $X509ChainValid`n" }
+		If ($Validate) {
+			Write-Host "Certificate chain validated: $X509ChainValid"
+			If ($X509Chain.ChainStatus.Count -eq 0) {
+				Write-Host "Certificate chain is trusted"
+			}
+			Else {
+				Write-Host "Certificate chain is NOT trusted:"
+				$X509Chain.ChainStatus | Format-List Status,StatusInformation
+			}
+			Write-Host "`n"
+		}
 	}
 }
 Else {
@@ -98,6 +108,16 @@ Else {
 		# return certificate information
 		$Certificate | Format-List Thumbprint, Subject, Issuer, DnsNameList
 		# declare if certificate is trusted
-		If ($Validate) { Write-Host "Certificate is trusted: $X509ChainValid`n" }
+		If ($Validate) {
+			Write-Host "Certificate chain validated: $X509ChainValid"
+			If ($X509Chain.ChainStatus.Count -eq 0) {
+				Write-Host "Certificate is trusted"
+			}
+			Else {
+				Write-Host "Certificate is NOT trusted:"
+				$X509Chain.ChainStatus | Format-List Status,StatusInformation
+			}
+			Write-Host "`n"
+		}
 	}
 }
