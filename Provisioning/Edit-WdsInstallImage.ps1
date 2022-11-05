@@ -31,6 +31,7 @@ Param(
 		'Rsat.FailoverCluster.Management.Tools~~~~0.0.11.0'
 		'Rsat.GroupPolicy.Management.Tools~~~~0.0.1.0'
 	),
+	[Parameter()]
 	[string[]]$CapabilitiesToRemove = @(
 		'Browser.InternetExplorer~~~~0.0.11.0'
 	),
@@ -39,6 +40,7 @@ Param(
 		'TelnetClient'
 		'WirelessNetworking'
 	),
+	[Parameter()]
 	[string[]]$FeaturesToDisable = @(
 		'TelnetClient'
 		'WirelessNetworking'
