@@ -58,7 +58,7 @@ Param(
 	[Parameter(ParameterSetName = 'Add')]
 	[string]$MaintenanceCollection,
 	[Parameter(ParameterSetName = 'Add')]
-	[string]$ClusterPriority,
+	[uint32]$ClusterPriority,
 	[Parameter()]
 	[string]$Json
 )
@@ -126,40 +126,46 @@ switch ($true) {
 		}
 	}
 	$Add {
+		# define ordered hashtable with required parameters
+		$json_hash = [ordered]@{
+			VMName = $VMName
+			VMHost = $VMHost
+		}
+		# update ordered hashtable with optional parameters
+		If ($Path) { $json_hash['Path'] = $Path }
+		If ($ProcessorCount) { $json_hash['ProcessorCount'] = $ProcessorCount }
+		If ($MemoryStartupBytes) { $json_hash['MemoryStartupBytes'] = $MemoryStartupBytes }
+		If ($MemoryMinimumBytes) { $json_hash['MemoryMinimumBytes'] = $MemoryMinimumBytes }
+		If ($MemoryMaximumBytes) { $json_hash['MemoryMaximumBytes'] = $MemoryMaximumBytes }
+		If ($VHDSizeBytes) { $json_hash['VHDSizeBytes'] = $VHDSizeBytes }
+		If ($DataVHDSizeBytes) { $json_hash['DataVHDSizeBytes'] = $DataVHDSizeBytes }
+		If ($DataVHDCount) { $json_hash['DataVHDCount'] = $DataVHDCount }
+		If ($ExcludedVHDSizeBytes) { $json_hash['ExcludedVHDSizeBytes'] = $ExcludedVHDSizeBytes }
+		If ($ExcludedVHDCount) { $json_hash['ExcludedVHDCount'] = $ExcludedVHDCount }
+		If ($SwitchName) { $json_hash['SwitchName'] = $SwitchName }
+		If ($VLAN) { $json_hash['VLAN'] = $VLAN }
+		If ($NetworkAdapterName) { $json_hash['NetworkAdapterName'] = $NetworkAdapterName }
+		If ($MacAddressPrefix) { $json_hash['MacAddressPrefix'] = $MacAddressPrefix }
+		If ($IPAddress) { $json_hash['IPAddress'] = $IPAddress }
+		If ($DhcpServer) { $json_hash['DhcpServer'] = $DhcpServer }
+		If ($DhcpScope) { $json_hash['DhcpScope'] = $DhcpScope }
+		If ($DeploymentMethod) { $json_hash['DeploymentMethod'] = $DeploymentMethod }
+		If ($DeploymentPath) { $json_hash['DeploymentPath'] = $DeploymentPath }
+		If ($DeploymentServer) { $json_hash['DeploymentServer'] = $DeploymentServer }
+		If ($DeploymentDomain) { $json_hash['DeploymentDomain'] = $DeploymentDomain }
+		If ($DeploymentCollection) { $json_hash['DeploymentCollection'] = $DeploymentCollection }
+		If ($MaintenanceCollection) { $json_hash['MaintenanceCollection'] = $MaintenanceCollection }
+		If ($ClusterPriority) { $json_hash['ClusterPriority'] = $ClusterPriority }
 		# create custom object from parameters then add to object
 		Try {
+			# remove any existing VM hashtable from array of hashtables
 			If ($json_data | Where-Object { $_.VMName -eq $VMName } ) {
 				$json_replace = $true
 				$json_data = $json_data | Where-Object { $_.VMName -ne $VMName }
 			}
-			$json_data += [pscustomobject][ordered]@{
-				VMName                = $VMName
-				VMHost                = $VMHost
-				Path                  = $Path
-				ProcessorCount        = $ProcessorCount
-				MemoryStartupBytes    = $MemoryStartupBytes
-				MemoryMinimumBytes    = $MemoryMinimumBytes
-				MemoryMaximumBytes    = $MemoryMaximumBytes
-				VHDSizeBytes          = $VHDSizeBytes
-				DataVHDSizeBytes      = $DataVHDSizeBytes
-				DataVHDCount          = $DataVHDCount
-				ExcludedVHDSizeBytes  = $ExcludedVHDSizeBytes
-				ExcludedVHDCount      = $ExcludedVHDCount
-				SwitchName            = $SwitchName
-				VLAN                  = $VLAN
-				NetworkAdapterName    = $NetworkAdapterName
-				MacAddressPrefix      = $MacAddressPrefix
-				IPAddress             = $IPAddress
-				DhcpServer            = $DhcpServer
-				DhcpScope             = $DhcpScope
-				DeploymentMethod      = $DeploymentMethod
-				DeploymentPath        = $DeploymentPath
-				DeploymentServer      = $DeploymentServer
-				DeploymentDomain      = $DeploymentDomain
-				DeploymentCollection  = $DeploymentCollection
-				MaintenanceCollection = $MaintenanceCollection
-				ClusterPriority       = $ClusterPriority
-			}
+			# add VM hashtable to array of hashtables
+			$json_data += $json_hash
+			# export array of hashtables to JSON
 			$json_data | ConvertTo-Json | Set-Content -Path $Json
 			If ($json_replace) {
 				Write-Output "`nReplaced '$VMName' in configuration file: '$Json'"
