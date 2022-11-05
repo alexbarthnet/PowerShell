@@ -6,12 +6,30 @@ Param(
 	[object[]]$WdsInstallImage,
 	[Parameter()][ValidateScript({ (Test-Path -PathType 'Container' -Path $_) -and ((Get-ChildItem -Path $_).Count -eq 0) } )]
 	[string]$TempPath = ([System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')),
+	[Parameter()][ValidateScript({ (Test-Path -PathType 'Container' -Path $_) -and ((Get-ChildItem -Path $_).Count -ne 0) } )]
+	[string]$Source,
+	[Parameter()]
+	[switch]$AddCapabilities,
+	[Parameter()]
+	[switch]$RemoveCapabilities,
 	[Parameter()]
 	[switch]$EnableFeatures,
 	[Parameter()]
 	[switch]$DisableFeatures,
 	[Parameter()]
 	[switch]$RemoveAppXPackages,
+	[Parameter()]
+	[string[]]$CapabilitiesToAdd = @(
+		'Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0'
+		'Rsat.CertificateServices.Tools~~~~0.0.1.0'
+		'Rsat.DHCP.Tools~~~~0.0.1.0'
+		'Rsat.Dns.Tools~~~~0.0.1.0'
+		'Rsat.FailoverCluster.Management.Tools~~~~0.0.11.0'
+		'Rsat.GroupPolicy.Management.Tools~~~~0.0.1.0'
+	),
+	[string[]]$CapabilitiesToRemove = @(
+		'Browser.InternetExplorer~~~~0.0.11.0'
+	),
 	[Parameter()]
 	[string[]]$FeaturesToEnable = @(
 		'TelnetClient'
@@ -133,6 +151,62 @@ ForEach ($Image in $WdsInstallImage) {
 		Write-Error 'Could not mount the image'
 		$_
 		Return
+	}
+
+	# add capabilities to WIM
+	If ($AddCapabilities -and (Test-Path -Path $Source -PathType 'Container')) {
+		Write-Host '================================'
+		Write-Host 'Adding capabilities to image...'
+		Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+		Write-Host ''
+		# retrieve capabilities
+		Try {
+			$wim_capabilities_to_add = Get-WindowsCapability -Path $wds_temp_mount | Where-Object { $_.Name -in $CapabilitiesToAdd -and $_.State -eq 'NotPresent' }
+		}
+		Catch {
+			Write-Error 'Could not get capabilities from image'
+			$_
+			Return
+		}
+		# add capabilities individually
+		ForEach ($Capability in $wim_capabilities_to_add) {
+			Try {
+				$null = Add-WindowsCapability -Path $wds_temp_mount -Name $Capability.Name -Source $Source
+			}
+			Catch {
+				Write-Error "Could not add capability to image: $($Capability.Name)"
+				$_
+				Return
+			}
+		}
+	}
+
+	# remove capabilities from WIM
+	If ($RemoveCapabilities -and (Test-Path -Path $Source -PathType 'Container')) {
+		Write-Host '================================'
+		Write-Host 'Removing capabilities from image...'
+		Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+		Write-Host ''
+		# retrieve capabilities
+		Try {
+			$wim_capabilities_to_add = Get-WindowsCapability -Path $wds_temp_mount | Where-Object { $_.Name -in $CapabilitiesToRemove -and $_.State -eq 'Installed' }
+		}
+		Catch {
+			Write-Error 'Could not get capabilities from image'
+			$_
+			Return
+		}
+		# remove capabilities individually
+		ForEach ($Capability in $wim_capabilities_to_add) {
+			Try {
+				$null = Remove-WindowsCapability -Path $wds_temp_mount -Name $Capability.Name -Source $Source
+			}
+			Catch {
+				Write-Error "Could not remove capability from image: $($Capability.Name)"
+				$_
+				Return
+			}
+		}
 	}
 
 	# enable features in WIM
