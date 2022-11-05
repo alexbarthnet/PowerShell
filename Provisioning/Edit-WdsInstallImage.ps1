@@ -7,7 +7,9 @@ Param(
 	[Parameter()][ValidateScript({ (Test-Path -PathType 'Container' -Path $_) -and ((Get-ChildItem -Path $_).Count -eq 0) } )]
 	[string]$TempPath = ([System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')),
 	[Parameter()][ValidateScript({ (Test-Path -PathType 'Container' -Path $_) -and ((Get-ChildItem -Path $_).Count -ne 0) } )]
-	[string]$Source,
+	[string]$CapabilitySource,
+	[Parameter()][ValidateScript({ (Test-Path -PathType 'Container' -Path $_) -and ((Get-ChildItem -Path $_).Count -ne 0) } )]
+	[string]$PackageSource,
 	[Parameter()]
 	[switch]$AddCapabilities,
 	[Parameter()]
@@ -17,7 +19,9 @@ Param(
 	[Parameter()]
 	[switch]$DisableFeatures,
 	[Parameter()]
-	[switch]$RemoveAppXPackages,
+	[switch]$AddPackages,
+	[Parameter()]
+	[switch]$RemovePackages,
 	[Parameter()]
 	[string[]]$CapabilitiesToAdd = @(
 		'Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0'
@@ -40,7 +44,11 @@ Param(
 		'WirelessNetworking'
 	),
 	[Parameter()]
-	[string[]]$AppXPackagesToRemove = @(
+	[string[]]$PackagesToAdd = @(
+		# add packages here!
+	),
+	[Parameter()]
+	[string[]]$PackagesToRemove = @(
 		'Microsoft.BingWeather',
 		'Microsoft.GetHelp',
 		'Microsoft.Getstarted',
@@ -134,7 +142,7 @@ ForEach ($Image in $WdsInstallImage) {
 		$null = Export-WdsInstallImage -ImageGroup $wds_image_group -ImageName $wds_image_name -Destination $wim_file_old
 	}
 	Catch {
-		Write-Error 'Could not export the original image'
+		Write-Error 'Could not export image from WDS'
 		$_
 		Return
 	}
@@ -148,13 +156,13 @@ ForEach ($Image in $WdsInstallImage) {
 		$null = Mount-WindowsImage -Path $wds_temp_mount -ImagePath $wim_file_old -Index $wds_image_index -CheckIntegrity -Verbose
 	}
 	Catch {
-		Write-Error 'Could not mount the image'
+		Write-Error 'Could not mount image'
 		$_
 		Return
 	}
 
 	# add capabilities to WIM
-	If ($AddCapabilities -and (Test-Path -Path $Source -PathType 'Container')) {
+	If ($AddCapabilities -and (Test-Path -Path $PackageSource -PathType 'Container')) {
 		Write-Host '================================'
 		Write-Host 'Adding capabilities to image...'
 		Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
@@ -171,7 +179,7 @@ ForEach ($Image in $WdsInstallImage) {
 		# add capabilities individually
 		ForEach ($Capability in $wim_capabilities_to_add) {
 			Try {
-				$null = Add-WindowsCapability -Path $wds_temp_mount -Name $Capability.Name -Source $Source
+				$null = Add-WindowsCapability -Path $wds_temp_mount -Name $Capability.Name -Source $CapabilitySource
 			}
 			Catch {
 				Write-Error "Could not add capability to image: $($Capability.Name)"
@@ -182,14 +190,14 @@ ForEach ($Image in $WdsInstallImage) {
 	}
 
 	# remove capabilities from WIM
-	If ($RemoveCapabilities -and (Test-Path -Path $Source -PathType 'Container')) {
+	If ($RemoveCapabilities) {
 		Write-Host '================================'
 		Write-Host 'Removing capabilities from image...'
 		Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 		Write-Host ''
 		# retrieve capabilities
 		Try {
-			$wim_capabilities_to_add = Get-WindowsCapability -Path $wds_temp_mount | Where-Object { $_.Name -in $CapabilitiesToRemove -and $_.State -eq 'Installed' }
+			$wim_capabilities_to_remove = Get-WindowsCapability -Path $wds_temp_mount | Where-Object { $_.Name -in $CapabilitiesToRemove -and $_.State -eq 'Installed' }
 		}
 		Catch {
 			Write-Error 'Could not get capabilities from image'
@@ -197,12 +205,12 @@ ForEach ($Image in $WdsInstallImage) {
 			Return
 		}
 		# remove capabilities individually
-		ForEach ($Capability in $wim_capabilities_to_add) {
+		ForEach ($Capability in $wim_capabilities_to_remove) {
 			Try {
-				$null = Remove-WindowsCapability -Path $wds_temp_mount -Name $Capability.Name -Source $Source
+				$null = Remove-WindowsCapability -Path $wds_temp_mount -Name $Capability.Name
 			}
 			Catch {
-				Write-Error "Could not remove capability from image: $($Capability.Name)"
+				Write-Error "Could not remove capability: $($Capability.Name)"
 				$_
 				Return
 			}
@@ -216,13 +224,22 @@ ForEach ($Image in $WdsInstallImage) {
 		Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 		Write-Host ''
 		Try {
-			$wim_features = Get-WindowsOptionalFeature -Path $wds_temp_mount | Where-Object { $_.FeatureName -in $FeaturesToEnable -and $_.State -eq 'Disabled' }
-			$null = $wim_features | Enable-WindowsOptionalFeature
+			$wim_features_to_enable = Get-WindowsOptionalFeature -Path $wds_temp_mount | Where-Object { $_.FeatureName -in $FeaturesToEnable -and $_.State -eq 'Disabled' }
 		}
 		Catch {
-			Write-Error 'Could not enable features in the image'
+			Write-Error 'Could not get features from image'
 			$_
 			Return
+		}
+		ForEach ($Feature in $wim_features_to_enable) {
+			Try {
+				$null = Enable-WindowsOptionalFeature -Path $wds_temp_mount -FeatureName $Feature.FeatureName
+			}
+			Catch {
+				Write-Error "Could not enable feature: $($Feature.FeatureName)"
+				$_
+				Return
+			}
 		}
 	}
 
@@ -233,30 +250,79 @@ ForEach ($Image in $WdsInstallImage) {
 		Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 		Write-Host ''
 		Try {
-			$wim_features = Get-WindowsOptionalFeature -Path $wds_temp_mount | Where-Object { $_.FeatureName -in $FeaturesToDisable -and $_.State -eq 'Enabled' }
-			$null = $wim_features | Disable-WindowsOptionalFeature
+			$wim_features_to_disable = Get-WindowsOptionalFeature -Path $wds_temp_mount | Where-Object { $_.FeatureName -in $FeaturesToDisable -and $_.State -eq 'Enabled' }
 		}
 		Catch {
-			Write-Error 'Could not disable features in the image'
+			Write-Error 'Could not get features from image'
 			$_
 			Return
+		}
+		ForEach ($Feature in $wim_features_to_disable) {
+			Try {
+				$null = Disable-WindowsOptionalFeature -Path $wds_temp_mount -FeatureName $Feature.FeatureName
+			}
+			Catch {
+				Write-Error "Could not disable feature: $($Feature.FeatureName)"
+				$_
+				Return
+			}
+		}
+	}
+
+	# add AppX packages to WIM
+	If ($AddPackages -and (Test-Path -Path $PackageSource -PathType 'Container')) {
+		Write-Host '================================'
+		Write-Host 'Adding packages to image...'
+		Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+		Write-Host ''
+		# retrieve AppX packages from source
+		Try {
+			$wim_packages_to_add = Get-ChildItem -Path $PackageSource | Where-Object { $_.BaseName -in $PackagesToAdd -and $_.Extension -eq '.appx' }
+		}
+		Catch {
+			Write-Error 'Could not get packages from source'
+			$_
+			Return
+		}
+		# add AppX packages individually
+		ForEach ($Package in $wim_packages_to_add) {
+			Try {
+				$null = Add-AppxProvisionedPackage -Path $wds_temp_mount -PackagePath $Package.FullName -LicensePath $Package.FullName.Replace($Package.Extension, '.xml')
+			}
+			Catch {
+				Write-Error "Could not add package: $($Package.Name)"
+				$_
+				Return
+			}
 		}
 	}
 
 	# remove AppX packages from WIM
-	If ($RemoveAppXPackages) {
+	If ($RemovePackages) {
 		Write-Host '================================'
 		Write-Host 'Removing packages from image...'
 		Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 		Write-Host ''
+		# retrieve AppX packages from image
 		Try {
-			$wim_packages = Get-AppxProvisionedPackage -Path $wds_temp_mount | Where-Object { $_.DisplayName -in $AppXPackages }
-			$null = $wim_packages | Remove-AppxProvisionedPackage
+			$wim_packages_to_remove = Get-AppxProvisionedPackage -Path $wds_temp_mount | Where-Object { $_.DisplayName -in $PackagesToRemove }
+			$null = $wim_packages | Remove-AppxProvisionedPackage -PackageName $_.
 		}
 		Catch {
-			Write-Error 'Could not remove packages from the image'
+			Write-Error 'Could not get packages from image'
 			$_
 			Return
+		}
+		# remove AppX packages individually
+		ForEach ($Package in $wim_packages_to_remove) {
+			Try {
+				$null = Remove-AppxProvisionedPackage -Path $wds_temp_mount -PackageName $Package.DisplayName
+			}
+			Catch {
+				Write-Error "Could not remove package: $($Package.DisplayName)"
+				$_
+				Return
+			}
 		}
 	}
 
@@ -269,7 +335,7 @@ ForEach ($Image in $WdsInstallImage) {
 		$null = Dismount-WindowsImage -Path $wds_temp_mount -Save -CheckIntegrity
 	}
 	Catch {
-		Write-Error 'Could not dismount the image'
+		Write-Error 'Could not dismount image'
 		$_
 		Return
 	}
@@ -283,7 +349,7 @@ ForEach ($Image in $WdsInstallImage) {
 		$null = Export-WindowsImage -Verbose -SourceImagePath $wim_file_old -SourceIndex $wds_image_index -CheckIntegrity -DestinationImagePath $wim_file_new
 	}
 	Catch {
-		Write-Error 'Could not export the patched image'
+		Write-Error 'Could not export image'
 		$_
 		Return
 	}
@@ -309,7 +375,7 @@ ForEach ($Image in $WdsInstallImage) {
 		$null = Remove-WdsInstallImage -ImageGroup $wds_image_group -ImageName $wds_image_name
 	}
 	Catch {
-		Write-Error 'Could not remove the image from WDS'
+		Write-Error 'Could not remove image from WDS'
 		$_
 		Return
 	}
@@ -323,7 +389,7 @@ ForEach ($Image in $WdsInstallImage) {
 		$null = Import-WdsInstallImage -ImageGroup $wds_image_group -ImageName $wds_image_name -Path $wim_file_new -NewFileName $wds_image_file -DisplayOrder $wds_image_order
 	}
 	Catch {
-		Write-Error 'Could not import the image into WDS'
+		Write-Error 'Could not import image into WDS'
 		$_
 		Return
 	}
