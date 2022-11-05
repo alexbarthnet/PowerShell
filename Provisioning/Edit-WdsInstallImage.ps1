@@ -164,7 +164,7 @@ ForEach ($Image in $WdsInstallImage) {
 	}
 
 	# add capabilities to WIM
-	If ($AddCapabilities -and (Test-Path -Path $PackageSource -PathType 'Container')) {
+	If ($AddCapabilities -and (Test-Path -Path $CapabilitySource -PathType 'Container')) {
 		Write-Host '================================'
 		Write-Host 'Adding capabilities to image...'
 		Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
@@ -337,7 +337,7 @@ ForEach ($Image in $WdsInstallImage) {
 		$null = Dismount-WindowsImage -Path $wds_temp_mount -Save -CheckIntegrity
 	}
 	Catch {
-		Write-Error 'Could not dismount image'
+		Write-Error 'Could not unmount updated image'
 		$_
 		Return
 	}
@@ -351,7 +351,7 @@ ForEach ($Image in $WdsInstallImage) {
 		$null = Export-WindowsImage -Verbose -SourceImagePath $wim_file_old -SourceIndex $wds_image_index -CheckIntegrity -DestinationImagePath $wim_file_new
 	}
 	Catch {
-		Write-Error 'Could not export image'
+		Write-Error 'Could not export updated image'
 		$_
 		Return
 	}
@@ -377,7 +377,7 @@ ForEach ($Image in $WdsInstallImage) {
 		$null = Remove-WdsInstallImage -ImageGroup $wds_image_group -ImageName $wds_image_name
 	}
 	Catch {
-		Write-Error 'Could not remove image from WDS'
+		Write-Error 'Could not remove original image from WDS'
 		$_
 		Return
 	}
@@ -391,7 +391,7 @@ ForEach ($Image in $WdsInstallImage) {
 		$null = Import-WdsInstallImage -ImageGroup $wds_image_group -ImageName $wds_image_name -Path $wim_file_new -NewFileName $wds_image_file -DisplayOrder $wds_image_order
 	}
 	Catch {
-		Write-Error 'Could not import image into WDS'
+		Write-Error 'Could not import updated image into WDS'
 		$_
 		Return
 	}
