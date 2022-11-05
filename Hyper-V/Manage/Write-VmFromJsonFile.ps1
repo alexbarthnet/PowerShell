@@ -150,8 +150,8 @@ switch ($true) {
 		If ($DhcpServer) { $json_hash['DhcpServer'] = $DhcpServer }
 		If ($DhcpScope) { $json_hash['DhcpScope'] = $DhcpScope }
 		If ($DeploymentMethod) { $json_hash['DeploymentMethod'] = $DeploymentMethod }
-		If ($DeploymentPath) { $json_hash['DeploymentPath'] = $DeploymentPath }
 		If ($DeploymentServer) { $json_hash['DeploymentServer'] = $DeploymentServer }
+		If ($DeploymentPath) { $json_hash['DeploymentPath'] = $DeploymentPath }
 		If ($DeploymentDomain) { $json_hash['DeploymentDomain'] = $DeploymentDomain }
 		If ($DeploymentCollection) { $json_hash['DeploymentCollection'] = $DeploymentCollection }
 		If ($MaintenanceCollection) { $json_hash['MaintenanceCollection'] = $MaintenanceCollection }
