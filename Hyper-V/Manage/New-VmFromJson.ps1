@@ -601,7 +601,7 @@ Function New-VmFromParams {
 	}
 
 	# configure the CPU
-	If ($null = $vm_processor_count) { $vm_processor_count = 2 }
+	If ($null -eq $vm_processor_count) { $vm_processor_count = 2 }
 	Write-Host ("$Hostname,$vm_host,$vm_name - ...setting CPU count: " + $vm_processor_count)
 	$vm | Set-VMProcessor -Count $vm_processor_count -ExposeVirtualizationExtensions $true
 
