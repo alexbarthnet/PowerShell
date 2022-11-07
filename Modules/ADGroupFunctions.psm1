@@ -68,6 +68,104 @@ Function Find-ADGroup {
 	}
 }
 
+Function Get-ADGroupsFromGroup {
+	[CmdletBinding()]
+	param (
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ $_ -is [Microsoft.ActiveDirectory.Management.ADObject] -or $_ -is [System.String] })]
+		[object]$Identity,
+		[Parameter(Position = 1)]
+		[string]$Property = 'msds-membertransitive',
+		[Parameter(Position = 2)]
+		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
+	)
+
+	# retrieve group
+	Try {
+		$ad_group = Get-ADGroup -Identity $Identity -Server $Server
+	}
+	Catch {
+		# report error if verbose
+		Write-Verbose -Message 'ERROR: could not retrieve group'
+		# return error to caller
+		Return $_
+	}
+
+	# validate values in property are groups
+	Try {
+		# create empty list
+		$ad_results = New-Object System.Collections.Generic.List[string]
+		# retrive property from object
+		$ad_objects = [array](Get-ADObject -Identity $ad_group -Properties $Property -Server $Server | Select-Object -ExpandProperty $Property)
+		# parse values in property
+		ForEach ($fqdn in $ad_objects) {
+			# retrieve object for member
+			$ad_object = Get-ADObject -Identity $fqdn -Server $Server
+			# if member is a group...
+			If ($ad_object.ObjectClass -eq 'group') {
+				# ...add name of member to desired list
+				$ad_results.Add($ad_object.Name)
+			}
+		}
+		# return list to caller
+		Return $ad_results
+	}
+	Catch {
+		# report error if verbose
+		Write-Verbose -Message 'ERROR: could not retrieve one or more objects'
+		# return error to caller
+		Return $_
+	}
+}
+
+Function Get-ADGroupsFromQuery {
+	[CmdletBinding()]
+	param (
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]	
+		[string]$LDAPFilter,
+		[Parameter(Position = 1)]
+		[string]$SearchBase = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().GetDirectoryEntry().DistinguishedName,
+		[Parameter(Position = 2)]
+		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
+	)
+
+	# retrieve objects from query
+	Try {
+		$ad_result = [array](Get-ADObject -LDAPFilter $LDAPFilter -SearchBase $SearchBase -Server $Server)
+	}
+	Catch {
+		# report error if verbose
+		Write-Verbose -Message 'ERROR: could not retrieve objects'
+		# return error to caller
+		Return $_
+	}
+
+	# validate objects are groups
+	Try {
+		# create empty list
+		$ad_results = New-Object System.Collections.Generic.List[string]
+		# retrive DNs from objects
+		$ad_objects = [array]($ad_result | Select-Object -ExpandProperty 'DistinguishedName')
+		# parse values in property
+		ForEach ($fqdn in $ad_objects) {
+			# retrieve object for member
+			$ad_object = Get-ADObject -Identity $fqdn -Server $Server
+			# if member is a group...
+			If ($ad_object.ObjectClass -eq 'group') {
+				# ...add name of member to desired list
+				$ad_results.Add($ad_object.Name)
+			}
+		}
+		# return list to caller
+		Return $ad_results
+	}
+	Catch {
+		# report error if verbose
+		Write-Verbose -Message 'ERROR: could not retrieve one or more objects'
+		# return error to the caller
+		Return $_
+	}
+}
+
 Function Update-ADMembers {
 	[CmdletBinding(SupportsShouldProcess)]
 	Param (
