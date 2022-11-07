@@ -9,6 +9,8 @@ Param(
 	[Parameter()][ValidateScript({ (Test-Path -PathType 'Container' -Path $_) -and ((Get-ChildItem -Path $_).Count -ne 0) } )]
 	[string]$CapabilitySource,
 	[Parameter()][ValidateScript({ (Test-Path -PathType 'Container' -Path $_) -and ((Get-ChildItem -Path $_).Count -ne 0) } )]
+	[string]$FeatureSource,
+	[Parameter()][ValidateScript({ (Test-Path -PathType 'Container' -Path $_) -and ((Get-ChildItem -Path $_).Count -ne 0) } )]
 	[string]$PackageSource,
 	[Parameter()]
 	[switch]$AddCapabilities,
@@ -24,6 +26,7 @@ Param(
 	[switch]$RemovePackages,
 	[Parameter()]
 	[string[]]$CapabilitiesToAdd = @(
+		'NetFx~~~~'
 		'Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0'
 		'Rsat.CertificateServices.Tools~~~~0.0.1.0'
 		'Rsat.DHCP.Tools~~~~0.0.1.0'
@@ -37,13 +40,13 @@ Param(
 	),
 	[Parameter()]
 	[string[]]$FeaturesToEnable = @(
+		'NetFx3'	
 		'TelnetClient'
 		'WirelessNetworking'
 	),
 	[Parameter()]
 	[string[]]$FeaturesToDisable = @(
-		'TelnetClient'
-		'WirelessNetworking'
+		# add features here!
 	),
 	[Parameter()]
 	[string[]]$PackagesToAdd = @(
@@ -226,7 +229,7 @@ ForEach ($Image in $WdsInstallImage) {
 		Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 		Write-Host ''
 		Try {
-			$wim_features_to_enable = Get-WindowsOptionalFeature -Path $wds_temp_mount | Where-Object { $_.FeatureName -in $FeaturesToEnable -and $_.State -eq 'Disabled' }
+			$wim_features_to_enable = Get-WindowsOptionalFeature -Path $wds_temp_mount | Where-Object { $_.FeatureName -in $FeaturesToEnable -and $_.State -match 'Disabled' }
 		}
 		Catch {
 			Write-Error 'Could not get features from image'
@@ -235,7 +238,12 @@ ForEach ($Image in $WdsInstallImage) {
 		}
 		ForEach ($Feature in $wim_features_to_enable) {
 			Try {
-				$null = Enable-WindowsOptionalFeature -Path $wds_temp_mount -FeatureName $Feature.FeatureName
+				If ($Feature.State -eq 'DisabledWithPayloadRemoved' -and (Test-Path -Path $FeatureSource -PathType Container)) {
+					$null = Enable-WindowsOptionalFeature -Path $wds_temp_mount -FeatureName $Feature.FeatureName -Source $FeatureSource
+				}
+				Else {
+					$null = Enable-WindowsOptionalFeature -Path $wds_temp_mount -FeatureName $Feature.FeatureName
+				}
 			}
 			Catch {
 				Write-Error "Could not enable feature: $($Feature.FeatureName)"
