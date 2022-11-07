@@ -2,12 +2,12 @@
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	[Parameter(Position = 0, Mandatory = $True, ValueFromPipeline = $true)]
+	[Parameter(Mandatory = $True, ValueFromPipeline = $true)]
 	[object[]]$WdsInstallImage,
+	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -PathType 'Container' -Path $_ } )]
+	[string]$UpdatePath = '..\updates',	
 	[Parameter()][ValidateScript({ (Test-Path -PathType 'Container' -Path $_) -and ((Get-ChildItem -Path $_).Count -eq 0) } )]
-	[string]$TempPath = ([System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')),
-	[Parameter()][ValidateScript({ Test-Path -PathType 'Container' -Path $_ } )]
-	[string]$UpdatePath = '..\updates',
+	[string]$TempPath = [System.Environment]::GetEnvironmentVariable('TEMP', 'Machine'),
 	[Parameter()]
 	[switch]$UseDefenderExclusions
 )
