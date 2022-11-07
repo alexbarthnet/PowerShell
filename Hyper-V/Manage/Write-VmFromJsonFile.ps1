@@ -36,7 +36,7 @@ Param(
 	[Parameter(ParameterSetName = 'Add')][ValidateRange(0, 4094)]
 	[uint16]$VLAN,
 	[Parameter(ParameterSetName = 'Add')]
-	[string]$NetworkAdapterName = 'Network Adapter',
+	[string]$NetworkAdapterName,
 	[Parameter(ParameterSetName = 'Add')]
 	[string]$MacAddressPrefix,
 	[Parameter(ParameterSetName = 'Add')]
@@ -73,7 +73,7 @@ If ([string]::IsNullOrEmpty($Json)) {
 If (-not (Test-Path -Path $Json)) {
 	If ($Add) {
 		Try {
-			$null = New-Item -ItemType 'File' -Path $Json
+			$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
 		}
 		Catch {
 			Write-Output "`nERROR: could not create configuration file:"
@@ -89,8 +89,15 @@ If (-not (Test-Path -Path $Json)) {
 }
 
 # import JSON data
-$json_data = @()
-$json_data += Get-Content -Path $Json | ConvertFrom-Json
+Try {
+	$json_data = @()
+	$json_data += Get-Content -Path $Json | ConvertFrom-Json
+}
+Catch {
+	Write-Output "`nERROR: could not read configuration file:"
+	Write-Output "$Json`n"
+	Return
+}
 
 # evaluate parameters
 switch ($true) {
@@ -119,43 +126,52 @@ switch ($true) {
 				$json_data | ConvertTo-Json | Set-Content -Path $Json
 				Write-Output "`nRemoved '$VMName' from configuration file: '$Json'"
 			}
-			$json_data | Format-List
+			If ($VerbosePreference) {
+				$json_data
+			}
 		}
 		Catch {
 			Write-Output "`nERROR: could not update configuration file: '$Json'"
 		}
 	}
 	$Add {
-		# define ordered hashtable with required parameters
-		$json_hash = [ordered]@{
-			VMName = $VMName
-			VMHost = $VMHost
+		# define parameters in preferred order
+		$json_params = @(
+			'VMName'
+			'VMHost'
+			'Path'
+			'ProcessorCount'
+			'MemoryStartupBytes'
+			'MemoryMinimumBytes'
+			'MemoryMaximumBytes'
+			'VHDSizeBytes'
+			'DataVHDSizeBytes'
+			'DataVHDCount'
+			'ExcludedVHDSizeBytes'
+			'ExcludedVHDCount'
+			'SwitchName'
+			'VLAN'
+			'NetworkAdapterName'
+			'MacAddressPrefix'
+			'IPAddress'
+			'DhcpServer'
+			'DhcpScope'
+			'DeploymentMethod'
+			'DeploymentServer'
+			'DeploymentPath'
+			'DeploymentDomain'
+			'DeploymentCollection'
+			'MaintenanceCollection'
+			'ClusterPriority'
+		)
+		# create ordered hashtable
+		$json_hash = [ordered]@{}
+		# update ordered hashtable with parameters
+		ForEach ($param in $json_params) {
+			If ($null -ne $PSBoundParameters['$param']) {
+				$json_hash['$param'] = $PSBoundParameters['$param']
+			}
 		}
-		# update ordered hashtable with optional parameters
-		If ($Path) { $json_hash['Path'] = $Path }
-		If ($ProcessorCount) { $json_hash['ProcessorCount'] = $ProcessorCount }
-		If ($MemoryStartupBytes) { $json_hash['MemoryStartupBytes'] = $MemoryStartupBytes }
-		If ($MemoryMinimumBytes) { $json_hash['MemoryMinimumBytes'] = $MemoryMinimumBytes }
-		If ($MemoryMaximumBytes) { $json_hash['MemoryMaximumBytes'] = $MemoryMaximumBytes }
-		If ($VHDSizeBytes) { $json_hash['VHDSizeBytes'] = $VHDSizeBytes }
-		If ($DataVHDSizeBytes) { $json_hash['DataVHDSizeBytes'] = $DataVHDSizeBytes }
-		If ($DataVHDCount) { $json_hash['DataVHDCount'] = $DataVHDCount }
-		If ($ExcludedVHDSizeBytes) { $json_hash['ExcludedVHDSizeBytes'] = $ExcludedVHDSizeBytes }
-		If ($ExcludedVHDCount) { $json_hash['ExcludedVHDCount'] = $ExcludedVHDCount }
-		If ($SwitchName) { $json_hash['SwitchName'] = $SwitchName }
-		If ($VLAN) { $json_hash['VLAN'] = $VLAN }
-		If ($NetworkAdapterName) { $json_hash['NetworkAdapterName'] = $NetworkAdapterName }
-		If ($MacAddressPrefix) { $json_hash['MacAddressPrefix'] = $MacAddressPrefix }
-		If ($IPAddress) { $json_hash['IPAddress'] = $IPAddress }
-		If ($DhcpServer) { $json_hash['DhcpServer'] = $DhcpServer }
-		If ($DhcpScope) { $json_hash['DhcpScope'] = $DhcpScope }
-		If ($DeploymentMethod) { $json_hash['DeploymentMethod'] = $DeploymentMethod }
-		If ($DeploymentServer) { $json_hash['DeploymentServer'] = $DeploymentServer }
-		If ($DeploymentPath) { $json_hash['DeploymentPath'] = $DeploymentPath }
-		If ($DeploymentDomain) { $json_hash['DeploymentDomain'] = $DeploymentDomain }
-		If ($DeploymentCollection) { $json_hash['DeploymentCollection'] = $DeploymentCollection }
-		If ($MaintenanceCollection) { $json_hash['MaintenanceCollection'] = $MaintenanceCollection }
-		If ($ClusterPriority) { $json_hash['ClusterPriority'] = $ClusterPriority }
 		# create custom object from parameters then add to object
 		Try {
 			# remove any existing VM hashtable from array of hashtables
@@ -164,7 +180,7 @@ switch ($true) {
 				$json_data = $json_data | Where-Object { $_.VMName -ne $VMName }
 			}
 			# add VM hashtable to array of hashtables
-			$json_data += $json_hash
+			$json_data += [pscustomobject]$json_hash
 			# export array of hashtables to JSON
 			$json_data | ConvertTo-Json | Set-Content -Path $Json
 			If ($json_replace) {
@@ -173,7 +189,9 @@ switch ($true) {
 			Else {
 				Write-Output "`nAdded '$VMName' to configuration file: '$Json'"
 			}
-			$json_data | Format-List
+			If ($VerbosePreference) {
+				$json_data
+			}
 		}
 		Catch {
 			Write-Output "`nERROR: could not update configuration file: '$Json'"
@@ -181,6 +199,6 @@ switch ($true) {
 	}
 	Default {
 		Write-Output "`nDisplaying configuration file: '$Json'"
-		$json_data | Format-List
+		$json_data
 	}
 }
