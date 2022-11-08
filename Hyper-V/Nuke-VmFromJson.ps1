@@ -1,6 +1,6 @@
 Param(
 	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
-	[string]$VmJson,
+	[string]$Json,
 	[Parameter(Mandatory = $True)]
 	[string[]]$VmName,
 	[Parameter()]
@@ -139,7 +139,7 @@ Function Remove-DeviceFromSccm {
 # create VM list from parameters
 $vm_list = @()
 If ($VmName) {
-	$vm_list += (Get-Content -Path $VmJson | ConvertFrom-Json) | Where-Object { $_.VMHost -and $_.VMName -in $VMName }
+	$vm_list += (Get-Content -Path $Json | ConvertFrom-Json) | Where-Object { $_.VMHost -and $_.VMName -in $VMName }
 }
 
 # check VM list

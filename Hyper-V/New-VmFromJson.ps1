@@ -1,6 +1,6 @@
 Param(
 	[Parameter(Mandatory = $True, ValueFromPipeline = $True)][ValidateScript({ Test-Path -Path $_ })]
-	[string]$VmJson,
+	[string]$Json,
 	[Parameter()]
 	[string[]]$VmName,
 	[Parameter()]
@@ -746,16 +746,16 @@ Function New-VmFromParams {
 # create VM list from parameters
 $vm_list = @()
 If ($VmHost -and $VmName) {
-	$vm_list += (Get-Content -Path $VmJson | ConvertFrom-Json) | Where-Object { $_.VMHost -eq $VMHost -and $_.VMName -in $VMName }
+	$vm_list += (Get-Content -Path $Json | ConvertFrom-Json) | Where-Object { $_.VMHost -eq $VMHost -and $_.VMName -in $VMName }
 }
 ElseIf ($VmHost) {
-	$vm_list += (Get-Content -Path $VmJson | ConvertFrom-Json) | Where-Object { $_.VMHost -eq $VMHost -and $_.VMName }
+	$vm_list += (Get-Content -Path $Json | ConvertFrom-Json) | Where-Object { $_.VMHost -eq $VMHost -and $_.VMName }
 }
 ElseIf ($VmName) {
-	$vm_list += (Get-Content -Path $VmJson | ConvertFrom-Json) | Where-Object { $_.VMHost -and $_.VMName -in $VMName }
+	$vm_list += (Get-Content -Path $Json | ConvertFrom-Json) | Where-Object { $_.VMHost -and $_.VMName -in $VMName }
 }
 Else {
-	$vm_list += (Get-Content -Path $VmJson | ConvertFrom-Json) | Where-Object { $_.VMHost -and $_.VMName }
+	$vm_list += (Get-Content -Path $Json | ConvertFrom-Json) | Where-Object { $_.VMHost -and $_.VMName }
 }
 
 # check VM list
