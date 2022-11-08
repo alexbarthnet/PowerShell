@@ -446,7 +446,7 @@ ForEach ($VmParams in $vm_list) {
 
 		# remove computer records from DNS
 		Write-Host ("$Hostname,$vm_host,$vm_name - checking for VM in DNS")
-		$vm_dns = Get-DnsServerResourceRecord -ComputerName $pdc -ZoneName $dns -RRType A | Where-Object { $_.VMHost -eq $vm_name }
+		$vm_dns = Get-DnsServerResourceRecord -ComputerName $pdc -ZoneName $dns -RRType A | Where-Object { $_.Hostname -eq $vm_name }
 		If ($vm_dns) {
 			Write-Host ("$Hostname,$vm_host,$vm_name - ...DNS records found")
 			Write-Host ("$Hostname,$vm_host,$vm_name - removing DNS records...")
