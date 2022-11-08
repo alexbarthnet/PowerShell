@@ -2,13 +2,5 @@
 *.csv
 *.dat
 *.txt
-# ignore archived files
-Archived/*
-# ignore personal files
-Personal/*
-# ignore private files
-Private/*
-# ignore shortcut files
-Shortcuts/*
 # ignore Mac specific files
 .DS_Store
