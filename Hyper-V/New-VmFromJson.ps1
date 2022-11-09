@@ -500,7 +500,6 @@ Function New-VmFromParams {
 	If ($vhd_excluded_count) {
 		# define path to excluded VHDs and add to array of paths
 		$vm_path_ex = Invoke-Command -ComputerName $vm_host -ScriptBlock { Join-Path -Path $using:vm_path -ChildPath ('Exclude\' + $using:vm_name) }
-		$vm_path_all += $vm_path_ex
 		# populate array of excluded VHDs
 		For ($vhd_excl = 1; $vhd_excl -le $vhd_excluded_count; $vhd_excl++) {
 			$vhd_excl_files += Invoke-Command -ComputerName $vm_host -ScriptBlock { Join-Path -Path $using:vm_path_ex -ChildPath ($using:vm_name + '-excl-' + $using:vhd_excl + '.vhdx') }
