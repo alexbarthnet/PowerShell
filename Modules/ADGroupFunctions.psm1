@@ -6,21 +6,21 @@ Function Find-ADGroup {
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ $_ -is [Microsoft.ActiveDirectory.Management.ADObject] -or $_ -is [System.String] })]
 		[object]$Identity,
 		[Parameter(Position = 1)]
-		[string[]]$Attributes = @('*'),
+		[string[]]$Properties = @('*'),
 		[Parameter(Position = 2)]
 		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
 	)
 
 	# check attributes
 	If ('*' -notin $Attributes) {
-		If ('whenChanged' -notin $Attributes) { $Attributes += 'whenChanged' }
-		If ('whenCreated' -notin $Attributes) { $Attributes += 'whenCreated' }
+		If ('whenChanged' -notin $Attributes) { $Properties += 'whenChanged' }
+		If ('whenCreated' -notin $Attributes) { $Properties += 'whenCreated' }
 	}
 
 	# check for group
 	Try {
 		# return group object to caller with the requested attributes
-		Return (Get-ADGroup -Server $Server -Identity $Identity -Properties $Attributes)
+		Return (Get-ADGroup -Server $Server -Identity $Identity -Properties $Properties)
 	}
 	Catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
 		# collect error before attempting to create group
@@ -38,7 +38,7 @@ Function Find-ADGroup {
 			}
 			Try {
 				# create the group then return the group with the requested attributes
-				Return (New-ADGroup @group_hash -PassThru | Get-ADGroup -Properties $Attributes)
+				Return (New-ADGroup @group_hash -PassThru | Get-ADGroup -Server $Server -Properties $Properties)
 			}
 			Catch [Microsoft.ActiveDirectory.Management.ADIdentityAlreadyExistsException] {
 				# report error if verbose
