@@ -12,9 +12,9 @@ Function Find-ADGroup {
 	)
 
 	# check attributes
-	If ('*' -notin $Attributes) {
-		If ('whenChanged' -notin $Attributes) { $Properties += 'whenChanged' }
-		If ('whenCreated' -notin $Attributes) { $Properties += 'whenCreated' }
+	If ('*' -notin $Properties) {
+		If ('whenChanged' -notin $Properties) { $Properties += 'whenChanged' }
+		If ('whenCreated' -notin $Properties) { $Properties += 'whenCreated' }
 	}
 
 	# check for group
@@ -176,140 +176,117 @@ Function Update-ADMembers {
 		[Parameter(Position = 2)][AllowEmptyCollection()][AllowEmptyString()][AllowNull()]
 		[string[]]$ExcludedDNs,
 		[Parameter(Position = 3)]
-		[string]$Filter = '^CN=',
+		[string[]]$Properties = @('*'),
 		[Parameter(Position = 4)]
-		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
+		[string]$Filter = '^CN=',
 		[Parameter(Position = 5)]
-		[switch]$PassThru,
+		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
 		[Parameter(Position = 6)]
-		[switch]$Report
+		[switch]$PassThru
 	)
 
-	# create empty objects
-	# $ad_members_missing = @()
-	# $ad_members_invalid = @()
-	# $ad_members_changed = @()
-	$ad_members_object = $null
-	$ad_members_errors = @()
-
-	# retrieve object before changes
+	# retrieve group before changes
 	Try {
-		$ad_members_object = Get-ADGroup -Server $Server -Identity $Identity -Properties @('Member', 'SamAccountName')
+		$ad_members_group = Get-ADGroup -Server $Server -Identity $Identity -Properties 'Member'
 	}
 	Catch {
-		$ad_members_errors += $_
+		Return $_
 	}
 
-	# process changes
-	If ($null -ne $ad_members_object) {
-		# create generic lists for members
-		$ad_members_current = [System.Collections.Generic.List[string]]::New()
-		$ad_members_desired = [System.Collections.Generic.List[string]]::New()
-		$ad_members_exclude = [System.Collections.Generic.List[string]]::New()
-		$ad_members_trimmed = [System.Collections.Generic.List[string]]::New()
-		$ad_members_changed = [System.Collections.Generic.List[string]]::New()
+	# create generic lists for members
+	$ad_members_current = [System.Collections.Generic.List[string]]::New()
+	$ad_members_desired = [System.Collections.Generic.List[string]]::New()
+	$ad_members_exclude = [System.Collections.Generic.List[string]]::New()
+	$ad_members_trimmed = [System.Collections.Generic.List[string]]::New()
+	$ad_members_changed = [System.Collections.Generic.List[string]]::New()
 
-		# create empty arrays
-		# $ad_members_current = @()
-		# $ad_members_desired = @()
-		# $ad_members_exclude = @()
-		# $ad_members_trimmed = @()
+	# retrieve current members
+	ForEach ($MemberDN in $ad_members_group.Member) {
+		If ($MemberDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberDN)) {
+			$ad_members_current.Add($MemberDN)
+		}
+	}
 
-		# retrieve current members
-		ForEach ($MemberDN in $ad_members_object.Member) {
-			If ($MemberDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberDN)) {
-				# $ad_members_current += $MemberDN
-				$ad_members_current.Add($MemberDN)
+	# retrieve desired members
+	ForEach ($MemberDN in $MemberDNs) {
+		If ($MemberDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberDN)) {
+			$ad_members_desired.Add($MemberDN)
+		}
+	}
+
+	# retrieve excluded DNs
+	ForEach ($MemberDN in $ExcludedDNs) {
+		If ($MemberDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberDN)) {
+			$ad_members_exclude.Add($MemberDN)
+		}
+	}
+
+	# retrieve missing members less any excluded DNs
+	$ad_members_trimmed = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except($ad_members_desired, $ad_members_exclude))
+
+	# retrieve missing members, linq will ensure that the output is of unique values
+	$ad_members_missing = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except($ad_members_trimmed, $ad_members_current))
+
+	# retrieve extra members, linq will ensure that the output is of unique values
+	$ad_members_invalid = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except($ad_members_current, $ad_members_trimmed))
+
+	# retrieve changed members, linq will combine the two lists
+	$ad_members_changed = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Concat($ad_members_missing, $ad_members_invalid))
+
+	# report desired, current, missing, and extra members
+	If ($VerbosePreference -eq 'Continue') {
+		ForEach ($ad_member_fqdn in $ad_members_current) { Write-Verbose "Current Member: $ad_member_fqdn" }
+		ForEach ($ad_member_fqdn in $ad_members_trimmed) { Write-Verbose "Desired Member: $ad_member_fqdn" }
+		ForEach ($ad_member_fqdn in $ad_members_exclude) { Write-Verbose "Exclude Member: $ad_member_fqdn" }
+		ForEach ($ad_member_fqdn in $ad_members_missing) { Write-Verbose "Will Add: $ad_member_fqdn" }
+		ForEach ($ad_member_fqdn in $ad_members_invalid) { Write-Verbose "Will Remove: $ad_member_fqdn" }
+	}
+
+	# add any missing members
+	If ( $ad_members_missing.Count -ge 1 ) {
+		if ($PSCmdlet.ShouldProcess(($ad_members_missing -join ','), "Add members to $($ad_members_group.SamAccountName)")) {
+			Try {
+				Add-ADGroupMember -Server $Server -Identity $ad_members_group -Members $ad_members_missing
+			}
+			Catch {
+				Return $_
 			}
 		}
+	}
 
-		# retrieve desired members
-		ForEach ($MemberDN in $MemberDNs) {
-			If ($MemberDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberDN)) {
-				# $ad_members_desired += $MemberDN
-				$ad_members_desired.Add($MemberDN)
+	# remove any extra members
+	If ( $ad_members_invalid.Count -ge 1 ) {
+		if ($PSCmdlet.ShouldProcess(($ad_members_invalid -join ','), "Remove members from $($ad_members_group.SamAccountName)")) {
+			Try {
+				Remove-ADGroupMember -Server $Server -Identity $ad_members_group -Members $ad_members_invalid -Confirm:$false
 			}
-		}
-
-		# retrieve excluded DNs
-		ForEach ($MemberDN in $ExcludedDNs) {
-			If ($MemberDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberDN)) {
-				# $ad_members_exclude += $MemberDN
-				$ad_members_exclude.Add($MemberDN)
-			}
-		}
-
-		# retrieve missing members less any excluded DNs
-		# $ad_members_trimmed += [array][System.Linq.Enumerable]::Except([string[]]$ad_members_desired, [string[]]$ad_members_exclude)
-		$ad_members_trimmed = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except($ad_members_desired, $ad_members_exclude))
-
-		# retrieve missing members, linq will ensure that the output is of unique values
-		# $ad_members_missing += [array][System.Linq.Enumerable]::Except([string[]]$ad_members_trimmed, [string[]]$ad_members_current)
-		$ad_members_missing = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except($ad_members_trimmed, $ad_members_current))
-
-		# retrieve extra members, linq will ensure that the output is of unique values
-		# $ad_members_invalid += [array][System.Linq.Enumerable]::Except([string[]]$ad_members_current, [string[]]$ad_members_trimmed)
-		$ad_members_invalid = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except($ad_members_current, $ad_members_trimmed))
-
-		# report desired, current, missing, and extra members
-		If ($VerbosePreference -eq 'Continue') {
-			ForEach ($ad_member_fqdn in $ad_members_current) { Write-Verbose "Current Member: $ad_member_fqdn" }
-			ForEach ($ad_member_fqdn in $ad_members_trimmed) { Write-Verbose "Desired Member: $ad_member_fqdn" }
-			ForEach ($ad_member_fqdn in $ad_members_exclude) { Write-Verbose "Exclude Member: $ad_member_fqdn" }
-			ForEach ($ad_member_fqdn in $ad_members_missing) { Write-Verbose "Will Add: $ad_member_fqdn" }
-			ForEach ($ad_member_fqdn in $ad_members_invalid) { Write-Verbose "Will Remove: $ad_member_fqdn" }
-		}
-
-		# add any missing members
-		If ( $ad_members_missing.Count -ge 1 ) {
-			if ($PSCmdlet.ShouldProcess(($ad_members_missing -join ','), "Add members to $($ad_members_object.SamAccountName)")) {
-				# call native AD function
-				Add-ADGroupMember -Server $Server -Identity $ad_members_object -Members $ad_members_missing
-				# if report requested...
-				If ($Report) { ForEach ($ad_member_fqdn in $ad_members_missing) { $ad_members_changed.Add($ad_member_fqdn) } }
-			}
-		}
-
-		# remove any extra members
-		If ( $ad_members_invalid.Count -ge 1 ) {
-			if ($PSCmdlet.ShouldProcess(($ad_members_invalid -join ','), "Remove members from $($ad_members_object.SamAccountName)")) {
-				# call native AD function
-				Remove-ADGroupMember -Server $Server -Identity $ad_members_object -Members $ad_members_invalid -Confirm:$false
-				# if report requested...
-				If ($Report) { ForEach ($ad_member_fqdn in $ad_members_invalid) { $ad_members_changed.Add($ad_member_fqdn) } }
+			Catch {
+				Return $_
 			}
 		}
 	}
 
 	# return the group if passthru
 	If ($PassThru) {
+		# check attributes
+		If ('*' -notin $Properties) {
+			If ('whenChanged' -notin $Properties) { $Properties += 'whenChanged' }
+			If ('whenCreated' -notin $Properties) { $Properties += 'whenCreated' }
+			If ('Member' -notin $Properties) { $Properties += 'Member' }
+		}
 		# retrieve object after changes
 		Try {
-			$ad_members_object = Get-ADGroup -Server $Server -Identity $Identity -Properties @('SamAccountName', 'Member')
+			# define additional properties for object
+			$ad_members_notes = @{ MemberAdded = $ad_members_missing; MemberRemoved = $ad_members_invalid; MemberChanged = $ad_members_changed }
+			# retreive object
+			$ad_members_group = Get-ADGroup -Server $Server -Identity $Identity -Properties $Properties
+			# expand object with 
+			$ad_members_group | Add-Member -NotePropertyMembers $ad_members_notes -Force
+			# return expanded object
+			Return $ad_members_group
 		}
 		Catch {
-			$ad_members_object = $_
-		}
-		Return $ad_members_object
-	}
-
-	# return the report if requested
-	If ($Report) {
-		Try {
-			$ad_members_object = Get-ADGroup -Server $Server -Identity $Identity -Properties @('SamAccountName', 'Member')
-		}
-		Catch {
-			$ad_members_object = $null
-			$ad_members_errors += $_
-		}
-
-		[PSCustomObject]@{
-			Error             = $ad_members_errors
-			DistinguishedName = $ad_members_object.DistinguishedName
-			SamAccountName    = $ad_members_object.SamAccountName
-			Added             = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::OrderBy($ad_members_missing, [Func[string, string]] { $args[0] }))
-			Removed           = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::OrderBy($ad_members_invalid, [Func[string, string]] { $args[0] }))
-			Changed           = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::OrderBy($ad_members_changed, [Func[string, string]] { $args[0] }))
+			Return $_
 		}
 	}
 }
@@ -321,99 +298,123 @@ Function Update-ADMembersOf {
 		[object]$Identity,
 		[Parameter(Position = 1, Mandatory = $true)][AllowEmptyCollection()][AllowEmptyString()][AllowNull()]
 		[string[]]$MemberOfDNs,
-		[Parameter(Position = 2)]
-		[string]$Filter = '^CN=',
+		[Parameter(Position = 2)][AllowEmptyCollection()][AllowEmptyString()][AllowNull()]
+		[string[]]$ExcludedDNs,
 		[Parameter(Position = 3)]
-		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
+		[string]$Filter = '^CN=',
 		[Parameter(Position = 4)]
-		[switch]$Report
+		[string[]]$Properties = @('*'),
+		[Parameter(Position = 5)]
+		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
+		[Parameter(Position = 6)]
+		[switch]$PassThru
 	)
 
-	# create empty arrays
-	$ad_membersof_missing = @()
-	$ad_membersof_invalid = @()
-	$ad_membersof_changed = @()
-
-	# retrieve object with required attributes
+	# retrieve object before changes
 	Try {
-		$ad_membersof_object = Get-ADObject -Server $Server -Identity $Identity -Properties @('MemberOf', 'SamAccountName')
-		$ad_membersof_error = $null
+		$ad_memberof_object = Get-ADObject -Server $Server -Identity $Identity -Properties 'MemberOf'
 	}
 	Catch {
-		$ad_membersof_object = $null
-		$ad_membersof_error = $_
+		Return $_
 	}
 
-	# verify object class
-	If ($null -ne $ad_membersof_object) {
-		# define permitted classes
-		$ad_membersof_classes = @()
-		$ad_membersof_classes += 'Computer'
-		$ad_membersof_classes += 'Group'
-		$ad_membersof_classes += 'User'
-		$ad_membersof_classes += 'msDS-GroupManagedServiceAccount'
+	# define permitted classes
+	$ad_memberof_classes = @()
+	$ad_memberof_classes += 'Computer'
+	$ad_memberof_classes += 'Group'
+	$ad_memberof_classes += 'User'
+	$ad_memberof_classes += 'msDS-GroupManagedServiceAccount'
 
-		# check input object against permitted classes
-		If ($ad_membersof_object.ObjectClass -notin $ad_membersof_classes) {
-			$ad_membersof_object = $null
-			Try { Write-Error -Message 'Invalid Object Class' -ErrorAction 'Stop' } Catch { $ad_membersof_error = $_ }
-		}
+	# check input object against permitted classes
+	If ($ad_memberof_object.ObjectClass -notin $ad_memberof_classes) {
+		Write-Error -Message 'Invalid Object Class' -ErrorAction 'Stop' 
+		Return $null
 	}
 
-	# process changes
-	If ($null -ne $ad_membersof_object) {
-		# create empty arrays
-		$ad_membersof_current = @()
-		$ad_membersof_desired = @()
+	# create generic lists for members
+	$ad_memberof_current = [System.Collections.Generic.List[string]]::New()
+	$ad_memberof_desired = [System.Collections.Generic.List[string]]::New()
+	$ad_memberof_exclude = [System.Collections.Generic.List[string]]::New()
+	$ad_memberof_trimmed = [System.Collections.Generic.List[string]]::New()
+	$ad_memberof_changed = [System.Collections.Generic.List[string]]::New()
 
-		# retrieve current membership
-		ForEach ($MemberOfDN in $ad_membersof_object.MemberOf) {
-			If ($MemberOfDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberOfDN)) { $ad_membersof_current += $MemberOfDN }
-		}
-
-		# retrieve desired membership
-		ForEach ($MemberOfDN in $MemberOfDNs) {
-			If ($MemberOfDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberOfDN)) { $ad_membersof_desired += $MemberOfDN }
-		}
-
-		# retrieve missing and extra memberships
-		$ad_membersof_missing += [array][System.Linq.Enumerable]::Except([string[]]$ad_membersof_desired, [string[]]$ad_membersof_current)
-		$ad_membersof_invalid += [array][System.Linq.Enumerable]::Except([string[]]$ad_membersof_current, [string[]]$ad_membersof_desired)
-
-		# report current, desired, missing, and extra memberships
-		If ($VerbosePreference -eq 'Continue') {
-			ForEach ($ad_memberof_fqdn in $ad_membersof_current) { Write-Verbose "Current MemberOf: $ad_memberof_fqdn" }
-			ForEach ($ad_memberof_fqdn in $ad_membersof_desired) { Write-Verbose "Desired MemberOf: $ad_memberof_fqdn" }
-			ForEach ($ad_memberof_fqdn in $ad_membersof_missing) { Write-Verbose "Will Join: $ad_memberof_fqdn" }
-			ForEach ($ad_memberof_fqdn in $ad_membersof_invalid) { Write-Verbose "Will Leave: $ad_memberof_fqdn" }
-		}
-
-		# add missing memberships
-		If ( $ad_membersof_missing.Count -ge 1 ) {
-			if ($PSCmdlet.ShouldProcess($ad_membersof_missing, "Add $($ad_membersof_object.SamAccountName) to groups")) {
-				Add-ADPrincipalGroupMembership -Server $Server -Identity $ad_membersof_object -MemberOf $ad_membersof_missing
-				$ad_membersof_changed += $ad_membersof_missing
-			}
-		}
-
-		# remove extra memberships
-		If ( $ad_membersof_invalid.Count -ge 1 ) {
-			if ($PSCmdlet.ShouldProcess($ad_membersof_invalid, "Remove $($ad_membersof_object.SamAccountName) from groups")) {
-				Remove-ADPrincipalGroupMembership -Server $Server -Identity $ad_membersof_object -MemberOf $ad_membersof_invalid -Confirm:$false
-				$ad_membersof_changed += $ad_membersof_invalid
-			}
+	# retrieve current membership
+	ForEach ($MemberOfDN in $ad_memberof_object.MemberOf) {
+		If ($MemberOfDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberOfDN)) {
+			$ad_memberof_current.Add($MemberOfDN)
 		}
 	}
 
-	# return the report if requested
-	If ($Report) {
-		[PSCustomObject]@{
-			Error             = $ad_membersof_error
-			DistinguishedName = $ad_membersof_object.DistinguishedName
-			SamAccountName    = $ad_membersof_object.SamAccountName
-			Added             = [array][Linq.Enumerable]::OrderBy($ad_membersof_missing, [Func[object, string]] { $args[0] })
-			Removed           = [array][Linq.Enumerable]::OrderBy($ad_membersof_invalid, [Func[object, string]] { $args[0] })
-			Changed           = [array][Linq.Enumerable]::OrderBy($ad_membersof_changed, [Func[object, string]] { $args[0] })
+	# retrieve desired membership
+	ForEach ($MemberOfDN in $MemberOfDNs) {
+		If ($MemberOfDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberOfDN)) {
+			$ad_memberof_desired.Add($MemberOfDN)
+		}
+	}
+
+	# retrieve excluded DNs
+	ForEach ($MemberOfDN in $ExcludedDNs) {
+		If ($MemberOfDN -match $Filter -and -not [string]::IsNullOrEmpty($MemberOfDN)) {
+			$ad_memberof_exclude.Add($MemberOfDN)
+		}
+	}
+
+	# retrieve missing members less any excluded DNs
+	$ad_memberof_trimmed = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except($ad_memberof_desired, $ad_memberof_exclude))
+
+	# retrieve missing members, linq will ensure that the output is of unique values
+	$ad_memberof_missing = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except($ad_memberof_trimmed, $ad_memberof_current))
+
+	# retrieve extra members, linq will ensure that the output is of unique values
+	$ad_memberof_invalid = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except($ad_memberof_current, $ad_memberof_trimmed))
+
+	# retrieve changed members, linq will combine the two lists
+	$ad_memberof_changed = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Concat($ad_memberof_missing, $ad_memberof_invalid))
+
+	# report current, desired, missing, and extra memberships
+	If ($VerbosePreference -eq 'Continue') {
+		ForEach ($ad_memberof_fqdn in $ad_memberof_current) { Write-Verbose "Current MemberOf: $ad_memberof_fqdn" }
+		ForEach ($ad_memberof_fqdn in $ad_memberof_desired) { Write-Verbose "Desired MemberOf: $ad_memberof_fqdn" }
+		ForEach ($ad_memberof_fqdn in $ad_memberof_exclude) { Write-Verbose "Exclude Member: $ad_member_fqdn" }
+		ForEach ($ad_memberof_fqdn in $ad_memberof_missing) { Write-Verbose "Will Join: $ad_memberof_fqdn" }
+		ForEach ($ad_memberof_fqdn in $ad_memberof_invalid) { Write-Verbose "Will Leave: $ad_memberof_fqdn" }
+	}
+
+	# add missing memberships
+	If ( $ad_memberof_missing.Count -ge 1 ) {
+		if ($PSCmdlet.ShouldProcess(($ad_memberof_missing -join ','), "Add $($ad_memberof_object.SamAccountName) to groups")) {
+			Add-ADPrincipalGroupMembership -Server $Server -Identity $ad_memberof_object -MemberOf $ad_memberof_missing
+		}
+	}
+
+	# remove extra memberships
+	If ( $ad_memberof_invalid.Count -ge 1 ) {
+		if ($PSCmdlet.ShouldProcess(($ad_memberof_invalid -join ','), "Remove $($ad_memberof_object.SamAccountName) from groups")) {
+			Remove-ADPrincipalGroupMembership -Server $Server -Identity $ad_memberof_object -MemberOf $ad_memberof_invalid -Confirm:$false
+		}
+	}
+
+	# return the group if passthru
+	If ($PassThru) {
+		# check attributes
+		If ('*' -notin $Properties) {
+			If ('whenChanged' -notin $Properties) { $Properties += 'whenChanged' }
+			If ('whenCreated' -notin $Properties) { $Properties += 'whenCreated' }
+			If ('MemberOf' -notin $Properties) { $Properties += 'MemberOf' }
+		}
+		# retrieve object after changes
+		Try {
+			# define additional properties for object
+			$ad_memberof_notes = @{ MemberOfAdded = $ad_memberof_missing; MemberOfRemoved = $ad_memberof_invalid; MemberOfChanged = $ad_memberof_changed }
+			# retreive object
+			$ad_memberof_object = Get-ADGroup -Server $Server -Identity $Identity -Properties $Properties
+			# modify object
+			$ad_memberof_object | Add-Member -NotePropertyMembers $ad_memberof_notes -Force
+			# return expanded object
+			Return $ad_memberof_object
+		}
+		Catch {
+			Return $_
 		}
 	}
 }
@@ -421,6 +422,8 @@ Function Update-ADMembersOf {
 # define functions to export
 $functions_to_export = @()
 $functions_to_export += 'Find-ADGroup'
+$functions_to_export += 'Get-ADGroupsFromGroup'
+$functions_to_export += 'Get-ADGroupsFromQuery'
 $functions_to_export += 'Update-ADMembers'
 $functions_to_export += 'Update-ADMembersOf'
 
