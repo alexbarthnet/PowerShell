@@ -168,8 +168,8 @@ switch ($true) {
 		$json_hash = [ordered]@{}
 		# update ordered hashtable with parameters
 		ForEach ($param in $json_params) {
-			If ($null -ne $PSBoundParameters['$param']) {
-				$json_hash['$param'] = $PSBoundParameters['$param']
+			If ($null -ne $PSBoundParameters[$param]) {
+				$json_hash[$param] = $PSBoundParameters[$param]
 			}
 		}
 		# create custom object from parameters then add to object
