@@ -19,8 +19,8 @@ Function Find-ADGroup {
 
 	# check for group
 	Try {
-		# return group object to caller with the requested attributes
-		Return (Get-ADGroup -Server $Server -Identity $Identity -Properties $Properties)
+		# return group retrieved with properties via group retrieved from identity to enable retrieval of constructed attributes
+		Return (Get-ADGroup -Server $Server -Identity $Identity | Get-ADGroup -Server $Server -Properties $Properties)
 	}
 	Catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
 		# collect error before attempting to create group
@@ -120,7 +120,7 @@ Function Get-ADGroupsFromGroup {
 Function Get-ADGroupsFromQuery {
 	[CmdletBinding()]
 	param (
-		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]	
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		[string]$LDAPFilter,
 		[Parameter(Position = 1)]
 		[string]$SearchBase = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().GetDirectoryEntry().DistinguishedName,
@@ -280,7 +280,7 @@ Function Update-ADMembers {
 			$ad_members_notes = @{ MemberAdded = $ad_members_missing; MemberRemoved = $ad_members_invalid; MemberChanged = $ad_members_changed }
 			# retreive object
 			$ad_members_group = Get-ADGroup -Server $Server -Identity $Identity -Properties $Properties
-			# expand object with 
+			# expand object with
 			$ad_members_group | Add-Member -NotePropertyMembers $ad_members_notes -Force
 			# return expanded object
 			Return $ad_members_group
@@ -327,7 +327,7 @@ Function Update-ADMembersOf {
 
 	# check input object against permitted classes
 	If ($ad_memberof_object.ObjectClass -notin $ad_memberof_classes) {
-		Write-Error -Message 'Invalid Object Class' -ErrorAction 'Stop' 
+		Write-Error -Message 'Invalid Object Class' -ErrorAction 'Stop'
 		Return $null
 	}
 
