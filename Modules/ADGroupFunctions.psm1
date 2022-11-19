@@ -6,59 +6,58 @@ Function Find-ADGroup {
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ $_ -is [Microsoft.ActiveDirectory.Management.ADObject] -or $_ -is [System.String] })]
 		[object]$Identity,
 		[Parameter(Position = 1)]
-		[string[]]$Properties = @('*'),
+		[string[]]$Properties,
 		[Parameter(Position = 2)]
 		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
 	)
 
-	# check attributes
-	If ('*' -notin $Properties) {
-		If ('whenChanged' -notin $Properties) { $Properties += 'whenChanged' }
-		If ('whenCreated' -notin $Properties) { $Properties += 'whenCreated' }
-	}
-
 	# check for group
 	Try {
-		# return group retrieved with properties via group retrieved from identity to enable retrieval of constructed attributes
-		Return (Get-ADGroup -Server $Server -Identity $Identity | Get-ADGroup -Server $Server -Properties $Properties)
+		# retrieve group with identity
+		$group_object = Get-ADGroup -Server $Server -Identity $Identity
 	}
 	Catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
-		# collect error before attempting to create group
-		$group_error = $_
-		# if string passed...
-		If ($Identity -is [System.String]) {
-			# define hash table for group creation
-			$group_hash = @{
-				Server         = $Server
-				Path           = $Identity.Split(',', 2)[1]
-				Name           = $Identity.Split(',', 2)[0].Replace('CN=', $null)
-				SamAccountName = $Identity.Split(',', 2)[0].Replace('CN=', $null)
-				GroupCategory  = 'Security'
-				GroupScope     = 'Global'
+		# determine name and path from input
+		switch ($Identity) {
+			{ $_ -is [Microsoft.ActiveDirectory.Management.ADObject] } { 
+				$group_dn = $Identity.DistinguishedName
 			}
-			Try {
-				# create the group then return the group with the requested attributes
-				Return (New-ADGroup @group_hash -PassThru | Get-ADGroup -Server $Server -Properties $Properties)
-			}
-			Catch [Microsoft.ActiveDirectory.Management.ADIdentityAlreadyExistsException] {
-				# report error if verbose
-				Write-Verbose -Message 'ERROR: could not create group, resource with the same name already exists'
-				# return error to caller
-				Return $_
-			}
-			Catch {
-				# report error if verbose
-				Write-Verbose -Message 'ERROR: could not create group, exception not resolved by Find-ADGroup'
-				# return error to caller
-				Return $_
+			{ $_ -is [System.String] } {
+				$group_dn = $Identity	
 			}
 		}
-		Else {
+		# define hash table for group creation
+		$group_hash = @{
+			Server         = $Server
+			GroupCategory  = 'Security'
+			GroupScope     = 'Global'
+			Path           = $group_dn.Split(',', 2)[1]
+			Name           = $group_dn.Split(',', 2)[0].Replace('CN=', $null)
+			SamAccountName = $group_dn.Split(',', 2)[0].Replace('CN=', $null)
+		}
+		# create the group
+		Try {
+			# create the group then return the group with the requested attributes
+			$group_object = New-ADGroup @group_hash -PassThru
+		}
+		Catch [System.UnauthorizedAccessException] {
 			# report error if verbose
-			Write-Verbose -Message 'ERROR: could not retrieve group, ADObject passed but not found'
+			Write-Verbose -Message 'ERROR: could not create group, access denied'
 			# return error to caller
-			Return $group_error
+			Return $_
 		}
+		Catch {
+			# report error if verbose
+			Write-Verbose -Message 'ERROR: could not create group, exception not resolved by Find-ADGroup'
+			# return error to caller
+			Return $_
+		}
+	}
+	Catch [System.UnauthorizedAccessException] {
+		# report error if verbose
+		Write-Verbose -Message 'ERROR: could not retrieve group, access denied'
+		# return error to caller
+		Return $_
 	}
 	Catch {
 		# report error if verbose
@@ -66,6 +65,22 @@ Function Find-ADGroup {
 		# return error to caller
 		Return $_
 	}
+
+	# retrieve requested properties
+	If ($Properties) {
+		Try {
+			$group_object = Get-ADGroup -Server $Server -Properties $Properties -Identity $group_object
+		}
+		Catch {
+			# report error if verbose
+			Write-Verbose -Message 'ERROR: could not retrieve group with properties, exception not resolved by Find-ADGroup'
+			# return error to caller
+			Return $_
+		}
+	}
+
+	# return group
+	Return $group_object
 }
 
 Function Get-ADGroupsFromGroup {
