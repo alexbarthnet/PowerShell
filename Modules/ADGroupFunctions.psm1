@@ -19,11 +19,11 @@ Function Find-ADGroup {
 	Catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
 		# determine name and path from input
 		switch ($Identity) {
-			{ $_ -is [Microsoft.ActiveDirectory.Management.ADObject] } { 
+			{ $_ -is [Microsoft.ActiveDirectory.Management.ADObject] } {
 				$group_dn = $Identity.DistinguishedName
 			}
 			{ $_ -is [System.String] } {
-				$group_dn = $Identity	
+				$group_dn = $Identity
 			}
 		}
 		# define hash table for group creation
@@ -43,6 +43,12 @@ Function Find-ADGroup {
 		Catch [System.UnauthorizedAccessException] {
 			# report error if verbose
 			Write-Verbose -Message 'ERROR: could not create group, access denied'
+			# return error to caller
+			Return $_
+		}
+		Catch [Microsoft.ActiveDirectory.Management.ADIdentityAlreadyExistsException] {
+			# report error if verbose
+			Write-Verbose -Message 'ERROR: could not create group, object with same DistinguishedName already exists'
 			# return error to caller
 			Return $_
 		}
@@ -107,22 +113,8 @@ Function Get-ADGroupsFromGroup {
 
 	# validate values in property are groups
 	Try {
-		# create empty list
-		$ad_results = New-Object System.Collections.Generic.List[string]
 		# retrive property from object
 		$ad_objects = [array](Get-ADObject -Identity $ad_group -Properties $Property -Server $Server | Select-Object -ExpandProperty $Property)
-		# parse values in property
-		ForEach ($fqdn in $ad_objects) {
-			# retrieve object for member
-			$ad_object = Get-ADObject -Identity $fqdn -Server $Server
-			# if member is a group...
-			If ($ad_object.ObjectClass -eq 'group') {
-				# ...add name of member to desired list
-				$ad_results.Add($ad_object.Name)
-			}
-		}
-		# return list to caller
-		Return $ad_results
 	}
 	Catch {
 		# report error if verbose
@@ -130,6 +122,30 @@ Function Get-ADGroupsFromGroup {
 		# return error to caller
 		Return $_
 	}
+
+	# create empty list
+	$ad_results = [System.Collections.Generic.List[string]]::New()
+
+	# parse values in property
+	ForEach ($fqdn in $ad_objects) {
+		# retrieve object for member
+		Try {
+			$ad_object = Get-ADObject -Identity $fqdn -Server $Server
+		}
+		Catch {
+			# report error if verbose
+			Write-Verbose -Message 'ERROR: could not retrieve one or more objects'
+			# move to next value
+			Continue
+		}
+		# if member is a group...
+		If ($ad_object.ObjectClass -eq 'group') {
+			# ...add name of member to desired list
+			$ad_results.Add($ad_object.Name)
+		}
+	}
+	# return list to caller
+	Return $ad_results
 }
 
 Function Get-ADGroupsFromQuery {
@@ -156,22 +172,8 @@ Function Get-ADGroupsFromQuery {
 
 	# validate objects are groups
 	Try {
-		# create empty list
-		$ad_results = New-Object System.Collections.Generic.List[string]
 		# retrive DNs from objects
 		$ad_objects = [array]($ad_result | Select-Object -ExpandProperty 'DistinguishedName')
-		# parse values in property
-		ForEach ($fqdn in $ad_objects) {
-			# retrieve object for member
-			$ad_object = Get-ADObject -Identity $fqdn -Server $Server
-			# if member is a group...
-			If ($ad_object.ObjectClass -eq 'group') {
-				# ...add name of member to desired list
-				$ad_results.Add($ad_object.Name)
-			}
-		}
-		# return list to caller
-		Return $ad_results
 	}
 	Catch {
 		# report error if verbose
@@ -179,6 +181,30 @@ Function Get-ADGroupsFromQuery {
 		# return error to the caller
 		Return $_
 	}
+
+	# create empty list
+	$ad_results = New-Object System.Collections.Generic.List[string]
+
+	# parse values in property
+	ForEach ($fqdn in $ad_objects) {
+		# retrieve object for member
+		Try {
+			$ad_object = Get-ADObject -Identity $fqdn -Server $Server
+		}
+		Catch {
+			# report error if verbose
+			Write-Verbose -Message 'ERROR: could not retrieve one or more objects'
+			# move to next value
+			Continue
+		}
+		# if member is a group...
+		If ($ad_object.ObjectClass -eq 'group') {
+			# ...add name of member to desired list
+			$ad_results.Add($ad_object.Name)
+		}
+	}
+	# return list to caller
+	Return $ad_results
 }
 
 Function Update-ADMembers {
