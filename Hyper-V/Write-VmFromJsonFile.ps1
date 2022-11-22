@@ -91,7 +91,7 @@ If (-not (Test-Path -Path $Json)) {
 # import JSON data
 Try {
 	$json_data = @()
-	$json_data += Get-Content -Path $Json | ConvertFrom-Json
+	$json_data += Get-Content -Path $Json | ConvertFrom-Json | ForEach-Object { $_ | Where-Object {$_.PSObject.Properties.MemberType -eq 'NoteProperty'} }
 }
 Catch {
 	Write-Output "`nERROR: could not read configuration file:"
