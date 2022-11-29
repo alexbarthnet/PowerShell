@@ -60,7 +60,9 @@ Param(
 	[Parameter(ParameterSetName = 'Add')]
 	[uint32]$ClusterPriority,
 	[Parameter()]
-	[string]$Json
+	[string]$Json,
+	[Parameter()]
+	[string]$JsonSortProperty = 'VMname'
 )
 
 # if JSON file not provided...
@@ -90,12 +92,10 @@ If (-not (Test-Path -Path $Json)) {
 
 # import JSON data
 Try {
-	$json_data = @()
-	$json_data += Get-Content -Path $Json | ConvertFrom-Json | ForEach-Object { $_ | Where-Object {$_.PSObject.Properties.MemberType -eq 'NoteProperty'} }
+	$json_data = [array](Get-Content -Path $Json | ConvertFrom-Json)
 }
 Catch {
-	Write-Output "`nERROR: could not read configuration file:"
-	Write-Output "$Json`n"
+	Write-Output "`nERROR: could not read configuration file: '$Json'`n"
 	Return
 }
 
@@ -181,13 +181,17 @@ switch ($true) {
 			}
 			# add VM hashtable to array of hashtables
 			$json_data += [pscustomobject]$json_hash
+			# filter and sort array of hashtables
+			$json_data = $json_data | Where-Object -Property $JsonSortProperty | Sort-Object -Property $JsonSortProperty
 			# export array of hashtables to JSON
 			$json_data | ConvertTo-Json | Set-Content -Path $Json
 			If ($json_replace) {
 				Write-Output "`nReplaced '$VMName' in configuration file: '$Json'"
+				$json_hash
 			}
 			Else {
 				Write-Output "`nAdded '$VMName' to configuration file: '$Json'"
+				$json_hash
 			}
 			If ($VerbosePreference) {
 				$json_data
