@@ -72,21 +72,13 @@ If ([string]::IsNullOrEmpty($Json)) {
 }
 
 # verify JSON file
-If (-not (Test-Path -Path $Json)) {
-	If ($Add) {
-		Try {
-			$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
-		}
-		Catch {
-			Write-Output "`nERROR: could not create configuration file:"
-			Write-Output "$Json`n"
-			Return
-		}
+If ($Add -and -not (Test-Path -Path $Json)) {
+	Try {
+		$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
 	}
-	Else {
-		Write-Output "`nERROR: could not find configuration file:"
-		Write-Output "$Json`n"
-		Return
+	Catch {
+		Write-Verbose "could not create configuration file: '$Json'"
+		Return $_
 	}
 }
 
@@ -95,8 +87,8 @@ Try {
 	$json_data = [array](Get-Content -Path $Json | ConvertFrom-Json)
 }
 Catch {
-	Write-Output "`nERROR: could not read configuration file: '$Json'`n"
-	Return
+	Write-Verbose "could not read configuration file: '$Json'"
+	Return $_
 }
 
 # evaluate parameters
