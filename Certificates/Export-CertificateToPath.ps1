@@ -166,9 +166,8 @@ Process {
 	}
 
 	# import JSON data
-	$json_data = @()
-	$json_data += Get-Content -Path $Json | ConvertFrom-Json
-
+	$json_data = [array](Get-Content -Path $Json | ConvertFrom-Json)
+	
 	# evaluate parameters
 	switch ($true) {
 		$Clear {
