@@ -1,5 +1,5 @@
 # define logging
-$log_root = (Get-CimInstance -Class Win32_OperatingSystem).WindowsDirectory
+$log_root = [System.Environment]::GetFolderPath('CommonApplicationData')
 $log_file = (Split-Path -Path $PSCommandPath -Leaf).Replace((Get-Item -Path $PSCommandPath).Extension, '.txt')
 $log_path = Join-Path -Path $log_root -Child $log_file
 # retrieve Hyper-V adapter names and NetBIOS transport settings
@@ -13,7 +13,7 @@ If ($nics_to_rename.Count -gt 0 -or $nics_w_netbios.Count -gt 0) {
 		# rename NICs with Hyper-V adapter name
 		Try {
 			Get-NetAdapter -Name $nic_to_rename.Name | Rename-NetAdapter -NewName $nic_to_rename.DisplayValue
-			Write-Output "Renaming '$($nic_to_rename.Name)' to '$($nic_to_rename.DisplayValue)'"
+			Write-Output "Renamed '$($nic_to_rename.Name)' to '$($nic_to_rename.DisplayValue)'"
 		}
 		Catch {
 			Write-Error -Message "Could not rename '$($nic_to_rename.Name)' to '$($nic_to_rename.DisplayValue)'"
@@ -26,7 +26,7 @@ If ($nics_to_rename.Count -gt 0 -or $nics_w_netbios.Count -gt 0) {
 		# disable NetBIOS transport
 		Try {
 			Set-ItemProperty -Path $nic_w_netbios.PSPath -Name 'NetbiosOptions' -Value 2
-			Write-Output "Disabling NetBT on adapter '$($nic_object.Name)' with GUID '$nic_ifguid'"
+			Write-Output "Disabled NetBT on adapter '$($nic_object.Name)' with GUID '$nic_ifguid'"
 			$restart_needed = $true
 		}
 		Catch {

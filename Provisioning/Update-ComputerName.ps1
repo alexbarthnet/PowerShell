@@ -1,9 +1,9 @@
 # define logging
-$log_root = (Get-CimInstance -Class Win32_OperatingSystem).WindowsDirectory
+$log_root = [System.Environment]::GetFolderPath('CommonApplicationData')
 $log_file = (Split-Path -Path $PSCommandPath -Leaf).Replace((Get-Item -Path $PSCommandPath).Extension, '.txt')
 $log_path = Join-Path -Path $log_root -Child $log_file
 # retrieve computer and virtual machine names
-$os_name = (Get-CimInstance -Class 'Win32_ComputerSystem').Name
+$os_name = (Get-Item 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName').GetValue('ComputerName')
 $vm_name = (Get-Item 'HKLM:\SOFTWARE\Microsoft\Virtual Machine\Guest\Parameters').GetValue('VirtualMachineName')
 # check computer name
 If ($os_name -ne $vm_name -and -not [string]::IsNullOrEmpty($vm_name)) {
