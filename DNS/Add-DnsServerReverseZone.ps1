@@ -200,7 +200,11 @@ For ($Name = $FirstIP; $Name -lt $Counter; $Name++) {
 	Try {
 		$Record = Get-DnsServerResourceRecord -ComputerName $Server -ZoneName $Zone -Name $Name -ErrorAction 'Stop'
 		If ($Record.RecordData.PtrDomainName -eq $PtrDomainName) {
-			Write-Verbose "found '$Name' in '$Zone' on '$Server' with value: $PtrDomainName"
+			Write-Verbose "found '$Name' in '$Zone' on '$Server' with expected value: $PtrDomainName"
+			$DnsLocated++
+		}
+		ElseIf ($Record.RecordData.PtrDomainName -ne $PtrDomainName -and -not $Reset) {
+			Write-Verbose "found '$Name' in '$Zone' on '$Server' with existing value: $PtrDomainName"
 			$DnsLocated++
 		}
 		Else {
@@ -211,7 +215,7 @@ For ($Name = $FirstIP; $Name -lt $Counter; $Name++) {
 			# update PTR record
 			Try {
 				Set-DnsServerResourceRecord -ComputerName $Server -ZoneName $Zone -OldInputObject $Record -NewInputObject $NewRecord -ErrorAction 'Stop'
-				Write-Verbose "updated '$Name' in '$Zone' on '$Server' with value: $PtrDomainName"
+				Write-Verbose "updated '$Name' in '$Zone' on '$Server' with expected value: $PtrDomainName"
 				$DnsUpdated++
 			}
 			Catch {
@@ -269,7 +273,11 @@ For ($Name = $FirstIP; $Name -lt $Counter; $Name++) {
 	Try {
 		$Record = Get-DnsServerResourceRecord -ComputerName $Server -ZoneName $ForwardZone -Name $RecordName -ErrorAction 'Stop'
 		If ($Record.RecordData.IPv4Address.IPAddressToString -eq $IPAddress) {
-			Write-Verbose "found '$RecordName' in '$ForwardZone' on '$Server' with value: $IPAddress"
+			Write-Verbose "found '$RecordName' in '$ForwardZone' on '$Server' with expected value: $IPAddress"
+			$DnsLocated++
+		}
+		ElseIf ($Record.RecordData.IPv4Address.IPAddressToString -ne $IPAddress -and -not $Reset) {
+			Write-Verbose "found '$RecordName' in '$ForwardZone' on '$Server' with existing value: $IPAddress"
 			$DnsLocated++
 		}
 		Else {
@@ -280,7 +288,7 @@ For ($Name = $FirstIP; $Name -lt $Counter; $Name++) {
 			# update PTR record
 			Try {
 				Set-DnsServerResourceRecord -ComputerName $Server -ZoneName $ForwardZone -OldInputObject $Record -NewInputObject $NewRecord -ErrorAction 'Stop'
-				Write-Verbose "updated '$RecordName' in '$ForwardZone' on '$Server' with value: $IPAddress"
+				Write-Verbose "updated '$RecordName' in '$ForwardZone' on '$Server' with expected value: $IPAddress"
 				$DnsUpdated++
 			}
 			Catch {
@@ -291,7 +299,7 @@ For ($Name = $FirstIP; $Name -lt $Counter; $Name++) {
 	Catch {
 		Try {
 			Add-DnsServerResourceRecordA -ComputerName $Server -ZoneName $ForwardZone -Name $RecordName -IPv4Address $IPAddress -ErrorAction 'Stop'
-			Write-Verbose "created '$RecordName' in '$ForwardZone' on '$Server' with value: $IPAddress"
+			Write-Verbose "created '$RecordName' in '$ForwardZone' on '$Server' with expected value: $IPAddress"
 			$DnsCreated++
 		}
 		Catch {
