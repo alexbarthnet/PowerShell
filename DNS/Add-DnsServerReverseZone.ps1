@@ -3,17 +3,17 @@ Param(
 	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Zone')][ValidatePattern('.in-addr.arpa[.]{0,1}$')]
 	[string]$Zone,
 	[Parameter(Position = 1)]
-	[string]$RecordPrefix = 'ip',
-	[Parameter(Position = 2)]
-	[string]$SubDomain = "reverse",
-	[Parameter(Position = 3)]
-	[string]$Domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().Name,
-	[Parameter(Position = 4)]
-	[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
-	[Parameter(Position = 5)]
-	[hashtable]$ReservedHosts,
-	[Parameter(Position = 6)]
 	[switch]$UseNameServersFromDomain,
+	[Parameter(Position = 2)]
+	[hashtable]$ReservedHosts,
+	[Parameter(Position = 3)]
+	[string]$PtrPrefix = 'ip',
+	[Parameter(Position = 4)]
+	[string]$SubDomain = 'reverse',
+	[Parameter(Position = 5)]
+	[string]$Domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().Name,
+	[Parameter(Position = 6)]
+	[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
 	[Parameter(Position = 7)]
 	[switch]$Reset
 )
@@ -60,7 +60,7 @@ switch ($Count) {
 }
 
 # check foward zone
-Write-Output "Checking forward zone..."
+Write-Output "`nChecking forward zone..."
 Try {
 	$ForwardZone = Get-DnsServerZone -ComputerName $Server -ZoneName "$SubDomain.$Domain" -ErrorAction 'Stop' | Select-Object -ExpandProperty 'ZoneName'
 	Write-Output "...found forward zone for subdomain: '$ForwardZone'"
@@ -77,15 +77,15 @@ Catch {
 }
 
 # check for reverse zone
-Write-Output "Checking reverse zone..."
+Write-Output "`nChecking reverse zone..."
 Try {
 	$ReverseZone = Get-DnsServerZone -ComputerName $Server -Name $Zone -ErrorAction 'Stop' | Select-Object -ExpandProperty 'ZoneName'
 	Write-Output "...found reverse zone: '$ReverseZone'"
 }
 Catch {
-	Write-Output "...creating zone..."
+	Write-Output '...creating zone...'
 	Try {
-		$ReverseZone = Add-DnsServerPrimaryZone -ComputerName $Server -Name $Zone -DynamicUpdate 'Secure' -ReplicationScope 'Domain' -PassThru  | Select-Object -ExpandProperty 'ZoneName'
+		$ReverseZone = Add-DnsServerPrimaryZone -ComputerName $Server -Name $Zone -DynamicUpdate 'Secure' -ReplicationScope 'Domain' -PassThru | Select-Object -ExpandProperty 'ZoneName'
 		Write-Output "...created reverse zone: '$ReverseZone'"
 	}
 	Catch {
@@ -96,7 +96,12 @@ Catch {
 
 # configure reverse zone
 If ($UseNameServersFromDomain) {
-	Write-Output "Updating NS records..."
+	Write-Output "`nChecking NS records..."
+
+	# define counters
+	$DnsCreated = 0
+	$DnsRemoved = 0
+
 	# retrieve forward zone NS records
 	Try {
 		$ForwardNSRecords = (Get-DnsServerResourceRecord -ComputerName $Server -ZoneName $ForwardZone -Name '@' -RRType NS).RecordData.NameServer
@@ -133,7 +138,8 @@ If ($UseNameServersFromDomain) {
 	ForEach ($NameServer in $MissingNameServers) {
 		Try {
 			Add-DnsServerResourceRecord -ComputerName $Server -ZoneName $ReverseZone -NS -Name '@' -NameServer $NameServer
-			Write-Output "...created NS record '$NameServer' in '$ReverseZone' on '$Server'"
+			Write-Verbose "created NS record '$NameServer' in '$ReverseZone' on '$Server'"
+			$DnsCreated++
 		}
 		Catch {
 			Write-Output "could not create NS record '$NameServer'"
@@ -145,20 +151,32 @@ If ($UseNameServersFromDomain) {
 	ForEach ($NameServer in $InvalidNameServers) {
 		Try {
 			Remove-DnsServerResourceRecord -ComputerName $Server -ZoneName $ReverseZone -RRType 'NS' -Name '@' -RecordData $NameServer -Confirm:$false
-			Write-Output "...removed NS record '$NameServer' from '$ReverseZone' on '$Server'"
+			Write-Verbose "removed NS record '$NameServer' from '$ReverseZone' on '$Server'"
+			$DnsRemoved++
 		}
 		Catch {
-			Write-Output "ERROR: could not remove NS record '$NameServer'"
+			Write-Output "could not remove NS record '$NameServer'"
 			Throw $_
 		}
 	}
+
+	# report NS record changes
+	If ($DnsCreated -eq 0 -and $DnsRemoved -eq 0) { Write-Output "...checked '$($ReverseNameServers.Count)' NS record(s)"}
+	If ($DnsCreated) { Write-Output "...created '$DnsCreated' NS record(s)" }
+	If ($DnsRemoved) { Write-Output "...removed '$DnsRemoved' NS record(s)" }
 }
 
 # define first IP and counter from address and netmask
 $FirstIP = [uint32]($Network.Split('.')[-1])
 $Counter = [uint32]$FirstIP + [Math]::Pow(2, (32 - [uint32]$Netmask))
 
+# define counters
+$DnsLocated = 0
+$DnsUpdated = 0
+$DnsCreated = 0
+
 # create PTR records
+Write-Output "`nChecking PTR records..."
 For ($Name = $FirstIP; $Name -lt $Counter; $Name++) {
 	# create octet array from base address
 	$Octets = $Network.Split('.')
@@ -175,14 +193,15 @@ For ($Name = $FirstIP; $Name -lt $Counter; $Name++) {
 	}
 	Else {
 		$IPAddressWithDashes = $Octets -join '-'
-		$PtrDomainName = "$Prefix-$IPAddressWithDashes.$ForwardZone."
+		$PtrDomainName = "$PtrPrefix-$IPAddressWithDashes.$ForwardZone."
 	}
 
 	# create PTR record
 	Try {
 		$Record = Get-DnsServerResourceRecord -ComputerName $Server -ZoneName $Zone -Name $Name -ErrorAction 'Stop'
 		If ($Record.RecordData.PtrDomainName -eq $PtrDomainName) {
-			Write-Output "...found '$Name' in '$Zone' on '$Server' with value: $PtrDomainName"
+			Write-Verbose "found '$Name' in '$Zone' on '$Server' with value: $PtrDomainName"
+			$DnsLocated++
 		}
 		Else {
 			# copy PTR record object
@@ -192,7 +211,8 @@ For ($Name = $FirstIP; $Name -lt $Counter; $Name++) {
 			# update PTR record
 			Try {
 				Set-DnsServerResourceRecord -ComputerName $Server -ZoneName $Zone -OldInputObject $Record -NewInputObject $NewRecord -ErrorAction 'Stop'
-				Write-Output "...updated '$Name' in '$Zone' on '$Server' with value: $PtrDomainName"
+				Write-Verbose "updated '$Name' in '$Zone' on '$Server' with value: $PtrDomainName"
+				$DnsUpdated++
 			}
 			Catch {
 				Throw $_
@@ -202,7 +222,8 @@ For ($Name = $FirstIP; $Name -lt $Counter; $Name++) {
 	Catch {
 		Try {
 			Add-DnsServerResourceRecordPtr -ComputerName $Server -ZoneName $Zone -Name $Name -PtrDomainName $PtrDomainName
-			Write-Output "...created '$Name' in '$Zone' on '$Server' with value: $PtrDomainName"
+			Write-Verbose "created '$Name' in '$Zone' on '$Server' with value: $PtrDomainName"
+			$DnsCreated++
 		}
 		Catch {
 			Throw $_
@@ -210,7 +231,18 @@ For ($Name = $FirstIP; $Name -lt $Counter; $Name++) {
 	}
 }
 
+# report PTR record changes
+If ($DnsLocated) { Write-Output "...located '$DnsLocated' PTR record(s)" }
+If ($DnsUpdated) { Write-Output "...updated '$DnsUpdated' PTR record(s)" }
+If ($DnsCreated) { Write-Output "...created '$DnsCreated' PTR record(s)" }
+
+# define counters
+$DnsLocated = 0
+$DnsUpdated = 0
+$DnsCreated = 0
+
 # create A records
+Write-Output "`nChecking A records..."
 For ($Name = $FirstIP; $Name -lt $Counter; $Name++) {
 	# create octet array from base address
 	$Octets = $Network.Split('.')
@@ -227,7 +259,7 @@ For ($Name = $FirstIP; $Name -lt $Counter; $Name++) {
 	}
 	Else {
 		$IPAddressWithDashes = $Octets -join '-'
-		$PtrDomainName = "$Prefix-$IPAddressWithDashes.$ForwardZone."
+		$PtrDomainName = "$PtrPrefix-$IPAddressWithDashes.$ForwardZone."
 	}
 
 	# retrieve record name from PTR domain name
@@ -237,7 +269,8 @@ For ($Name = $FirstIP; $Name -lt $Counter; $Name++) {
 	Try {
 		$Record = Get-DnsServerResourceRecord -ComputerName $Server -ZoneName $ForwardZone -Name $RecordName -ErrorAction 'Stop'
 		If ($Record.RecordData.IPv4Address.IPAddressToString -eq $IPAddress) {
-			Write-Output "...found '$RecordName' in '$ForwardZone' on '$Server' with value: $IPAddress"
+			Write-Verbose "found '$RecordName' in '$ForwardZone' on '$Server' with value: $IPAddress"
+			$DnsLocated++
 		}
 		Else {
 			# copy PTR record object
@@ -247,7 +280,8 @@ For ($Name = $FirstIP; $Name -lt $Counter; $Name++) {
 			# update PTR record
 			Try {
 				Set-DnsServerResourceRecord -ComputerName $Server -ZoneName $ForwardZone -OldInputObject $Record -NewInputObject $NewRecord -ErrorAction 'Stop'
-				Write-Output "...updated '$RecordName' in '$ForwardZone' on '$Server' with value: $IPAddress"
+				Write-Verbose "updated '$RecordName' in '$ForwardZone' on '$Server' with value: $IPAddress"
+				$DnsUpdated++
 			}
 			Catch {
 				Throw $_
@@ -256,11 +290,20 @@ For ($Name = $FirstIP; $Name -lt $Counter; $Name++) {
 	}
 	Catch {
 		Try {
-			Add-DnsServerResourceRecordA -ComputerName $Server -ZoneName $Zone -Name $RecordName -IPv4Address $IPAddress -ErrorAction 'Stop'
-			Write-Output "...created '$RecordName' in '$ForwardZone' on '$Server' with value: $IPAddress"
+			Add-DnsServerResourceRecordA -ComputerName $Server -ZoneName $ForwardZone -Name $RecordName -IPv4Address $IPAddress -ErrorAction 'Stop'
+			Write-Verbose "created '$RecordName' in '$ForwardZone' on '$Server' with value: $IPAddress"
+			$DnsCreated++
 		}
 		Catch {
 			Throw $_
 		}
 	}
 }
+
+# report A record changes
+If ($DnsLocated) { Write-Output "...located '$DnsLocated' A record(s)" }
+If ($DnsUpdated) { Write-Output "...updated '$DnsUpdated' A record(s)" }
+If ($DnsCreated) { Write-Output "...created '$DnsCreated' A record(s)" }
+
+# close with empty line 
+Write-Output ''
