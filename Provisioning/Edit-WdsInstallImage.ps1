@@ -4,7 +4,7 @@
 Param(
 	[Parameter(Position = 0, Mandatory = $True, ValueFromPipeline = $true)]
 	[object[]]$WdsInstallImage,
-	[Parameter()][ValidateScript({ (Test-Path -PathType 'Container' -Path $_) -and ((Get-ChildItem -Path $_).Count -eq 0) } )]
+	[Parameter()][ValidateScript({ (Test-Path -PathType 'Container' -Path $_) } )]
 	[string]$TempPath = ([System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')),
 	[Parameter()][ValidateScript({ (Test-Path -PathType 'Container' -Path $_) -and ((Get-ChildItem -Path $_).Count -ne 0) } )]
 	[string]$CapabilitySource,
@@ -26,6 +26,7 @@ Param(
 	[switch]$RemovePackages,
 	[Parameter()]
 	[string[]]$CapabilitiesToAdd = @(
+		# define default capabilities to add here!
 		'NetFx~~~~'
 		'Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0'
 		'Rsat.CertificateServices.Tools~~~~0.0.1.0'
@@ -36,24 +37,27 @@ Param(
 	),
 	[Parameter()]
 	[string[]]$CapabilitiesToRemove = @(
+		# define default capabilities to remove here!
 		'Browser.InternetExplorer~~~~0.0.11.0'
 	),
 	[Parameter()]
 	[string[]]$FeaturesToEnable = @(
+		# define default feature to enable here!
 		'NetFx3'	
 		'TelnetClient'
 		'WirelessNetworking'
 	),
 	[Parameter()]
 	[string[]]$FeaturesToDisable = @(
-		# add features here!
+		# define default features to disable here!
 	),
 	[Parameter()]
 	[string[]]$PackagesToAdd = @(
-		# add packages here!
+		# define default packages to add here!
 	),
 	[Parameter()]
 	[string[]]$PackagesToRemove = @(
+		# define default packages to remove here!
 		'Microsoft.BingWeather',
 		'Microsoft.GetHelp',
 		'Microsoft.Getstarted',
@@ -98,6 +102,7 @@ ForEach ($Image in $WdsInstallImage) {
 		$wds_image_name = $WdsInstallImage.ImageName
 		$wds_image_file = $WdsInstallImage.FileName
 		$wds_image_base = $WdsInstallImage.FileName.Replace('.wim', $null)
+		$wds_unattended = $WdsInstallImage.UnattendFilePresent
 	}
 	Catch {
 		Write-Error 'Could not retrieve one or more required values from the WDS Install Image'
@@ -336,7 +341,7 @@ ForEach ($Image in $WdsInstallImage) {
 		}
 	}
 
-	# dismount image and re-export to shrink file
+	# dismount and save image
 	Write-Host '================================'
 	Write-Host 'Unmounting updated image...'
 	Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
@@ -365,15 +370,24 @@ ForEach ($Image in $WdsInstallImage) {
 	}
 
 	# save uninstall file
-	If ($WdsInstallImage.UnattendFilePresent) {
+	If ($wds_unattended) {
+		Write-Host '================================'
+		Write-Host 'Retrieving unattend file from WDS...'
+		Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 		# define path for unattend file
 		$wds_share_path = Join-Path -Path (Get-SmbShare | Where-Object { $_.Name -match 'REMINST' }).Path -ChildPath 'Images'
 		$wds_group_path = Join-Path -Path $wds_share_path -ChildPath $wds_image_group
 		$wds_image_path = Join-Path -Path $wds_group_path -ChildPath $wds_image_base
 		$wds_files_path = Join-Path -Path $wds_image_path -ChildPath 'Unattend'
-
 		# get unattend file
-		$wds_files_xml = Get-ChildItem -Path $wds_files_path -Filter '*.xml' | Copy-Item -Destination $wds_temp_files -PassThru
+		Try {
+			$wds_files_xml = Get-ChildItem -Path $wds_files_path -Filter '*.xml' | Copy-Item -Destination $wds_temp_files -PassThru
+		}
+		Catch {
+			Write-Error 'Could not retrieve unattend file from WDS'
+			$_
+			Return
+		}
 	}
 
 	# remove wds image
@@ -405,9 +419,26 @@ ForEach ($Image in $WdsInstallImage) {
 	}
 
 	# restore unattend XML file
-	If ($WdsInstallImage.UnattendFilePresent) {
-		New-Item -Path $wds_files_path -ItemType 'Directory' -Force
-		Move-Item -Path $wds_files_xml -Destination $wds_files_path
+	If ($wds_unattended) {
+		Write-Host '================================'
+		Write-Host 'Restoring unattend file to WDS...'
+		Write-Host (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+		Try {
+			$null = New-Item -Path $wds_files_path -ItemType 'Directory' -Force
+		}
+		Catch {
+			Write-Error 'Could not create unattend folder in WDS'
+			$_
+			Return
+		}
+		Try {
+			Move-Item -Path $wds_files_xml -Destination $wds_files_path
+		}
+		Catch {
+			Write-Error 'Could not retore unattend file to WDS'
+			$_
+			Return
+		}
 	}
 
 	# remove defender exclusions
