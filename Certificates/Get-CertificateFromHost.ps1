@@ -1,7 +1,7 @@
 [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Default')]
 Param (
 	# string for remote host
-	[Parameter(Position = 0)]
+	[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 	[string]$Hostname,
 	# int32 for remote port
 	[Parameter(Position = 1)]
