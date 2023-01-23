@@ -44,6 +44,7 @@ None. The script merely reports on actions taken and does not provide any action
 .EXAMPLE
 .\Add-DnsServerReverseLookupZone.ps1 -Zone '128-25.0.0.10.in-addr.arpa' -ReservedHosts @{ '10.0.0.129' = 'gateway.example.com'; '10.0.0.130' = 'firewall-a.example.com'; '10.0.0.131' = 'firewall-b.example.com' }
 #>
+
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
 	[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidatePattern('.in-addr.arpa[.]{0,1}$')]
