@@ -260,23 +260,27 @@ Process {
 			$PtrDomainName = "$PtrPrefix-$IPAddressWithDashes.$ForwardZone."
 		}
 
-		# create PTR record
+		# check PTR record
 		Try {
+			# throw exception if PTR record not found
 			$Record = Get-DnsServerResourceRecord -ComputerName $Server -ZoneName $Zone -Name $Name -ErrorAction 'Stop'
+			# report expected PTR record
 			If ($Record.RecordData.PtrDomainName -eq $PtrDomainName) {
 				Write-Verbose "found '$Name' in '$Zone' on '$Server' with expected value: $PtrDomainName"
 				$DnsLocated++
 			}
+			# report existing PTR record when Reset not set
 			ElseIf ($Record.RecordData.PtrDomainName -ne $PtrDomainName -and -not $Reset) {
 				Write-Verbose "found '$Name' in '$Zone' on '$Server' with existing value: $PtrDomainName"
 				$DnsLocated++
 			}
+			# update existing PTR record
 			Else {
 				# copy PTR record object
 				$NewRecord = $Record
 				# update new PTR record object
 				$NewRecord.RecordData.PtrDomainName = $PtrDomainName
-				# update PTR record
+				# set new PTR record
 				Try {
 					Set-DnsServerResourceRecord -ComputerName $Server -ZoneName $Zone -OldInputObject $Record -NewInputObject $NewRecord -ErrorAction 'Stop'
 					Write-Verbose "updated '$Name' in '$Zone' on '$Server' with expected value: $PtrDomainName"
@@ -288,6 +292,7 @@ Process {
 			}
 		}
 		Catch {
+			# create PTR record
 			Try {
 				Add-DnsServerResourceRecordPtr -ComputerName $Server -ZoneName $Zone -Name $Name -PtrDomainName $PtrDomainName
 				Write-Verbose "created '$Name' in '$Zone' on '$Server' with value: $PtrDomainName"
@@ -340,23 +345,27 @@ Process {
 			Continue
 		}
 
-		# create A record
+		# check A record
 		Try {
+			# throw exception if A record not found
 			$Record = Get-DnsServerResourceRecord -ComputerName $Server -ZoneName $DomainName -Name $RecordName -ErrorAction 'Stop'
+			# report expected A record
 			If ($Record.RecordData.IPv4Address.IPAddressToString -eq $IPAddress) {
 				Write-Verbose "found '$RecordName' in '$ForwardZone' on '$Server' with expected value: $IPAddress"
 				$DnsLocated++
 			}
+			# report existing A record when Reset not set
 			ElseIf ($Record.RecordData.IPv4Address.IPAddressToString -ne $IPAddress -and -not $Reset) {
 				Write-Verbose "found '$RecordName' in '$ForwardZone' on '$Server' with existing value: $IPAddress"
 				$DnsLocated++
 			}
+			# update existing A record
 			Else {
-				# copy PTR record object
+				# copy A record object
 				$NewRecord = $Record
-				# update new PTR record object
+				# update new A record object
 				$NewRecord.RecordData.IPv4Address = [System.Net.IPAddress]::Parse($IPAddress)
-				# update PTR record
+				# set new A record
 				Try {
 					Set-DnsServerResourceRecord -ComputerName $Server -ZoneName $DomainName -OldInputObject $Record -NewInputObject $NewRecord -ErrorAction 'Stop'
 					Write-Verbose "updated '$RecordName' in '$ForwardZone' on '$Server' with expected value: $IPAddress"
@@ -368,6 +377,7 @@ Process {
 			}
 		}
 		Catch {
+			# create A record
 			Try {
 				Add-DnsServerResourceRecordA -ComputerName $Server -ZoneName $DomainName -Name $RecordName -IPv4Address $IPAddress -ErrorAction 'Stop'
 				Write-Verbose "created '$RecordName' in '$ForwardZone' on '$Server' with expected value: $IPAddress"
