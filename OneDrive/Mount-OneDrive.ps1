@@ -1,4 +1,4 @@
-[CmdletBinding(DefaultParameterSetName = 'Default')]
+[CmdletBinding(SupportsShouldProcess)]
 Param(
 	[string]$Identity,
 	[switch]$ClearHidden,
@@ -80,26 +80,28 @@ $folders_onedrive = Get-ChildItem -Path $onedrive_directory.FullName | Where-Obj
 				# retrieve current folder ACL
 				$folder_acl = Get-Acl $folder_local
 				# update ACLs on all hidden items in current folder
-				ForEach ($item_hidden in $folder_hidden) {
-					# reset ACL
+				if ($PSCmdlet.ShouldProcess($folder_hidden.FullName, 'Remove hidden items')) {
+					ForEach ($item_hidden in $folder_hidden) {
+						# reset ACL
+						Try {
+							$item_hidden | Set-Acl -AclObject $folder_acl
+						}
+						Catch {
+							Write-Error "...'$folder_local' skipped; could not reset ACL on hidden item: $($item_hidden.FullName)"
+							Continue :folder
+						}
+					}
+					Write-Output ("...'$folder_local' hidden items updated, emptying directory...")
+					# remove item
 					Try {
-						$item_hidden | Set-Acl -AclObject $folder_acl
+						Get-ChildItem -Force -Recurse -Path $folder_local | Remove-Item -Force -Recurse
 					}
 					Catch {
-						Write-Error "...'$folder_local' skipped; could not reset ACL on hidden item: $($item_hidden.FullName)"
+						Write-Error "...'$folder_local' skipped; could not remove hidden items"
 						Continue :folder
 					}
+					Write-Output ("...'$folder_local' hidden items removed")
 				}
-				Write-Output ("...'$folder_local' hidden items updated, emptying directory...")
-				# remove item
-				Try {
-					Get-ChildItem -Force -Recurse -Path $folder_local | Remove-Item -Force -Recurse
-				}
-				Catch {
-					Write-Error "...'$folder_local' skipped; could not remove hidden items"
-					Continue :folder
-				}
-				Write-Output ("...'$folder_local' hidden items removed")
 			}
 		}
 		Else {
@@ -120,8 +122,10 @@ $folders_onedrive = Get-ChildItem -Path $onedrive_directory.FullName | Where-Obj
 
 	# create junction
 	Try {
-		$null = New-Item -ItemType Junction -Path $folder_local -Target $folder_cloud
-		Write-Output ("...'$folder_local' junctioned!")
+		if ($PSCmdlet.ShouldProcess($folder_local.FullName, 'Junction folder')) {
+			$null = New-Item -ItemType Junction -Path $folder_local -Target $folder_cloud
+			Write-Output ("...'$folder_local' junctioned!")
+		}
 	}
 	Catch {
 		Write-Error "...'$folder_local' skipped; could not junction"
