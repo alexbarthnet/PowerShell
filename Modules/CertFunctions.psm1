@@ -66,10 +66,10 @@ Function ConvertTo-X509Certificate {
 Function Get-CertificateChain {
 	<#
 	.SYNOPSIS
-	Builds a certificate chain from an X.509 certificate object.
+	Returns the X.509 certificates in the certificate chain from an X.509 certificate object.
 
 	.DESCRIPTION
-	Builds a certificate chain from an X.509 certificate object. The input must be an X.509 certificate object.
+	Returns the X.509 certificates in the certificate chain from an X.509 certificate object.
 
 	.PARAMETER Certificate
 	Specifies the X.509 certificate for which the certificate chain will be built.
@@ -252,9 +252,20 @@ Function Get-CertificateFromHost {
 		[switch]$Validate
 	)
 
+	# check hostname for included port number
+	If ($Hostname -match '([0-9A-z.\-:]*):([0-9]*)') {
+		# set hostname to first match
+		$Hostname = $matches[1]
+		# if port not explicitly set...
+		If ($null -eq $PSBoundParameters['Port']) {
+			# ...set port to second match
+			$Port = $matches[2]
+		}
+	}
+
 	# resolve hostname
 	Try {
-		$null = Resolve-DnsName -Name $Hostname -QuickTimeout -ErrorAction 'Stop'
+		$null = Resolve-DnsName -Name $Hostname -QuickTimeout -ErrorAction 'Stop' -Verbose:$false
 	}
 	Catch {
 		Write-Warning $_.ToString()
