@@ -80,7 +80,7 @@ $folders_onedrive = Get-ChildItem -Path $onedrive_directory.FullName | Where-Obj
 				# retrieve current folder ACL
 				$folder_acl = Get-Acl $folder_local
 				# update ACLs on all hidden items in current folder
-				if ($PSCmdlet.ShouldProcess($folder_hidden.FullName, 'Remove hidden items')) {
+				if ($PSCmdlet.ShouldProcess($folder_local, 'Remove hidden items')) {
 					ForEach ($item_hidden in $folder_hidden) {
 						# reset ACL
 						Try {
@@ -122,7 +122,7 @@ $folders_onedrive = Get-ChildItem -Path $onedrive_directory.FullName | Where-Obj
 
 	# create junction
 	Try {
-		if ($PSCmdlet.ShouldProcess($folder_local.FullName, 'Junction folder')) {
+		if ($PSCmdlet.ShouldProcess($folder_local, 'Junction folder')) {
 			$null = New-Item -ItemType Junction -Path $folder_local -Target $folder_cloud
 			Write-Output ("...'$folder_local' junctioned!")
 		}
