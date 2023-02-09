@@ -1,33 +1,23 @@
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
 	[string]$Identity,
-	[switch]$ExcludeFolders,
-	[string[]]$FoldersToExclude
+	[switch]$ClearHidden,
+	[switch]$CreateMissingFolders,
+	[string[]]$ExcludeOneDriveFolders
 )
-
-# define the default OneDrive excluded folders list
-$FoldersToExclude_default = @()
-$FoldersToExclude_default += 'AppData'
-$FoldersToExclude_default += 'Attachments'
-$FoldersToExclude_default += 'Microsoft Teams Chat Files'
-$FoldersToExclude_default += 'Microsoft Teams Data'
-$FoldersToExclude_default += 'Notebooks'
-$FoldersToExclude_default += 'Public'
 
 # buffer output
 Write-Output "`n"
 
 # get the OneDrive path(s) so we can filter which path(s) to junction
 $onedrive_directory = $null
-switch ($Identity) {
-	$null {
-		Write-Output ('Searching for OneDrive directory...')
-		$onedrive_directory = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object { $_.Name -match 'OneDrive' }
-	}
-	Default {
-		Write-Output ('Searching for OneDrive directory where name matches the Identity parameter...')
-		$onedrive_directory = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object { $_.Name -match 'OneDrive - ' -and $_.Name -match $Identity }	
-	}
+If ([string]::IsNullOrEmpty($Identity)) {
+	Write-Output ('Searching for OneDrive directory...')
+	$onedrive_directory = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object { $_.Name -match 'OneDrive' }
+}
+Else {
+	Write-Output ('Searching for OneDrive directory where name matches the Identity parameter...')
+	$onedrive_directory = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object { $_.Name -match 'OneDrive - ' -and $_.Name -match $Identity }
 }
 
 # test for 0 (can't junction) or 2+ (can't determine which to junction) OneDrive directories
@@ -36,53 +26,13 @@ switch (($onedrive_directory).Count) {
 	0 { Write-Output ('...found no OneDrive directories; exiting!'); Return }
 	Default {
 		If ([string]::IsNullOrEmpty($Identity)) {
-			Write-Output ('...found multiple OneDrive directories and no arguments were provided to limit scope to single directory, exiting!')
+			Write-Output ('...found multiple OneDrive directories; the Identity parameter was not provided to limit scope to single directory, exiting!')
 			Return
 		}
 		Else {
-			Write-Output ('...found multiple OneDrive directories and the provided argument did not limit scope to single directory, exiting!')
+			Write-Output ('...found multiple OneDrive directories; the Identity parameter did not limit scope to single directory, exiting!')
 			Return
 		}
-	}
-}
-
-# validate OneDrive directory *is* a directory
-If ($onedrive_directory.PSIsContainer) {
-	Write-Output '...validated the object found is a directory'
-}
-Else {
-	Write-Output '...unable to determine if the object found is a directory, exiting!'
-	Return
-}
-
-# buffer output
-Write-Output "`n"
-
-# define OneDrive directories that will *NOT* be junctioned
-If ($ExcludeFolders) {
-	Write-Output ('Checking the excluded folders...')
-	If ($FoldersToExclude.Count -ge 1) {
-		ForEach ($FolderToExclude in $FoldersToExclude) {
-			$FolderToExclude_path = Join-Path -Path $onedrive_directory -ChildPath $FolderToExclude
-			If (Test-Path $FolderToExclude_path) {
-				Write-Output ("`t Located: $FolderToExclude_path")
-			}
-			Else {
-				Write-Output ("`t Missing: $FolderToExclude_path")
-				Write-Output ('WARNING: the folder above was defined in the FoldersToExclude parameter but not found in OneDrive, exiting!')
-				Return
-			}
-		}
-	}
-	Else {
-		Write-Output ('NOTICE: no excluded folders were explicitly defined')
-		Write-Output ('...the following default folders will be excluded from junctioning:')
-		$FoldersToExclude = $FoldersToExclude_default
-		ForEach ($FolderToExclude in $FoldersToExclude) {
-			$FolderToExclude_path = Join-Path -Path $onedrive_directory -ChildPath $FolderToExclude
-			Write-Output ("`t $FolderToExclude_path")
-		}
-		# insert warning here!
 	}
 }
 
@@ -90,55 +40,91 @@ If ($ExcludeFolders) {
 Write-Output "`n"
 Write-Output ('-----')
 
-# loop through directories inside OneDrive directories
-Get-ChildItem -Path $onedrive_directory.FullName | Where-Object { $_.PSIsContainer } | ForEach-Object {
+# retrieve directories in OneDrive directory
+$folders_onedrive = Get-ChildItem -Path $onedrive_directory.FullName | Where-Object { $_.PSIsContainer }
+
+# loop through directories inside OneDrive directory
+:folder ForEach ($folder_onedrive in $folders_onedrive) {
 	# define variables and declare folder
-	$folder_hidden = $null
-	$folder_ready = $false
-	$folder_short = ($_.BaseName)
-	$folder_cloud = ($_.FullName)
+	$folder_hidden = @()
+	$folder_short = ($folder_onedrive.BaseName)
+	$folder_cloud = ($folder_onedrive.FullName)
 	$folder_local = ($env:USERPROFILE + '\' + $folder_short)
 	Write-Output (' ')
 	Write-Output ("Found OneDrive folder: '" + $folder_cloud + "'")
-	
-	# check if current folder matching the block list
-	If ($FoldersToExclude -contains $folder_short) {
-		Write-Output ("...'" + $folder_short + "' explicitly blocked, skipping!")
+
+	# check if OneDrive folder matches the block list
+	If ($folder_short -in $ExcludeOneDriveFolders) {
+		Write-Output ("...'" + $folder_short + "' skipped; folder name is blocked")
+		Continue :folder
 	}
-	Else {
-		If (Test-Path $folder_local) {
-			Write-Output ("...'" + $folder_local + "' exists in user profile...")
-			If ((Get-Item -Path $folder_local).LinkType -eq 'Junction') {
-				Write-Output ("...'" + $folder_local + "' already junctioned, skipping!")
+
+	# if OneDrive folder exists locally...
+	If (Test-Path $folder_local) {
+		# check if current folder is already junctioned
+		If ((Get-Item -Path $folder_local).LinkType -eq 'Junction') {
+			Write-Output ("...'$folder_local' skipped; folder already junctioned")
+			Continue :folder
+		}
+
+		# check if current folder is empty
+		If ((Get-ChildItem -Path $folder_local -Recurse).Count -eq 0) {
+			# check if current folder contains hidden items
+			$folder_hidden = Get-ChildItem -Force -Path $folder_local
+			If ($folder_hidden.Count -gt 0 -and -not $ClearHidden) {
+				Write-Output ("...'$folder_local' skipped; folder is empty but contains hidden items")
+				Continue
 			}
-			Else {
-				Write-Output ("...'" + $folder_local + "' directory exists, migrating!")
-				If ((Get-ChildItem -Path $folder_local -Recurse).Count -eq 0) {
-					Write-Output ("...'" + $folder_local + "' directory is empty, checking for hidden items...")
-					$folder_hidden = Get-ChildItem -Force -Path $folder_local
-					If ($folder_hidden.Count -gt 0) {
-						Write-Output ("...'" + $folder_local + "' hidden items found, resetting ACLs...")
-						$folder_acl = Get-Acl $folder_local
-						$folder_hidden | ForEach-Object { $_ | Set-Acl -AclObject $folder_acl }
-						Write-Output ("...'" + $folder_local + "' hidden items updated, emptying directory!")
-						Get-ChildItem -Force -Recurse -Path $folder_local | Remove-Item -Force -Recurse
+			If ($folder_hidden.Count -gt 0) {
+				Write-Output ("...'$folder_local' is empty but contains hidden items, updating ACLs on hidden items...")
+				# retrieve current folder ACL
+				$folder_acl = Get-Acl $folder_local
+				# update ACLs on all hidden items in current folder
+				ForEach ($item_hidden in $folder_hidden) {
+					# reset ACL
+					Try {
+						$item_hidden | Set-Acl -AclObject $folder_acl
 					}
-					$folder_ready = $true
+					Catch {
+						Write-Error "...'$folder_local' skipped; could not reset ACL on hidden item: $($item_hidden.FullName)"
+						Continue :folder
+					}
 				}
-				Else {
-					Write-Output ("...'" + $folder_local + "' directory is NOT empty, skipping!")
-					Write-Output ('     NOTICE: a directory MUST be empty before it can be converted to a junction!')
+				Write-Output ("...'$folder_local' hidden items updated, emptying directory...")
+				# remove item
+				Try {
+					Get-ChildItem -Force -Recurse -Path $folder_local | Remove-Item -Force -Recurse
 				}
+				Catch {
+					Write-Error "...'$folder_local' skipped; could not remove hidden items"
+					Continue :folder
+				}
+				Write-Output ("...'$folder_local' hidden items removed")
 			}
 		}
 		Else {
-			Write-Output ("...'" + $folder_local + "' does not exist, will create junction!")
-			$folder_ready = $true
+			Write-Warning "...'$folder_local' directory is NOT empty, skipping!"
+			Continue :folder
 		}
-		If ($folder_ready) {
-			Write-Output ("...'" + $folder_local + "' creating junction!")
-			New-Item -ItemType Junction -Path $folder_local -Target $folder_cloud | Out-Null
+	}
+	# if OneDrive folder missing locally...
+	Else {
+		If ($CreateMissingFolders) {
+			Write-Output "...'$folder_local' will be created; folder does not exist locally but CreateMissingFolders was set"
 		}
+		Else {
+			Write-Output "...'$folder_local' skipped; folder does not exist locally and CreateMissingFolders was not set"
+			Continue :folder
+		}
+	}
+
+	# create junction
+	Try {
+		$null = New-Item -ItemType Junction -Path $folder_local -Target $folder_cloud
+		Write-Output ("...'$folder_local' junctioned!")
+	}
+	Catch {
+		Write-Error "...'$folder_local' skipped; could not junction"
 	}
 }
 
