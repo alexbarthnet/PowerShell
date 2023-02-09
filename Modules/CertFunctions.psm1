@@ -10,7 +10,7 @@ Function ConvertTo-X509Certificate {
 	Specifies the input object that represents an X.509 certificate
 
 	.INPUTS
-	System.ByteArray,System.Collections,System.String. A byte array, 
+	System.ByteArray,System.Collections,System.String. A byte array, a collection containing a byte array as the first element, or the string representation of a byte array.
 
 	.OUTPUTS
 	X509Certificate2. An X509Certificate2 object created from the input.
@@ -22,9 +22,6 @@ Function ConvertTo-X509Certificate {
 		$InputObject
 	)
 
-	# create empty certificate object
-	$Certificate = New-Object -TypeName 'System.Security.Cryptography.X509Certificates.X509Certificate2'
-
 	# if InputObject is a collection and first element is a byte array...
 	If ( $InputObject[0] -is [byte[]] ) {
 		# ...retrieve byte array from first element of InputObject
@@ -35,11 +32,14 @@ Function ConvertTo-X509Certificate {
 		# ...copy InputObject to byte array
 		$ByteArray = $InputObject
 	}
-	# if InputObject is a byte array...
+	# if InputObject is a string...
 	ElseIf ( $InputObject -is [string]) {
+		# ...convert InputObject into a byte array
 		$ByteArray = [System.Convert]::ToByte($InputObject)
 	}
+	# if InputObject is not a pre-configured type...
 	Else {
+		# ...cast InputObject into a byte array
 		Try {
 			$ByteArray = [byte[]]$InputObject
 		}
@@ -47,6 +47,9 @@ Function ConvertTo-X509Certificate {
 			Throw $_
 		}
 	}
+
+	# create new certificate object
+	$Certificate = New-Object -TypeName 'System.Security.Cryptography.X509Certificates.X509Certificate2'
 
 	# import byte array into certificate object
 	Try {
@@ -56,7 +59,7 @@ Function ConvertTo-X509Certificate {
 		Throw $_
 	}
 
-	# return populated certificate object
+	# return certificate object
 	Return $Certificate
 }
 
@@ -69,13 +72,19 @@ Function Get-CertificateChain {
 	Builds a certificate chain from an X.509 certificate object. The input must be an X.509 certificate object.
 
 	.PARAMETER Certificate
-	Specifies the input that represents an X.509 certificate
+	Specifies the X.509 certificate for which the certificate chain will be built.
+
+	.PARAMETER CheckRevocation
+	Switch to check if any of the certificates in the chain have been revoked.
+
+	.PARAMETER PassThru
+	Switch to return the X.509 certificate chain instead of an array of the X.509 certificate objects in the certificate chain.
 
 	.INPUTS
-	X509Certificate2. An object representing an X509 certificate.
+	X509Certificate2. An object representing an X.509 certificate.
 
 	.OUTPUTS
-	X509Certificate2. An object representing an X509 certificate.
+	X509Chain, X509Certificate2. An object representing an X.509 certificate chain or the X.509 certificates in the certificate chain.
 
 	#>
 	[CmdletBinding()]
@@ -83,21 +92,36 @@ Function Get-CertificateChain {
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		[object]$Certificate,
 		[Parameter(Position = 1)]
-		[string]$Attribute = 'userCertificate'
+		[switch]$CheckRevocation,
+		[Parameter(Position = 2)]
+		[switch]$PassThru
 	)
 
-	Try {
-		# create certificate chain object
-		$X509Chain = New-Object -TypeName 'System.Security.Cryptography.X509Certificates.X509Chain'
-		# disable 
+	# create certificate chain object
+	$X509Chain = New-Object -TypeName 'System.Security.Cryptography.X509Certificates.X509Chain'
+
+	# if revocation checking was not requested...
+	If (-not $CheckRevocation) {
+		# ...disable revocation checking
 		$X509Chain.ChainPolicy.RevocationMode = 'NoCheck'
-		# build certificate chain from remote server certificate
+	}
+
+	# build certificate chain from certificate
+	Try {
 		$X509Chain.Build($Certificate)
-		# return certificate chain
-		Return $X509Chain.ChainElements.Certificate
 	}
 	Catch {
 		Throw $_
+	}
+
+	# if pass thru is set...
+	If ($PassThru) {
+		# return certificate chain
+		Return $X509Chain
+	}
+	Else {
+		# return certificates in certificate chain
+		Return $X509Chain.ChainElements.Certificate
 	}
 }
 
@@ -201,6 +225,9 @@ Function Get-CertificateFromHost {
 	.PARAMETER Port
 	Specifies the TCP port on the remote host.
 
+	.PARAMETER Timeout
+	Specifies the connection timeout in milliseconds.
+
 	.PARAMETER Chain
 	Switch to return the certificate and all certificates in chain.
 
@@ -213,66 +240,86 @@ Function Get-CertificateFromHost {
 	#>
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param (
-		# string for remote host
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		[string]$Hostname,
-		# int32 for remote port
 		[Parameter(Position = 1)]
 		[int32]$Port = 443,
-		# switch for expanding from certificate to certificate chain
+		[Parameter(Position = 2)]
+		[int32]$Timeout = 3000,
 		[Parameter()]
 		[switch]$Chain,
-		# switch for returning object
-		[Parameter(ParameterSetName = 'PassThru')]
-		[switch]$PassThru,
-		# switch for validating certificate is trusted
 		[Parameter(ParameterSetName = 'Validate')]
 		[switch]$Validate
 	)
 
-	# test hostname and port
-	If (-not (Test-NetConnection -ComputerName $Hostname -Port $Port -InformationLevel 'Quiet')) {
-		Write-Host 'could not connect to remote host'
+	# resolve hostname
+	Try {
+		$null = Resolve-DnsName -Name $Hostname -QuickTimeout -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning $_.ToString()
 		Return
 	}
 
 	# retrieve certificate from remote server
 	Try {
-		# connect to remote server
-		$TcpSocket = New-Object 'System.Net.Sockets.TcpClient' -ArgumentList @($Hostname, $Port)
-		$TcpSocketStream = $TcpSocket.GetStream()
+		# define tcp client
+		$TcpClient = New-Object 'System.Net.Sockets.TcpClient'
+		# connect tcp client
+		$TcpHandle = $TcpClient.BeginConnect($Hostname, $Port, $null, $null)
+		# check tcp client
+		$TcpResult = $TcpHandle.AsyncWaitHandle.WaitOne($Timeout, $false)
+		# if connected before timeout...
+		If ($TcpResult) {
+			# ...complete connection
+			$TcpClient.EndConnect($TcpHandle)
+		}
+		# if not connected after timeout...
+		Else {
+			# ...close the connection and return a null
+			$TcpClient.Close()
+			Write-Warning 'connection timed out'
+			Return $null
+		}
+		# open stream to remove server
 		Try {
-			# define System.Net.Security.RemoteCertificateValidationCallback delegate that always returns true
-			$RemoteCertificateValidationCallback = { param($delegate_sender, $delegate_certificate, $delegate_chain, $delegate_sslPolicyErrors) return $true }
-			# negotiate secure connection
-			$SSLStream = New-Object -TypeName 'System.Net.Security.SSLStream' -ArgumentList @($TcpSocketStream, $true, $RemoteCertificateValidationCallback)
-			$SSLStream.AuthenticateAsClient($Hostname)
+			$TcpClientStream = $TcpClient.GetStream()
+			# retrieve certificate from remote server
 			Try {
+				# define System.Net.Security.RemoteCertificateValidationCallback delegate that always returns true
+				$RemoteCertificateValidationCallback = { param($delegate_sender, $delegate_certificate, $delegate_chain, $delegate_sslPolicyErrors) return $true }
+				# define secure connection
+				$SSLStream = New-Object -TypeName 'System.Net.Security.SSLStream' -ArgumentList @($TcpClientStream, $true, $RemoteCertificateValidationCallback)
+				# start secure connection
+				$SSLStream.AuthenticateAsClient($Hostname)
 				# get certificate sent by remote server
-				$Certificate = New-Object -TypeName 'System.Security.Cryptography.X509Certificates.X509Certificate2' -ArgumentList $SSLStream.RemoteCertificate
+				Try {
+					$Certificate = New-Object -TypeName 'System.Security.Cryptography.X509Certificates.X509Certificate2' -ArgumentList $SSLStream.RemoteCertificate
+				}
+				Catch {
+					Throw $_
+				}
 			}
 			Catch {
-				Write-Host 'Could not retrieve certificate from remote host'
 				Throw $_
 			}
 		}
 		Catch {
-			Write-Host 'Could not securely connect to remote host'
 			Throw $_
-		}
-		Finally {
-			# close secure connection
-			$SSLStream.Dispose()
 		}
 	}
 	Catch {
-		Write-Host 'Could not connect to remote host'
 		Throw $_
 	}
 	Finally {
-		# close remote connection
-		If ($null -ne $TCPSocket) {
-			$TCPSocket.Dispose()
+		If ($null -ne $SSLStream) {
+			$SSLStream.Dispose()
+		}
+		If ($null -ne $TcpClientStream) {
+			$TcpClientStream.Dispose()
+		}
+		If ($null -ne $TcpClient) {
+			$TcpClient.Dispose()
 		}
 	}
 
