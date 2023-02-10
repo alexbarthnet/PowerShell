@@ -22,13 +22,16 @@ Function ConvertTo-X509Certificate {
 		$InputObject
 	)
 
-	# if InputObject is a collection and first element is a byte array...
-	If ( $InputObject[0] -is [byte[]] ) {
-		# ...retrieve byte array from first element of InputObject
-		$ByteArray = $InputObject[0]
+	Write-Verbose $InputObject.GetType().FullName
+
+	# if InputObject is a collection...
+	If ( $InputObject -is [System.Collections.CollectionBase]) {
+		# ...retrieve the first entry in the collection
+		$InputObject = $InputObject[0]
 	}
+
 	# if InputObject is a byte array...
-	ElseIf ( $InputObject -is [byte[]] ) {
+	If ( $InputObject -is [byte[]] ) {
 		# ...copy InputObject to byte array
 		$ByteArray = $InputObject
 	}
@@ -108,7 +111,7 @@ Function Get-CertificateChain {
 
 	# build certificate chain from certificate
 	Try {
-		$X509Chain.Build($Certificate)
+		$null = $X509Chain.Build($Certificate)
 	}
 	Catch {
 		Throw $_
@@ -154,60 +157,77 @@ Function Get-CertificateFromAD {
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		[object]$Identity,
 		[Parameter(Position = 1)]
-		[string]$Attribute = 'userCertificate'
+		[string]$Attribute = 'userCertificate',
+		[Parameter(Position = 2)]
+		[switch]$Chain
 	)
 
-	# if Identity is an ADobject with and the Attribute is not null...
-	If (($Identity -is [Microsoft.ActiveDirectory.Management.ADObject]) -and ($null -ne $Identity.$Attribute)) {
-		# ...retrieve the value from the attribute on the object
-		$Value = $Identity.$Attribute
+	# if Identity is an ADobject...
+	If ($Identity -is [Microsoft.ActiveDirectory.Management.ADObject]) {
+		# ...and if Attribute is an ADPropertyValueCollection that contains at least one value...
+		If ($Identity.$Attribute -is [Microsoft.ActiveDirectory.Management.ADPropertyValueCollection] -and $Identity.$Attribute.Count -ge 1) {
+			# ...retrieve the values from the attribute on the object
+			$Values = $Identity.$Attribute
+		}
+		# ...and if Attribute is not ADPropertyValueCollection or does not contain at least one value...
+		Else {
+			# ...retrieve the DN from the object
+			$Identity = $Identity.DistinguishedName
+		}
 	}
+
 	# if Identity is not ADObject or the Attribute on the ADObject is null...
-	Else {
-		# ...try to retrieve an object via S.DS
+	If ($Identity -isnot [Microsoft.ActiveDirectory.Management.ADObject]) {
 		Try {
+			# retrieve object via S.DS
 			$Entry = [System.DirectoryServices.DirectoryEntry]::New("LDAP://$Identity")
-		}
-		Catch {
-			Throw $_
-		}
-		# ...then get attribute for object
-		Try {
-			$Value = $Entry.$Attribute
+			# retrieve values from attribute on the the object
+			$Values = $Entry.$Attribute
 		}
 		Catch {
 			Throw $_
 		}
 	}
 
-	# if Value is not null...
-	If ($null -ne $Value[0]) {
-		# ...pass value to convert function
+	# create empty array for certificates
+	$Certificates = @()
+
+	# process each value in attribute
+	ForEach ($Value in $Values) {
+		# convert value to x509 certificate
 		Try {
-			$Certificate = $Value[0] | ConvertTo-X509Certificate
+			# do *NOT* pipe the value to the function; the pipeline will unroll byte arrays and break the function
+			$Certificate = ConvertTo-X509Certificate -InputObject $Value
 		}
 		Catch {
 			Throw $_
 		}
-	}
-	# if Value is null...
-	Else {
-		# TODO find exception to throw
-		Return $null
+		# if chain requested...
+		If ($Chain) {
+			# ...retrieve chain...
+			Try {
+				$CertificateChain = Get-CertificateChain -Certificate $Certificate
+			}
+			Catch {
+				Throw $_
+			}
+			# ...add certificates in chain to array
+			ForEach ($Certificate in $CertificateChain) {
+				$Certificates += $Certificate
+			}
+		}
+		# if chain not requested...
+		Else {
+			# ...add certificate to array
+			$Certificates += $Certificate
+		}
 	}
 
 	# return results
-	If ($Chain) {
-		Try {
-			$CertificateChain = Get-CertificateChain -Certificate $Certificate
-		}
-		Catch {
-			Throw $_
-		}
-		Return $CertificateChain
-	}
-	Else {
-		Return $Certificate
+	switch ($Certificates.Count) {
+		0 { Return $null }
+		1 { Return $Certificate }
+		Default { Return $Certificates }
 	}
 }
 
@@ -285,7 +305,7 @@ Function Get-CertificateFromHost {
 			# ...complete connection
 			$TcpClient.EndConnect($TcpHandle)
 		}
-		# if not connected after timeout...
+		# if not connected before timeout...
 		Else {
 			# ...close the connection and return a null
 			$TcpClient.Close()
@@ -293,31 +313,15 @@ Function Get-CertificateFromHost {
 			Return $null
 		}
 		# open stream to remove server
-		Try {
-			$TcpClientStream = $TcpClient.GetStream()
-			# retrieve certificate from remote server
-			Try {
-				# define System.Net.Security.RemoteCertificateValidationCallback delegate that always returns true
-				$RemoteCertificateValidationCallback = { param($delegate_sender, $delegate_certificate, $delegate_chain, $delegate_sslPolicyErrors) return $true }
-				# define secure connection
-				$SSLStream = New-Object -TypeName 'System.Net.Security.SSLStream' -ArgumentList @($TcpClientStream, $true, $RemoteCertificateValidationCallback)
-				# start secure connection
-				$SSLStream.AuthenticateAsClient($Hostname)
-				# get certificate sent by remote server
-				Try {
-					$Certificate = New-Object -TypeName 'System.Security.Cryptography.X509Certificates.X509Certificate2' -ArgumentList $SSLStream.RemoteCertificate
-				}
-				Catch {
-					Throw $_
-				}
-			}
-			Catch {
-				Throw $_
-			}
-		}
-		Catch {
-			Throw $_
-		}
+		$TcpClientStream = $TcpClient.GetStream()
+		# define System.Net.Security.RemoteCertificateValidationCallback delegate that always returns true
+		$RemoteCertificateValidationCallback = { param($delegate_sender, $delegate_certificate, $delegate_chain, $delegate_sslPolicyErrors) return $true }
+		# define sslstream
+		$SSLStream = New-Object -TypeName 'System.Net.Security.SSLStream' -ArgumentList @($TcpClientStream, $true, $RemoteCertificateValidationCallback)
+		# authenticate to hostname
+		$SSLStream.AuthenticateAsClient($Hostname)
+		# get certificate sent by remote server
+		$Certificate = New-Object -TypeName 'System.Security.Cryptography.X509Certificates.X509Certificate2' -ArgumentList $SSLStream.RemoteCertificate
 	}
 	Catch {
 		Throw $_
