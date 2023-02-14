@@ -53,9 +53,21 @@ $folders_onedrive = Get-ChildItem -Path $onedrive_directory.FullName | Where-Obj
 	Write-Output (' ')
 	Write-Output ("Found OneDrive folder: '" + $folder_cloud + "'")
 
-	# check if OneDrive folder matches the block list
+	# check if folder short name matches the block list
 	If ($folder_short -in $ExcludeOneDriveFolders) {
 		Write-Output ("...'" + $folder_short + "' skipped; folder name is blocked")
+		Continue :folder
+	}
+
+	# check if folder path in OneDrive matches the block list
+	If ($folder_cloud -in $ExcludeOneDriveFolders) {
+		Write-Output ("...'" + $folder_cloud + "' skipped; folder name is blocked")
+		Continue :folder
+	}
+
+	# check if folder path on machine matches the block list
+	If ($folder_local -in $ExcludeOneDriveFolders) {
+		Write-Output ("...'" + $folder_local + "' skipped; folder name is blocked")
 		Continue :folder
 	}
 
