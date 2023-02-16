@@ -2,12 +2,6 @@
 Param (
 	[Parameter(Position = 0)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Destination = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path,
-	[Parameter(Position = 1)]
-	[string]$FileName = 'OpenSSH-Win64.zip',
-	[Parameter(Position = 2)]
-	[string]$FilePath = (Join-Path -Path $Destination -ChildPath $FileName),
-	[Parameter(Position = 3)]
-	[string]$Uri = 'https://github.com/PowerShell/Win32-OpenSSH/releases/latest/',
 	[Parameter(Position = 4)]
 	[switch]$Install,
 	[Parameter(Position = 5)]
@@ -17,7 +11,15 @@ Param (
 	[Parameter(Position = 7)]
 	[switch]$SkipDownload,
 	[Parameter(Position = 8)]
-	[switch]$Force
+	[switch]$Force,
+	[Parameter(DontShow)]
+	[string]$Uri = 'https://github.com/PowerShell/Win32-OpenSSH/releases/latest/',
+	[Parameter(DontShow)]
+	[string]$FileName = 'OpenSSH-Win64.zip',
+	[Parameter(DontShow)]
+	[string]$FilePath = (Join-Path -Path $Destination -ChildPath $FileName),
+	[Parameter(DontShow)]
+	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
 )
 
 # retrieve information on latest release

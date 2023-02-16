@@ -1,32 +1,24 @@
 [CmdletBinding()]
 Param (
 	[Parameter(Position = 0)][ValidateScript({ Test-Path -Path $_ })]
-	[string]$Destination,
+	[string]$Destination = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path,
 	[Parameter(Position = 1)]
 	[switch]$Extract,
 	[Parameter(Position = 2)]
-	[switch]$SkipDownload,
-	[Parameter(Position = 3)]
 	[switch]$ExtractHere,	
+	[Parameter(Position = 3)]
+	[switch]$SkipDownload,
 	[Parameter(Position = 4)]
 	[switch]$Force,
-	[Parameter(DontShow)][ValidateScript({ Test-Path -Path $_ })]
-	[string]$DefaultPath = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path,
-	[Parameter(DontShow)]
-	[string]$FileName = 'SysinternalsSuite.zip',
 	[Parameter(DontShow)]
 	[string]$Uri = 'https://download.sysinternals.com/files/SysinternalsSuite.zip',
 	[Parameter(DontShow)]
+	[string]$FileName = 'SysinternalsSuite.zip',
+	[Parameter(DontShow)]
+	[string]$FilePath = (Join-Path -Path $Destination -ChildPath $FileName),
+	[Parameter(DontShow)]
 	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
 )
-
-# set file path based upon inputs
-If ($Destination) {
-	$FilePath = Join-Path -Path $Destination -ChildPath $FileName
-}
-Else {
-	$FilePath = Join-Path -Path $DefaultPath -ChildPath $FileName
-}
 
 # check file
 If ((Test-Path -Path $FilePath) -and -not $SkipDownload) {
