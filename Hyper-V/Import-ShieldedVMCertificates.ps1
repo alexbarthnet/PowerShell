@@ -4,9 +4,12 @@ Param(
 	[Parameter(Position = 0, Mandatory = $True)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
 	[string]$Path,
 	# password for PFX files to import
-	[Parameter(Position = 1, Mandatory = $True)]
+	[Parameter(Position = 1)]
 	[securestring]$Password,
-	# local hostname
+	# import certificate even if found
+	[Parameter(Position = 2)]
+	[switch]$Force,
+	# certificate store location
 	[Parameter(DontShow)]
 	[string]$CertStoreLocation = 'Cert:\LocalMachine\Shielded VM Local Certificates',
 	# local hostname
@@ -33,7 +36,7 @@ Begin {
 
 	Function Import-CertificatePair {
 		Param(
-			[Parameter(Position = 0, Mandatory = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf'})]
+			[Parameter(Position = 0, Mandatory = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
 			[object]$PfxFile
 		)
 
@@ -53,7 +56,7 @@ Begin {
 			$ImportedCertificates = Get-ChildItem -Path $CertStoreLocation | Where-Object { $_.Thumbprint -eq $X509Certificate2.Thumbprint }
 			# ...then compare the thumbprints of the Certificate and the Cert object
 			If ($ImportedCertificates.Count -gt 0) {
-				Write-Output "Certificates in path and store match; skipping import of:"
+				Write-Output 'Certificates in path and store match; skipping import of:'
 				Write-Output "`tCerPath : '$($CerPath)'"
 				Write-Output "`tPfxPath : '$($PfxFile.FullName)'"
 				Write-Output "`tSubject : '$($X509Certificate2.Subject)'"
@@ -63,9 +66,9 @@ Begin {
 
 		# create hashtable for .pfx file
 		$ImportPfxCertificate = @{
-			FilePath              = $PfxFile.FullName
-			Exportable            = $true
-			CertStoreLocation     = $CertStoreLocation
+			FilePath          = $PfxFile.FullName
+			Exportable        = $true
+			CertStoreLocation = $CertStoreLocation
 		}
 
 		# add password to hashtable

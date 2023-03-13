@@ -9,7 +9,7 @@ Param(
 	# prinicpals that can access exported PFX files
 	[Parameter(Position = 2)]
 	[string[]]$Principals,
-	# local hostname
+	# certificate store location
 	[Parameter(DontShow)][ValidateScript({ Test-Path -Path $_ -PathType 'Container'})]
 	[string]$CertStoreLocation = 'Cert:\LocalMachine\Shielded VM Local Certificates',
 	# local hostname
