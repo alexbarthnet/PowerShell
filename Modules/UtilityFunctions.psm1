@@ -99,40 +99,40 @@ Function Get-RandomAlpha {
 	If (-not $LowerCase -and -not $UpperCase -and -not $Numbers -and -not $Symbols) { $All = $true }
 
 	# build list of characters
-	$List = [System.Collections.Generic.List[byte]]::new()
+	$List = [System.Collections.Generic.List[char]]::new()
 	If ($All -or $Numbers) { 
 		# 0123456789
-		$List.AddRange([byte[]](48..57))
+		$List.AddRange([char[]](48..57))
 	}
 	If ($All -or $UpperCase) {
 		# ABCDEFGHIJKLMNOPQRSTUVWXYZ
-		$List.AddRange([byte[]](65..90))
+		$List.AddRange([char[]](65..90))
 	}
 	If ($All -or $LowerCase) {
 		# abcdefghijklmnopqrstuvwxyz
-		$List.AddRange([byte[]](97..122))
+		$List.AddRange([char[]](97..122))
 	}
 	If ($All -or $Symbols) {
 		# !"#$%&'()*+,-./
-		$List.AddRange([byte[]](33..47))
+		$List.AddRange([char[]](33..47))
 		# :;<=>?@
-		$List.AddRange([byte[]](58..64))
+		$List.AddRange([char[]](58..64))
 		# [\]^_`
-		$List.AddRange([byte[]](91..96))
+		$List.AddRange([char[]](91..96))
 		# {|}~
-		$List.AddRange([byte[]](123..127))
+		$List.AddRange([char[]](123..127))
 	}
 
 	# remove excluded characters
-	ForEach ($Character in $ExcludeCharacters) { $null = $List.Remove([byte]$Character) }
+	ForEach ($Character in $ExcludeCharacters) { $null = $List.RemoveAll($Character) }
 
-	# clear required objects
+	# create string builder
 	$StringBuilder = [System.Text.StringBuilder]::new()
 
 	# create random string
 	While ($StringBuilder.Length -lt $Length) {
 		# append random character to string from list
-		$null = $StringBuilder.Append([char]($List[(Get-Random -Max $List.Count)]))
+		$null = $StringBuilder.Append($List[(Get-Random -Max $List.Count)])
 		# remove excluded strings
 		ForEach ($String in $ExcludeStrings) { $null = $StringBuilder.Replace($String,$null) }
 	}
@@ -150,11 +150,13 @@ Function Get-RandomHex {
 		[switch]$UpperCase
 	)
 
-	# clear required objects
+	# create string builder
 	$string = [System.Text.StringBuilder]::new()
 
 	# create random string
-	Do { $null = $string.Append('{0:x}' -f (Get-Random -Max 15)) } Until ($string.Length -eq $Length -or $string.Length -eq 65535)
+	While ($StringBuilder.Length -lt $Length) {
+		$null = $string.Append('{0:x}' -f (Get-Random -Max 15))
+	}
 
 	# return random string
 	If ($UpperCase) {
