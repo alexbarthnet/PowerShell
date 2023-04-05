@@ -1,7 +1,7 @@
 [CmdletBinding(SupportsShouldProcess)]
 Param(
 	[string]$Identity,
-	[switch]$ClearHidden,
+	[switch]$ClearHiddenItemsFromEmptyFolders,
 	[switch]$CreateMissingFolders,
 	[string[]]$ExcludeOneDriveFolders
 )
@@ -83,8 +83,9 @@ $folders_onedrive = Get-ChildItem -Path $onedrive_directory.FullName | Where-Obj
 		If ((Get-ChildItem -Path $folder_local -Recurse).Count -eq 0) {
 			# check if current folder contains hidden items
 			$folder_hidden = Get-ChildItem -Force -Path $folder_local
-			If ($folder_hidden.Count -gt 0 -and -not $ClearHidden) {
+			If ($folder_hidden.Count -gt 0 -and -not $ClearHiddenItemsFromEmptyFolders) {
 				Write-Output ("...'$folder_local' skipped; folder is empty but contains hidden items")
+				$HiddenItemsFound = $true
 				Continue
 			}
 			If ($folder_hidden.Count -gt 0) {
@@ -142,6 +143,14 @@ $folders_onedrive = Get-ChildItem -Path $onedrive_directory.FullName | Where-Obj
 	Catch {
 		Write-Error "...'$folder_local' skipped; could not junction"
 	}
+}
+
+# inform user how to handle hidden items if encountered
+If ($HiddenItemsFound) {
+	Write-Output (' ')
+	Write-Output ('-----')
+	Write-Output (' ')
+	Write-Output ('One or more folders contain hidden items and could not be junctioned; use the -ClearHiddenItemsFromEmptyFoldersItemsFromEmptyFolders switch to permit the script to remove hidden items from otherwise empty folders')
 }
 
 # close out
