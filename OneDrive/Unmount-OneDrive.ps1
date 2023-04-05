@@ -5,15 +5,6 @@ Param(
 	[string[]]$FoldersToRestore
 )
 
-# define the default OneDrive excluded folders list
-$FoldersToRestore_default = @()
-$FoldersToRestore_default += 'Desktop'
-$FoldersToRestore_default += 'Documents'
-$FoldersToRestore_default += 'Downloads'
-$FoldersToRestore_default += 'Music'
-$FoldersToRestore_default += 'Pictures'
-$FoldersToRestore_default += 'Videos'
-
 # buffer output
 Write-Output "`n"
 
@@ -46,17 +37,17 @@ switch (($onedrive_directory).Count) {
 	}
 }
 
-# validate OneDrive directory *is* a directory
-If ($onedrive_directory.PSIsContainer) {
-	Write-Output '...validated the object found is a directory'
-}
-Else {
-	Write-Output '...unable to determine if the object found is a directory, exiting!'
-	Return
-}
-
 # buffer output
 Write-Output "`n"
+
+# define the default OneDrive excluded folders list
+$FoldersToRestore_default = @()
+$FoldersToRestore_default += 'Desktop'
+$FoldersToRestore_default += 'Documents'
+$FoldersToRestore_default += 'Downloads'
+$FoldersToRestore_default += 'Music'
+$FoldersToRestore_default += 'Pictures'
+$FoldersToRestore_default += 'Videos'
 
 # define OneDrive directories that will *NOT* be un-junctioned
 If ($RestoreFolders) {
@@ -90,12 +81,15 @@ If ($RestoreFolders) {
 Write-Output "`n"
 Write-Output ('-----')
 
+# retrieve junctions in profile directory
+$folders_junctioned = Get-ChildItem -Path $env:USERPROFILE | Where-Object { $_.PSIsContainer -and $_.LinkType -eq 'Junction' -and $_.Target -match $onedrive_directory.Name }
+
 # loop through directories inside profile
-Get-ChildItem -Path $env:USERPROFILE | Where-Object { $_.PSIsContainer -and $_.LinkType -eq 'Junction' -and $_.Target -match $onedrive_directory.Name } | ForEach-Object {
+ForEach ($folder_junctioned in $folders_junctioned) {
 	# define variables and declare folder
-	$folder_basename = ($_.BaseName)
-	$folder_fullname = ($_.FullName)
-	$folder_target = ($_.Target)
+	$folder_basename = ($folder_junctioned.BaseName)
+	$folder_fullname = ($folder_junctioned.FullName)
+	$folder_target = ($folder_junctioned.Target)
 	Write-Output (' ')
 	Write-Output ("Found OneDrive folder: '" + $folder_fullname + "'")
 
