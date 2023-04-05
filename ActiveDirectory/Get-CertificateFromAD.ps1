@@ -53,8 +53,8 @@ If ($User -or $Computer -and ($null -eq $Attribute)) {
 # check for required inputs
 If ($ObjectDN -and $Attribute) {
 	# declare inputs
-	Write-Host 'Retrieving certificate from AD object: ' + $objectDN
-	Write-Host 'Retrieving certificate from attribute: ' + $Attribute
+	Write-Host "Retrieving certificate from AD object: '$objectDN'"
+	Write-Host "Retrieving certificate from attribute: '$Attribute'"
 }
 Else {
 	# declare error
@@ -63,12 +63,17 @@ Else {
 }
 
 # retrieve object
-$ad_object = $null
-$ad_object = Get-ADObject -Filter "distinguishedName -eq '$objectDN'" -Properties *
-If ($ad_object) {
-	# retrieve attribute from object
-	$ad_attr = $null
+Try {
+	$ad_object = Get-ADObject -Identity $objectDN -Properties $Attribute 
+}
+Catch {
+	Throw $_
+}
+
+# retrieve attribute from object
+If ($ad_object -and ($null -ne $ad_object.$Attribute)) {
 	$ad_attr = $ad_object.$Attribute
+	
 	If ($ad_attr) {
 		New-Object System.Security.Cryptography.X509Certificates.X509Certificate2 $ad_attr
 	}
