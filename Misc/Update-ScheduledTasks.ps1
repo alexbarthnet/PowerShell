@@ -72,15 +72,15 @@ Begin {
 			'^[^\\].*' {
 				Return $false
 			}
-			# taskpath cannot be '\'
+			# taskpath of '\' is not permitted; we do not want to manipulate any tasks in the default path
 			'^\\$' {
 				Return $false
 			}
-			# taskpath cannot be '\Microsoft'
+			# taskpath of '\Microsoft' is not permitted; we do not want to manipulate any tasks in the Microsoft path
 			'^\\Microsoft$' {
 				Return $false
 			}
-			# taskpath cannot be '\Microsoft\*'
+			# taskpath of '\Microsoft\*' is not permitted; we do not want to manipulate any tasks in the Microsoft path
 			'^\\Microsoft\\.*$' {
 				Return $false
 			}
@@ -397,7 +397,7 @@ Process {
 				Return
 			}
 
-			# create hashtable for 
+			# create hashtable for cleanup
 			Try {
 				$ExpectedTasks = @{}
 			}
