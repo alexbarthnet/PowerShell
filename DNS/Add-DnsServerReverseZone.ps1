@@ -71,7 +71,7 @@ Param(
 
 Begin {
 	# retrieve all zones
-	Write-Output "`nRetrieveing DNS zones..."
+	Write-Output "`nRetrieving DNS zones..."
 	Try {
 		$DnsZones = Get-DnsServerZone -ComputerName $Server -ErrorAction 'Stop' | Where-Object { $_.ZoneName.Contains('.') -and $_.ZoneType -eq 'Primary' -and -not $_.IsAutoCreated } | Select-Object -ExpandProperty 'ZoneName'
 	}
