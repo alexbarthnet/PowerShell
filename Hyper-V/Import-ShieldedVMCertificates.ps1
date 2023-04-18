@@ -52,6 +52,10 @@ Begin {
 			Catch {
 				Write-Error -Message "could not create X.509 certificate from '$CerFile'"
 			}
+		}
+
+		# if X509Certificate2 was created...
+		If ($null -ne $X509Certificate2) {
 			# ...then retrieve any Shielded VM certificates with the same thumbprint as the X509 object 
 			$ImportedCertificates = Get-ChildItem -Path $CertStoreLocation | Where-Object { $_.Thumbprint -eq $X509Certificate2.Thumbprint }
 			# ...then compare the thumbprints of the Certificate and the Cert object
