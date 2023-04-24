@@ -2,8 +2,8 @@
 .SYNOPSIS
 Create a reverse lookup zone on a Microsoft Windows DNS server, populate the zone with placeholder PTR records, and create matching A records for the placeholder PTR records.
 
-.DESCRIPTION 
-Create a reverse lookup zone on a Microsoft Windows DNS server, populate the zone with placeholder PTR records, and create matching A records for the placeholder PTR records. Includes options to create custom PTR records using the ReservedHosts parameter, reset the PTR records in an existing zone to placeholder records, and create the matching A records in custom subdomains, 
+.DESCRIPTION
+Create a reverse lookup zone on a Microsoft Windows DNS server, populate the zone with placeholder PTR records, and create matching A records for the placeholder PTR records. Includes options to create custom PTR records using the ReservedHosts parameter, reset the PTR records in an existing zone to placeholder records, and create the matching A records in custom subdomains,
 
 .PARAMETER Zone
 Specifies the reverse lookup zone that will be added and populated
@@ -105,7 +105,7 @@ Process {
 		$Array = $Zone.Replace('.in-addr.arpa', $null).Split('.', [System.StringSplitOptions]::RemoveEmptyEntries)
 		# get count of octets
 		$Count = $Array.Count
-		# reverse array 
+		# reverse array
 		[array]::Reverse($Array)
 	}
 	Catch {
@@ -336,8 +336,8 @@ Process {
 		}
 
 		# retrieve record name from PTR domain name
-		$RecordName = $PtrDomainName.Split('.',2)[0]
-		$DomainName = $PtrDomainName.Split('.',2)[1]
+		$RecordName = $PtrDomainName.Split('.', 2)[0]
+		$DomainName = $PtrDomainName.Split('.', 2)[1]
 
 		# verify zone
 		If ($DnsZones -notcontains $DomainName) {
@@ -396,6 +396,6 @@ Process {
 }
 
 End {
-	# close with empty line 
+	# close with empty line
 	Write-Output ''
 }
