@@ -4,7 +4,9 @@ Function Get-ADSecurityIdentifier {
 	[CmdletBinding()]
 	param (
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
-		[object]$Principal
+		[object]$Principal,
+		[Parameter(Position = 1)]
+		[string]$Domain = [System.Environment]::UserDomainName
 	)
 
 	# verify the input
@@ -17,7 +19,7 @@ Function Get-ADSecurityIdentifier {
 		# check for specific well-known SIDs or translate the SID
 		switch ($Principal) {
 			# well-known built-in SID that only translates on a domain controller
-			{ ($_ -eq 'Windows Authorization Access Group') -or ($_ -eq "$([System.Environment]::UserDomainName)\Windows Authorization Access Group") } {
+			{ ($_ -eq 'Windows Authorization Access Group') -or ($_ -eq "$Domain\Windows Authorization Access Group") } {
 				Return [System.Security.Principal.SecurityIdentifier]('S-1-5-32-560')
 			}
 			# a SID in string format
@@ -30,7 +32,7 @@ Function Get-ADSecurityIdentifier {
 			}
 			# a principal without domain prefix or suffix
 			Default {
-				Return ([System.Security.Principal.NTAccount]("$([System.Environment]::UserDomainName)\$Principal")).Translate([System.Security.Principal.SecurityIdentifier])
+				Return ([System.Security.Principal.NTAccount]("$Domain\$Principal")).Translate([System.Security.Principal.SecurityIdentifier])
 			}
 		}
 	}
@@ -224,9 +226,9 @@ Function Reset-ADSecurity {
 	$ad_defaultsddl = @{}
 
 	# retrieve owner SID if requested
-	If ([string]::IsNullOrEmpty($Owner)) {
+	If ($null -ne $Owner) {
 		Try {
-			$ad_owner = ([System.Security.Principal.NTAccount]($Owner)).Translate([System.Security.Principal.SecurityIdentifier])
+			$ad_owner = Get-ADSecurityIdentifier -Principal $Owner
 		}
 		Catch {
 			Write-Host "ERROR: could not retrieve SID for owner: '$Owner'"
@@ -263,7 +265,7 @@ Function Reset-ADSecurity {
 		Catch {
 			Write-Host "ERROR: could not retrieve object class for: '$($ad_object.DistinguishedName)'"
 		}
-		
+
 
 		# check hashtable for default security descriptor of object class
 		If ([string]::IsNullOrEmpty($ad_defaultsddl[$ad_class])) {
@@ -285,16 +287,16 @@ Function Reset-ADSecurity {
 
 		# remove existing ACEs from object
 		$ad_acl.Access | ForEach-Object { $ad_acl.RemoveAccessRule($_) } | Out-Null
-		
+
 		# add default SDDL to ACL
 		$ad_acl.SetSecurityDescriptorSddlForm($ad_sddl)
-		
+
 		# enable inheritance on object
 		$ad_acl.SetAccessRuleProtection($false, $false)
 
 		# set owner on ACL if provided
 		If ($null -ne $ad_owner) { $ad_acl.SetOwner($ad_owner) }
-		
+
 		# set ACL for object
 		$ad_acl | Set-Acl -Path $ad_path
 	}
@@ -432,7 +434,7 @@ Function Update-ADSecurity {
 			# update ACL
 			Try {
 				Set-Acl -AclObject $ad_object_acl -Path $ad_object_path
-				Write-Host "Updated ACL on object: '$ad_object_dn'"	
+				Write-Host "Updated ACL on object: '$ad_object_dn'"
 			}
 			Catch {
 				Write-Host "ERROR: could set inheritance on ACL for: '$ad_object_dn'"
