@@ -60,7 +60,7 @@ Begin {
 		Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, "_$HostName.txt") -Force
 	}
 
-	Function Approve-ScheduledTaskPath {
+	Function Test-ScheduledTaskPath {
 		[CmdletBinding()]
 		Param(
 			[string]$TaskPath
@@ -76,12 +76,8 @@ Begin {
 			'^\\$' {
 				Return $false
 			}
-			# taskpath of '\Microsoft' is not permitted; we do not want to manipulate any tasks in the Microsoft path
-			'^\\Microsoft$' {
-				Return $false
-			}
-			# taskpath of '\Microsoft\*' is not permitted; we do not want to manipulate any tasks in the Microsoft path
-			'^\\Microsoft\\.*$' {
+			# taskpath starting with '\Microsoft' is not permitted; we do not want to manipulate any tasks in the Microsoft path
+			'^\\(Microsoft(\\.*)?)?$' {
 				Return $false
 			}
 			Default {
@@ -324,13 +320,14 @@ Process {
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
+				$_
 			}
 		}
 		# add entry to configuration file
 		$Add {
 			Try {
 				# validate input
-				If (-not (Approve-ScheduledTaskPath -TaskPath $TaskPath)) {
+				If (-not (Test-ScheduledTaskPath -TaskPath $TaskPath)) {
 					Write-Output "`nERROR: the path defined is not permitted: '$TaskPath'"
 					Return
 				}
@@ -491,7 +488,7 @@ Process {
 			# process cleanup hashtable
 			ForEach ($TaskPath in $ExpectedTasks.Keys) {
 				# check if any bad path values have been snuck in
-				If (-not (Approve-ScheduledTaskPath -TaskPath $TaskPath)) {
+				If (-not (Test-ScheduledTaskPath -TaskPath $TaskPath)) {
 					Write-Output "`nERROR: the path defined is not permitted: '$TaskPath'"
 					Return
 				}
