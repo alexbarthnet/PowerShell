@@ -353,6 +353,294 @@ Function Get-CertificateFromHost {
 	}
 }
 
+Function Get-CertificatePrivateKeyPath {
+	<#
+	.SYNOPSIS
+	Grants the X.509 certificates in the certificate chain from an X.509 certificate object.
+
+	.DESCRIPTION
+	Returns the X.509 certificates in the certificate chain from an X.509 certificate object.
+
+	.PARAMETER Certificate
+	Specifies the X.509 certificate for which the certificate chain will be built.
+
+	.PARAMETER Thumbprint
+	Switch to check if any of the certificates in the chain have been revoked.
+
+	.PARAMETER MachineKeysPath
+	Switch to return the X.509 certificate chain instead of an array of the X.509 certificate objects in the certificate chain.
+
+	.PARAMETER CertStoreLocation
+	Switch to return the X.509 certificate chain instead of an array of the X.509 certificate objects in the certificate chain.
+
+	.INPUTS
+	X509Certificate2. An object representing an X.509 certificate.
+
+	.OUTPUTS
+	X509Chain, X509Certificate2. An object representing an X.509 certificate chain or the X.509 certificates in the certificate chain.
+
+	#>
+	[CmdletBinding(DefaultParameterSetName = 'Certificate')]
+	Param(
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'Certificate', ValueFromPipeline = $true)]
+		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'Thumbprint')]
+		[string]$Thumbprint,
+		[Parameter(Position = 1, DontShow)]
+		[string]$MachineKeysPath = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'Microsoft\Crypto\RSA\MachineKeys'),
+		[Parameter(Position = 2, DontShow)]
+		[string]$CertStoreLocation = 'Cert:\LocalMachine\My'
+	)
+
+	# if thumbprint provided...
+	If ($PSCmdlet.ParameterSetName = 'Thumbprint') {
+		Try {
+			$Certificate = Get-Item -Path (Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint)
+		}
+		Catch {
+			Write-Verbose -Message "Certificate with thumbprint '$Thumbprint' was not found in the machine key store"
+			Return $null
+		}
+	}
+
+	# if certificate has private key...
+	If ($Certificate.HasPrivateKey) {
+		# if certificate is machine key...
+		If ($Certificate.PrivateKey.CspKeyContainerInfo.MachineKeyStore) {
+			# retrieve path for private key
+			$Path = Join-Path -Path $MachineKeysPath -ChildPath $Certificate.PrivateKey.CspKeyContainerInfo.UniqueKeyContainerName
+			Write-Verbose -Message "Certificate '$($Certificate.Thumbprint)' private key: $Path"
+			Return $Path
+		}
+		Else {
+			Write-Verbose -Message "Certificate '$($Certificate.Thumbprint)' is not in the machine key store"
+			Return $null
+		}
+	}
+	Else {
+		Write-Verbose -Message "Certificate '$($Certificate.Thumbprint)' does not have a private key"
+		Return $null
+	}
+}
+
+Function Grant-CertificatePermissions {
+	<#
+	.SYNOPSIS
+	Grants access to the private key of an X.509 certificate.
+
+	.DESCRIPTION
+	Adds access control entries to the access control list on the private key of an X.509 certificate.
+
+	.PARAMETER Certificate
+	Specifies the X.509 certificate with the private key.
+
+	.PARAMETER Thumbprint
+	Specifies the thumbprint of the X.509 certificate with the private key.
+
+	.PARAMETER Principals
+	Specifies the principals to add from the access control list.
+
+	.PARAMETER AccessRights
+	Specifies one or more FileSystemAccessRights to grant to the Principals.
+
+	.INPUTS
+	X509Certificate2. An object representing an X.509 certificate.
+
+	.OUTPUTS
+	None.
+
+	#>
+	[CmdletBinding(DefaultParameterSetName = 'Certificate')]
+	Param(
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'Certificate', ValueFromPipeline = $true)]
+		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'Thumbprint')]
+		[string]$Thumbprint,
+		[Parameter(Position = 1)][AllowEmptyCollection()]
+		[string[]]$Principals,
+		[Parameter(Position = 2)]
+		[string[]]$AccessRights = @('Read', 'Synchronize'),
+		[Parameter(Position = 3, DontShow)]
+		[string]$CertStoreLocation = 'Cert:\LocalMachine\My'
+	)
+
+	# retrieve certificate with thumbprint
+	If ($PSCmdlet.ParameterSetName = 'Thumbprint') {
+		Try {
+			$Certificate = Get-Item -Path (Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint)
+		}
+		Catch {
+			Write-Host "ERROR: could not retrieve certificate with thumbprint '$Thumbprint' from the local machine key store"
+			Return $null
+		}
+	}
+
+	# retrieve private key path
+	Try {
+		$Path = Get-CertificatePrivateKeyPath -Certificate $Certificate
+	}
+	Catch {
+		Write-Host 'ERROR: could not retrieve private key path for certificate'
+		Return
+	}
+
+	# if private key path is null...
+	If ($null -eq $Path) {
+		# ...report and return
+		Write-Host "ERROR: could not locate private key for certificate: '$($Certificate.Thumbprint)"
+		Return
+	}
+
+	# retrieve private key ACL
+	Try {
+		$Acl = Get-Acl -Path $Path
+	}
+	Catch {
+		Write-Host "ERROR: could not retrieve ACL on private key for certificate: '$($Certificate.Thumbprint)'"
+		Return $_
+	}
+
+	# create list for ACEs
+	$AccessRules = [System.Collections.Generic.List[object]]::new()
+
+	# check ACL for requested ACEs
+	ForEach ($Principal in $Principals) {
+		$AccessRule = $Acl.Access | Where-Object { $_.IdentityReference -eq $Principal -and $_.FileSystemRights -eq $AccessRights }
+		If ($null -eq $AccessRule) {
+			Try {
+				$AccessRule = New-Object System.Security.AccessControl.FileSystemAccessRule @($Principal, $AccessRights, 'Allow')
+				$AccessRules.Add($AccessRule)
+				Write-Host "Created ACE for principal: $Principal"
+			}
+			Catch {
+				Write-Host "ERROR: could not create ACE for princpal: $Principal"
+				Return $_
+			}
+		}
+		Else {
+			Write-Host "Found existing ACE for principal: $Principal"
+		}
+	}
+
+	# update ACL if required
+	If ($AccessRules.Count -gt 0) {
+		ForEach ($AccessRule in $AccessRules) { $Acl.AddAccessRule($AccessRule) }
+		Try {
+			$Acl | Set-Acl -Path $Path
+			Write-Host "Updated ACL on private key for certificate: '$($Certificate.Thumbprint)'"
+		}
+		Catch {
+			Write-Host "ERROR: could not update ACL on private key for certificate: '$($Certificate.Thumbprint)'"
+			Return $_
+		}
+	}
+}
+
+Function Revoke-CertificatePermissions {
+	<#
+	.SYNOPSIS
+	Revokes access to the private key of an X.509 certificate.
+
+	.DESCRIPTION
+	Removes access control entries from the access control list on the private key of an X.509 certificate.
+
+	.PARAMETER Certificate
+	Specifies the X.509 certificate with the private key.
+
+	.PARAMETER Thumbprint
+	Specifies the thumbprint of the X.509 certificate with the private key.
+
+	.PARAMETER Principals
+	Specifies the principals to remove from the access control list.
+
+	.INPUTS
+	X509Certificate2. An object representing an X.509 certificate.
+
+	.OUTPUTS
+	None.
+
+	#>
+	[CmdletBinding(DefaultParameterSetName = 'Certificate')]
+	Param(
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'Certificate', ValueFromPipeline = $true)]
+		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'Thumbprint')]
+		[string]$Thumbprint,
+		[Parameter(Position = 1)][AllowEmptyCollection()]
+		[string[]]$Principals,
+		[Parameter(Position = 2, DontShow)]
+		[string]$CertStoreLocation = 'Cert:\LocalMachine\My'
+	)
+
+	# retrieve certificate with thumbprint
+	If ($PSCmdlet.ParameterSetName = 'Thumbprint') {
+		Try {
+			$Certificate = Get-Item -Path (Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint)
+		}
+		Catch {
+			Write-Host "ERROR: could not retrieve certificate with thumbprint '$Thumbprint' from the local machine key store"
+			Return $null
+		}
+	}
+
+	# retrieve private key path
+	Try {
+		$Path = Get-CertificatePrivateKeyPath -Certificate $Certificate
+	}
+	Catch {
+		Write-Host 'ERROR: could not retrieve private key path for certificate'
+		Return
+	}
+
+	# if private key path is null...
+	If ($null -eq $Path) {
+		# ...report and return
+		Write-Host "ERROR: could not locate private key for certificate: '$($Certificate.Thumbprint)"
+		Return
+	}
+
+	# retrieve private key ACL
+	Try {
+		$Acl = Get-Acl -Path $Path
+	}
+	Catch {
+		Write-Host "ERROR: could not retrieve ACL on private key for certificate: '$($Certificate.Thumbprint)'"
+		Return $_
+	}
+
+	# create list for ACEs
+	$AccessRules = [System.Collections.Generic.List[object]]::new()
+
+	# check ACL for requested ACEs
+	ForEach ($Principal in $Principals) {
+		$AccessRule = $Acl.Access | Where-Object { $_.IdentityReference -eq $Principal }
+		If ($null -ne $AccessRule) {
+			$AccessRules.Add($AccessRule)
+			Write-Host "Found existing ACE for principal: $Principal"
+		}
+		Else {
+			Write-Host "WARNING: could not find existing ACE for principal: $Principal"
+		}
+	}
+
+	# update ACL if required
+	If ($AccessRules.Count -gt 0) {
+		# update ACL object
+		ForEach ($AccessRule in $AccessRules) { 
+			$Acl.RemoveAccessRule($AccessRule)
+		}
+		# set ACL object
+		Try {
+			$Acl | Set-Acl -Path $Path
+			Write-Host "Updated ACL on private key for certificate: '$($Certificate.Thumbprint)'"
+		}
+		Catch {
+			Write-Host "ERROR: could not update ACL on private key for certificate: '$($Certificate.Thumbprint)'"
+			Return $_
+		}
+	}
+}
+
 Function Test-Thumbprint {
 	<#
 	.SYNOPSIS
@@ -392,6 +680,8 @@ $functions_to_export += 'ConvertTo-X509Certificate'
 $functions_to_export += 'Get-CertificateChain'
 $functions_to_export += 'Get-CertificateFromAD'
 $functions_to_export += 'Get-CertificateFromHost'
+$functions_to_export += 'Grant-CertificatePermissions'
+$functions_to_export += 'Revoke-CertificatePermissions'
 $functions_to_export += 'Test-Thumbprint'
 
 # export module members
