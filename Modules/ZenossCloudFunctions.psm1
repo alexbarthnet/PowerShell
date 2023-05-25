@@ -1,6 +1,97 @@
 # references
 # https://help.zenoss.com/dev/collection-zone-and-resource-manager-apis/codebase/routers/router-reference/devicerouter
 
+Function Add-ZenossCloudDevice {
+	<#
+	.SYNOPSIS
+	Add device to Zenoss Cloud.
+
+	.DESCRIPTION
+	Add device to Zenoss Cloud by making a REST call to Zenoss Cloud using an API key.
+
+	.PARAMETER Uri
+	Specifies the URI for a specific Zenoss Cloud instance.
+
+	.PARAMETER Key
+	Specifies the API key.
+
+	.PARAMETER Device
+	Specifies the device name.
+
+	.PARAMETER State
+	Specifies the state for the device
+
+	.INPUTS
+	None.
+
+	.OUTPUTS
+	Response from the REST call.
+
+	.EXAMPLE
+	PS> Add-ZenossCloudDevice -Uri 'https://test.zenoss.io/cz0/zport/dmd/device_router' -Key '0123456789abcdef' -Device 'test-device-1.department.example.com' -State 'Production'
+
+	#>
+
+	[CmdletBinding()]
+	param (
+		[Parameter(Position = 0, Mandatory = $true)]
+		[string]$Uri,
+		[Parameter(Position = 1, Mandatory = $true)]
+		[string]$Key,
+		[Parameter(Position = 2, Mandatory = $true)]
+		[string]$Device,
+		[Parameter(Position = 3, Mandatory = $true)]
+		[string]$State
+	)
+
+	# WIP function, return immediately
+	Return
+
+	# get zenoss cloud production states
+	$zenoss_states = Get-ZenossCloudProductionStates -Uri $Uri -Key $Key
+
+	# check zenoss cloud production state
+	$zenoss_state = $null
+	$zenoss_state = ($zenoss_states.result.data | Where-Object { $_.Name -eq $State }).Value
+	If ($null -eq $zenoss_state) {
+		Return "ERROR: ProductionState '$State' not found in Zenoss Cloud"
+	}
+
+	# retrieve device uid
+	$zenoss_device = $null
+	$zenoss_device = Get-ZenossCloudDevice -Uri $Uri -Key $Key -Device $Device
+	If ($null -eq $zenoss_device.uid) {
+		Return "ERROR: Device '$Device' not found in Zenoss Cloud"
+	}
+
+	# create hashtable for HTML headers
+	$zenoss_head = @{
+		'z-api-key'    = $Key
+		'Content-Type' = 'application/json'
+	}
+
+	# create array for zenoss body entry
+	$zenoss_data = [array][PSCustomObject]@{
+		uids      = $zenoss_device.uid
+		prodState = $zenoss_state
+		hashcheck = 'no'
+	}
+
+	# create hashtable for HTML body
+	$zenoss_body = @{
+		'action' = 'DeviceRouter'
+		'method' = 'addDevice'
+		'data'   = $zenoss_data
+		'tid'    = 1
+	}
+
+	# create device-specific URI
+	$uri_device = $Uri.Replace('/zport/dmd', $zenoss_device.uid)
+
+	# invoke rest method
+	Invoke-RestMethod -Method 'Post' -Uri $uri_device -Headers $zenoss_head -Body ($zenoss_body | ConvertTo-Json)
+}
+
 Function Get-ZenossCloudDevices {
 	<#
 	.SYNOPSIS
