@@ -12,7 +12,7 @@ Param(
 	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')]
 	[string]$Subject,
 	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')][ValidateScript({ Test-Path -Path $_ })]
-	[string]$Storage,
+	[string]$Path,
 	[Parameter(Position = 3, Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')]
 	[string[]]$Principals,
 	[Parameter()]
@@ -64,10 +64,10 @@ Begin {
 			# start certificate chain counter
 			$cert_counter = 0
 
-			# define format for certificate chain counter string
+			# define *format* for certificate chain counter string
 			$cert_counter_string_format = "d$($cert_chain.ChainElements.Certificate.Count.ToString().Length)"
 
-			# export certificate chain to storage
+			# export certificate chain to path
 			ForEach ($cert_element in $cert_chain.ChainElements.Certificate) {
 				switch ($cert_element.Subject) {
 					$Certificate.Subject {
@@ -111,33 +111,53 @@ Begin {
 			[Parameter(Position = 2, Mandatory = $true)][ValidatePattern('^[^\*]+$')]
 			[string]$Name,
 			[Parameter(Position = 3, Mandatory = $true)][ValidateScript({ Test-Path -Path $_ })]
-			[string]$Storage,
+			[string]$Path,
 			[Parameter(Position = 4, Mandatory = $true)]
-			[string[]]$Principals
+			[string[]]$Principals,
+			[Parameter(Position = 5)][ValidateScript({ Test-Path -Path $_ })]
+			[string]$Store = 'Cert:\LocalMachine\My',
+			[Parameter(Position = 5)][ValidateSet({ [Microsoft.CertificateServices.Commands.ExportChainOption].GetEnumValues() })]
+			[string]$ChainOption = 'EndEntityCertOnly',
+			[Parameter(Position = 5)][ValidateSet({ [Microsoft.CertificateServices.Commands.CryptoAlgorithmOptions].GetEnumValues() })]
+			[string]$CryptoAlgorithmOption = 'AES256_SHA256'
 		)
 
 		# declare start
 		Write-Host "`nExporting private key and certificate chain"
 
 		# retrieve certificate
-		$cert_object = $null
-		$cert_object = Get-ChildItem -Path 'Cert:\LocalMachine\My' | Where-Object { $_.Thumbprint -eq $Hash } | Sort-Object NotBefore | Select-Object -Last 1
+		$PFXData = $null
+		$PFXData = Get-ChildItem -Path $Store | Where-Object { $_.Thumbprint -eq $Hash } | Sort-Object NotBefore | Select-Object -Last 1
 
-		# export certificate and certificate chain to storage
-		If ($cert_object) {
+		# export certificate and certificate chain to path
+		If ($PFXData) {
 			# define full path to pfx
-			$cert_file_head = $cert_object.Subject.Split(',', 2)[0].Split('=', 2)[-1]
-			$cert_file_date = Get-Date -Date $cert_object.NotBefore -Format 'FileDateTimeUniversal'
-			$cert_file_tail = 'cert.pfx'
-			$cert_file_name = $cert_file_head, $cert_file_date, $cert_file_tail -join '_'
-			$cert_file_path = Join-Path -Path $Storage -ChildPath $cert_file_name
+			$FileHead = $PFXData.Subject.Split(',', 2)[0].Split('=', 2)[-1]
+			$FileDate = Get-Date -Date $PFXData.NotBefore -Format 'FileDateTimeUniversal'
+			$FileTail = 'cert.pfx'
+			$FilePath = Join-Path -Path $Path -ChildPath ($FileHead, $FileDate, $FileTail -join '_')
 
-			# export PFX to storage
-			Write-Host " - exporting keypair to PFX   : $cert_file_path"
-			$null = $cert_object | Export-PfxCertificate -FilePath $cert_file_path -ProtectTo $Principals -ChainOption EndEntityCertOnly -CryptoAlgorithmOption AES256_SHA256
+			# define params for Export-PfxCertificateToPrincipals
+			$ExportPfxCertificateParams = @{
+				PFXData               = $PFXData
+				FilePath              = $FilePath
+				ProtectTo             = $Principals
+				ChainOption           = $ChainOption
+				CryptoAlgorithmOption = $CryptoAlgorithmOption
+			}
 
-			# export certificate chain to storage
-			$cert_object | Export-CertificateChainFiles -Path $Storage
+			# export PFX file to path
+			Write-Host " - exporting keypair to PFX   : $FilePath"
+			$null = Export-PfxCertificate @ExportPfxCertificateParams
+
+			# define params for Export-PfxCertificateToPrincipals
+			$ExportCertificateChainFiles = @{
+				Certificate = $PFXData
+				Path        = $Path
+			}
+
+			# export certificate chain to path
+			$null = Export-CertificateChainFiles @ExportCertificateChainFiles
 		}
 		Else {
 			Write-Host "ERROR: certificate not found with hash: '$Hash'"
@@ -196,7 +216,7 @@ Process {
 					$json_data | ConvertTo-Json | Set-Content -Path $Json
 					Write-Output "`nRemoved '$Subject' from configuration file: '$Json'"
 				}
-				$json_data | Select-Object Subject, Storage, Principals, Updated
+				$json_data | Select-Object Subject, Path, Principals, Updated
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
@@ -207,86 +227,88 @@ Process {
 			Try {
 				$json_data += [pscustomobject]@{
 					Subject    = [string]$Subject
-					Storage    = [string]$Storage
+					Path       = [string]$Path
 					Principals = [string[]]$Principals
 					Updated    = (Get-Date -Format FileDateTimeUniversal)
 				}
 				$json_data | ConvertTo-Json | Set-Content -Path $Json
 				Write-Output "`nAdded '$Subject' to configuration file: '$Json'"
-				$json_data | Select-Object Subject, Storage, Principals, Updated
+				$json_data | Select-Object Subject, Path, Principals, Updated
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
 			}
 		}
 		{ $null -ne $Result } {
-			# retrieve values from $Result
+			# retrieve $Result values
 			$cert_name = $Result.ManagedItem.Name
 			$cert_date = $Result.ManagedItem.DateStart
 			$cert_hash = $Result.ManagedItem.CertificateThumbPrintHash
 
-			# check for empty values in $Result
+			# validate $Result values
 			If ([string]::IsNullOrEmpty($cert_name) -or [string]::IsNullOrEmpty($cert_date) -or [string]::IsNullOrEmpty($cert_hash)) {
 				Write-Host "ERROR: one or more values from `$Result was null or empty"
-				Exit
+				Return
 			}
 
-			# declare values
+			# announce $Result values
 			Write-Host "`nExporting certificate from `$Result object"
 			Write-Host " - subject    : $cert_name"
 			Write-Host " - datestart  : $cert_date"
 			Write-Host " - thumbprint : $cert_hash"
 
-			# check entry count in configuration file
+			# if configuration file is empty...
 			If ($json_data.Count -eq 0) {
-				Write-Host "ERROR: no entries found in input file: $Json"
-				Exit
+				# ...announce error and return
+				Write-Output "ERROR: no entries found in input file: $Json"
+				Return
 			}
-
-			# set use default
-			$cert_found_match = $false
-			$cert_use_default = $true
-
-			# process each entry in configuration file
-			ForEach ($json_datum in $json_data) {
-				# check entry for matching subject and verify strings for storage and principals
-				If ($json_datum.Subject -eq $cert_name -and -not [string]::IsNullOrEmpty($json_datum.Storage) -and -not [string]::IsNullOrEmpty($json_datum.Principals)) {
-					$cert_found_match = $true
-					$cert_use_default = $false
-					$cert_subject = $json_datum.Subject
-					$cert_storage = $json_datum.Storage
-					$cert_prncpls = $json_datum.Principals
-				}
-			}
-
-			# process default entry if required
-			If ($cert_use_default) {
-				# retrieve default entry
-				$json_datum = $json_data | Where-Object { $_.Subject -eq '_default' } | Sort-Object -Property 'Updated' | Select-Object -Last 1
-				# check for matching subject and verify strings for storage and principals
-				If ($json_datum.Subject -eq '_default' -and -not [string]::IsNullOrEmpty($json_datum.Storage) -and -not [string]::IsNullOrEmpty($json_datum.Principals)) {
-					$cert_found_match = $true
-					$cert_subject = $json_datum.Subject
-					$cert_storage = $json_datum.Storage
-					$cert_prncpls = $json_datum.Principals
-				}
-			}
-
-			# declare export details and start
-			If ($cert_found_match) {
-				Write-Host "`nRetrieving values from configuration file"
-				Write-Host " - subject    : $cert_subject"
-				Write-Host " - storage    : $cert_storage"
-				Write-Host " - principals : $($cert_prncpls -join ',')"
-				Export-PfxCertificateToPrincipals -Name $cert_name -Date $cert_date -Hash $cert_hash -Storage $cert_storage -Principals $cert_prncpls
-			}
+			# if configuration file is not empty...
 			Else {
-				Write-Host "ERROR: unable to locate matching subject or '_default' entry with valid storage and principals"
+				# ...retrieve entry with matching subject if any
+				$Defined = $json_data | Where-Object { $_.Subject -eq $cert_name -and -not [string]::IsNullOrEmpty($_.Path) -and -not [string]::IsNullOrEmpty($_.Principals) } | Select-Object -First 1
+			}
+
+			# if defined entry not found in configuration file...
+			If ($null -eq $Defined) {
+				# ...check for default entry in configuration file
+				$Defined = $json_data | Where-Object { $_.Subject -eq '_default' -and -not [string]::IsNullOrEmpty($_.Path) -and -not [string]::IsNullOrEmpty($_.Principals) } | Select-Object -First 1
+			}
+
+			# if default entry not found in configuration file...
+			If ($null -eq $Defined) {
+				# ...announce error and return
+				Write-Output "ERROR: unable to locate matching subject or '_default' entry with valid path and principals"
+				Return
+			}
+
+			# announce $Result values
+			Write-Host "`nFound matching configuration entry:"
+			Write-Host " - subject    : $($Defined.Subject)"
+			Write-Host " - path       : $($Defined.Path)"
+			Write-Host " - principals : $($Defined.Principals)"
+
+			# define params for Export-PfxCertificateToPrincipals
+			$ExporPfxCertificateToPrincipalsParams = @{
+				Name       = $cert_name
+				Date       = $cert_date
+				Hash       = $cert_hash
+				Path       = $Defined.Path
+				Principals = $Defined.Principals
+			}
+
+			# export pfx certificate to principals
+			Try {
+				Export-PfxCertificateToPrincipals @ExporPfxCertificateToPrincipalsParams
+			}
+			Catch {
+				Write-Output 'ERROR: unable to export PFX certificate'
+				Return $_
 			}
 		}
 		Default {
 			Write-Output "`nDisplaying '$Json'`n"
-			$json_data | Select-Object Subject, Storage, Principals, Updated
+			$json_data | Select-Object Subject, Path, Principals, Updated
 		}
 	}
 }
