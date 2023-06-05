@@ -356,28 +356,28 @@ Function Get-CertificateFromHost {
 Function Get-CertificatePrivateKeyPath {
 	<#
 	.SYNOPSIS
-	Grants the X.509 certificates in the certificate chain from an X.509 certificate object.
+	Returns the path of the private key for an X.509 certificate.
 
 	.DESCRIPTION
-	Returns the X.509 certificates in the certificate chain from an X.509 certificate object.
+	Returns the path of the private key for an X.509 certificate.
 
 	.PARAMETER Certificate
-	Specifies the X.509 certificate for which the certificate chain will be built.
+	Specifies an X.509 certificate object.
 
 	.PARAMETER Thumbprint
-	Switch to check if any of the certificates in the chain have been revoked.
+	Specifies the thumbprint of an X.509 certificate.
 
 	.PARAMETER MachineKeysPath
-	Switch to return the X.509 certificate chain instead of an array of the X.509 certificate objects in the certificate chain.
+	Specifies the path to machine keys on the system.
 
 	.PARAMETER CertStoreLocation
-	Switch to return the X.509 certificate chain instead of an array of the X.509 certificate objects in the certificate chain.
+	Specifices the path to the certificate store to search for a certificate by thumbprint when the Thumbprint parameter is specified.
 
 	.INPUTS
 	X509Certificate2. An object representing an X.509 certificate.
 
 	.OUTPUTS
-	X509Chain, X509Certificate2. An object representing an X.509 certificate chain or the X.509 certificates in the certificate chain.
+	System.String. A string representing the path to the private key for the input.
 
 	#>
 	[CmdletBinding(DefaultParameterSetName = 'Certificate')]
