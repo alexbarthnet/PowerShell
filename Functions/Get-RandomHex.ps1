@@ -1,19 +1,26 @@
+# see UtilityFunctions.psm1 for the latest version
 Function Get-RandomHex {
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param(
-		[Parameter(Mandatory = $True, Position = 0)]
-		[int]$Length
+		[Parameter(Position = 0, Mandatory = $True)][ValidateRange(1, 65535)]
+		[uint16]$Length,
+		[Parameter(Position = 1)]
+		[switch]$UpperCase
 	)
 
-	# clear required objects
-	$key = $null
-	switch ($true) {
-		{ $Length -gt 0 } {
-			Do { $key += '{0:x}' -f (Get-Random -Max 16) } Until ($key.Length -eq $Length)
-			$key
-		}
-		Default {
-			Write-Output 'Provide a length!'
-		}
+	# create string builder
+	$string = [System.Text.StringBuilder]::new()
+
+	# create random string
+	While ($StringBuilder.Length -lt $Length) {
+		$null = $string.Append('{0:x}' -f (Get-Random -Max 15))
+	}
+
+	# return random string
+	If ($UpperCase) {
+		Return $string.ToString().ToUpperInvariant()
+	}
+	Else {
+		Return $string.ToString()
 	}
 }

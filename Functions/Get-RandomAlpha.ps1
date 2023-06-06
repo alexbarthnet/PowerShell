@@ -1,31 +1,60 @@
+# see UtilityFunctions.psm1 for the latest version
 Function Get-RandomAlpha {
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param(
-		[Parameter(Mandatory = $True, Position = 0)]
-		[int]$Length,
+		[Parameter(Position = 0, Mandatory = $True)][ValidateRange(1, 65535)]
+		[uint16]$Length,
 		[switch]$LowerCase,
 		[switch]$UpperCase,
-		[switch]$Numbers
+		[switch]$Numbers,
+		[switch]$Symbols,
+		[switch]$All,
+		[char[]]$ExcludeCharacters,
+		[string[]]$ExcludeStrings
 	)
 
-	If (-not $LowerCase -and -not $UpperCase -and -not $Numbers) {
-		$LowerCase = $true; $UpperCase = $true; $Numbers = $true
+	# check parameters
+	If (-not $LowerCase -and -not $UpperCase -and -not $Numbers -and -not $Symbols) { $All = $true }
+
+	# build list of characters
+	$List = [System.Collections.Generic.List[char]]::new()
+	If ($All -or $Numbers) { 
+		# 0123456789
+		$List.AddRange([char[]](48..57))
+	}
+	If ($All -or $UpperCase) {
+		# ABCDEFGHIJKLMNOPQRSTUVWXYZ
+		$List.AddRange([char[]](65..90))
+	}
+	If ($All -or $LowerCase) {
+		# abcdefghijklmnopqrstuvwxyz
+		$List.AddRange([char[]](97..122))
+	}
+	If ($All -or $Symbols) {
+		# !"#$%&'()*+,-./
+		$List.AddRange([char[]](33..47))
+		# :;<=>?@
+		$List.AddRange([char[]](58..64))
+		# [\]^_`
+		$List.AddRange([char[]](91..96))
+		# {|}~
+		$List.AddRange([char[]](123..127))
 	}
 
-	$array = @()
-	If ($Numbers) { $array += 48..57 }
-	If ($UpperCase) { $array += 65..90 }
-	If ($LowerCase) { $array += 97..122 }
+	# remove excluded characters
+	ForEach ($Character in $ExcludeCharacters) { $null = $List.RemoveAll($Character) }
 
-	# clear required objects
-	$key = $null
-	switch ($true) {
-		{ $Length -gt 0 } {
-			Do { $value = (Get-Random -Max $array.Count); $key += [char]($array[$value]) } Until ($key.Length -eq $Length)
-			$key
-		}
-		Default {
-			Write-Output 'Provide a length!'
-		}
+	# create string builder
+	$StringBuilder = [System.Text.StringBuilder]::new()
+
+	# create random string
+	While ($StringBuilder.Length -lt $Length) {
+		# append random character to string from list
+		$null = $StringBuilder.Append($List[(Get-Random -Max $List.Count)])
+		# remove excluded strings
+		ForEach ($String in $ExcludeStrings) { $null = $StringBuilder.Replace($String,$null) }
 	}
+
+	# return random string
+	Return $StringBuilder.ToString()
 }
