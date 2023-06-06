@@ -172,7 +172,7 @@ Function Get-StringHash {
 	Param(
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		[string]$InputObject,
-		[Parameter(Position = 1)][ValidateSet('SHA1', 'SHA256', 'SHA384', 'SHA512', 'MACTripleDES', 'MD5', 'RIPEMD160')]
+		[Parameter(Position = 1)][ValidateSet( {(Get-Command -Name 'Get-FileHash').Parameters['Algorithm'].Attributes.ValidValues} )]
 		[string]$Algorithm = 'SHA256'
 	)
 
