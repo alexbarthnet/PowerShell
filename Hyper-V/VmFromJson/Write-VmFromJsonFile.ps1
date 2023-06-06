@@ -25,6 +25,8 @@ Param(
 	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'RemoveVMHardDiskDrive')]
 	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'AddVMNetworkAdapter')]
 	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'RemoveVMNetworkAdapter')]
+	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'AddOSD')]
+	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'RemoveOSD')]
 	[string]$VMName,
 	# VM - path of virtual machine files
 	# VMHardDiskDrive - path of virtual hard disk drive
@@ -130,6 +132,7 @@ Begin {
 
 	Function Update-JsonFile {
 		Param(
+			[Parameter()][AllowNull()]
 			[object[]]$JsonData,
 			[string]$JsonPath,
 			[switch]$Replaced,
