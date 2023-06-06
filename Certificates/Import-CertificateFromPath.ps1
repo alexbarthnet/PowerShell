@@ -43,64 +43,73 @@ Begin {
 			[Parameter(Position = 1)][AllowEmptyCollection()]
 			[string[]]$Principals,
 			[Parameter(Position = 2)]
-			[string[]]$RequiredPrincipals = @('BUILTIN\Administrators', 'NT AUTHORITY\SYSTEM')
+			[string[]]$RequiredPrincipals = @('BUILTIN\Administrators', 'NT AUTHORITY\SYSTEM'),
+			[Parameter(Position = 3)]
+			[string[]]$AccessRights = @('Read', 'Synchronize')
 		)
 
-		# verify certificate has private key
+		# if certificate has private key...
 		If ($Certificate.HasPrivateKey) {
-			# retrieve ACL for private key
-			$cert_key = [System.Environment]::GetFolderPath('CommonApplicationData') + '\Microsoft\Crypto\RSA\MachineKeys\' + $Certificate.PrivateKey.CspKeyContainerInfo.UniqueKeyContainerName
-			$cert_acl = Get-Acl -Path $cert_key
-			$cert_aces = @()
+			# if certificate is machine key...
+			If ($Certificate.PrivateKey.CspKeyContainerInfo.MachineKeyStore) {
+				# retrieve ACL for private key
+				$cert_key = [System.Environment]::GetFolderPath('CommonApplicationData') + '\Microsoft\Crypto\RSA\MachineKeys\' + $Certificate.PrivateKey.CspKeyContainerInfo.UniqueKeyContainerName
+				$cert_acl = Get-Acl -Path $cert_key
+				$cert_aces = @()
 
-			# check ACL for required ACEs
-			$AccessRights = 'FullControl'
-			ForEach ($Principal in $RequiredPrincipals) {
-				If ($null -eq ($cert_acl.Access | Where-Object { $_.IdentityReference -eq $Principal -and $_.FileSystemRights -eq $AccessRights })) {
+				# check ACL for required ACEs
+				ForEach ($Principal in $RequiredPrincipals) {
+					If ($null -eq ($cert_acl.Access | Where-Object { $_.IdentityReference -eq $Principal -and $_.FileSystemRights -eq $AccessRights })) {
+						Try {
+							$cert_aces += New-Object System.Security.AccessControl.FileSystemAccessRule @($Principal, 'FullControl', 'Allow')
+							Write-Host "  - ACE Added  : $Principal"
+						}
+						Catch {
+							Write-Host "ERROR: '$($Certificate.Subject)' - could not create ACE for required principal: $Principal"
+							Return
+						}
+					}
+					Else {
+						Write-Host "  - ACE Found for required principal: $Principal"
+					}
+				}
+
+				# check ACL for custom ACEs
+				ForEach ($Principal in $Principals) {
+					If ($null -eq ($cert_acl.Access | Where-Object { $_.IdentityReference -eq $Principal -and $_.FileSystemRights -eq $AccessRights })) {
+						Try {
+							$cert_aces += New-Object System.Security.AccessControl.FileSystemAccessRule @($Principal, $AccessRights, 'Allow')
+							Write-Host "  - ACE Added  : $Principal"
+						}
+						Catch {
+							Write-Host "ERROR: '$($Certificate.Subject)' - could not create ACE for requested principal: $Principal"
+							Return
+						}
+					}
+					Else {
+						Write-Host "  - ACE Found for requested principal: $Principal"
+					}
+				}
+
+				# update ACL if required
+				If ($cert_aces.Count -gt 0) {
+					ForEach ($cert_ace in $cert_aces) { $cert_acl.AddAccessRule($cert_ace) }
 					Try {
-						$cert_aces += New-Object System.Security.AccessControl.FileSystemAccessRule @($Principal, $AccessRights, 'Allow')
-						Write-Host "  - ACE Added  : $Principal"
+						$cert_acl | Set-Acl -Path $cert_key
+						Write-Host '  - ACE Updated...'
 					}
 					Catch {
-						Write-Host "ERROR: '$($Certificate.Subject)' - could not create ACE for: $Principal"
+						Write-Host "ERROR: '$($Certificate.Subject)' - could not update private key"
+						Return
 					}
-				}
-				Else {
-					Write-Host "  - ACE Found  : $Principal"
 				}
 			}
-
-			# check ACL for custom ACEs
-			$AccessRights = @('Read', 'Synchronize')
-			ForEach ($Principal in $Principals) {
-				If ($null -eq ($cert_acl.Access | Where-Object { $_.IdentityReference -eq $Principal -and $_.FileSystemRights -eq $AccessRights })) {
-					Try {
-						$cert_aces += New-Object System.Security.AccessControl.FileSystemAccessRule @($Principal, $AccessRights, 'Allow')
-						Write-Host "  - ACE Added  : $Principal"
-					}
-					Catch {
-						Write-Host "ERROR: '$($Certificate.Subject)' - could not create ACE for: $Principal"
-					}
-				}
-				Else {
-					Write-Host "  - ACE Found  : $Principal"
-				}
-			}
-
-			# update ACL if required
-			If ($cert_aces.Count -gt 0) {
-				ForEach ($cert_ace in $cert_aces) { $cert_acl.AddAccessRule($cert_ace) }
-				Try {
-					$cert_acl | Set-Acl -Path $cert_key
-					Write-Host '  - ACE Updated...'
-				}
-				Catch {
-					Write-Host "ERROR: '$($Certificate.Subject)' - could not update private key"
-				}
+			Else {
+				Write-Host "WARNING: '$($Certificate.Subject)' - certificate is not in the machine store"
 			}
 		}
 		Else {
-			Write-Host "WARNING: '$($Certificate.Subject)' - cannot set key permissions on certificates without a private key"
+			Write-Host "WARNING: '$($Certificate.Subject)' - certificate does not have a private key"
 		}
 	}
 
