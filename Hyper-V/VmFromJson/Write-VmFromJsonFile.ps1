@@ -268,6 +268,11 @@ Process {
 			$VM = $JsonData | Where-Object { $_.VMName -eq $VMName }
 			# check for existing VM object
 			If ($VM) {
+				$VMOptionalProperties = @{}
+				ForEach ($Property in ($VM.PSObject.Properties | Where-Object { $_.TypeNameOfValue -eq 'System.Object[]' })) {
+					$VMOptionalProperties[$Property.Name] = $Property.Value
+				}
+				
 				Write-Warning -Message 'JSON file contains VM with provided VMName. This will overwrite the existing entry.' -WarningAction Inquire
 				# declare replace
 				$Replaced = $true
