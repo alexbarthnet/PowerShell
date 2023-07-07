@@ -3,7 +3,7 @@ Function Format-Bytes {
 		[Parameter(Position = 0,Mandatory = $true)]
 		[uint64]$Size,
 		[Parameter(Position = 1)]
-		[byte]$RoundTo = 2
+		[int32]$RoundTo = 2
 	)
 	Switch ($Size) {
 		{ $_ -ge 1PB } { "$([math]::Round($Size / 1PB,$RoundTo)) PB"; Break }
