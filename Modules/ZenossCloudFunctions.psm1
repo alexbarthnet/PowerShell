@@ -70,11 +70,43 @@ Function Add-ZenossCloudDevice {
 		'Content-Type' = 'application/json'
 	}
 
+	<#
+	addDevice(
+		deviceName
+		deviceClass
+		**serialNumber
+		**zWinPassword
+		**osProductName
+		**zWinUser
+		**tag
+		**rackSlot
+		**hwManufacturer
+		**hwProductName
+		**collector
+		**zCommandPassword
+		**title
+		**manageIp
+		**comments
+		**priority
+		**snmpCommunity
+		**zCommandUsername
+		**groupPaths
+		**snmpPort
+		**cProperties
+		**zProperties
+		**productionState
+		**systemPaths
+		**osManufacturer
+		**model
+		**locationPath
+	)
+	#>
+
 	# create array for zenoss body entry
 	$zenoss_data = [array][PSCustomObject]@{
-		uids      = $zenoss_device.uid
-		prodState = $zenoss_state
-		hashcheck = 'no'
+		deviceName = $Device
+		prodState  = $zenoss_state
+		hashcheck  = 'no'
 	}
 
 	# create hashtable for HTML body
