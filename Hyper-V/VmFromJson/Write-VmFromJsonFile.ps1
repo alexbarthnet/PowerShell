@@ -154,7 +154,7 @@ Param(
 	[Parameter()]
 	[switch]$PassThru,
 	[Parameter(DontShow)]
-	[string[]]$ExcludeParametersDefault = @(
+	[string[]]$ExcludedParametersDefault = @(
 		'VMName'
 		'CreateDefaultVMHardDiskDrive'
 		'CreateDefaultVMNetworkAdapter'
@@ -212,8 +212,7 @@ Begin {
 	Function Get-ParametersFromCommand {
 		Param(
 			[string]$CommandName = $PSCommandPath,
-			[string]$ParameterSetName = $PSCmdlet.ParameterSetName,
-			[switch]$LimitToParameterSet,
+			[string]$ParameterSetName,
 			[switch]$ExcludeParameterSetName,
 			[string[]]$ExcludeParameters,
 			[string[]]$ExcludeParameterSets
@@ -224,55 +223,41 @@ Begin {
 			$Command = Get-Command -Name $CommandName -ErrorAction ([System.Management.Automation.ActionPreference]::Stop)
 		}
 		Catch {
-			Write-Host "ERROR: '$Command' not found"
 			Return $_
 		}
 
-		# verify parameter set name
-		If ([string]::IsNullOrEmpty($ParameterSetName)) {
-			$LimitToParameterSet = $false
-			$ExcludeParameterSetName = $false
-		}
-
 		# define lists
-		$ParametersList = [System.Collections.Generic.List[string]]::new()
-		$ExcludeParameterSetNames = [System.Collections.Generic.List[string]]::new()
+		$ExcludedParametersList = [System.Collections.Generic.List[string]]::new()
 
 		# retrieve parameters for script
 		$ParametersFromScript = $Command.Parameters.Values
-		
+
 		# filter parameters to parameter set
-		If ($ExcludeParameterSets) {
-			ForEach ($ExcludeParameterSet in $ExcludeParameterSets) {
-				ForEach ($ExcludedParameterSetName in ($ParametersFromScript.Where({ $_.Attributes.ParameterSetName -eq $ExcludeParameterSet }).Name) ) {
-					$ExcludeParameterSetNames.Add($ExcludedParameterSetName)
-				}
+		If ($ParameterSetName) {
+			# filter parameters to parameter set
+			$ParametersFromScript = $ParametersFromScript.Parameters.Values.Where({ $_.Attributes.ParameterSetName -eq $ParameterSetName })
+			# filter out parameter set name
+			If ($ExcludeParameterSetName) {
+				$ExcludedParametersList.Add($ParameterSetName)
 			}
 		}
 
-		# filter parameters to parameter set
-		If ($LimitToParameterSet) {
-			$ParametersFromScript = $ParametersFromScript.Where({ $_.Attributes.ParameterSetName -eq $ParameterSetName })
+		# define parameters excluded by parameter set
+		ForEach ($ExcludedParameterSet in $ExcludeParameterSets) {
+			# process each parameter in the excluded parameter set
+			ForEach ($ExcludedParameter in ($ParametersFromScript.Where({ $_.Attributes.ParameterSetName -eq $ExcludedParameterSet }).Name) ) {
+				$ExcludedParametersList.Add($ExcludedParameter)
+			}
 		}
 
-		# filter out parameter set name
-		If ($ExcludeParameterSetName) {
-			$ParametersFromScript = $ParametersFromScript.Where({ $_.Name -ne $ParameterSetName })
+		# define parameters excluded by default
+		ForEach ($ExcludedParameter in $ExcludedParametersDefault) {
+			$ExcludedParametersList.Add($ExcludedParameter)
 		}
 
 		# filter out excluded parameters
-		If ($ExcludeParameters) {
-			$ParametersFromScript = $ParametersFromScript.Where({ $_.Name -notin $ExcludeParameters })
-		}
-
-		# filter out default excluded parameters
-		If ($ExcludeParametersDefault) {
-			$ParametersFromScript = $ParametersFromScript.Where({ $_.Name -notin $ExcludeParametersDefault })
-		}
-
-		# filter parameters to parameter set
-		If ($ExcludeParameterSets) {
-			$ParametersFromScript = $ParametersFromScript.Where({ $_.Name -notin $ExcludeParameterSetNames })
+		If ($ExcludedParametersList.Count -gt 0) {
+			$ParametersFromScript = $ParametersFromScript.Where({ $_.Name -notin $ExcludedParametersList })
 		}
 
 		# get parameters with position
@@ -281,9 +266,12 @@ Begin {
 		# get parameters with position
 		$ParametersWithOutPosition = $ParametersFromScript.Where({ $_.Attributes.Position -lt 0 })
 
+		# define lists
+		$ParametersList = [System.Collections.Generic.List[string]]::new()
+
 		# process each parameter for script
 		ForEach ($Parameter in $ParametersWithPosition | Sort-Object -Property { $_.Attributes.Position } ) {
-			# if parameter has a name and name not in ExcludeParameters or ExcludeParametersDefault...
+			# if parameter has a name and name not in ExcludeParameters or ExcludedParametersDefault...
 			If ($null -ne $Parameter.Name) {
 				# add parameter name to list
 				$ParametersList.Add($Parameter.Name)
@@ -292,7 +280,7 @@ Begin {
 
 		# process each parameter for script
 		ForEach ($Parameter in $ParametersWithOutPosition | Sort-Object -Property { $_.Name } ) {
-			# if parameter has a name and name not in ExcludeParameters or ExcludeParametersDefault...
+			# if parameter has a name and name not in ExcludeParameters or ExcludedParametersDefault...
 			If ($null -ne $Parameter.Name) {
 				# add parameter name to list
 				$ParametersList.Add($Parameter.Name)
@@ -370,9 +358,8 @@ Begin {
 
 		# define required parameters for Get-ParametersFromCommand
 		$GetParametersFromCommand = @{
-			LimitToParameterSet     = $true
-			ExcludeParameterSetName = $true
 			ExcludeParameters       = $JsonNestedParams.Keys
+			ExcludeParameterSetName = $true
 		}
 
 		# define optional paramters for Get-ParametersFromCommand
@@ -757,9 +744,8 @@ Process {
 
 			# define parameters for Get-ParametersFromCommand
 			$GetParametersFromCommand = @{
-				LimitToParameterSet     = $true
-				ExcludeParameterSetName = $true
 				ExcludeParameters       = $JsonKeyValues.Keys
+				ExcludeParameterSetName = $true
 				ExcludeParameterSets    = @('AddVMHardDiskDrive', 'AddVMNetworkAdapter')
 			}
 
