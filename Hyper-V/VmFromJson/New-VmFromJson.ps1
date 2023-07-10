@@ -7,6 +7,7 @@ Param(
 	[string]$Path,
 	[switch]$UseDefaultPathOnHost,
 	[switch]$SkipProvisioning,
+	[switch]$ForceRestart,
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 )
@@ -121,7 +122,7 @@ Begin {
 		}
 	}
 
-	Function Get-CIMInstanceForVM {
+	Function Get-CimInstanceForVM {
 		Param(
 			# define VM parameters
 			[Parameter(Mandatory = $true)]
@@ -156,7 +157,7 @@ Begin {
 		}
 	}
 
-	Function Get-CIMInstanceForVMMS {
+	Function Get-CimInstanceForVMMS {
 		Param(
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName
@@ -330,7 +331,7 @@ Begin {
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName
 		)
-		
+
 		# define hashtable for InvokeCommand splat
 		Try {
 			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
@@ -779,7 +780,7 @@ Begin {
 
 					# if device collection not found...
 					If ($null -eq $Collection) {
-						# ...warn and return 
+						# ...warn and return
 						Write-Host ("$Hostname,$ComputerName,$Name - WARNING: could not retrieve device collection: '$CollectionName'")
 						Return
 					}
@@ -1152,7 +1153,7 @@ Begin {
 
 		# get hashtable for InvokeCommand splat
 		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $DeploymentServer
 		}
 		Catch {
 			Return $_
@@ -1260,7 +1261,7 @@ Begin {
 				$NewWdsClient = @{
 					DeviceID          = $ArgumentList['DeviceID']
 					DeviceName        = $ArgumentList['DeviceName']
-					WdsClientUnattend = $DeploymentPath
+					WdsClientUnattend = $ArgumentList['WdsClientUnattend']
 					ErrorAction       = [System.Management.Automation.ActionPreference]::Stop
 				}
 
@@ -1558,12 +1559,12 @@ Begin {
 		}
 
 		# check for existing DHCP scope
-		Write-Host ("$Hostname,$ComputerName,$Name - checking for DHCP scope: '$ScopeId'")
 		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - checking for DHCP scope: '$ScopeId'")
 			$null = Get-DhcpServerv4Scope @GetDhcpServerv4Scope
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: DHCP server does not have scope: '$ScopeId'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: checking for DHCP scope")
 			Return $_
 		}
 
@@ -1574,12 +1575,12 @@ Begin {
 		}
 
 		# check for existing DHCP scope
-		Write-Host ("$Hostname,$ComputerName,$Name - checking for DHCP scope: '$ScopeId'")
 		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...found scope, retrieving reservations...")
 			$Reservations = Get-DhcpServerv4Reservation @GetDhcpServerv4Reservation
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: DHCP server does not have scope: '$ScopeId'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving reservations from DHCP scope")
 			Return $_
 		}
 
@@ -1590,13 +1591,13 @@ Begin {
 		Write-Host ("$Hostname,$ComputerName,$Name - checking for DHCP reservation: '$IPAddress'")
 		$Reservations = $Reservations | Where-Object { $_.IPAddress -eq $IPAddress -or $_.ClientId -eq $ClientId }
 		ForEach ($Reservation in $Reservations) {
-			If ($Reservation.IPAddress -eq $IPAddress -and $Reservation.ClientId -ne $ClientId) {
-				Write-Host ("$Hostname,$ComputerName,$Name - found existing DHCP reservation with requested IP address and client ID")
+			If ($Reservation.IPAddress -eq $IPAddress -and $Reservation.ClientId -eq $ClientId) {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...found existing DHCP reservation with requested IP address and client ID")
 				Return
 			}
 			If ($Reservation.IPAddress -ne $IPAddress) {
 				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - removing existing DHCP reservation with conflicting IP address: '$($Reservation.IPAddress)'")
+					Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing DHCP reservation with conflicting IP address: '$($Reservation.IPAddress)'")
 					Remove-DhcpServerv4Reservation -ComputerName $ServerName -IPAddress $IPAddress
 				}
 				Catch {
@@ -1606,7 +1607,7 @@ Begin {
 			}
 			If ($Reservation.ClientId -ne $ClientId) {
 				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - removing existing DHCP reservation with conflicting client ID: '$($Reservation.ClientId)'")
+					Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing DHCP reservation with conflicting client ID: '$($Reservation.ClientId)'")
 					Remove-DhcpServerv4Reservation -ComputerName $ServerName -ScopeId $ScopeId -ClientId $ClientId
 				}
 				Catch {
@@ -1634,7 +1635,7 @@ Begin {
 		# create DHCP reservation
 		Try {
 			Add-DhcpServerv4Reservation @AddDhcpServerv4Reservation
-			Write-Host ("$Hostname,$ComputerName,$Name - created DHCP reservation on")
+			Write-Host ("$Hostname,$ComputerName,$Name - created DHCP reservation")
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: creating DHCP reservcation")
@@ -1685,6 +1686,47 @@ Begin {
 				Catch {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not set device naming on VMNetworkAdapter for VM")
 					Return $_
+				}
+			}
+			# if switch should be empty...
+			If ($null -eq $SwitchName) {
+				# ...and switch is not empty...
+				If ($null -ne $VMNetworkAdapter.SwitchName) {
+					# ...disconnect switch
+					$DisconnectVMNetworkAdapter = @{
+						VMNetworkAdapter = $VMNetworkAdapter
+						Passthru         = $true
+						ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
+					}
+					Try {
+						Write-Host ("$Hostname,$ComputerName,$Name - ...disconnecting VMNetworkAdapter '$NetworkAdapterName' from switch '$($VMNetworkAdapter.SwitchName)'")
+						$VMNetworkAdapter = Disconnect-VMNetworkAdapter @DisconnectVMNetworkAdapter
+					}
+					Catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not disconnect VMNetworkAdapter from switch")
+						Return $_
+					}
+				}
+			}
+			# if switch name is empty...
+			Else {
+				# ...but switch name is not adapter switch...
+				If ($VMNetworkAdapter.SwitchName -ne $SwitchName) {
+					# ...connect adapter to correct switch
+					$ConnectVMNetworkAdapter = @{
+						VMNetworkAdapter = $VMNetworkAdapter
+						SwitchName       = $SwitchName
+						Passthru         = $true
+						ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
+					}
+					Try {
+						Write-Host ("$Hostname,$ComputerName,$Name - ...connecting VMNetworkAdapter '$NetworkAdapterName' to switch '$SwitchName'")
+						$VMNetworkAdapter = Connect-VMNetworkAdapter @ConnectVMNetworkAdapter
+					}
+					Catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not connect VMNetworkAdapter to switch")
+						Return $_
+					}
 				}
 			}
 			# return
@@ -1808,11 +1850,14 @@ Begin {
 		Param(
 			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VMNetworkAdapter] })]
 			[object]$VMNetworkAdapter,
-			[string]$ComputerName = $VMNetworkAdapter.ComputerName,
+			[string]$ComputerName = $VMNetworkAdapter.ComputerName.ToLower(),
 			[string]$IPAddress,
 			[string]$MacAddress,
 			[string]$MacAddressPrefix
 		)
+
+		# report state
+		Write-Host ("$Hostname,$ComputerName,$Name - checking MAC address on VMNetworkAdapter...")
 
 		# if MAC address was provided...
 		If ($PSBoundParameters['MacAddress']) {
@@ -1829,7 +1874,7 @@ Begin {
 			# assign MAC address from prefix and suffix
 			$StaticMacAddress = ($MacAddressPrefix, $MacAddressSuffix) -join $null
 		}
-		# if MAC address was not provided and VMNetworkAdapter has non-default MAC address
+		# if MAC address was not provided and VMNetworkAdapter has default MAC address
 		ElseIf ($VMNetworkAdapter.MacAddress -eq '00000000000') {
 			# retrieve MAC address from host
 			Try {
@@ -1841,10 +1886,16 @@ Begin {
 				Return $_
 			}
 		}
+		# if MAC address was not provided and VMNetworkAdapter has non-default MAC address
+		Else {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...using existing MAC address: '$($VMNetworkAdapter.MacAddress)'")
+			Return $VMNetworkAdapter
+		}
 
 		# if static MAC addresss not defined or matches existing MAC address...
 		If ($null -eq $StaticMacAddress -or $VMNetworkAdapter.MacAddress -eq $StaticMacAddress) {
 			# ...return
+			Write-Host ("$Hostname,$ComputerName,$Name - ...verified MAC address: '$($VMNetworkAdapter.MacAddress)'")
 			Return $VMNetworkAdapter
 		}
 		Else {
@@ -2016,7 +2067,7 @@ Begin {
 		# retrieve CIM instance for host management service
 		Write-Host ("$Hostname,$ComputerName,$Name - ...retrieving CIM instance for VM management service")
 		Try {
-			$CimInstanceForVMMS = Get-CIMInstanceForVMMS @GetCimInstanceForVMMS
+			$CimInstanceForVMMS = Get-CimInstanceForVMMS @GetCimInstanceForVMMS
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve CIM instance for VM management service")
@@ -2725,6 +2776,9 @@ Process {
 					NetworkAdapterName = $VMNetworkAdapter.NetworkAdapterName
 				}
 
+				# report state
+				Write-Host ("$Hostname,$ComputerName,$Name - checking VMNetworkAdapter with Name: '$($VMNetworkAdapter.NetworkAdapterName)'")
+
 				# define optional parameters for VMNetworkAdapter
 				If ($null -ne $VMNetworkAdapter.SwitchName) {
 					$AddVMNetworkAdapterToVM['SwitchName'] = $VMNetworkAdapter.SwitchName
@@ -2783,10 +2837,10 @@ Process {
 				# add VM IP address and MAC address to DHCP server
 				If ($null -ne $VMNetworkAdapter.DhcpServer -and $null -ne $VMNetworkAdapter.DhcpScope -and $null -ne $VMNetworkAdapter.IPAddress) {
 					$AddVMNetworkAdapterToDHCP = @{
-						ServerName = $VMNetworkAdapter.DhcpServer
-						ScopeId    = $VMNetworkAdapter.DhcpScope
-						IPAddress  = $VMNetworkAdapter.IPAddress
-						MacAddress = $VMNetworkAdapterObject.MacAddress
+						ComputerName = $VMNetworkAdapter.DhcpServer
+						ScopeId      = $VMNetworkAdapter.DhcpScope
+						IPAddress    = $VMNetworkAdapter.IPAddress
+						MacAddress   = $VMNetworkAdapterObject.MacAddress
 					}
 					Try {
 						Add-VMNetworkAdapterToDHCP @AddVMNetworkAdapterToDHCP
@@ -2876,19 +2930,30 @@ Process {
 		}
 
 		# start cluster tasks
-		If ($null -ne $VM -and $null -ne $ClusterName) {
+		If ($null -ne $VM -and -not [string]::IsNullOrEmpty($ClusterName)) {
 			If ($JsonData.$Name.DoNotCluster) {
 				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping clustering, DoNotCluster set")
 			}
 			Else {
-
+				# define parameters for Add-VMToClusterName
+				$AddVMToClusterName = @{
+					VM          = $VM
+					ClusterName = $ClusterName
+				}
+				Try {
+					Add-VMToClusterName @AddVMToClusterName
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: adding VM to cluster")
+					Return $_
+				}
 			}
 		}
 
 		# start VM on local host
-		If ($null -ne $VM -and ($null -eq $ClusterName -or $JsonData.$Name.DoNotCluster -eq $true)) {
+		If ($null -ne $VM -and ([string]::IsNullOrEmpty($ClusterName) -or $JsonData.$Name.DoNotCluster -eq $true)) {
+			Write-Host ("$Hostname,$ComputerName,$Name - starting VM on host...")
 			If ($VM.State -ne 'Running') {
-				Write-Host ("$Hostname,$ComputerName,$Name - starting VM on host")
 				Try {
 					Start-VM -VM $VM
 				}
@@ -2896,6 +2961,20 @@ Process {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: starting VM")
 					Return $_
 				}
+				Write-Host ("$Hostname,$ComputerName,$Name - ...started VM on host")
+			}
+			ElseIf ($ForceRestart) {
+				Try {
+					Restart-VM -VM $VM -Force
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: restarting VM")
+					Return $_
+				}
+				Write-Host ("$Hostname,$ComputerName,$Name - ...restarted VM on host")
+			}
+			Else {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...found VM running on host and ForceRestart not set")
 			}
 		}
 	}
