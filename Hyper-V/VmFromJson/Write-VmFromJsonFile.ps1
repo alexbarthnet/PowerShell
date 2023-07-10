@@ -102,23 +102,23 @@ Param(
 	# VM - MAC address prefix for default network adapter, paired with the IP address to create a MAC address
 	# VMNetworkAdapter - MAC address prefix for network adapter, paired with the IP address to create a MAC address
 	[Parameter(Position = 14, ParameterSetName = 'Add')]
-	[Parameter(Position = 7, ParameterSetName = 'AddVMNetworkAdapter')]
+	[Parameter(Position = 6, ParameterSetName = 'AddVMNetworkAdapter')]
 	[ValidateScript({ ($_.Length -eq 4) -and ($_ -match '^[0-9A-F]+$') })]
 	[string]$MacAddressPrefix,
 	# VM - IP address for default network adapter, paired with the MAC address prefix to create a MAC address
 	# VMNetworkAdapter - IP address for network adapter, paired with the MAC address prefix to create a MAC address
 	[Parameter(Position = 15, ParameterSetName = 'Add')]
-	[Parameter(Position = 8, ParameterSetName = 'AddVMNetworkAdapter')]
+	[Parameter(Position = 7, ParameterSetName = 'AddVMNetworkAdapter')]
 	[string]$IPAddress,
 	# VM - name of DHCP server for default network adapter
 	# VMNetworkAdapter - name of DHCP server for network adapter
 	[Parameter(Position = 16, ParameterSetName = 'Add')]
-	[Parameter(Position = 9, ParameterSetName = 'AddVMNetworkAdapter')]
+	[Parameter(Position = 8, ParameterSetName = 'AddVMNetworkAdapter')]
 	[string]$DhcpServer,
 	# VM - name of DHCP scope on DHCP server for default network adapter
 	# VMNetworkAdapter - name of DHCP scope on DHCP server for network adapter
 	[Parameter(Position = 17, ParameterSetName = 'Add')]
-	[Parameter(Position = 10, ParameterSetName = 'AddVMNetworkAdapter')]
+	[Parameter(Position = 9, ParameterSetName = 'AddVMNetworkAdapter')]
 	[string]$DhcpScope,
 	# OS Deployment - multiple - path to 
 	#  ISO	: literal path to ISO file on hypervisor
@@ -317,7 +317,7 @@ Begin {
 		# check path to key
 		If ($JsonPathToKey -eq $JsonKey) {
 			# report pending action
-			Write-Host "Adding '$JsonNestedKey' of '$JsonNestedValue' to '$JsonPathToKey' on '$JsonKey'..."
+			Write-Host "Adding '$JsonNestedKey' of '$JsonNestedValue' to '$JsonKey' in '$Json'..."
 			# define initial key
 			$JsonCurrentKey = $JsonPathToKey
 			# define initial object
@@ -604,6 +604,8 @@ Process {
 				Write-Host "`nERROR: could not create configuration file: '$Json'"
 				Return $_
 			}
+			# ...create empty JSON data object
+			$JsonData = [PSCustomObject]@{}
 		}
 		# if Add not set...
 		Else {
@@ -612,19 +614,15 @@ Process {
 			Return
 		}
 	}
-
-	# import JSON data
-	Try {
-		$JsonData = Get-Content -Path $Json | ConvertFrom-Json
-		# if JSON data is empty...
-		If ($null -eq $JsonData) {
-			# ...create an empty custom object
-			$JsonData = [PSCustomObject]@{}
+	Else {
+		# import JSON data
+		Try {
+			$JsonData = Get-Content -Path $Json | ConvertFrom-Json
 		}
-	}
-	Catch {
-		Write-Host "`nERROR: could not read configuration file: '$Json'"
-		Return $_
+		Catch {
+			Write-Host "`nERROR: could not read configuration file: '$Json'"
+			Return $_
+		}
 	}
 
 	# retrieve current object
@@ -790,8 +788,8 @@ Process {
 				}
 			}
 
-			# if ExistingKeyValuePairs exist...
-			If ($ExistingKeyValuePairs) {
+			# if PreserveVMParameters set and ExistingKeyValuePairs exist...
+			If ($PreserveVMParameters -and $ExistingKeyValuePairs) {
 				# ...process each keys of ExistingKeyValuePairs...
 				ForEach ($Key in $ExistingKeyValuePairs.Keys) {
 					# ...if VMObjectParams does not contain the key...
@@ -821,7 +819,12 @@ Process {
 					# define key for finding existing key value pair
 					JsonNestedKey    = 'Path'
 					# define value for finding existing key value pair
-					JsonNestedValue  = "$Path\$VMName.vhdx"
+					JsonNestedValue  = "$Path\$VMName\$VMName.vhdx"
+					# define value for default entries
+					JsonNestedParams = [ordered]@{
+						Path      = "$Path\$VMName\$VMName.vhdx"
+						SizeBytes = 100GB
+					}
 				}
 
 				# add object to nested JSON key
@@ -850,6 +853,10 @@ Process {
 					JsonNestedKey    = 'NetworkAdapterName'
 					# define value for finding existing key value pair
 					JsonNestedValue  = 'Network Adapter'
+					# define value for default entries
+					JsonNestedParams = [ordered]@{
+						NetworkAdapterName = 'Network Adapter'
+					}
 				}
 
 				# add object to nested JSON key
