@@ -628,8 +628,9 @@ Begin {
 
 			# define parameters for Get-CimInstance
 			$GetCimInstanceForPXE = @{
-				Namespace = "ROOT\SMS\site_$SiteCode"
-				Query     = "SELECT * FROM SMS_LastPXEAdvertisement WHERE NetBiosName = '$($Device.Name)' OR SMBIOSGUID = '$($Device.SMBIOSGUID)'"
+				Namespace   = "ROOT\SMS\site_$($ArgumentList['SiteCode'])"
+				Query       = "SELECT * FROM SMS_LastPXEAdvertisement WHERE NetBiosName = '$($Device.Name)' OR SMBIOSGUID = '$($Device.SMBIOSGUID)'"
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 			}
 
 			# retrieve CIM instances for matching PXE advertisements
@@ -1561,9 +1562,9 @@ Process {
 					'SCCM' {
 						# define parameters for Remove-DeviceFromSccm
 						$RemoveDeviceFromSccm = @{
-							VM                    = $VM
+							VM               = $VM
 							# DeploymentPath        = $JsonData.$Name.OSDeployment.DeploymentPath
-							DeploymentServer      = $JsonData.$Name.OSDeployment.DeploymentServer
+							DeploymentServer = $JsonData.$Name.OSDeployment.DeploymentServer
 							# DeploymentDomain      = $JsonData.$Name.OSDeployment.DeploymentDomain
 							# DeploymentCollection  = $JsonData.$Name.OSDeployment.DeploymentCollection
 							# MaintenanceCollection = $JsonData.$Name.OSDeployment.MaintenanceCollection
