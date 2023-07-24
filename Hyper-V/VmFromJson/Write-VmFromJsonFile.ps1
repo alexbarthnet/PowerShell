@@ -155,6 +155,7 @@ Param(
 	[switch]$PassThru,
 	[Parameter(DontShow)]
 	[string[]]$ExcludedParametersDefault = @(
+		'Json'
 		'VMName'
 		'CreateDefaultVMHardDiskDrive'
 		'CreateDefaultVMNetworkAdapter'
@@ -235,7 +236,7 @@ Begin {
 		# filter parameters to parameter set
 		If ($ParameterSetName) {
 			# filter parameters to parameter set
-			$ParametersFromScript = $ParametersFromScript.Parameters.Values.Where({ $_.Attributes.ParameterSetName -eq $ParameterSetName })
+			$ParametersFromScript = $ParametersFromScript.Where({ $_.Attributes.ParameterSetName -eq $ParameterSetName })
 			# filter out parameter set name
 			If ($ExcludeParameterSetName) {
 				$ExcludedParametersList.Add($ParameterSetName)
@@ -248,6 +249,11 @@ Begin {
 			ForEach ($ExcludedParameter in ($ParametersFromScript.Where({ $_.Attributes.ParameterSetName -eq $ExcludedParameterSet }).Name) ) {
 				$ExcludedParametersList.Add($ExcludedParameter)
 			}
+		}
+
+		# define parameters excluded
+		ForEach ($ExcludedParameter in $ExcludeParameters) {
+			$ExcludedParametersList.Add($ExcludedParameter)
 		}
 
 		# define parameters excluded by default
@@ -616,6 +622,9 @@ Process {
 	If ($PSCmdlet.ParameterSetName -notin @('Clear', 'Default')) {
 		# define JsonKeyName from JsonKeyParameter property
 		$JsonKey = (Get-Variable -Name $JsonKeyParameter -ValueOnly)
+		# retrieve JsonEntry from JsonData
+		# $JsonEntry = $JsonData | Where-Object { $_.$JsonKeyParameter -eq $JsonKey }
+
 		# if item not found in JSON data and not Adding...
 		If ($null -eq $JsonData.$JsonKey -and -not $Add) {
 			# ...report and return
@@ -744,6 +753,7 @@ Process {
 
 			# define parameters for Get-ParametersFromCommand
 			$GetParametersFromCommand = @{
+				ParameterSetName        = 'Add'
 				ExcludeParameters       = $JsonKeyValues.Keys
 				ExcludeParameterSetName = $true
 				ExcludeParameterSets    = @('AddVMHardDiskDrive', 'AddVMNetworkAdapter')
@@ -808,7 +818,7 @@ Process {
 					JsonNestedValue  = "$Path\$VMName\$VMName.vhdx"
 					# define value for default entries
 					JsonNestedParams = [ordered]@{
-						Path      = "$Path\$VMName\$VMName.vhdx"
+						Path      = "$Path\$VMName\Virtual Hard Disks\$VMName.vhdx"
 						SizeBytes = 100GB
 					}
 				}
@@ -861,13 +871,15 @@ Process {
 			# define parameters for function
 			$AddNestedJsonKeyValuePair = @{
 				# define parameters
-				BoundParameters = $PSBoundParameters
+				BoundParameters  = $PSBoundParameters
+				# define paramter set name
+				ParameterSetName = 'AddOSD'
 				# define keys between root key and nested key
-				JsonPathToKey   = 'OSDeployment'
+				JsonPathToKey    = 'OSDeployment'
 				# define key for finding existing key value pair
-				JsonNestedKey   = 'DeploymentMethod'
+				JsonNestedKey    = 'DeploymentMethod'
 				# define value for finding existing key value pair
-				JsonNestedValue = $DeploymentMethod
+				JsonNestedValue  = $DeploymentMethod
 			}
 
 			# add object to nested JSON key
@@ -885,13 +897,15 @@ Process {
 			# define parameters for function
 			$AddNestedJsonKeyValuePair = @{
 				# define parameters
-				BoundParameters = $PSBoundParameters
+				BoundParameters  = $PSBoundParameters
+				# define paramter set name
+				ParameterSetName = 'AddVMHardDiskDrive'
 				# define keys between root key and nested key
-				JsonPathToKey   = 'VMHardDiskDrives'
+				JsonPathToKey    = 'VMHardDiskDrives'
 				# define key for finding existing key value pair
-				JsonNestedKey   = 'Path'
+				JsonNestedKey    = 'Path'
 				# define value for finding existing key value pair
-				JsonNestedValue = $Path
+				JsonNestedValue  = $Path
 			}
 
 			# add object to nested JSON key
@@ -909,13 +923,15 @@ Process {
 			# define parameters for function
 			$AddNestedJsonKeyValuePair = @{
 				# define parameters
-				BoundParameters = $PSBoundParameters
+				BoundParameters  = $PSBoundParameters
+				# define paramter set name
+				ParameterSetName = 'AddVMNetworkAdapter'
 				# define keys between root key and nested key
-				JsonPathToKey   = 'VMNetworkAdapters'
+				JsonPathToKey    = 'VMNetworkAdapters'
 				# define key for finding existing key value pair
-				JsonNestedKey   = 'NetworkAdapterName'
+				JsonNestedKey    = 'NetworkAdapterName'
 				# define value for finding existing key value pair
-				JsonNestedValue = $NetworkAdapterName
+				JsonNestedValue  = $NetworkAdapterName
 			}
 
 			# add object to nested JSON key
