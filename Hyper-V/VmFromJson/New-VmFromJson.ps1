@@ -1032,8 +1032,9 @@ Begin {
 
 				# define parameters for Get-CimInstance
 				$GetCimInstanceForPXE = @{
-					Namespace = "ROOT\SMS\site_$SiteCode"
-					Query     = "SELECT * FROM SMS_LastPXEAdvertisement WHERE NetBiosName = '$($Device.Name)' OR SMBIOSGUID = '$($Device.SMBIOSGUID)'"
+					Namespace   = "ROOT\SMS\site_$($ArgumentList['SiteCode'])"
+					Query       = "SELECT * FROM SMS_LastPXEAdvertisement WHERE NetBiosName = '$($Device.Name)' OR SMBIOSGUID = '$($Device.SMBIOSGUID)'"
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 				}
 
 				# retrieve CIM instances for matching PXE advertisements
