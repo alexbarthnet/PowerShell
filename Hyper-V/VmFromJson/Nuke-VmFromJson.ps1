@@ -1569,11 +1569,11 @@ Process {
 						# define parameters for Remove-DeviceFromSccm
 						$RemoveDeviceFromSccm = @{
 							VM                    = $VM
-							DeploymentPath        = $JsonData.$Name.OSDeployment.DeploymentPath
+							# DeploymentPath        = $JsonData.$Name.OSDeployment.DeploymentPath
 							DeploymentServer      = $JsonData.$Name.OSDeployment.DeploymentServer
-							DeploymentDomain      = $JsonData.$Name.OSDeployment.DeploymentDomain
-							DeploymentCollection  = $JsonData.$Name.OSDeployment.DeploymentCollection
-							MaintenanceCollection = $JsonData.$Name.OSDeployment.MaintenanceCollection
+							# DeploymentDomain      = $JsonData.$Name.OSDeployment.DeploymentDomain
+							# DeploymentCollection  = $JsonData.$Name.OSDeployment.DeploymentCollection
+							# MaintenanceCollection = $JsonData.$Name.OSDeployment.MaintenanceCollection
 						}
 
 						# remove VM from SCCM
