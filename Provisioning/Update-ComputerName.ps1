@@ -7,32 +7,45 @@ $os_name = (Get-Item 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\Active
 $vm_name = (Get-Item 'HKLM:\SOFTWARE\Microsoft\Virtual Machine\Guest\Parameters').GetValue('VirtualMachineName')
 # check computer name
 If ($os_name -ne $vm_name -and -not [string]::IsNullOrEmpty($vm_name)) {
+	# check if transcript exists
+	$TestPath = Test-Path -Path $log_path -PathType Leaf
+	# start transcript
 	Start-Transcript -Path $log_path -Append
-	Write-Output "Found active computer name: $os_name"
-	Write-Output "Found virtual machine name: $vm_name"
-	Write-Output "Renaming computer to: $vm_name"
-	# define variables for loop
-	$vm_renamed = $false
-	$loop_count = 1
-	# make 5 attempsts at renaming computer
-	Do {
-		Try {
-			# sleep to allow for domain replication of new computer objects
-			Start-Sleep -Seconds 5
-			# get boolean from returned object
-			$vm_renamed = Rename-Computer -NewName $vm_name -Force -PassThru | Select-Object 'HasSucceeded' -ExpandProperty 'HasSucceeded'
-		}
-		Catch {
-			Write-Output "...error renaming computer on try #$($loop_count): $($_.ToString())"
-		}
-		Finally {
-			$loop_count++
-		}
-	}
-	Until ($vm_renamed -or $loop_count -gt 5)
-	If ($vm_renamed) {
-		Write-Output "...renamed computer on try #$($loop_count)"
+	# if transcript not previously started...
+	If (-not $TestPath) {
+		# sleep and restart
+		Write-Output 'Restarting computer in first pass...'
+		Start-Sleep -Seconds 30
 		Restart-Computer -Force
+	}
+	Else {
+		Write-Output 'Renaming computer in second pass...'
+		Write-Output "Found active computer name: $os_name"
+		Write-Output "Found virtual machine name: $vm_name"
+		Write-Output "Renaming computer to: $vm_name"
+		# define variables for loop
+		$vm_renamed = $false
+		$loop_count = 0
+		# make 5 attempsts at renaming computer
+		Do {
+			Try {
+				# sleep to allow for domain replication of new computer objects
+				Start-Sleep -Seconds 5
+				# get boolean from returned object
+				$vm_renamed = Rename-Computer -NewName $vm_name -Force -PassThru | Select-Object 'HasSucceeded' -ExpandProperty 'HasSucceeded'
+			}
+			Catch {
+				Write-Output "...error renaming computer on try #$($loop_count)..."
+			}
+			Finally {
+				$loop_count++
+			}
+		}
+		Until ($vm_renamed -or $loop_count -gt 5)
+		If ($vm_renamed) {
+			Write-Output "...renamed computer on try #$($loop_count)"
+			Restart-Computer -Force
+		}
 	}
 	Stop-Transcript
 }
