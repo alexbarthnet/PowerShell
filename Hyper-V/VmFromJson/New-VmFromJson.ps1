@@ -13,7 +13,11 @@ Param(
 )
 
 Begin {
+	# set error action preference
+	$ErrorActionPreference = [System.Management.Automation.ActionPreference]::Stop
+
 	Function Format-Bytes {
+		[CmdletBinding()]
 		Param (
 			[Parameter(Position = 0, Mandatory = $true)]
 			[uint64]$Size,
@@ -31,6 +35,7 @@ Begin {
 	}
 
 	Function Test-PSSessionByName {
+		[CmdletBinding()]
 		Param(
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName
@@ -72,15 +77,22 @@ Begin {
 	}
 
 	Function Get-PSSessionInvoke {
+		[CmdletBinding()]
 		Param(
 			[Parameter(Mandatory = $true)]
-			[string]$ComputerName
+			[string]$ComputerName,
+			[hashtable]$ArgumentList
 		)
 
 		# default arguments passed to ScriptBlock run by Invoke-Command
-		$ArgumentList = @{
+		$ArgumentListForInvokeCommand = @{
 			# ErrorAction for ScriptBlock run by Invoke-Command
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# optional arguments passed to ScriptBlock run by Invoke-Command
+		ForEach ($Key in $ArgumentList.Keys) {
+			$ArgumentListForInvokeCommand[$Key] = $ArgumentList[$Key]
 		}
 
 		# define hashtable for Invoke-Command
@@ -88,7 +100,7 @@ Begin {
 			# ErrorAction for Invoke-Command itself
 			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 			# arguments passed to script block executed by Invoke-Command
-			ArgumentList = $ArgumentList
+			ArgumentList = $ArgumentListForInvokeCommand
 		}
 
 		# if computername matches hostname...
@@ -104,7 +116,7 @@ Begin {
 			$SessionExists = Test-PSSessionByName -ComputerName $ComputerName
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# if a session exists...
@@ -123,6 +135,7 @@ Begin {
 	}
 
 	Function Get-CimInstanceForVM {
+		[CmdletBinding()]
 		Param(
 			# define VM parameters
 			[Parameter(Mandatory = $true)]
@@ -136,7 +149,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
-			Return $_
+			Throw $_
 		}
 
 		# define CIM instance for VM system settings
@@ -153,11 +166,12 @@ Begin {
 			Get-CimInstance @GetCimInstance
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 	}
 
 	Function Get-CimInstanceForVMMS {
+		[CmdletBinding()]
 		Param(
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName
@@ -176,11 +190,12 @@ Begin {
 			Get-CimInstance @GetCimInstance
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 	}
 
 	Function Get-ClusterName {
+		[CmdletBinding()]
 		Param(
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName
@@ -191,7 +206,7 @@ Begin {
 			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# test for cluster
@@ -206,7 +221,7 @@ Begin {
 			}
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# return the cluster name
@@ -219,6 +234,7 @@ Begin {
 	}
 
 	Function Get-ClusterNodeNames {
+		[CmdletBinding()]
 		Param(
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName
@@ -229,7 +245,7 @@ Begin {
 			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# test for cluster
@@ -242,7 +258,7 @@ Begin {
 			}
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# return the cluster nodes
@@ -255,6 +271,7 @@ Begin {
 	}
 
 	Function Get-CMModulePath {
+		[CmdletBinding()]
 		Param(
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName,
@@ -266,7 +283,7 @@ Begin {
 			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# retrieve path to CM module from remote registry
@@ -283,7 +300,7 @@ Begin {
 			}
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# if path not found...
@@ -312,7 +329,7 @@ Begin {
 			}
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# if path not found...
@@ -327,6 +344,7 @@ Begin {
 	}
 
 	Function Get-CMSiteCode {
+		[CmdletBinding()]
 		Param(
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName
@@ -337,7 +355,7 @@ Begin {
 			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# retrieve CM site code from remote registry
@@ -354,7 +372,7 @@ Begin {
 			}
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# if CM site code not found...
@@ -366,61 +384,6 @@ Begin {
 		Else {
 			# ...return CM site code
 			Return $CMSiteCode
-		}
-	}
-
-	Function Get-VMActualHost {
-		[CmdletBinding(DefaultParameterSetName = 'Default')]
-		Param(
-			[Parameter(Mandatory = $true)]
-			[string]$ComputerName,
-			[Parameter(Mandatory = $true)]
-			[string]$Name
-		)
-
-		# retrieve cluster name from computer
-		Try {
-			$ClusterName = Get-ClusterName -ComputerName $ComputerName
-		}
-		Catch {
-			Return $_
-		}
-
-		# if host is not clustered...
-		If ([string]::IsNullOrEmpty($ClusterName)) {
-			# ...return computername
-			Return $ComputerName
-		}
-
-		# get hashtable for InvokeCommand splat
-		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
-		}
-		Catch {
-			Return $_
-		}
-
-		# update argument list
-		$InvokeCommand['ArgumentList']['Cluster'] = $ClusterName
-		$InvokeCommand['ArgumentList']['Name'] = $Name
-
-		# retrieve node name for cluster group with matching name
-		Try {
-			$NodeName = Invoke-Command @InvokeCommand -ScriptBlock {
-				Param($ArgumentList)
-				Get-ClusterGroup | Where-Object { $_.Name -eq $ArgumentList['Name'] -and $_.GroupType -eq 'VirtualMachine' } | Select-Object -ExpandProperty 'OwnerNode' | Select-Object -ExpandProperty 'NodeName'
-			}
-		}
-		Catch {
-			Return $_
-		}
-
-		# return node name
-		If ($null -ne $NodeName) {
-			Return $NodeName
-		}
-		Else {
-			Return $ComputerName
 		}
 	}
 
@@ -467,7 +430,7 @@ Begin {
 			$VM = Get-VM @GetVM
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# return objects
@@ -476,15 +439,16 @@ Begin {
 		}
 		ElseIf ($VM -is [array]) {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieved multiple VM objects with provided parameters")
-			Throw
+			Throw $_
 		}
 		Else {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieved unexpected object type with provided parameters")
-			Throw
+			Throw $_
 		}
 	}
 
 	Function Get-VMHostNextMacAddress {
+		[CmdletBinding()]
 		Param(
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName,
@@ -497,7 +461,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not get initial hashtable for Invoke-Command")
-			Return $_
+			Throw $_
 		}
 
 		# update argument list
@@ -512,7 +476,7 @@ Begin {
 			}
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# verify current MAC address
@@ -541,7 +505,7 @@ Begin {
 			}
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# return current MAC address
@@ -549,12 +513,13 @@ Begin {
 			Return [System.BitConverter]::ToString($CurrentMacAddress).Replace('-', $null)
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 	}
 
 	Function Add-DeviceToSccm {
-		param (
+		[CmdletBinding()]
+		Param(
 			# define VM parameters
 			[Parameter(Mandatory = $true)]
 			[object]$VM,
@@ -577,7 +542,7 @@ Begin {
 			$InvokeCommand = Get-PSSessionInvoke -ComputerName $DeploymentServer
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# get VM from parameters
@@ -586,7 +551,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
-			Return $_
+			Throw $_
 		}
 
 		# define CIM instance for VM system settings
@@ -602,7 +567,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve CIM instance for VM")
-			Return $_
+			Throw $_
 		}
 
 		# retrive BIOS GUID from CIM data
@@ -621,7 +586,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve path to CM PowerShell module")
-			Return $_
+			Throw $_
 		}
 
 		# test CM module path
@@ -636,7 +601,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve CM site code")
-			Return $_
+			Throw $_
 		}
 
 		# test CM site code
@@ -645,11 +610,12 @@ Begin {
 			Return
 		}
 
-		# update arguments for Invoke-Command
+		# update arguments for Invoke-Command - reporting
 		$InvokeCommand['ArgumentList']['Hostname'] = $Hostname
-		$InvokeCommand['ArgumentList']['VMHost'] = $ComputerName
-		$InvokeCommand['ArgumentList']['Name'] = $Name
 		$InvokeCommand['ArgumentList']['ComputerName'] = $DeploymentServer
+		$InvokeCommand['ArgumentList']['Name'] = $Name
+
+		# update arguments for Invoke-Command - deployment
 		$InvokeCommand['ArgumentList']['DeploymentCollection'] = $DeploymentCollection
 		$InvokeCommand['ArgumentList']['MaintenanceCollection'] = $MaintenanceCollection
 		$InvokeCommand['ArgumentList']['ModulePath'] = $CMModulePath
@@ -658,34 +624,80 @@ Begin {
 		$InvokeCommand['ArgumentList']['OSDDOMAIN'] = $DeploymentDomain
 		$InvokeCommand['ArgumentList']['OSDDOMAINOUNAME'] = $DeploymentPath
 
-		# connect to SCCM
-		Try {
-			Invoke-Command @InvokeCommand -ScriptBlock {
-				Param($ArgumentList)
+		# add VM to SCCM
+		Invoke-Command @InvokeCommand -ScriptBlock {
+			Param($ArgumentList)
 
-				Function Get-CMDeviceFromCollection {
-					[CmdletBinding(DefaultParameterSetName = 'ResourceId')]
-					Param(
-						[Parameter(Mandatory = $true)]
-						[string]$CollectionId,
-						[Parameter(Mandatory = $true, ParameterSetName = 'ResourceId')]
-						[string]$ResourceId,
-						[Parameter(Mandatory = $true, ParameterSetName = 'Name')]
-						[string]$Name,
-						[switch]$SkipUpdate,
-						[int32]$Seconds = 5,
-						[int32]$Limit = 8
-					)
+			Function Get-CMDeviceFromCollection {
+				[CmdletBinding(DefaultParameterSetName = 'ResourceId')]
+				Param(
+					[Parameter(Mandatory = $true)]
+					[string]$CollectionId,
+					[Parameter(Mandatory = $true, ParameterSetName = 'ResourceId')]
+					[string]$ResourceId,
+					[Parameter(Mandatory = $true, ParameterSetName = 'Name')]
+					[string]$Name,
+					[switch]$SkipUpdate,
+					[int32]$Seconds = 5,
+					[int32]$Limit = 8
+				)
 
-					# define parameters for Get-CMDevice
-					$GetCMDevice = @{
-						CollectionId = $CollectionId
-						Fast         = $true
-						ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
-					}
+				# define parameters for Get-CMDevice
+				$GetCMDevice = @{
+					CollectionId = $CollectionId
+					Fast         = $true
+					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+				}
 
-					# define device for Get-CMDevice
-					$GetCMDevice[$PSCmdlet.ParameterSetName] = $PSBoundParameters[$PSCmdlet.ParameterSetName]
+				# define device for Get-CMDevice
+				$GetCMDevice[$PSCmdlet.ParameterSetName] = $PSBoundParameters[$PSCmdlet.ParameterSetName]
+
+				# retrieve device by name
+				Try {
+					$Device = Get-CMDevice @GetCMDevice
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve device from collection")
+					Throw $_
+				}
+
+				# if device found
+				If ($null -ne $Device) {
+					# ...return device
+					Return $Device
+				}
+				# if skip update...
+				ElseIf ($SkipUpdate) {
+					# ...return null
+					Return $null
+				}
+
+				# update collection
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - updating collection...")
+					Invoke-CMCollectionUpdate -CollectionId $CollectionId
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not update from collection")
+					Throw $_
+				}
+
+				# define integers for while loop and reporting
+				$WaitTime = [int32]0
+				$Multiplier = [int32]0
+
+				# wait until device is visible in SCCM
+				Write-Host ("$Hostname,$ComputerName,$Name - waiting for device to be visible in SCCM...")
+				While ($null -eq $Device -or $Multiplier -lt $Limit) {
+					# increment multiplier
+					$Multiplier++
+
+					# record total time
+					$WaitTime += ($Seconds * $Multiplier)
+
+					# wait for collection update to complete
+					Write-Host ("$Hostname,$ComputerName,$Name - ...waiting an additional '$($Seconds * $Multiplier)' seconds")
+					Start-Sleep -Seconds ($Seconds * $Multiplier)
 
 					# retrieve device by name
 					Try {
@@ -693,452 +705,454 @@ Begin {
 					}
 					Catch {
 						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve device from collection")
-						Return $_
-					}
-
-					# if device found
-					If ($null -ne $Device) {
-						# ...return device
-						Return $Device
-					}
-					# if skip update...
-					ElseIf ($SkipUpdate) {
-						# ...return null
-						Return $null
-					}
-
-					# update collection
-					Try {
-						Write-Host ("$Hostname,$ComputerName,$Name - updating collection...")
-						Invoke-CMCollectionUpdate -CollectionId $CollectionId
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not update from collection")
-						Return $_
-					}
-
-					# define integers for while loop and reporting
-					$WaitTime = [int32]0
-					$Multiplier = [int32]0
-
-					# wait until device is visible in SCCM
-					Write-Host ("$Hostname,$ComputerName,$Name - waiting for device to be visible in SCCM...")
-					While ($null -eq $Device -or $Multiplier -lt $Limit) {
-						# increment multiplier
-						$Multiplier++
-
-						# record total time
-						$WaitTime += ($Seconds * $Multiplier)
-
-						# wait for collection update to complete
-						Write-Host ("$Hostname,$ComputerName,$Name - ...waiting an additional '$($Seconds * $Multiplier)' seconds")
-						Start-Sleep -Seconds ($Seconds * $Multiplier)
-
-						# retrieve device by name
-						Try {
-							$Device = Get-CMDevice @GetCMDevice
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve device from collection")
-							Return $_
-						}
-					}
-
-					# declare wait time
-					Write-Host ("$Hostname,$ComputerName,$Name - ...waited for '$WaitTime' seconds")
-
-					# if device found...
-					If ($null -ne $Device) {
-						# ...declare wait time and return
-						Write-Host ("$Hostname,$ComputerName,$Name - ...found device in collection after '$WaitTime' seconds")
-						Return $Device
-					}
-					# if device found...
-					Else {
-						# ...declare wait time and return
-						Write-Host ("$Hostname,$ComputerName,$Name - WARNING: device not found after '$WaitTime' seconds")
-						Write-Host ("$Hostname,$ComputerName,$Name - ...check SCCM before continuing")
-						Return $null
-					}
-				}
-
-				Function Add-CMDeviceToCollection {
-					Param (
-						[string]$CollectionName,
-						[string]$ResourceId
-					)
-
-					# retrieve device collection
-					Try {
-						Write-Host ("$Hostname,$ComputerName,$Name - retrieving device collection: '$CollectionName'")
-						$Collection = Get-CMDeviceCollection -Name $CollectionName
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve device collection")
-						Return $_
-					}
-
-					# if device collection not found...
-					If ($null -eq $Collection) {
-						# ...warn and return
-						Write-Host ("$Hostname,$ComputerName,$Name - WARNING: could not retrieve device collection: '$CollectionName'")
-						Return
-					}
-
-					# check for direct membership rule
-					Try {
-						Write-Host ("$Hostname,$ComputerName,$Name - retrieving direct membership rule for device...")
-						$MembershipRule = Get-CMDeviceCollectionDirectMembershipRule -CollectionId $Collection.CollectionID -ResourceId $ResourceId
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving direct membership rule")
-						Return $_
-					}
-
-					# if direct membership rule not found...
-					If ($null -eq $DeploymentRule) {
-						# add direct membership rule to collection
-						Try {
-							Write-Host ("$Hostname,$ComputerName,$Name - adding direct membership rule for device to collection...")
-							$MembershipRule = Add-CMDeviceCollectionDirectMembershipRule -CollectionId $Collection.CollectionID -ResourceId $ResourceId -PassThru
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: adding direct membership rule for device to collection")
-							Return $_
-						}
-					}
-
-					# if collection membership rule not found after adding rule...
-					If ($null -eq $MembershipRule) {
-						Write-Host ("$Hostname,$ComputerName,$Name - WARNING: could not retrieve direct membership rule after adding to collection")
-						Return
-					}
-
-					# retrieve device from collection
-					Try {
-						Write-Host ("$Hostname,$ComputerName,$Name - retrieving device from collection...")
-						Get-CMDeviceFromCollection -CollectionId $Collection.CollectionID -ResourceId $ResourceId
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving device from collection")
-						Return $_
-					}
-				}
-
-				Function Update-CMDeviceVariable {
-					Param (
-						[string]$ResourceId,
-						[string]$VariableName,
-						[string]$VariableValue
-					)
-
-					# retrieve device variable for OSD domain
-					Try {
-						Write-Host ("$Hostname,$ComputerName,$Name - retrieving device variable: '$VariableName'")
-						$DeviceVariable = Get-CMDeviceVariable -ResourceId $ResourceId -VariableName $VariableName
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving device variable")
-						Return $_
-					}
-
-					# if device variable not found...
-					If ($null -eq $DeviceVariable) {
-						# create device variable
-						Try {
-							Write-Host ("$Hostname,$ComputerName,$Name - ...adding device variable: '$VariableName'")
-							$null = New-CMDeviceVariable -ResourceId $ResourceId -VariableName $VariableName -VariableValue $VariableValue
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: adding device variable")
-							Return $_
-						}
-					}
-					# if device variable found with wrong value...
-					ElseIf ($DeviceVariable.Value -ne $VariableValue) {
-						# update device variable
-						Try {
-							Write-Host ("$Hostname,$ComputerName,$Name - ...updating device variable: '$VariableName'")
-							$null = Set-CMDeviceVariable -ResourceId $ResourceId -VariableName $VariableName -NewVariableValue $VariableValue
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: updating device variable")
-							Return $_
-						}
-					}
-					Else {
-						Write-Host ("$Hostname,$ComputerName,$Name - ...found device variable: '$VariableName'")
-					}
-				}
-
-				# create objects for reporting
-				$Hostname = $ArgumentList['Hostname']
-				$ComputerName = $ArgumentList['ComputerName']
-				$Name = $ArgumentList['Name']
-
-				# import CM module
-				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - ...importing SCCM module")
-					Import-Module -Name $ArgumentList['ModulePath'] -ErrorAction 'Stop'
-				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not import SCCM module")
-					Return $_
-				}
-
-				# move to site drive
-				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - ...setting location to site drive")
-					Set-Location -Path ([string]::Concat($ArgumentList['SiteCode'], ':\'))
-				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not import SCCM module")
-					Return $_
-				}
-
-				# retrieve All Systems collection
-				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - retrieving 'All Systems' collection")
-					$AllSystems = Get-CMDeviceCollection -Name 'All Systems'
-				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving 'All Systems' collection")
-					Return $_
-				}
-
-				# validate All Systems collection
-				If ($null -eq $AllSystems) {
-					Write-Host ("$Hostname,$ComputerName,$Name - WARNING: could not retrieve All Systems collection")
-					Return
-				}
-
-				# retrieve device by name
-				If ($null -eq $Device) {
-					Try {
-						Write-Host ("$Hostname,$ComputerName,$Name - retrieving device by name from 'All Systems' collection")
-						$Device = Get-CMDevice -Collection $AllSystems -Fast -Name $Name
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve device by name from 'All Systems' collection")
-						Return $_
-					}
-
-					# if multiple devices found by name...
-					If ($Device.Count -gt 1) {
-						# ...warn and return
-						Write-Host ("$Hostname,$ComputerName,$Name - WARNING: multiple devices found with the same name")
-						Write-Host ("$Hostname,$ComputerName,$Name - ...remove extra devices from SCCM before continuing")
-						Return
-					}
-
-					# if device found by name and Device is a full client...
-					If ($null -ne $Device -and $Device.Client -eq 1) {
-						# ...warn and return
-						Write-Host ("$Hostname,$ComputerName,$Name - WARNING: device found by name with existing client")
-						Write-Host ("$Hostname,$ComputerName,$Name - ...remove device from SCCM before continuing")
-						Return
-					}
-
-					# if device found by name and Device is a full client...
-					If ($null -ne $Device -and $Device.SMBIOSGUID -ne $ArgumentList['BIOSGUID']) {
-						# ...warn and return
-						Write-Host ("$Hostname,$ComputerName,$Name - WARNING: device found by name with unexpected SMBIOSGUID: '$($ArgumentList['BIOSGUID'])'")
-						Write-Host ("$Hostname,$ComputerName,$Name - ...remove device from SCCM before continuing")
-						Return
-					}
-				}
-
-				# retrieve device by BIOSGUID
-				If ($null -eq $Device) {
-					# retrieve device by BIOSGUID
-					Try {
-						Write-Host ("$Hostname,$ComputerName,$Name - retrieving devices from 'All Systems' collection")
-						$Device = Get-CMDevice -Collection $AllSystems -Fast | Where-Object { $_.SMBIOSGUID -eq $ArgumentList['BIOSGUID'] }
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving devices from 'All Systems' collection")
-						Return $_
-					}
-
-					# if multiple devices found by BIOSGUID...
-					If ($Device.Count -gt 1) {
-						# ...warn and return
-						Write-Host ("$Hostname,$ComputerName,$Name - WARNING: multiple devices found with the same SMBIOSGUID")
-						Write-Host ("$Hostname,$ComputerName,$Name - ...remove extra devices from SCCM before continuing")
-						Return
-					}
-
-					# if device found by SMBIOSGUID and Device is a full client...
-					If ($null -ne $Device -and $Device.Client -eq 1) {
-						# ...warn and return
-						Write-Host ("$Hostname,$ComputerName,$Name - WARNING: device found by SMBIOSGUID with existing client")
-						Write-Host ("$Hostname,$ComputerName,$Name - ...remove device from SCCM before continuing")
-						Return
-					}
-
-					# if device found by SMBIOSGUID and Device is a full client...
-					If ($null -ne $Device -and $Device.Name -ne $Name) {
-						# ...warn and return
-						Write-Host ("$Hostname,$ComputerName,$Name - WARNING: device found by SMBIOSGUID with unexpected name: '$($Device.Name)'")
-						Write-Host ("$Hostname,$ComputerName,$Name - ...remove device from SCCM before continuing")
-						Return
+						Throw $_
 					}
 				}
 
 				# if device found...
 				If ($null -ne $Device) {
-					# ...report
-					Write-Host ("$Hostname,$ComputerName,$Name - ...found existing device with resource ID: '$($Device.ResourceID)'")
-
-					# define parameters for Get-CimInstance
-					$GetCimInstanceForPXE = @{
-						Namespace = "ROOT\SMS\site_$SiteCode"
-						Query     = "SELECT * FROM SMS_LastPXEAdvertisement WHERE NetBiosName = '$($Device.Name)' OR SMBIOSGUID = '$($Device.SMBIOSGUID)'"
-					}
-
-					# retrieve CIM instances for matching PXE advertisements
-					Try {
-						Write-Host ("$Hostname,$ComputerName,$Name - checking for PXE deployments for existing device...")
-						$CimInstanceForPXE = Get-CimInstance $GetCimInstanceForPXE
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving PXE deployment for device")
-						Return $_
-					}
-
-					# process each CIM instance
-					ForEach ($CimInstance in $CimInstanceForPXE) {
-						# get CM resource with matching NetBiosName and SMBIOSGUID
-						Try {
-							Write-Host ("$Hostname,$ComputerName,$Name - ...found PXE deployment for resource: '$($Resource.ResourceId)'")
-							$Resource = Get-CMResource -Fast | Where-Object { $_.NetBiosName -eq $CimInstance.NetBiosName -and $_.SMBIOSGUID -eq $CimInstance.SMBIOSGUID }
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving CM resource from CIM instance data")
-							Return $_
-						}
-
-						# clear PXE flag on CM resource
-						Try {
-							Write-Host ("$Hostname,$ComputerName,$Name - ...clearing PXE deployment for resource: '$($Resource.ResourceId)'")
-							Clear-CMPxeDeployment -ResourceId $Resource.ResourceId
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: clearing CM PXE deployment")
-							Return $_
-						}
-					}
+					# ...declare wait time and return
+					Write-Host ("$Hostname,$ComputerName,$Name - ...found device in collection after '$WaitTime' seconds")
+					Return $Device
 				}
 				# if device not found...
 				Else {
-					# define parameters for Import-CMComputerInformation
-					$ImportCMComputerInformation = @{
-						CollectionId = $AllSystems.CollectionID
-						ComputerName = $Name.ToUpper()
-						SMBiosGuid   = $ArgumentList['BIOSGUID']
-						ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
-					}
-
-					# import the device into SCCM
-					Try {
-						Write-Host ("$Hostname,$ComputerName,$Name - ...adding device to SCCM")
-						Import-CMComputerInformation @ImportCMComputerInformation
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: adding device to SCCM")
-						Return $_
-					}
-
-					# retrieve device from collection
-					Try {
-						$Device = Get-CMDeviceFromCollection -CollectionId $AllSystems.CollectionID -Name $Name
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving device from collection: '$($AllSystems.Name)'")
-						Return $_
-					}
-
-					# if device still not found...
-					If ($null -eq $Device) {
-						Return
-					}
-				}
-
-				# if device variable not provided...
-				If ([string]::IsNullOrEmpty($ArgumentList['OSDDOMAIN'])) {
-					Write-Host ("$Hostname,$ComputerName,$Name - skipping device variable: 'OSDDOMAIN'; value not provided")
-				}
-				# if deployment collection name provided...
-				Else {
-					# update device variable for OSD domain
-					Try {
-						Write-Host ("$Hostname,$ComputerName,$Name - checking device variable: 'OSDDOMAIN'")
-						Update-CMDeviceVariable -ResourceId $Device.ResourceID -VariableName 'OSDDOMAIN' -VariableValue $ArgumentList['OSDDomain']
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: checking device variable")
-						Return $_
-					}
-				}
-
-				# if device variable not provided...
-				If ([string]::IsNullOrEmpty($ArgumentList['OSDDOMAINOUNAME'])) {
-					Write-Host ("$Hostname,$ComputerName,$Name - skipping device variable: 'OSDDOMAINOUNAME'; value not provided")
-				}
-				Else {
-					# update device variable for OSD domain OU name
-					Try {
-						Write-Host ("$Hostname,$ComputerName,$Name - checking device variable: 'OSDDOMAINOUNAME'")
-						Update-CMDeviceVariable -ResourceId $Device.ResourceID -VariableName 'OSDDOMAINOUNAME' -VariableValue $ArgumentList['OSDDOMAINOUNAME']
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: checking device variable")
-						Return $_
-					}
-				}
-
-				# if collection name not provided...
-				If ([string]::IsNullOrEmpty($ArgumentList['DeploymentCollection'])) {
-					Write-Host ("$Hostname,$ComputerName,$Name - skipping deployment collection; name not provided")
-				}
-				# if collection name provided...
-				Else {
-					# add device to deployment collection
-					Try {
-						Write-Host ("$Hostname,$ComputerName,$Name - adding device to deployment collection: $($ArgumentList['DeploymentCollection'])")
-						$Device = Add-CMDeviceToCollection -CollectionName $ArgumentList['DeploymentCollection'] -ResourceId $Device.ResourceID
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add device to deployment collection")
-						Return $_
-					}
-				}
-
-				# if collection name not provided...
-				If ([string]::IsNullOrEmpty($ArgumentList['MaintenanceCollection'])) {
-					Write-Host ("$Hostname,$ComputerName,$Name - skipping maintenance collection; name not provided")
-				}
-				# if collection name provided...
-				Else {
-					# add device to collection
-					Try {
-						Write-Host ("$Hostname,$ComputerName,$Name - adding device to maintenance collection: $($ArgumentList['MaintenanceCollection'])")
-						$Device = Add-CMDeviceToCollection -CollectionName $ArgumentList['MaintenanceCollection'] -ResourceId $Device.ResourceID
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add device to collection'")
-						Return $_
-					}
+					# ...declare wait time and return
+					Write-Host ("$Hostname,$ComputerName,$Name - WARNING: device not found after '$WaitTime' seconds")
+					Write-Host ("$Hostname,$ComputerName,$Name - ...check SCCM before continuing")
+					Return $null
 				}
 			}
-		}
-		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create SCCM device")
-			Return $_
+
+			Function Add-CMDeviceToCollection {
+				Param (
+					[string]$CollectionName,
+					[string]$ResourceId
+				)
+
+				# retrieve device collection
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - retrieving device collection: '$CollectionName'")
+					$Collection = Get-CMDeviceCollection -Name $CollectionName
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve device collection")
+					Throw $_
+				}
+
+				# if device collection not found...
+				If ($null -eq $Collection) {
+					# ...warn and return
+					Write-Host ("$Hostname,$ComputerName,$Name - WARNING: could not retrieve device collection: '$CollectionName'")
+					Return
+				}
+
+				# check for direct membership rule
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - retrieving direct membership rule for device...")
+					$MembershipRule = Get-CMDeviceCollectionDirectMembershipRule -CollectionId $Collection.CollectionID -ResourceId $ResourceId
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving direct membership rule")
+					Throw $_
+				}
+
+				# if direct membership rule not found...
+				If ($null -eq $MembershipRule) {
+					# add direct membership rule to collection
+					Try {
+						Write-Host ("$Hostname,$ComputerName,$Name - adding direct membership rule for device to collection...")
+						$MembershipRule = Add-CMDeviceCollectionDirectMembershipRule -CollectionId $Collection.CollectionID -ResourceId $ResourceId -PassThru
+					}
+					Catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: adding direct membership rule for device to collection")
+						Throw $_
+					}
+				}
+
+				# if collection membership rule not found after adding rule...
+				If ($null -eq $MembershipRule) {
+					Write-Host ("$Hostname,$ComputerName,$Name - WARNING: could not retrieve direct membership rule after adding to collection")
+					Return
+				}
+
+				# retrieve device from collection
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - retrieving device from collection...")
+					Get-CMDeviceFromCollection -CollectionId $Collection.CollectionID -ResourceId $ResourceId
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving device from collection")
+					Throw $_
+				}
+			}
+
+			Function Update-CMDeviceVariable {
+				Param (
+					[string]$ResourceId,
+					[string]$VariableName,
+					[string]$VariableValue
+				)
+
+				# retrieve device variable for OSD domain
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - retrieving device variable: '$VariableName'")
+					$DeviceVariable = Get-CMDeviceVariable -ResourceId $ResourceId -VariableName $VariableName
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving device variable")
+					Throw $_
+				}
+
+				# if device variable not found...
+				If ($null -eq $DeviceVariable) {
+					# create device variable
+					Try {
+						Write-Host ("$Hostname,$ComputerName,$Name - ...adding device variable: '$VariableName'")
+						$null = New-CMDeviceVariable -ResourceId $ResourceId -VariableName $VariableName -VariableValue $VariableValue
+					}
+					Catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: adding device variable")
+						Throw $_
+					}
+				}
+				# if device variable found with wrong value...
+				ElseIf ($DeviceVariable.Value -ne $VariableValue) {
+					# update device variable
+					Try {
+						Write-Host ("$Hostname,$ComputerName,$Name - ...updating device variable: '$VariableName'")
+						$null = Set-CMDeviceVariable -ResourceId $ResourceId -VariableName $VariableName -NewVariableValue $VariableValue
+					}
+					Catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: updating device variable")
+						Throw $_
+					}
+				}
+				Else {
+					Write-Host ("$Hostname,$ComputerName,$Name - ...found device variable: '$VariableName'")
+				}
+			}
+
+			# create objects for reporting
+			$Hostname = $ArgumentList['Hostname']
+			$ComputerName = $ArgumentList['ComputerName']
+			$Name = $ArgumentList['Name']
+
+			# import CM module
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...importing SCCM module")
+				Import-Module -Name $ArgumentList['ModulePath'] -ErrorAction 'Stop'
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: importing SCCM module")
+				Throw $_
+			}
+
+			# move to site drive
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...setting location to site drive")
+				Set-Location -Path ([string]::Concat($ArgumentList['SiteCode'], ':\'))
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: setting location to SCCM drive")
+				Throw $_
+			}
+
+			# retrieve All Systems collection
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - retrieving 'All Systems' collection")
+				$AllSystems = Get-CMDeviceCollection -Name 'All Systems'
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving 'All Systems' collection")
+				Throw $_
+			}
+
+			# validate All Systems collection
+			If ($null -eq $AllSystems) {
+				Write-Host ("$Hostname,$ComputerName,$Name - WARNING: All Systems collection is empty")
+				Return
+			}
+
+			# retrieve device by name
+			If ($null -eq $Device) {
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - retrieving device by name from 'All Systems' collection")
+					$Device = Get-CMDevice -Collection $AllSystems -Fast -Name $Name
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving device by name from 'All Systems' collection")
+					Throw $_
+				}
+	
+				# if multiple devices found by name...
+				If ($Device.Count -gt 1) {
+					# ...warn and return
+					Write-Host ("$Hostname,$ComputerName,$Name - WARNING: multiple devices found with the same name")
+					Write-Host ("$Hostname,$ComputerName,$Name - ...remove extra devices from SCCM before continuing")
+					Return
+				}
+	
+				# if device found by name and Device is a full client...
+				If ($null -ne $Device -and $Device.Client -eq 1) {
+					# ...warn and return
+					Write-Host ("$Hostname,$ComputerName,$Name - WARNING: device found by name with existing client")
+					Write-Host ("$Hostname,$ComputerName,$Name - ...remove device from SCCM before continuing")
+					Return
+				}
+	
+				# if device found by name with different BIOSGUID...
+				If ($null -ne $Device -and $Device.SMBIOSGUID -ne $ArgumentList['BIOSGUID']) {
+					# ...warn and return
+					Write-Host ("$Hostname,$ComputerName,$Name - WARNING: device found by name with unexpected SMBIOSGUID: '$($ArgumentList['BIOSGUID'])'")
+					Write-Host ("$Hostname,$ComputerName,$Name - ...remove device from SCCM before continuing")
+					Return
+				}
+			}
+
+			# retrieve device by BIOSGUID
+			If ($null -eq $Device) {
+				# retrieve device by BIOSGUID
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - retrieving devices from 'All Systems' collection")
+					$Device = Get-CMDevice -Collection $AllSystems -Fast | Where-Object { $_.SMBIOSGUID -eq $ArgumentList['BIOSGUID'] }
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving devices from 'All Systems' collection")
+					Throw $_
+				}
+
+				# if multiple devices found by BIOSGUID...
+				If ($Device.Count -gt 1) {
+					# ...warn and return
+					Write-Host ("$Hostname,$ComputerName,$Name - WARNING: multiple devices found with the same SMBIOSGUID")
+					Write-Host ("$Hostname,$ComputerName,$Name - ...remove extra devices from SCCM before continuing")
+					Return
+				}
+
+				# if device found by SMBIOSGUID and Device is a full client...
+				If ($null -ne $Device -and $Device.Client -eq 1) {
+					# ...warn and return
+					Write-Host ("$Hostname,$ComputerName,$Name - WARNING: device found by SMBIOSGUID with existing client")
+					Write-Host ("$Hostname,$ComputerName,$Name - ...remove device from SCCM before continuing")
+					Return
+				}
+
+				# if device found by SMBIOSGUID and Device is a full client...
+				If ($null -ne $Device -and $Device.Name -ne $Name) {
+					# ...warn and return
+					Write-Host ("$Hostname,$ComputerName,$Name - WARNING: device found by SMBIOSGUID with unexpected name: '$($Device.Name)'")
+					Write-Host ("$Hostname,$ComputerName,$Name - ...remove device from SCCM before continuing")
+					Return
+				}
+			}
+
+			# if device not found by name or BIOSGUID...
+			If ($null -eq $Device) {
+				# define parameters for Import-CMComputerInformation
+				$ImportCMComputerInformation = @{
+					CollectionId = $AllSystems.CollectionID
+					ComputerName = $Name.ToUpper()
+					SMBiosGuid   = $ArgumentList['BIOSGUID']
+					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+				}
+				
+				# import the device into SCCM
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - ...adding device to SCCM")
+					Import-CMComputerInformation @ImportCMComputerInformation
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: adding device to SCCM")
+					Throw $_
+				}
+				
+				# define parameters for Get-CMDeviceFromCollection
+				$GetCMDeviceFromCollection = @{
+					CollectionId = $AllSystems.CollectionID
+					Name         = $Name
+					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# retrieve device from collection
+				Try {
+					$Device = Get-CMDeviceFromCollection @GetCMDeviceFromCollection
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving device from collection: '$($AllSystems.Name)'")
+					Throw $_
+				}
+				
+				# if device still not found...
+				If ($null -eq $Device) {
+					Return
+				}
+
+				# retrieve resource ID
+				$ResourceId = $Device.ResourceId
+
+				# ...report
+				Write-Host ("$Hostname,$ComputerName,$Name - ...created new device with resource ID: '$ResourceId'")
+			}
+			# if device found...
+			Else {
+				# retrieve resource ID
+				$ResourceId = $Device.ResourceId
+
+				# ...report
+				Write-Host ("$Hostname,$ComputerName,$Name - ...found existing device with resource ID: '$ResourceId'")
+
+				# define parameters for Get-CimInstance
+				$GetCimInstanceForPXE = @{
+					Namespace = "ROOT\SMS\site_$SiteCode"
+					Query     = "SELECT * FROM SMS_LastPXEAdvertisement WHERE NetBiosName = '$($Device.Name)' OR SMBIOSGUID = '$($Device.SMBIOSGUID)'"
+				}
+
+				# retrieve CIM instances for matching PXE advertisements
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - checking for PXE deployments for existing device...")
+					$CimInstanceForPXE = Get-CimInstance @GetCimInstanceForPXE
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving PXE deployment for device")
+					Throw $_
+				}
+
+				# process each CIM instance
+				ForEach ($CimInstance in $CimInstanceForPXE) {
+					# get CM resource with matching NetBiosName and SMBIOSGUID
+					Try {
+						$Resource = Get-CMResource -Fast | Where-Object { $_.NetBiosName -eq $CimInstance.NetBiosName -and $_.SMBIOSGUID -eq $CimInstance.SMBIOSGUID }
+					}
+					Catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving CM resource from CIM instance data")
+						Throw $_
+					}
+
+					# report advertisement ID
+					Write-Host ("$Hostname,$ComputerName,$Name - clearing PXE deployment for advertisement ID: '$($CimInstance.AdvertisementID)'")
+
+					# define parameters for Clear-CMPxeDeployment
+					$ClearCMPxeDeployment = @{
+						ResourceId  = $Resource.ResourceId
+						ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+					}
+
+					# clear PXE flag on CM resource
+					Try {
+						Clear-CMPxeDeployment @ClearCMPxeDeployment
+					}
+					Catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: clearing CM PXE deployment")
+						Throw $_
+					}
+
+					# report and continue
+					Write-Host ("$Hostname,$ComputerName,$Name - ...cleared PXE deployment for resource")
+				}
+			}
+
+			# if device variable not provided...
+			If ([string]::IsNullOrEmpty($ArgumentList['OSDDOMAIN'])) {
+				Write-Host ("$Hostname,$ComputerName,$Name - skipping device variable: 'OSDDOMAIN'; value not provided")
+			}
+			# if deployment collection name provided...
+			Else {
+				# define parameterss for Update-CMDeviceVariable
+				$UpdateCMDeviceVariable = @{
+					ResourceId    = $Device.ResourceID
+					VariableName  = 'OSDDOMAIN'
+					VariableValue = $ArgumentList['OSDDomain']
+					ErrorAction   = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# update device variable for OSD domain
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - checking device variable: 'OSDDOMAIN'")
+					Update-CMDeviceVariable @UpdateCMDeviceVariable
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: checking device variable")
+					Throw $_
+				}
+			}
+
+			# if device variable not provided...
+			If ([string]::IsNullOrEmpty($ArgumentList['OSDDOMAINOUNAME'])) {
+				Write-Host ("$Hostname,$ComputerName,$Name - skipping device variable: 'OSDDOMAINOUNAME'; value not provided")
+			}
+			Else {
+				# define parameterss for Update-CMDeviceVariable
+				$UpdateCMDeviceVariable = @{
+					ResourceId    = $Device.ResourceID
+					VariableName  = 'OSDDOMAINOUNAME'
+					VariableValue = $ArgumentList['OSDDOMAINOUNAME']
+					ErrorAction   = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# update device variable for OSD domain OU name
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - checking device variable: 'OSDDOMAINOUNAME'")
+					Update-CMDeviceVariable @UpdateCMDeviceVariable
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: checking device variable")
+					Throw $_
+				}
+			}
+
+			# if collection name not provided...
+			If ([string]::IsNullOrEmpty($ArgumentList['DeploymentCollection'])) {
+				Write-Host ("$Hostname,$ComputerName,$Name - skipping deployment collection; name not provided")
+			}
+			# if collection name provided...
+			Else {
+				# define parameters for Get-CMDeviceFromCollection
+				$AddCMDeviceToCollection = @{
+					CollectionName = $ArgumentList['DeploymentCollection']
+					ResourceId     = $Device.ResourceID
+					ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# add device to deployment collection
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - adding device to deployment collection: $($ArgumentList['DeploymentCollection'])")
+					$Device = Add-CMDeviceToCollection @AddCMDeviceToCollection
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add device to deployment collection")
+					Throw $_
+				}
+			}
+
+			# if collection name not provided...
+			If ([string]::IsNullOrEmpty($ArgumentList['MaintenanceCollection'])) {
+				Write-Host ("$Hostname,$ComputerName,$Name - skipping maintenance collection; name not provided")
+			}
+			# if collection name provided...
+			Else {
+				# define parameters for Get-CMDeviceFromCollection
+				$AddCMDeviceToCollection = @{
+					CollectionName = $ArgumentList['MaintenanceCollection']
+					ResourceId     = $Device.ResourceID
+					ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# add device to collection
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - adding device to maintenance collection: $($ArgumentList['MaintenanceCollection'])")
+					$Device = Add-CMDeviceToCollection @AddCMDeviceToCollection
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add device to collection'")
+					Throw $_
+				}
+			}
 		}
 	}
 
 	Function Add-DeviceToWds {
+		[CmdletBinding()]
 		Param (
 			# define VM parameters
 			[Parameter(Mandatory = $true)]
@@ -1156,7 +1170,7 @@ Begin {
 			$InvokeCommand = Get-PSSessionInvoke -ComputerName $DeploymentServer
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# get VM from parameters
@@ -1165,7 +1179,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
-			Return $_
+			Throw $_
 		}
 
 		# define CIM instance for VM system settings
@@ -1181,7 +1195,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve CIM instance for VM")
-			Return $_
+			Throw $_
 		}
 
 		# retrive BIOS GUID from CIM data
@@ -1190,97 +1204,143 @@ Begin {
 			Return
 		}
 		Else {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...found BIOS GUID for VM")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...found BIOS GUID for VM: '$($CimInstanceForVM.BIOSGUID)'")
 			$BIOSGUID = $CimInstanceForVM.BIOSGUID
 		}
 
-		# retrieve state of WDS Active Directory integration
-		Write-Host ("$Hostname,$ComputerName,$Name - checking WDS server...")
-		Try {
-			$Disabled = Invoke-Command @InvokeCommand -ScriptBlock {
-				$GetItemProperty = @{
-					Path        = 'HKLM:\SYSTEM\CurrentControlSet\Services\WDSServer\Providers\WDSDCMGR\Providers\WDSADDC'
-					Name        = 'Disabled'
-					ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
-				}
-				Get-ItemProperty @GetItemProperty | Select-Object -ExpandProperty 'Disabled'
-			}
-		}
-		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not check WDS provider")
-			Return $_
-		}
-
-		# check state of WDS Active Directory integration
-		If ($Disabled -eq 0) {
-			Write-Host ("$Hostname,$ComputerName,$Name - WARNING: WDS server is AD-integrated; skipping WDS provisioning...")
-			Return
-		}
-		Else {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...WDS server is stand-alone; creating WDS device...")
-		}
-
 		# update arguments for Invoke-Command
+		$InvokeCommand['ArgumentList']['Hostname'] = $Hostname
+		$InvokeCommand['ArgumentList']['ComputerName'] = $DeploymentServer
+		$InvokeCommand['ArgumentList']['DeviceName'] = $Name
 		$InvokeCommand['ArgumentList']['DeviceID'] = $BIOSGUID
-		$InvokeCommand['ArgumentList']['DeviceName'] = $Name.ToUpper()
-
-		# if WDS not integrated with Active Directory
-		Try {
-			Invoke-Command @InvokeCommand -ScriptBlock {
-				Param($ArgumentList)
-				# remove existing WDS clients by DeviceID
-				Try {
-					Get-WdsClient -DeviceID $ArgumentList['DeviceID'] | Remove-WdsClient
-				}
-				Catch {
-					Return $_
-				}
-
-				# remove existing WDS clients by DeviceName
-				Try {
-					Get-WdsClient -DeviceName $ArgumentList['DeviceName'] | Remove-WdsClient
-				}
-				Catch {
-					Return $_
-				}
-			}
-		}
-		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove existing WDS devices")
-			Return $_
-		}
-
-		# update arguments for Invoke-Command
 		$InvokeCommand['ArgumentList']['WdsClientUnattend'] = $DeploymentPath
 
-		# if WDS not integrated with Active Directory
-		Try {
-			Invoke-Command @InvokeCommand -ScriptBlock {
-				Param($ArgumentList)
-				# define parameters for New-WdsClient
-				$NewWdsClient = @{
-					DeviceID          = $ArgumentList['DeviceID']
-					DeviceName        = $ArgumentList['DeviceName']
-					WdsClientUnattend = $ArgumentList['WdsClientUnattend']
-					ErrorAction       = [System.Management.Automation.ActionPreference]::Stop
+		# add VM to WDS
+		Invoke-Command @InvokeCommand -ScriptBlock {
+			Param($ArgumentList)
+
+			# create objects for reporting
+			$Hostname = $ArgumentList['Hostname']
+			$ComputerName = $ArgumentList['ComputerName']
+			$Name = $ArgumentList['DeviceName']
+
+			# define parameters for Get-Item Property
+			$GetItemProperty = @{
+				Path        = 'HKLM:\SYSTEM\CurrentControlSet\Services\WDSServer\Providers\WDSDCMGR\Providers\WDSADDC'
+				Name        = 'Disabled'
+				ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
+			}
+
+			# retrieve Disabled item property for WDS Active Directory inegration
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - checking WDS server...")
+				$Disabled = Get-ItemProperty @GetItemProperty | Select-Object -ExpandProperty 'Disabled'
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not check WDS integration")
+				Throw $_
+			}
+
+			# if WDS Active Directory integration is not disabled...
+			If ($Disabled -eq 0) {
+				# ...declare and return
+				Write-Host ("$Hostname,$ComputerName,$Name - WARNING: WDS server is in Active Directory mode; skipping WDS provisioning...")
+				Return
+			}
+
+			# define parameters for Get-WdsClient
+			$GetWdsClient = @{
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# retrieve existing WDS clients
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - checking for matching WDS devices...")
+				$WdsClient = Get-WdsClient @GetWdsClient
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve existing WDS devices")
+				Throw $_
+			}
+
+			# create objects for device
+			$DeviceID = $ArgumentList['DeviceID']
+
+			# filter WDS clients
+			$WdsClient = $WdsClient | Where-Object { $_.DeviceId -eq "{$DeviceId}" -or $_.DeviceName -eq $Name }
+
+			# if no WDS clients found...
+			If ($null -eq $WdsClient) {
+				# ...declare and continue
+				Write-Host ("$Hostname,$ComputerName,$Name - ...no matching WDS device found")
+			}
+			# if WDS clients found with matching DeviceId...
+			ElseIf ($null -ne ($WdsClient | Where-Object { $_.DeviceId -eq "{$DeviceId}" })) {
+				# ...remove existing WDS clients by DeviceId
+				Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing WDS devices with matching DeviceID")
+
+				# define parameters for Remove-WdsClient
+				$RemoveWdsClient = @{
+					DeviceId    = $DeviceId
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 				}
 
-				# create WDS client
+				# remove WDS clients with matching DeviceId
 				Try {
-					$null = New-WdsClient @NewWdsClient
+					Remove-WdsClient @RemoveWdsClient
 				}
 				Catch {
-					Return $_
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove existing WDS devices with matching DeviceID")
+					Throw $_
 				}
 			}
-		}
-		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create WDS device")
-			Return $_
+			# if WDS clients found with matching DeviceName...
+			ElseIf ($null -ne ($WdsClient | Where-Object { $_.DeviceName -eq $Name })) {
+				# ...remove existing WDS clients by DeviceName
+				Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing WDS devices with matching DeviceName")
+				
+				# define parameters for Remove-WdsClient
+				$RemoveWdsClient = @{
+					DeviceId    = $Name
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# remove WDS clients with matching DeviceName
+				Try {
+					Remove-WdsClient @RemoveWdsClient
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove existing WDS devices with matching DeviceName")
+					Throw $_
+				}
+			}
+
+			# define parameters for New-WdsClient
+			$NewWdsClient = @{
+				DeviceId          = $DeviceId
+				DeviceName        = $Name
+				WdsClientUnattend = $ArgumentList['WdsClientUnattend']
+				ErrorAction       = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# create WDS client
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - creating WDS device...")
+				$null = New-WdsClient @NewWdsClient
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create WDS device")
+				Throw $_
+			}
+
+			# declare complete and return
+			Write-Host ("$Hostname,$ComputerName,$Name - ...created WDS device")
+			Return
 		}
 	}
 
 	Function Add-IsoToVm {
+		[CmdletBinding()]
 		Param (
 			# define VM parameters
 			[Parameter(Mandatory = $true)]
@@ -1296,7 +1356,7 @@ Begin {
 			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# get VM from parameters
@@ -1305,7 +1365,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
-			Return $_
+			Throw $_
 		}
 
 		# update argument list for Test-Path
@@ -1325,7 +1385,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not check provided path")
-			Return $_
+			Throw $_
 		}
 
 		# evaluate deployment path
@@ -1346,13 +1406,13 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve DVD drives from VM")
-			Return $_
+			Throw $_
 		}
 
 		# if multiple DVD drives found...
 		If ($VMDvdDrive.Count -gt 1) {
 			# sort drives by controller and LUN then select first drive
-			Write-Host ("$Hostname,$ComputerName,$Name - found multiple DVD drives on VM; select first drive")
+			Write-Host ("$Hostname,$ComputerName,$Name - found multiple DVD drives on VM; selecting first drive")
 			$VMDvdDrive = $VMDvdDrive | Sort-Object -Property ControllerNumber, ControllerLocation | Select-Object -First 1
 		}
 
@@ -1370,7 +1430,7 @@ Begin {
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve SCSI controller")
-				Return $_
+				Throw $_
 			}
 
 			# if multiple SCSI controllers found...
@@ -1395,7 +1455,7 @@ Begin {
 				}
 				Catch {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add SCSI controller")
-					Return $_
+					Throw $_
 				}
 			}
 
@@ -1414,7 +1474,7 @@ Begin {
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add DVD drive to VM")
-				Return $_
+				Throw $_
 			}
 		}
 
@@ -1432,7 +1492,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not attach ISO file to DVD drive")
-			Return $_
+			Throw $_
 		}
 
 		# define parameters for Set-VMFirmware
@@ -1449,11 +1509,12 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not update VM firmware")
-			Return $_
+			Throw $_
 		}
 	}
 
 	Function Add-VMToClusterName {
+		[CmdletBinding()]
 		Param(
 			# define VM parameters
 			[Parameter(Mandatory = $true)]
@@ -1464,29 +1525,43 @@ Begin {
 			[string]$ClusterName
 		)
 
+		# get VM from parameters
+		Try {
+			$VM = Get-VMFromParameters -ComputerName $ComputerName -VM $VM
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
+			Throw $_
+		}
+
 		# define parameters for Get-ClusterGroup
 		$GetClusterGroup = @{
 			Cluster     = $ClusterName
 			VMId        = $VM.Id
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
 		}
 
 		# retrieve existing cluster group
 		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - checking cluster for VM...")
 			$ClusterGroup = Get-ClusterGroup @GetClusterGroup
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: getting cluster group for VM")
-			Return $_
+			Throw $_
 		}
 
 		# if cluster group found...
 		If ($null -ne $ClusterGroup) {
-			# declare and continue
-			Write-Host ("$Hostname,$ComputerName,$Name - VM found in cluster: $ClusterName")
+			# declare and return cluster group
+			Write-Host ("$Hostname,$ComputerName,$Name - ...VM found in cluster: $ClusterName")
+			Return $ClusterGroup
 		}
 		# if cluster group not found...
 		Else {
+			# declare and begin
+			Write-Host ("$Hostname,$ComputerName,$Name - ...VM not found in cluster, adding to cluster: $ClusterName")
+
 			# define paramters for Add-ClusterVirtualMachineRole
 			$AddClusterVirtualMachineRole = @{
 				Cluster     = $ClusterName
@@ -1494,57 +1569,23 @@ Begin {
 				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 			}
 
-			# create cluster group
+			# add VM to cluster
 			Try {
-				Write-Host ("$Hostname,$ComputerName,$Name - VM ready to be clustered, adding to cluster: $ClusterName")
 				$ClusterGroup = Add-ClusterVirtualMachineRole @AddClusterVirtualMachineRole
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: adding VM to cluster: '$ClusterName'")
-				Return $_
+				Throw $_
 			}
 
-			# check cluster group
-			If ($null -eq $ClusterGroup) {
-				Write-Host ("$Hostname,$ComputerName,$Name - WARNING: expected cluster group not returned")
-				Return
-			}
-		}
-
-		# if cluster priority defined...
-		If ($null -ne $JsonData.$Name.ClusterPriority) {
-			# set VM priority if defined
-			Write-Host ("$Hostname,$ComputerName,$Name - VM priority defined, setting to: $($JsonData.$Name.ClusterPriority)")
-			Try {
-				$ClusterGroup.Priority = $JsonData.$Name.ClusterPriority
-			}
-			Catch {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: setting VM priority")
-				Return $_
-			}
-		}
-
-		# define paramters for Start-ClusterGroup
-		$StartClusterGroup = @{
-			Cluster     = $ClusterName
-			Name        = $ClusterGroup.Name
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# power on VM if necessary
-		If ($ClusterGroup.State -ne 'Online') {
-			Write-Host ("$Hostname,$ComputerName,$Name - VM powered off, starting VM on cluster...")
-			Try {
-				$null = Start-ClusterGroup @StartClusterGroup
-			}
-			Catch {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: starting VM on cluster")
-				Return $_
-			}
+			# declare and return cluster group
+			Write-Host ("$Hostname,$ComputerName,$Name - ...added VM to cluster")
+			Return $ClusterGroup
 		}
 	}
 
 	Function Add-VMNetworkAdapterToDHCP {
+		[CmdletBinding()]
 		Param(
 			[string]$ComputerName,
 			[string]$ScopeId,
@@ -1552,76 +1593,105 @@ Begin {
 			[string]$MacAddress
 		)
 
-		# define parameters for reservation
+		# define parameters for Get-DhcpServerv4Scope
 		$GetDhcpServerv4Scope = @{
 			ComputerName = $ComputerName
 			ScopeId      = $ScopeId
+			ErrorAction  = [System.Management.Automation.ActionPreference]::SilentlyContinue
 		}
 
 		# check for existing DHCP scope
 		Try {
 			Write-Host ("$Hostname,$ComputerName,$Name - checking for DHCP scope: '$ScopeId'")
-			$null = Get-DhcpServerv4Scope @GetDhcpServerv4Scope
+			$Scope = Get-DhcpServerv4Scope @GetDhcpServerv4Scope
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: checking for DHCP scope")
-			Return $_
+			Throw $_
 		}
 
-		# define parameters for reservation
+		# if DHCP scope not found...
+		If ($null -eq $Scope) {
+			# declare and return
+			Write-Host ("$Hostname,$ComputerName,$Name - ...DHCP scope not found, skipping DHCP provisioning")
+			Return
+		}
+
+		# define parameters for Get-DhcpServerv4Reservation
 		$GetDhcpServerv4Reservation = @{
 			ComputerName = $ComputerName
 			ScopeId      = $ScopeId
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 		}
 
-		# check for existing DHCP scope
+		# retrieve DHCP reservations
 		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...found scope, retrieving reservations...")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...found DHCP scope, retrieving reservations...")
 			$Reservations = Get-DhcpServerv4Reservation @GetDhcpServerv4Reservation
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving reservations from DHCP scope")
-			Return $_
+			Throw $_
 		}
 
 		# convert MAC address into client ID
 		$ClientId = $MacAddress -replace '(..(?!$))', '$1-'
 
-		# check for existing DHCP reservation
-		Write-Host ("$Hostname,$ComputerName,$Name - checking for DHCP reservation: '$IPAddress'")
+		# filter DHCP reservations
+		Write-Host ("$Hostname,$ComputerName,$Name - checking for DHCP reservations with...")
+		Write-Host ("$Hostname,$ComputerName,$Name -  IP Address : '$IPAddress'")
+		Write-Host ("$Hostname,$ComputerName,$Name -  Client ID  : '$ClientId'")
 		$Reservations = $Reservations | Where-Object { $_.IPAddress -eq $IPAddress -or $_.ClientId -eq $ClientId }
+
+		# check DHCP reservations
+		If ($null -eq $Reservations) {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...existing DHCP reservation not found")
+		}
+
+		# check DHCP reservations
 		ForEach ($Reservation in $Reservations) {
 			If ($Reservation.IPAddress -eq $IPAddress -and $Reservation.ClientId -eq $ClientId) {
 				Write-Host ("$Hostname,$ComputerName,$Name - ...found existing DHCP reservation with requested IP address and client ID")
 				Return
 			}
-			If ($Reservation.IPAddress -ne $IPAddress) {
+			ElseIf ($Reservation.IPAddress -ne $IPAddress) {
+				# define parameters for Remove-DhcpServerv4Reservation
+				$RemoveDhcpServerv4Reservation = @{
+					ComputerName = $ComputerName
+					IPAddress    = $IPAddress
+					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# remove DHCP reservation with same IP addresss
 				Try {
 					Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing DHCP reservation with conflicting IP address: '$($Reservation.IPAddress)'")
-					Remove-DhcpServerv4Reservation -ComputerName $ServerName -IPAddress $IPAddress
+					Remove-DhcpServerv4Reservation @RemoveDhcpServerv4Reservation
 				}
 				Catch {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: removing existing DHCP reservation'")
-					Return $_
+					Throw $_
 				}
 			}
-			If ($Reservation.ClientId -ne $ClientId) {
+			ElseIf ($Reservation.ClientId -ne $ClientId) {
+				# define parameters for Remove-DhcpServerv4Reservation
+				$RemoveDhcpServerv4Reservation = @{
+					ComputerName = $ComputerName
+					ScopeId      = $ScopeId
+					ClientId     = $ClientId
+					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# remove DHCP reservation with same client ID
 				Try {
 					Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing DHCP reservation with conflicting client ID: '$($Reservation.ClientId)'")
-					Remove-DhcpServerv4Reservation -ComputerName $ServerName -ScopeId $ScopeId -ClientId $ClientId
+					Remove-DhcpServerv4Reservation @RemoveDhcpServerv4Reservation
 				}
 				Catch {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: removing existing DHCP reservation")
-					Return $_
+					Throw $_
 				}
 			}
 		}
-
-		# declare values
-		Write-Host ("$Hostname,$ComputerName,$Name - creating DHCP reservation...")
-		Write-Host ("$Hostname,$ComputerName,$Name - ...Reservation name : $Name")
-		Write-Host ("$Hostname,$ComputerName,$Name - ...IP Address       : $IPAddress")
-		Write-Host ("$Hostname,$ComputerName,$Name - ...Client ID        : $ClientId")
 
 		# define parameters for DHCP reservation
 		$AddDhcpServerv4Reservation = @{
@@ -1630,20 +1700,25 @@ Begin {
 			ScopeId      = $ScopeId
 			IPAddress    = $IPAddress
 			ClientId     = $ClientId
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 		}
 
 		# create DHCP reservation
 		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - creating DHCP reservation...")
 			Add-DhcpServerv4Reservation @AddDhcpServerv4Reservation
-			Write-Host ("$Hostname,$ComputerName,$Name - created DHCP reservation")
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: creating DHCP reservcation")
 			Return
 		}
+
+		# declare action
+		Write-Host ("$Hostname,$ComputerName,$Name - ...created DHCP reservation")
 	}
 
 	Function Add-VMNetworkAdapterToVM {
+		[CmdletBinding()]
 		Param(
 			# define VM parameters
 			[Parameter(Mandatory = $true)]
@@ -1661,7 +1736,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
-			Return $_
+			Throw $_
 		}
 
 		# retrieve existing NICs with requested values
@@ -1670,7 +1745,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VMNetworkAdapters for VM")
-			Return $_
+			Throw $_
 		}
 
 		# if single NIC found with requested values...
@@ -1679,13 +1754,19 @@ Begin {
 			# if device naming is not enabled...
 			If ($VMNetworkAdapter.DeviceNaming -ne 'On') {
 				# ...enable device naming
+				$SetVMNetworkAdapter = @{
+					VMNetworkAdapter = $VMNetworkAdapter
+					DeviceNaming     = 'On'
+					Passthru         = $true
+					ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
+				}
 				Try {
 					Write-Host ("$Hostname,$ComputerName,$Name - ...enabling DeviceNaming on VMNetworkAdapter: '$NetworkAdapterName'")
-					$VMNetworkAdapter = Set-VMNetworkAdapter -VMNetworkAdapter $VMNetworkAdapter -DeviceNaming On -ErrorAction Stop -Passthru
+					$VMNetworkAdapter = Set-VMNetworkAdapter @SetVMNetworkAdapter
 				}
 				Catch {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not set device naming on VMNetworkAdapter for VM")
-					Return $_
+					Throw $_
 				}
 			}
 			# if switch should be empty...
@@ -1704,7 +1785,7 @@ Begin {
 					}
 					Catch {
 						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not disconnect VMNetworkAdapter from switch")
-						Return $_
+						Throw $_
 					}
 				}
 			}
@@ -1725,7 +1806,7 @@ Begin {
 					}
 					Catch {
 						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not connect VMNetworkAdapter to switch")
-						Return $_
+						Throw $_
 					}
 				}
 			}
@@ -1745,7 +1826,7 @@ Begin {
 				}
 				Catch {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove VMNetworkAdapter")
-					Return $_
+					Throw $_
 				}
 			}
 		}
@@ -1771,7 +1852,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VMNetworkAdapter to VM")
-			Return $_
+			Throw $_
 		}
 
 		# return network adapter
@@ -1779,6 +1860,7 @@ Begin {
 	}
 
 	Function Set-VMNetworkAdapterVlanId {
+		[CmdletBinding()]
 		Param(
 			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VMNetworkAdapter] })]
 			[object]$VMNetworkAdapter,
@@ -1792,7 +1874,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VLAN for VMNetworkAdapter")
-			Return $_
+			Throw $_
 		}
 
 		# if VLAN is null...
@@ -1836,7 +1918,7 @@ Begin {
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not set VLAN for VMNetworkAdapter")
-				Return $_
+				Throw $_
 			}
 			# refresh VMNetworkAdapter
 			$VMNetworkAdapter = $VMNetworkAdapterVlan.ParentAdapter
@@ -1847,6 +1929,7 @@ Begin {
 	}
 
 	Function Set-VMNetworkAdapterMacAddress {
+		[CmdletBinding()]
 		Param(
 			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VMNetworkAdapter] })]
 			[object]$VMNetworkAdapter,
@@ -1883,7 +1966,7 @@ Begin {
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve next MAC address from host")
-				Return $_
+				Throw $_
 			}
 		}
 		# if MAC address was not provided and VMNetworkAdapter has non-default MAC address
@@ -1918,7 +2001,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not set MAC address")
-			Return $_
+			Throw $_
 		}
 
 		# return updated VMNetworkAdapter
@@ -1926,6 +2009,7 @@ Begin {
 	}
 
 	Function Set-VMSecuritySettings {
+		[CmdletBinding()]
 		Param(
 			# define VM parameters
 			[Parameter(Mandatory = $true)]
@@ -1940,7 +2024,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
-			Return $_
+			Throw $_
 		}
 
 		# define parameters for Get-VMKeyProtector
@@ -1955,7 +2039,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM key protector")
-			Return $_
+			Throw $_
 		}
 
 		# define parameters for ConvertTo-HgsKeyProtector
@@ -1970,8 +2054,6 @@ Begin {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...found VM key protector")
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...creating key protector for VM")
-
 			# define parameters for Set-VMKeyProtector
 			$SetVMKeyProtector = @{
 				VM                   = $VM
@@ -1981,11 +2063,12 @@ Begin {
 
 			# set key protector
 			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...creating key protector for VM")
 				Set-VMKeyProtector @SetVMKeyProtector
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create VM key protector")
-				Return $_
+				Throw $_
 			}
 		}
 
@@ -2002,11 +2085,12 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not enable virtual TPM")
-			Return $_
+			Throw $_
 		}
 	}
 
 	Function Set-VMSystemSettings {
+		[CmdletBinding()]
 		Param(
 			# define VM parameters
 			[Parameter(Mandatory = $true)]
@@ -2023,7 +2107,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
-			Return $_
+			Throw $_
 		}
 
 		# define CIM instance for VM system settings
@@ -2039,12 +2123,28 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve CIM instance for VM")
-			Return $_
+			Throw $_
 		}
+
+		# define counter for changes
+		$SystemSettingsCounter = [int32]0
 
 		# modify VM system settings
 		ForEach ($SystemSetting in $SystemSettings.Keys) {
-			$CimInstanceForVM.$SystemSetting = $SystemSettings[$SystemSetting]
+			If ($CimInstanceForVM.$SystemSetting -eq $SystemSettings[$SystemSetting]) {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...found '$SystemSetting' set to '$($SystemSettings[$SystemSetting])'")
+			}
+			Else {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...updating '$SystemSetting' from '$($CimInstanceForVM.$SystemSetting)' to '$($SystemSettings[$SystemSetting])'")
+				$CimInstanceForVM.$SystemSetting = $SystemSettings[$SystemSetting]
+				$SystemSettingsCounter++
+			}
+		}
+
+		# check counter for changes
+		If ($SystemSettingsCounter -eq 0) {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...existing firmware settings match requested settings")
+			Return
 		}
 
 		# serialize and encode VM system settings
@@ -2055,7 +2155,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not serialize the CIM objects for VM firmware")
-			Return $_
+			Throw $_
 		}
 
 		# define CIM instance for VM management service
@@ -2071,14 +2171,14 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve CIM instance for VM management service")
-			Return $_
+			Throw $_
 		}
 
 		# define CIM method for host management service
 		$InvokeCimMethod = @{
 			CimInstance = $CimInstanceForVMMS
 			MethodName  = 'ModifySystemSettings'
-			Arguments   = @{SystemSettings = $CimEncodedData }
+			Arguments   = @{ SystemSettings = $CimEncodedData }
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
 
@@ -2089,7 +2189,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not call method to update firmware settings via CIM")
-			Return $_
+			Throw $_
 		}
 
 		# check CIM return value
@@ -2098,26 +2198,11 @@ Begin {
 		}
 		Else {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: firmware settings not updated, CIM returned: '$($CimMethod.ReturnValue)'")
-			Return $null
-		}
-
-		# retrieve updated firmware settings from WMI
-		Write-Host ("$Hostname,$ComputerName,$Name - retrieving updated CIM objects for VM firmware...")
-		Try {
-			$CimInstanceForVM = Get-CimInstance @GetCimInstanceForVM
-		}
-		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve updated CIM objects for VM firmware")
-			Return $_
-		}
-
-		# display updated firmware settings from WMI
-		ForEach ($SystemSetting in $SystemSettings.Keys) {
-			Write-Host ("$Hostname,$ComputerName,$VMName - ...set '$SystemSetting': '$($CimInstanceForVM.$SystemSetting)'")
 		}
 	}
 
 	Function Add-VHDFromParams {
+		[CmdletBinding()]
 		Param(
 			# define VM parameters
 			[Parameter(Mandatory = $true)]
@@ -2137,7 +2222,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
-			Return $_
+			Throw $_
 		}
 
 		# if scsi controller with requested number does not exist on VM...
@@ -2149,7 +2234,7 @@ Begin {
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VMScsiController to VM")
-				Return $_
+				Throw $_
 			}
 		}
 
@@ -2171,7 +2256,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VMHardDiskDrives from VM")
-			Return $_
+			Throw $_
 		}
 
 		# if path found on drives...
@@ -2186,7 +2271,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VMHardDiskDrives from VM")
-			Return $_
+			Throw $_
 		}
 
 		# remove requested drive from other locations
@@ -2202,7 +2287,7 @@ Begin {
 				}
 				Catch {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove errant VMHardDiskDrive from VM")
-					Return $_
+					Throw $_
 				}
 			}
 		}
@@ -2220,7 +2305,7 @@ Begin {
 				}
 				Catch {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove VMHardDiskDrive from VM")
-					Return $_
+					Throw $_
 				}
 			}
 		}
@@ -2245,7 +2330,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VMHardDiskDrive to VM")
-			Return $_
+			Throw $_
 		}
 
 		# if preserve drives requested...
@@ -2266,13 +2351,14 @@ Begin {
 				}
 				Catch {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not restore VMHardDiskDrive to VM")
-					Return $_
+					Throw $_
 				}
 			}
 		}
 	}
 
 	Function New-VHDFromParams {
+		[CmdletBinding()]
 		Param(
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName,
@@ -2287,39 +2373,64 @@ Begin {
 			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# update argument list
 		$InvokeCommand['ArgumentList']['Path'] = $Path
 
-		# create parent path
+		# get parent path
 		Try {
+			Write-Verbose ("$Hostname,$ComputerName,$Name - getting parent path for VHD")
+			$ParentPath = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				Split-Path -Path $ArgumentList['Path'] -Parent -ErrorAction Stop
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not get parent path")
+			Throw $_
+		}
+
+		# update argument list
+		$InvokeCommand['ArgumentList']['ParentPath'] = $ParentPath
+
+		# verify parent path
+		Try {
+			Write-Verbose ("$Hostname,$ComputerName,$Name - testing parent path for VHD")
+			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				Test-Path -Path $ArgumentList['ParentPath'] -PathType Container -ErrorAction Stop
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not test parent path")
+			Throw $_
+		}
+
+		# update argument list
+		$InvokeCommand['ArgumentList']['TestPath'] = $TestPath
+
+		# verify parent path
+		Try {
+			Write-Verbose ("$Hostname,$ComputerName,$Name - verifying parent path for VHD")
 			Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
-				Try {
-					$null = Split-Path -Path $ArgumentList['Path'] -Parent -Resolve -ErrorAction Stop
-				}
-				Catch {
-					Try {
-						$null = New-Item -Path (Split-Path -Path $ArgumentList['Path'] -Parent) -ItemType 'Directory' -ErrorAction Stop
-					}
-					Catch {
-						Return $_
-					}
+				If (-not $ArgumentList['TestPath']) {
+					$null = New-Item -Path $ArgumentList['ParentPath'] -ItemType 'Directory' -ErrorAction Stop
 				}
 			}
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not test path")
-			Return $_
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not verify parent path")
+			Throw $_
 		}
 
 		# define arguments for Get-VHD
 		$GetVHD = @{
 			ComputerName = $ComputerName
 			Path         = $Path
-			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			ErrorAction  = [System.Management.Automation.ActionPreference]::SilentlyContinue
 		}
 
 		# get existing VHD
@@ -2328,8 +2439,8 @@ Begin {
 			$VHD = Get-VHD @GetVHD
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create VHD")
-			Return $_
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not get VHD")
+			Throw $_
 		}
 
 		# if VHD found...
@@ -2349,15 +2460,16 @@ Begin {
 		# create the VHD
 		Try {
 			Write-Host ("$Hostname,$ComputerName,$Name - creating VHD with Path: '$Path'")
-			New-VHD @NewVHD
+			$null = New-VHD @NewVHD
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create VHD")
-			Return $_
+			Throw $_
 		}
 	}
 
 	Function New-VmFromParams {
+		[CmdletBinding()]
 		Param(
 			[Parameter(Mandatory)]
 			[string]$ComputerName,
@@ -2384,7 +2496,7 @@ Begin {
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VirtualMachinePath on host")
-				Return $_
+				Throw $_
 			}
 			Write-Host ("$Hostname,$ComputerName,$Name - ...using default VM path: '$Path")
 		}
@@ -2409,7 +2521,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create VM")
-			Return $_
+			Throw $_
 		}
 
 		# define parameters for integration services
@@ -2426,7 +2538,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not enable guest services")
-			Return $_
+			Throw $_
 		}
 
 		# define parameters for VM processor
@@ -2444,7 +2556,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not configure processor")
-			Return $_
+			Throw $_
 		}
 
 		# validate minimum memory
@@ -2481,7 +2593,7 @@ Begin {
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not set dynamic memory (start, min, max): $MemoryValues")
-				Return $_
+				Throw $_
 			}
 		}
 
@@ -2499,7 +2611,7 @@ Begin {
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not update security settings")
-				Return $_
+				Throw $_
 			}
 		}
 
@@ -2519,7 +2631,7 @@ Begin {
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not update system settings")
-			Return $_
+			Throw $_
 		}
 
 		# return VM object
@@ -2534,20 +2646,14 @@ Process {
 	}
 	Catch {
 		Write-Host "`nERROR: could not read configuration file: '$Json'"
-		Return $_
+		Throw $_
 	}
 
 	# process each VMname
 	ForEach ($Name in $VMName) {
-		# check if VMParams contains VM
+		# check if JSON contains VM
 		If ($null -eq $JsonData.$Name) {
 			Write-Host ("$Hostname - VM not found in Json: '$Name")
-			Continue
-		}
-
-		# check if VMParams contains multiple VMs with the same name
-		If ($JsonData.$Name.Count -gt 1) {
-			Write-Host ("$Hostname - VM found in Json multiple times: '$Name")
 			Continue
 		}
 
@@ -2576,7 +2682,7 @@ Process {
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: checking if host is clustered")
-				Return $_
+				Throw $_
 			}
 
 			# if host is not clustered...
@@ -2586,7 +2692,7 @@ Process {
 			}
 			# if host is not clustered...
 			Else {
-				Write-Host ("$Hostname,$ComputerName,$Name - ...host is clustered")
+				Write-Host ("$Hostname,$ComputerName,$Name - ...host is in cluster: '$ClusterName'")
 				$ComputerNames = Get-ClusterNodeNames -ComputerName $ComputerName
 			}
 
@@ -2602,7 +2708,7 @@ Process {
 				}
 				Catch {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving VMs from host")
-					Return $_
+					Throw $_
 				}
 
 				# add each VM to VM list
@@ -2615,7 +2721,7 @@ Process {
 			If ($VMList.Count -gt 1) {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: multiple VMs found with name")
 				ForEach ($VMObject in $VMList) {
-					Write-Host ("$Hostname,$ComputerName,$Name - ...found VM with Id: '$($VMObject.Id)'")
+					Write-Host ("$Hostname,$ComputerName,$Name - ...found VM on '$($VMObject.ComputerName)' with Id: '$($VMObject.Id)'")
 				}
 				Return
 			}
@@ -2655,7 +2761,9 @@ Process {
 				ComputerName = $ComputerName
 				Name         = $Name
 				Path         = $Path
+				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 			}
+
 			# define optional parameters
 			If ($null -ne $JsonData.$Name.ProcessorCount) {
 				$NewVMFromParams['ProcessorCount'] = $JsonData.$Name.ProcessorCount
@@ -2678,12 +2786,13 @@ Process {
 				$VM = New-VmFromParams @NewVMFromParams
 			}
 			Catch {
-				Return $_
+				Write-Verbose 'caught VM create error'
+				Throw $_
 			}
 		}
 
 		# if VM has hard disk drives...
-		If ($null -ne $JsonData.$Name.VMHardDiskDrives) {
+		If ($null -ne $VM -and $null -ne $JsonData.$Name.VMHardDiskDrives) {
 			# create hard drives
 			ForEach ($VMHardDiskDrive in $JsonData.$Name.VMHardDiskDrives) {
 				$NewVHDFromParams = @{
@@ -2695,7 +2804,7 @@ Process {
 					New-VHDFromParams @NewVHDFromParams
 				}
 				Catch {
-					Return $_
+					Throw $_
 				}
 			}
 
@@ -2713,7 +2822,7 @@ Process {
 					Add-VHDFromParams @AddVHDFromParams
 				}
 				Catch {
-					Return $_
+					Throw $_
 				}
 			}
 
@@ -2729,7 +2838,7 @@ Process {
 					Add-VHDFromParams @AddVHDFromParams
 				}
 				Catch {
-					Return $_
+					Throw $_
 				}
 			}
 
@@ -2745,7 +2854,7 @@ Process {
 					Add-VHDFromParams @AddVHDFromParams
 				}
 				Catch {
-					Return $_
+					Throw $_
 				}
 			}
 
@@ -2760,13 +2869,13 @@ Process {
 					Add-VHDFromParams @AddVHDFromParams
 				}
 				Catch {
-					Return $_
+					Throw $_
 				}
 			}
 		}
 
 		# if VM has network adapters...
-		If ($null -ne $JsonData.$Name.VMNetworkAdapters) {
+		If ($null -ne $VM -and $null -ne $JsonData.$Name.VMNetworkAdapters) {
 			# create VM network adapter
 			ForEach ($VMNetworkAdapter in $JsonData.$Name.VMNetworkAdapters) {
 				# define required parameters for VMNetworkAdapter
@@ -2789,7 +2898,7 @@ Process {
 					$VMNetworkAdapterObject = Add-VMNetworkAdapterToVM @AddVMNetworkAdapterToVM
 				}
 				Catch {
-					Return $_
+					Throw $_
 				}
 
 				# define required parameters for VLAN
@@ -2807,7 +2916,7 @@ Process {
 					$VMNetworkAdapterObject = Set-VMNetworkAdapterVlanId @SetVMNetworkAdapterVlanId
 				}
 				Catch {
-					Return $_
+					Throw $_
 				}
 
 				# define required parameters for MAC address
@@ -2831,7 +2940,7 @@ Process {
 					$VMNetworkAdapterObject = Set-VMNetworkAdapterMacAddress @SetVMNetworkAdapterMacAddress
 				}
 				Catch {
-					Return $_
+					Throw $_
 				}
 
 				# add VM IP address and MAC address to DHCP server
@@ -2846,16 +2955,16 @@ Process {
 						Add-VMNetworkAdapterToDHCP @AddVMNetworkAdapterToDHCP
 					}
 					Catch {
-						Return $_
+						Throw $_
 					}
 				}
 			}
 		}
 
 		# if VM has OS deployment...
-		If ($null -ne $JsonData.$Name.OSDeployment) {
+		If ($null -ne $VM -and $null -ne $JsonData.$Name.OSDeployment) {
 			# ...retrieve OS deployment method
-			$DeploymentMethod = $JsonData.$Name.OSDeployment.DeploymentMethod
+			$DeploymentMethod = $JsonData.$Name.OSDeployment.DeploymentMethod.ToUpper()
 
 			# ...configure OS deployment
 			If ([string]::IsNullOrEmpty($DeploymentMethod)) {
@@ -2865,8 +2974,8 @@ Process {
 				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, SkipProvisioning set")
 			}
 			Else {
-				switch ($JsonData.$Name.OSDeployment.DeploymentMethod) {
-					'iso' {
+				switch ($DeploymentMethod) {
+					'ISO' {
 						# define parameters for Add-IsoToVM
 						$AddIsoToVM = @{
 							VM             = $VM
@@ -2875,15 +2984,15 @@ Process {
 
 						# mount ISO file on VM
 						Try {
-							Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via directly via ISO file")
+							Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via ISO file")
 							Add-IsoToVm @AddIsoToVM
 						}
 						Catch {
 							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add ISO to VM")
-							Return $_
+							Throw $_
 						}
 					}
-					'wds' {
+					'WDS' {
 						# define parameters for Add-DeviceToWds
 						$AddDeviceToWds = @{
 							VM               = $VM
@@ -2898,10 +3007,10 @@ Process {
 						}
 						Catch {
 							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VM to WDS")
-							Return $_
+							Throw $_
 						}
 					}
-					'sccm' {
+					'SCCM' {
 						# define parameters for Add-DeviceToSccm
 						$AddDeviceToSccm = @{
 							VM                    = $VM
@@ -2918,63 +3027,208 @@ Process {
 							Add-DeviceToSccm @AddDeviceToSccm
 						}
 						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VM to WDS")
-							Return $_
+							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VM to SCCM")
+							Throw $_
 						}
 					}
 					default {
-						Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, unknown provisioning method provided: '$($DeploymentMethod.ToUpper())'")
+						Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, unknown provisioning method provided: '$DeploymentMethod'")
 					}
 				}
 			}
 		}
 
-		# start cluster tasks
+		# if VM is on a cluster...
 		If ($null -ne $VM -and -not [string]::IsNullOrEmpty($ClusterName)) {
+			# if DoNotCluster is set...
 			If ($JsonData.$Name.DoNotCluster) {
 				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping clustering, DoNotCluster set")
 			}
+			# if DoNotCluster is not set...
 			Else {
-				# define parameters for Add-VMToClusterName
+				# define required parameters for Add-VMToClusterName
 				$AddVMToClusterName = @{
 					VM          = $VM
 					ClusterName = $ClusterName
 				}
+
+				# add VM to cluster
 				Try {
-					Add-VMToClusterName @AddVMToClusterName
+					$ClusterGroup = Add-VMToClusterName @AddVMToClusterName
 				}
 				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: adding VM to cluster")
-					Return $_
+					Throw $_
+				}
+
+				# retrieve cluster priority
+				Try {
+					$ClusterPriority = $JsonData.$Name.ClusterPriority
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving cluster group priority from JSON")
+					Throw $_
+				}
+
+				# if cluster priority defined...
+				If ($null -ne $ClusterPriority) {
+					Write-Host ("$Hostname,$ComputerName,$Name - checking cluster group priority...")
+					# if cluster priority does not match...
+					If ($ClusterGroup.Priority -ne $ClusterPriority) {
+						# declare and begin
+						Write-Host ("$Hostname,$ComputerName,$Name - ...setting cluster group priority to: $ClusterPriority")
+				
+						# set cluster priority
+						Try {
+							$ClusterGroup.Priority = $ClusterPriority
+						}
+						Catch {
+							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: setting cluster group priority")
+							Throw $_
+						}
+					}
+					# if cluster priority matches...
+					Else {
+						# declare and continue
+						Write-Host ("$Hostname,$ComputerName,$Name - ...found priority already set to: $ClusterPriority")
+					}
+				}
+
+				# if cluster group is not online...
+				If ($ClusterGroup.State -eq 'Offline') {
+					# declare and begin
+					Write-Host ("$Hostname,$ComputerName,$Name - VM cluster group is offline, starting VM on cluster...")
+
+					# define paramters for Start-ClusterGroup
+					$StartClusterGroup = @{
+						Cluster        = $ClusterName
+						Name           = $ClusterGroup.Name
+						ChooseBestNode = $True
+						ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
+					}
+
+					# start cluster group
+					Try {
+						$ClusterGroup = Start-ClusterGroup @StartClusterGroup
+					}
+					Catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: starting VM on cluster")
+						Throw $_
+					}
+			
+					# declare and continue
+					Write-Host ("$Hostname,$ComputerName,$Name - ...started VM on cluster")
+					Continue
+				}
+				# if cluster group is online set...
+				ElseIf ($ClusterGroup.State -eq 'Online' -and $ForceRestart) {
+					# ..and ForceRestart is set...
+					If ($ForceRestart) {
+						# declare and begin
+						Write-Host ("$Hostname,$ComputerName,$Name - VM cluster group is not offline but ForceRestart set, restarting VM on cluster...")
+
+						# define paramters for Stop-ClusterGroup
+						$StopClusterGroup = @{
+							Cluster     = $ClusterName
+							Name        = $ClusterGroup.Name
+							ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+						}
+
+						# stop cluster group
+						Try {
+							$ClusterGroup = Stop-ClusterGroup @StopClusterGroup
+						}
+						Catch {
+							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: stopping VM on cluster")
+							Throw $_
+						}
+
+						# define paramters for Start-ClusterGroup
+						$StartClusterGroup = @{
+							Cluster        = $ClusterName
+							Name           = $ClusterGroup.Name
+							ChooseBestNode = $True
+						}
+
+						# start cluster group
+						Try {
+							$ClusterGroup = Start-ClusterGroup @StartClusterGroup
+						}
+						Catch {
+							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: starting VM on cluster")
+							Throw $_
+						}
+
+						# declare and continue
+						Write-Host ("$Hostname,$ComputerName,$Name - ...restarted VM on cluster")
+						Continue
+					}
+					# ...and ForceRestart not set...
+					Else {
+						# declare and continue
+						Write-Host ("$Hostname,$ComputerName,$Name - ...found VM running on cluster")
+						Continue
+					}
+				}
+				# if cluster group is not in an expected state...
+				Else {
+					# declare and continue
+					Write-Host ("$Hostname,$ComputerName,$Name - ...found VM cluster group in unexpected state: $($ClusterGroup.State)")
+					Continue
 				}
 			}
 		}
 
-		# start VM on local host
+		# if VM is not on a cluster or DoNotCluster set...
 		If ($null -ne $VM -and ([string]::IsNullOrEmpty($ClusterName) -or $JsonData.$Name.DoNotCluster -eq $true)) {
-			Write-Host ("$Hostname,$ComputerName,$Name - starting VM on host...")
-			If ($VM.State -ne 'Running') {
+			# if VM is not online...
+			If ($VM.State -eq 'Off') {
+				# ...start VM
+				Write-Host ("$Hostname,$ComputerName,$Name - starting VM on host...")
+				
+				# start VM
 				Try {
 					Start-VM -VM $VM
 				}
 				Catch {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: starting VM")
-					Return $_
+					Throw $_
 				}
+
+				# declare and continue
 				Write-Host ("$Hostname,$ComputerName,$Name - ...started VM on host")
+				Continue
 			}
-			ElseIf ($ForceRestart) {
-				Try {
-					Restart-VM -VM $VM -Force
+			# if VM is online and...
+			ElseIf ($VM.State -eq 'Running' -and $ForceRestart) {
+				# ...and ForceRestart set...
+				If ($ForceRestart) {
+					# ...restart VM
+					Write-Host ("$Hostname,$ComputerName,$Name - restarting VM on host...")
+
+					# restart VM
+					Try {
+						Restart-VM -VM $VM -Force
+					}
+					Catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: restarting VM")
+						Throw $_
+					}
+
+					# declare and continue
+					Write-Host ("$Hostname,$ComputerName,$Name - ...restarted VM on host")
+					Continue
 				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: restarting VM")
-					Return $_
+				Else {
+					# declare and continue
+					Write-Host ("$Hostname,$ComputerName,$Name - ...found VM running on host")
+					Continue
 				}
-				Write-Host ("$Hostname,$ComputerName,$Name - ...restarted VM on host")
 			}
+			# if VM is not in an expected state...
 			Else {
-				Write-Host ("$Hostname,$ComputerName,$Name - ...found VM running on host and ForceRestart not set")
+				# declare and continue
+				Write-Host ("$Hostname,$ComputerName,$Name - ...found VM in unexpected state: $($VM.State)")
+				Continue
 			}
 		}
 	}
