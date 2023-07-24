@@ -1383,7 +1383,6 @@ Begin {
 
 		# declare action
 		Write-Host ("$Hostname,$ComputerName,$Name - ...removed DHCP reservation(s)")
-		Return
 
 		# define parameters for DHCP reservation
 		$GetDhcpServerv4Failover = @{
