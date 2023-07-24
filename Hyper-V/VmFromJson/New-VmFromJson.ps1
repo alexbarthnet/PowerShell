@@ -1778,7 +1778,7 @@ Begin {
 			# replicate DHCP scope to peer
 			Try {
 				Write-Host ("$Hostname,$ComputerName,$Name - replicating DHCP scope to peer: '$($Failover.PartnerServer)'")
-				Invoke-DhcpServerv4FailoverReplication @InvokeDhcpServerv4FailoverReplication
+				$null = Invoke-DhcpServerv4FailoverReplication @InvokeDhcpServerv4FailoverReplication
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: replicating DHCP scope")
