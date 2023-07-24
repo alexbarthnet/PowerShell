@@ -684,7 +684,7 @@ Begin {
 
 				# wait until device is visible in SCCM
 				Write-Host ("$Hostname,$ComputerName,$Name - waiting for device to be visible in SCCM...")
-				While ($null -eq $Device -or $Multiplier -lt $Limit) {
+				While ($null -eq $Device -or $Multiplier -ge $Limit) {
 					# increment multiplier
 					$Multiplier++
 
@@ -1723,7 +1723,7 @@ Begin {
 			}
 		}
 
-		# define parameters for DHCP reservation
+		# define parameters for Add-DhcpServerv4Reservation
 		$AddDhcpServerv4Reservation = @{
 			ComputerName = $ComputerName
 			Name         = $Name
@@ -1745,6 +1745,55 @@ Begin {
 
 		# declare action
 		Write-Host ("$Hostname,$ComputerName,$Name - ...created DHCP reservation")
+
+		# define parameters for DHCP reservation
+		$GetDhcpServerv4Failover = @{
+			ComputerName = $ComputerName
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# check for DHCP failover
+		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - retrieving DHCP failover for scope...")
+			$Failover = Get-DhcpServerv4Failover @GetDhcpServerv4Failover
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving DHCP failover")
+			Throw $_
+		}
+
+		# check for scope in failover
+		If ($Failover -and $Failover.ScopeId -contains $ScopeId) {
+			# declare and continue
+			Write-Host ("$Hostname,$ComputerName,$Name - ...found DHCP failover for scope")
+
+			# define parameters for Invoke-DhcpServerv4FailoverReplication
+			$InvokeDhcpServerv4FailoverReplication = @{
+				ComputerName = $ComputerName
+				ScopeId      = $ScopeId
+				Force        = $true
+				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			}
+			
+			# replicate DHCP scope to peer
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - replicating DHCP scope to peer: '$($Failover.PartnerServer)'")
+				Invoke-DhcpServerv4FailoverReplication @InvokeDhcpServerv4FailoverReplication
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: replicating DHCP scope")
+				Throw $_
+			}
+
+			# declare and return
+			Write-Host ("$Hostname,$ComputerName,$Name - ...replicated DHCP scope to peer")
+			Return
+		}
+		Else {
+			# declare and return
+			Write-Host ("$Hostname,$ComputerName,$Name - ...failover configuration not found for scope")
+			Return
+		}
 	}
 
 	Function Add-VMNetworkAdapterToVM {
