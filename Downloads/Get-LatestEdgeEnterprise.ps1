@@ -3,7 +3,11 @@ Param (
 	[Parameter(Position = 0)][ValidateScript({Test-Path -Path $_})]
 	[string]$Destination = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path,
 	[Parameter(Position = 1)]
-	[switch]$Force
+	[switch]$Force,
+	[Parameter(DontShow)]
+	[string]$Uri = 'https://aka.ms/edge-msi',
+	[Parameter(DontShow)]
+	[string]$FileName = 'MicrosoftEdgeEnterpriseX64.msi'
 )
 
 # get JSON
