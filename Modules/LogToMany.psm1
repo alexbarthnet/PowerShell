@@ -42,7 +42,7 @@ Function Write-LogToMany {
 		[Parameter()]
 		[string]$EventSource,
 		[Parameter()]
-		[uint16]$EventId = 0,
+		[int32]$EventId,
 		[Parameter()]
 		[boolean]$LogScreen = $true
 	)
@@ -73,7 +73,33 @@ Function Write-LogToMany {
 
 	# write to event log
 	If ( [string]::IsNullOrEmpty($EventLog) -eq $false -and [string]::IsNullOrEmpty($EventSource) -eq $false ) {
-		Write-EventLog -LogName $EventLog -Source $EventSource -Category 0 -EventId $EventId -EntryType $LogLevel -Message $LogText
+		$WriteEvenLog = @{
+			LogName   = $EventLog
+			Source    = $EventSource
+			Category  = 0
+			EntryType = $LogLevel
+			Message   = $LogText
+		}
+		switch ($LogLevel) {
+			'warning' {
+				If ($null -eq $EventId) {
+					$EventId = [int32]2
+				}
+				Write-EventLog @WriteEvenLog -EventId $EventId
+			}
+			'error' {
+				If ($null -eq $EventId) {
+					$EventId = [int32]1
+				}
+				Write-EventLog @WriteEvenLog -EventId $EventId
+			}
+			Default {
+				If ($null -eq $EventId) {
+					$EventId = [int32]0
+				}
+				Write-EventLog @WriteEvenLog -EventId $EventId
+			}
+		}
 	}
 
 	# write to screen based upon level
@@ -89,11 +115,11 @@ Function Write-LogToMany {
 Function Start-LogToMany {
 	[CmdletBinding()]
 	Param (
-		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf'})]
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
 		[string]$ScriptPath,
 		[Parameter(Position = 1)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
 		[string]$LogFilePath = [System.Environment]::GetFolderPath('CommonApplicationData'),
-		[Parameter(Position = 3)][ValidateSet('csv','json')]
+		[Parameter(Position = 3)][ValidateSet('csv', 'json')]
 		[string]$LogFileFormat = 'csv',
 		[Parameter(Position = 2)][ValidateSet('ascii', 'bigendianunicode', 'unicode', 'utf7', 'utf8', 'utf32')]
 		[string]$LogFileEncoding = 'ascii',
@@ -196,7 +222,7 @@ Function Start-LogToMany {
 			LogFile     = $log_file
 			LogEncoding = $FileEncoding
 			LogEvent    = $EventLogName
-            LogFormat   = $LogFileFormat
+			LogFormat   = $LogFileFormat
 			LogSource   = $log_base
 		}
 	)
@@ -205,7 +231,7 @@ Function Start-LogToMany {
 Function Remove-LogToMany {
 	[CmdletBinding()]
 	Param (
-		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf'})]
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
 		[string]$ScriptPath,
 		[Parameter(Position = 1)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
 		[string]$LogFilePath = [System.Environment]::GetFolderPath('CommonApplicationData'),
@@ -275,7 +301,7 @@ Function Remove-LogToMany {
 Function Initialize-LogToMany {
 	[CmdletBinding()]
 	Param (
-		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf'})]
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
 		[string]$ScriptPath,
 		[Parameter(Position = 1)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
 		[string]$LogFilePath = [System.Environment]::GetFolderPath('CommonApplicationData'),
