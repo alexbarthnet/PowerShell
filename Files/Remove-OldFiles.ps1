@@ -15,8 +15,10 @@ Param(
 	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Remove')][ValidatePattern('^[^\*]+$')]
 	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Path,
-	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Add')]
-	[int]$Days,
+	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Add')][ValidateRange(1, 65535)]
+	[uint16]$OlderThanUnits,
+	[Parameter(Position = 3, Mandatory = $True, ParameterSetName = 'Add')][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
+	[string]$OlderThanType,
 	[Parameter()]
 	[string]$Json,
 	# local hostname
@@ -37,87 +39,132 @@ Begin {
 		Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, "_$Hostname.txt") -Force
 	}
 
-	Function Remove-ItemsFromPathByDays {
+	Function Get-PreviousDate {
+		Param (
+			[Parameter(Mandatory = $true, Position = 0)][ValidateRange(1, 65535)]
+			[uint16]$OlderThanUnits,
+			[Parameter(Mandatory = $true, Position = 1)][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
+			[string]$OlderThanType
+		)
+		Switch ($OlderThanType) {
+			'Seconds' { Return (Get-Date).AddSeconds(-1 * $OlderThanUnits) }
+			'Minutes' { Return (Get-Date).AddMinutes(-1 * $OlderThanUnits) }
+			'Hours' { Return (Get-Date).AddHours(-1 * $OlderThanUnits) }
+			'Days' { Return (Get-Date).AddDays(-1 * $OlderThanUnits) }
+			'Weeks' { Return (Get-Date).AddWeeks(-1 * $OlderThanUnits) }
+			'Months' { Return (Get-Date).AddMonths(-1 * $OlderThanUnits) }
+			'Years' { Return (Get-Date).AddYears(-1 * $OlderThanUnits) }
+		}
+	}
+
+	Function Remove-ItemsFromPathBeforeDate {
 		[CmdletBinding()]
 		Param(
-			[Parameter(Position = 0, Mandatory = $true)]
+			[Parameter(Mandatory = $true, Position = 0)]
 			[string]$Path,
-			[Parameter(Position = 1, Mandatory = $true)][ValidateScript({ $_ -gt 0 })]
-			[int]$Days
+			[Parameter(Mandatory = $true, Position = 1)]
+			[datetime]$Date
 		)
 
 		# declare start
-		Write-LogToMultiple -LogSubject $Path -Text 'checking for directory...'
-		If (Test-Path -Path $Path) {
-			Write-LogToMultiple -LogSubject $Path -Text 'directory found, setting date...'
-			$date_purge = (Get-Date).AddDays($Days * -1)
+		If (-not (Test-Path -Path $Path -PathType Container)) {
+			Write-LogToMultiple -LogSubject $Path -LogLevel 'Warning' -Text 'directory not found, skipping!'
+		}
 
-			# remove old files first
-			Write-LogToMultiple -LogSubject $Path -Text "removing files written before: '$date_purge'"
-			$old_files = @()
-			$old_files += Get-ChildItem -Path $Path -Recurse -Force -Attributes '!Directory' | Where-Object { $_.LastWriteTime -lt $date_purge }
-			ForEach ($old_file in $old_files) {
-				If ($Run) {
-					Write-LogToMultiple -LogSubject $Path -Text "removing file: '$($old_file.FullName)'"
-					Remove-Item -Path $old_file.FullName -Force
+		# define list for old files
+		$Files = [System.Collections.Generic.List[System.Object]]::new()
+
+		# retrieve old files first
+		Write-LogToMultiple -LogSubject $Path -Text "retrieving files written before: '$Date'"
+		Get-ChildItem -Path $Path -Recurse -Force -Attributes '!Directory' | Where-Object { $_.LastWriteTime -lt $Date } | ForEach-Object {
+			$Files.Add($_)
+		}
+
+		# remove old files first
+		Write-LogToMultiple -LogSubject $Path -Text "removing files written before: '$Date'"
+		ForEach ($File in $Files) {
+			If ($Run) {
+				Write-LogToMultiple -LogSubject $Path -Text "removing file: '$($File.FullName)'"
+				Try {
+					Remove-Item -Path $File.FullName -Force -ErrorAction Stop	
 				}
-				Else {
-					Write-LogToMultiple -LogSubject $Path -Text "TESTING - would remove file: '$($old_file.FullName)'"
+				Catch {
+					Write-LogToMultiple -LogSubject $Path -LogLevel 'Error' -Text "ERROR - removing file: '$($File.FullName)'"
 				}
 			}
-
-			# remove old folders last
-			Write-LogToMultiple -LogSubject $Path -Text "removing folders written before: '$date_purge'"
-			$old_paths = @()
-			$old_paths += Get-ChildItem -Path $Path -Recurse -Force -Attributes 'Directory' | Where-Object { $_.LastWriteTime -lt $date_purge } | Sort-Object -Property FullName -Descending
-			ForEach ($old_path in $old_paths) {
-				Write-LogToMultiple -LogSubject $Path -Text "checking folder: '$($old_path.FullName)'"
-				If (Test-Path -Path $old_path) {
-					If ($null -eq (Get-ChildItem -Path $old_path -Recurse -Force)) {
-						If ($Run) {
-							Write-LogToMultiple -LogSubject $Path -Text 'folder is empty, removing!'
-							Remove-Item -Path $old_path.FullName -Force
-						}
-						Else {
-							Write-LogToMultiple -LogSubject $Path -Text 'TESTING - folder is empty, would remove!'
-						}
-					}
-					Else {
-						Write-LogToMultiple -LogSubject $Path -Text 'folder not empty, skipping!'
-					}
-				}
-				Else {
-					Write-LogToMultiple -LogSubject $Path -Text 'folder not found, skipping!'
-				}
+			Else {
+				Write-LogToMultiple -LogSubject $Path -Text "TESTING - would remove file: '$($File.FullName)'"
 			}
 		}
-		Else {
-			Write-LogToMultiple -LogSubject $Path -Text 'directory not found, skipping!'
+
+		# define list for old folders
+		$Folders = [System.Collections.Generic.List[System.Object]]::new()
+
+		# retrieve old folders
+		Write-LogToMultiple -LogSubject $Path -Text "retrieving folders written before: '$Date'"
+		Get-ChildItem -Path $Path -Recurse -Force -Attributes 'Directory' | Where-Object { $_.LastWriteTime -lt $Date } | Sort-Object -Property FullName -Descending | ForEach-Object {
+			$Folders.Add($_)
+		}
+
+		# remove old folders last
+		Write-LogToMultiple -LogSubject $Path -Text "removing folders written before: '$Date'"
+		ForEach ($Folder in $Folders) {
+			Write-LogToMultiple -LogSubject $Path -Text "checking folder: '$($Folder.FullName)'"
+			If ($null -ne (Get-ChildItem -Path $Folder -Recurse -Force)) {
+				Write-LogToMultiple -LogSubject $Path -Text 'folder not empty, skipping!'
+				Continue
+			}
+
+			If ($Run) {
+				Write-LogToMultiple -LogSubject $Path -Text 'folder is empty, removing!'
+				Try {
+					Remove-Item -Path $Folder.FullName -Force -ErrorAction Stop	
+				}
+				Catch {
+					Write-LogToMultiple -LogSubject $Path -LogLevel 'Error' -Text "ERROR - removing folder: '$($Folder.FullName)'"
+				}
+			}
+			Else {
+				Write-LogToMultiple -LogSubject $Path -Text 'TESTING - folder is empty, would remove!'
+			}
 		}
 	}
 }
 
 Process {
-	# verify JSON file
-	If (-not (Test-Path -Path $Json)) {
+	# if JSON file was found...
+	If (Test-Path -Path $Json) {
+		# ...import JSON data
+		Try {
+			$JsonData = [array](Get-Content -Path $Json | ConvertFrom-Json)
+		}
+		Catch {
+			Write-Host "`nERROR: could not read configuration file: '$Json'"
+			Return $_
+		}
+	}
+	# if JSON file was not found...
+	Else {
+		# if Add set...
 		If ($Add) {
+			# ...try to create the JSON file
 			Try {
-				$null = New-Item -ItemType 'File' -Path $Json
+				$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
 			}
 			Catch {
-				Write-Output "`nERROR: could not create configuration file: '$Json'"
-				Return
+				Write-Host "`nERROR: could not create configuration file: '$Json'"
+				Return $_
 			}
+			# ...create empty JSON data object
+			$JsonData = [PSCustomObject]@{}
 		}
-		If ($Clear -or $Remove -or $Test -or $Run) {
-			Write-Output "`nERROR: could not find configuration file: '$Json'"
+		# if Add not set...
+		Else {
+			# ...report and return
+			Write-Host "`nERROR: could not find configuration file: '$Json'"
 			Return
 		}
 	}
-
-	# import JSON data
-	$json_data = @()
-	$json_data += Get-Content -Path $Json | ConvertFrom-Json
 
 	# evaluate parameters
 	switch ($true) {
@@ -136,18 +183,18 @@ Process {
 		$Remove {
 			# remove matching entries from object
 			Try {
-				$json_data = $json_data | Where-Object {
+				$JsonData = $JsonData | Where-Object {
 					$_.Path -ne $Path
 				}
-				If ($null -eq $json_data) {
+				If ($null -eq $JsonData) {
 					[string]::Empty | Set-Content -Path $Json
 					Write-Output "`nRemoved '$Path' from configuration file: '$Json'"
 				}
 				Else {
-					$json_data | ConvertTo-Json | Set-Content -Path $Json
+					$JsonData | ConvertTo-Json | Set-Content -Path $Json
 					Write-Output "`nRemoved '$Path' from configuration file: '$Json'"
 				}
-				$json_data | Select-Object Days, Path, Updated
+				$JsonData | Select-Object Days, Path, Updated
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
@@ -156,14 +203,15 @@ Process {
 		$Add {
 			# create custom object from parameters then add to object
 			Try {
-				$json_data += [pscustomobject]@{
-					Days    = $Days
-					Path    = $Path
-					Updated = (Get-Date -Format FileDateTimeUniversal)
+				$JsonData += [pscustomobject]@{
+					Path           = $Path
+					OlderThanUnits = $OlderThanUnits
+					OlderThanType  = $OlderThanType
+					Updated        = (Get-Date -Format FileDateTimeUniversal)
 				}
-				$json_data | ConvertTo-Json | Set-Content -Path $Json
+				$JsonData | ConvertTo-Json | Set-Content -Path $Json
 				Write-Output "`nAdded '$Path' to configuration file: '$Json'"
-				$json_data | Select-Object Days, Path, Updated
+				$JsonData | Select-Object Days, Path, Updated
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
@@ -180,18 +228,43 @@ Process {
 			}
 
 			# check entry count in configuration file
-			If ($json_data.Count -eq 0) {
+			If ($JsonData.Count -eq 0) {
 				Write-Host "ERROR: no entries found in configuration file: $Json"
 				Return
 			}
 
 			# process configuration file
-			ForEach ($json_datum in $json_data) {
-				If ([string]::IsNullOrEmpty($json_datum.Path) -or [string]::IsNullOrEmpty($json_datum.Days)) {
-					Write-Host "ERROR: invalid entry found in configuration file: $Json"
-				}
-				Else {
-					Remove-ItemsFromPathByDays -Path $json_datum.Path -Days $json_datum.Days
+			ForEach ($JsonDatum in $JsonData) {
+				switch ($true) {
+					([string]::IsNullOrEmpty($JsonDatum.Path)) {
+						Write-Host "ERROR: invalid entry found in configuration file: $Json"
+						Continue
+					}
+					([string]::IsNullOrEmpty($JsonDatum.OlderThanUnits)) {
+						Write-Host "ERROR: invalid entry found in configuration file: $Json"
+						Continue
+					}
+					([string]::IsNullOrEmpty($JsonDatum.OlderThanType)) {
+						Write-Host "ERROR: invalid entry found in configuration file: $Json"
+						Continue
+					}
+					Default {
+						Try {
+							$Date = Get-PreviousDate -OlderThanUnits ($JsonDatum.OlderThanUnits) -OlderThanType ($JsonDatum.OlderThanType)
+						}
+						Catch {
+							Write-Host "ERROR: could not create date from '$($JsonDatum.OlderThanUnits) $($JsonDatum.OlderThanType)'"
+							Continue
+						}
+						
+						Try {
+							Remove-ItemsFromPathBeforeDate -Path $JsonDatum.Path -Date $Date
+						}
+						Catch {
+							Write-Host 'ERROR: could not remove items'
+							Continue
+						}
+					}
 				}
 			}
 
@@ -206,7 +279,7 @@ Process {
 		}
 		Default {
 			Write-Output "`nDisplaying configuration file: '$Json'"
-			$json_data | Select-Object Days, Path, Updated
+			$JsonData | Select-Object Days, Path, Updated
 		}
 	}
 }
