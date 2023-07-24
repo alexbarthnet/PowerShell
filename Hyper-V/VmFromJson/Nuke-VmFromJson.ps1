@@ -504,16 +504,9 @@ Begin {
 		$InvokeCommand['ArgumentList']['Name'] = $Name
 
 		# update arguments for Invoke-Command - deployment
-		$InvokeCommand['ArgumentList']['RemoveMultipleDevices'] = $RemoveMultipleDevices
-
-		# update arguments for Invoke-Command - deployment
-		$InvokeCommand['ArgumentList']['DeploymentCollection'] = $DeploymentCollection
-		$InvokeCommand['ArgumentList']['MaintenanceCollection'] = $MaintenanceCollection
 		$InvokeCommand['ArgumentList']['ModulePath'] = $CMModulePath
 		$InvokeCommand['ArgumentList']['SiteCode'] = $CMSiteCode
 		$InvokeCommand['ArgumentList']['BIOSGUID'] = $BIOSGUID
-		$InvokeCommand['ArgumentList']['OSDDOMAIN'] = $DeploymentDomain
-		$InvokeCommand['ArgumentList']['OSDDOMAINOUNAME'] = $DeploymentPath
 
 		# connect to SCCM remotely
 		Write-Host ("$Hostname,$ComputerName,$Name - connecting to SCCM: " + $vm_deployment_server)
@@ -1569,11 +1562,11 @@ Process {
 						# define parameters for Remove-DeviceFromSccm
 						$RemoveDeviceFromSccm = @{
 							VM                    = $VM
-							DeploymentPath        = $JsonData.$Name.OSDeployment.DeploymentPath
+							# DeploymentPath        = $JsonData.$Name.OSDeployment.DeploymentPath
 							DeploymentServer      = $JsonData.$Name.OSDeployment.DeploymentServer
-							DeploymentDomain      = $JsonData.$Name.OSDeployment.DeploymentDomain
-							DeploymentCollection  = $JsonData.$Name.OSDeployment.DeploymentCollection
-							MaintenanceCollection = $JsonData.$Name.OSDeployment.MaintenanceCollection
+							# DeploymentDomain      = $JsonData.$Name.OSDeployment.DeploymentDomain
+							# DeploymentCollection  = $JsonData.$Name.OSDeployment.DeploymentCollection
+							# MaintenanceCollection = $JsonData.$Name.OSDeployment.MaintenanceCollection
 						}
 
 						# remove VM from SCCM
