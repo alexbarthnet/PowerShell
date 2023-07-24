@@ -813,9 +813,10 @@ Begin {
 				If ($null -eq $DeviceVariable) {
 					# define parameters for New-CMDeviceVariable
 					$NewCMDeviceVariable = @{
-						DeviceId     = $ResourceId # *MUST* be DeviceId due to CM module/cmdlet design
-						VariableName = $VariableName
-						ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+						DeviceId      = $ResourceId # *MUST* be DeviceId due to CM module/cmdlet design
+						VariableName  = $VariableName
+						VariableValue = $VariableValue
+						ErrorAction   = [System.Management.Automation.ActionPreference]::Stop
 					}
 
 					# create device variable
