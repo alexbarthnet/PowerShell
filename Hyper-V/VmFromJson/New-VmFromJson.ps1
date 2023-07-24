@@ -633,9 +633,7 @@ Begin {
 				Param(
 					[Parameter(Mandatory = $true)]
 					[string]$CollectionId,
-					[Parameter(Mandatory = $true, ParameterSetName = 'ResourceId')]
-					[string]$ResourceId,
-					[Parameter(Mandatory = $true, ParameterSetName = 'Name')]
+					[Parameter(Mandatory = $true)]
 					[string]$Name,
 					[switch]$SkipUpdate,
 					[int32]$Seconds = 5,
@@ -645,12 +643,10 @@ Begin {
 				# define parameters for Get-CMDevice
 				$GetCMDevice = @{
 					CollectionId = $CollectionId
+					Name         = $Name
 					Fast         = $true
 					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 				}
-
-				# define device for Get-CMDevice
-				$GetCMDevice[$PSCmdlet.ParameterSetName] = $PSBoundParameters[$PSCmdlet.ParameterSetName]
 
 				# retrieve device by name
 				Try {
@@ -779,7 +775,7 @@ Begin {
 				# retrieve device from collection
 				Try {
 					Write-Host ("$Hostname,$ComputerName,$Name - retrieving device from collection...")
-					Get-CMDeviceFromCollection -CollectionId $Collection.CollectionID -ResourceId $ResourceId
+					Get-CMDeviceFromCollection -CollectionId $Collection.CollectionID -Name $Name
 				}
 				Catch {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving device from collection")
