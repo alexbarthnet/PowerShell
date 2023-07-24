@@ -1384,6 +1384,55 @@ Begin {
 		# declare action
 		Write-Host ("$Hostname,$ComputerName,$Name - ...removed DHCP reservation(s)")
 		Return
+
+		# define parameters for DHCP reservation
+		$GetDhcpServerv4Failover = @{
+			ComputerName = $ComputerName
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# check for DHCP failover
+		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - retrieving DHCP failover for scope...")
+			$Failover = Get-DhcpServerv4Failover @GetDhcpServerv4Failover
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving DHCP failover")
+			Throw $_
+		}
+
+		# check for scope in failover
+		If ($Failover -and $Failover.ScopeId -contains $ScopeId) {
+			# declare and continue
+			Write-Host ("$Hostname,$ComputerName,$Name - ...found DHCP failover for scope")
+
+			# define parameters for Invoke-DhcpServerv4FailoverReplication
+			$InvokeDhcpServerv4FailoverReplication = @{
+				ComputerName = $ComputerName
+				ScopeId      = $ScopeId
+				Force        = $true
+				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			}
+			
+			# replicate DHCP scope to peer
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - replicating DHCP scope to peer: '$($Failover.PartnerServer)'")
+				$null = Invoke-DhcpServerv4FailoverReplication @InvokeDhcpServerv4FailoverReplication
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: replicating DHCP scope")
+				Throw $_
+			}
+
+			# declare and return
+			Write-Host ("$Hostname,$ComputerName,$Name - ...replicated DHCP scope to peer")
+			Return
+		}
+		Else {
+			# declare and return
+			Write-Host ("$Hostname,$ComputerName,$Name - ...failover configuration not found for scope")
+			Return
+		}
 	}
 }
 
