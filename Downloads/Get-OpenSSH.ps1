@@ -22,14 +22,30 @@ Param (
 	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
 )
 
-# retrieve information on latest release
-$UriFromRedirect = (Invoke-WebRequest -Uri $Uri -UseBasicParsing -MaximumRedirection 0 -ErrorAction 'SilentlyContinue').Headers.Location.Replace('/tag/', '/download/') + '/' + $FileName
+# define parameters for Invoke-WebRequest
+$InvokeWebRequest = @{
+	Uri                = $Uri
+	UseBasicParsing    = $true
+	MaximumRedirection = 0
+}
+
+# retrieve response from URI
+Try {
+	$WebRequest = Invoke-WebRequest @InvokeWebRequest
+}
+Catch {
+	Write-Error 'ERROR: could not retrieve response from URI'
+	Return
+}
+
+# create URI for file from response
+$UriForFile = $WebRequest.Headers.Location.Replace('/tag/', '/download/'), '/', $FileName -join $null
 
 # check file
 If ((Test-Path -Path $FilePath) -and -not $SkipDownload) {
 	# get MD5 hash for local file and remote URI
 	$HashFromFile = [System.Convert]::ToBase64String([System.Security.Cryptography.HashAlgorithm]::Create('md5').ComputeHash((Get-Content -Path $FilePath -Raw -Encoding Byte)))
-	$HashFromLink = (Invoke-WebRequest -Uri $UriFromRedirect -UseBasicParsing -Method 'Head').Headers.'Content-MD5'
+	$HashFromLink = (Invoke-WebRequest -Uri $UriForFile -UseBasicParsing -Method 'Head').Headers.'Content-MD5'
 	# compare hashs
 	If ($HashFromLink -eq $HashFromFile) {
 		Write-Output 'MD5 hash of most recent download matches MD5 hash in headers for URL, skipping!'
@@ -40,10 +56,10 @@ If ((Test-Path -Path $FilePath) -and -not $SkipDownload) {
 # download file to destination
 If ($Force -or -not $SkipDownload) {
 	Try {
-		Invoke-WebRequest -Uri $UriFromRedirect -UseBasicParsing -OutFile $FilePath
+		Invoke-WebRequest -Uri $UriForFile -UseBasicParsing -OutFile $FilePath
 	}
-	Catch{
-		Write-Error "ERROR: could not download the file to the specified location"
+	Catch {
+		Write-Error 'ERROR: could not download the file to the specified location'
 		Return
 	}
 }
@@ -93,7 +109,7 @@ If ($Install -or $InstallService) {
 		Get-WindowsCapability -Online -Name 'OpenSSH*' | Remove-WindowsCapability -Online
 	}
 	Catch {
-		Write-Error "ERROR: could not remove default SSH files"
+		Write-Error 'ERROR: could not remove default SSH files'
 		Return
 	}
 
@@ -102,7 +118,7 @@ If ($Install -or $InstallService) {
 		Expand-Archive -Path $FilePath -DestinationPath ([System.Environment]::GetFolderPath('ProgramFiles')) -Force
 	}
 	Catch {
-		Write-Error "ERROR: could not extract files to Program Files directory"
+		Write-Error 'ERROR: could not extract files to Program Files directory'
 		Return
 	}
 
