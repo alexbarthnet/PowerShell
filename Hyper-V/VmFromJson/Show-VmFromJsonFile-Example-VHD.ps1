@@ -4,30 +4,8 @@ Return
 
 $Json = '..\..\..\Personal\HyperV\vm-test.json'
 
-$WriteVMFromJsonFile_Add = @{
-	Add                           = $true
-	VMName                        = 'testvm1'
-	Path                          = 'E:\Hyper-V'
-	ComputerName                  = 'file1'
-	ProcessorCount                = 2
-	MemoryStartupBytes            = 2GB
-	MemoryMinimumBytes            = 1GB
-	MemoryMaximumBytes            = 4GB
-	ClusterPriority               = 2000
-	DoNotCluster                  = $false
-	EnableVMTPM                   = $true
-	CreateDefaultVMHardDiskDrive  = $true
-	CreateDefaultVMNetworkAdapter = $true
-	PreserveVMParameters          = $true
-	SwitchName                    = 'ConvergedSwitch'
-	VlanId                        = 10
-	MacAddressPrefix              = '0AAB'
-	IPAddress                     = '192.168.10.99'
-	DhcpServer                    = 'dc3'
-	DhcpScope                     = '192.168.10.0'
-}
+.\Write-VMFromJsonFile.ps1 -Json $Json -Clear
 
-.\Write-VMFromJsonFile.ps1 -Json $Json @WriteVMFromJsonFile_Add
 
 $WriteVMFromJsonFile_AddVMHardDiskDrive = @{
 	AddVMHardDiskDrive = $true
