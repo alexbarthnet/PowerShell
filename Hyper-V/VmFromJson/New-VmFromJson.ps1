@@ -794,10 +794,17 @@ Begin {
 					[string]$VariableValue
 				)
 
+				# define parameters for Get-CMDeviceVariable
+				$GetCMDeviceVariable = @{
+					ResourceId   = $ResourceId
+					VariableName = $VariableName
+					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+				}
+
 				# retrieve device variable for OSD domain
 				Try {
 					Write-Host ("$Hostname,$ComputerName,$Name - retrieving device variable: '$VariableName'")
-					$DeviceVariable = Get-CMDeviceVariable -ResourceId $ResourceId -VariableName $VariableName
+					$DeviceVariable = Get-CMDeviceVariable @GetCMDeviceVariable
 				}
 				Catch {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving device variable")
@@ -806,30 +813,53 @@ Begin {
 
 				# if device variable not found...
 				If ($null -eq $DeviceVariable) {
+					# define parameters for New-CMDeviceVariable
+					$NewCMDeviceVariable = @{
+						DeviceId     = $ResourceId # *MUST* be DeviceId due to CM module/cmdlet design
+						VariableName = $VariableName
+						ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+					}
+
 					# create device variable
 					Try {
 						Write-Host ("$Hostname,$ComputerName,$Name - ...adding device variable: '$VariableName'")
-						$null = New-CMDeviceVariable -ResourceId $ResourceId -VariableName $VariableName -VariableValue $VariableValue
+						$null = New-CMDeviceVariable @NewCMDeviceVariable
 					}
 					Catch {
 						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: adding device variable")
 						Throw $_
 					}
+
+					# declare and return
+					Write-Host ("$Hostname,$ComputerName,$Name - ...added device variable")
+					Return
 				}
 				# if device variable found with wrong value...
 				ElseIf ($DeviceVariable.Value -ne $VariableValue) {
+					# define parameters for New-CMDeviceVariable
+					$SetCMDeviceVariable = @{
+						ResourceId   = $ResourceId
+						VariableName = $VariableName
+						ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+					}
+
 					# update device variable
 					Try {
 						Write-Host ("$Hostname,$ComputerName,$Name - ...updating device variable: '$VariableName'")
-						$null = Set-CMDeviceVariable -ResourceId $ResourceId -VariableName $VariableName -NewVariableValue $VariableValue
+						$null = Set-CMDeviceVariable @SetCMDeviceVariable
 					}
 					Catch {
 						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: updating device variable")
 						Throw $_
 					}
+
+					# declare and return
+					Write-Host ("$Hostname,$ComputerName,$Name - ...updated device variable")
+					Return
 				}
 				Else {
 					Write-Host ("$Hostname,$ComputerName,$Name - ...found device variable: '$VariableName'")
+					Return
 				}
 			}
 
