@@ -48,6 +48,12 @@ Param(
 	# path to JSON configuration file
 	[Parameter(Mandatory = $True)]
 	[string]$Json,
+	# start time
+	[Parameter(DontShow)]
+	[double]$LogDays = 7,
+	# start time
+	[Parameter(DontShow)]
+	[string]$LogStart = (Get-Date -Format FileDateTimeUniversal),
 	# local hostname
 	[Parameter(DontShow)]
 	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
@@ -56,8 +62,12 @@ Param(
 Begin {
 	# if updating...
 	If ($Update) {
-		# ...define transcript file from script path and start transcript
-		Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, "_$HostName.txt") -Force
+		# append hostname to script path
+		$LogPathWithName = $PSCommandPath.Replace('.ps1', "_$HostName.txt")
+		# append datetime to script path
+		$LogPathWithDate = $LogPathWithName.Replace('.txt', "_$LogStart.txt")
+		# save transcript to updated script path
+		Start-Transcript -Path $LogPathWithDate -Force
 	}
 
 	Function Test-ScheduledTaskPath {
@@ -183,7 +193,7 @@ Begin {
 
 		# get scheduled task
 		Try {
-			$Existing = Get-ScheduledTask | Where-Object { $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath }
+			$Existing = Get-ScheduledTask | Where-Object { $_.URI -eq "$TaskPath\$TaskName" }
 		}
 		Catch {
 			Write-Output "`nERROR: could not retrieve scheduled tasks with filter for task '$TaskName' at path '$TaskPath'"
@@ -192,40 +202,66 @@ Begin {
 
 		# if scheduled task exists...
 		If ($Existing) {
-			# ...verify task actions
-			If ($Existing.Actions -ne $Action) {
+			# ...verify task action components
+			$FixExecute = $Existing.Actions[0].Execute -ne $Action.Execute
+			$FixArguments = $Existing.Actions[0].Arguments -ne $Action.Arguments
+			# ...verify task action
+			If ($FixExecute -or $FixArguments) {
 				Try {
-					Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Action $Action
+					Write-Output "Updating action for existing scheduled task '$TaskName' at path '$TaskPath'"
+					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Action $Action
 				}
 				Catch {
 					Write-Output "`nERROR: could not update action for existing scheduled task '$TaskName' at path '$TaskPath'"
 					Return $_
 				}
 			}
+			# ...verify task trigger components
+			$FixStartBoundary = [datetime]$Existing.Triggers[0].StartBoundary -ne [datetime]$Trigger.StartBoundary
+			If ($null -ne $RandomDelay) {
+				$FixRandomDelay = $Existing.Triggers[0].RandomDelay -ne $Trigger.RandomDelay
+			}
+			If ($null -ne $RepetitionInterval) {
+				$FixRepetitionInterval = $Existing.Triggers[0].Repetition.Interval -ne $Trigger.Repetition.Interval
+			}
 			# ...verify task trigger
-			If ($Existing.Actions -ne $Trigger) {
+			If ($FixStartBoundary -or $FixRandomDelay -or $FixRepetitionInterval) {
 				Try {
-					Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Trigger $Trigger
+					Write-Output "Updating trigger for existing scheduled task '$TaskName' at path '$TaskPath'"
+					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Trigger $Trigger
 				}
 				Catch {
 					Write-Output "`nERROR: could not update trigger for existing scheduled task '$TaskName' at path '$TaskPath'"
 					Return $_
 				}
 			}
+			# ...verify task settings components
+			$FixEnabled = $Existing.Settings.Enabled -ne $Settings.Enabled
+			$FixExecutionTimeLimit = $Existing.Settings.ExecutionTimeLimit -ne $Settings.ExecutionTimeLimit
 			# ...verify task settings
-			If ($Existing.Actions -ne $Settings) {
+			If ($FixEnabled -or $FixExecutionTimeLimit) {
 				Try {
-					Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Settings $Settings
+					Write-Output "Updating settings for existing scheduled task '$TaskName' at path '$TaskPath'"
+					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Settings $Settings
 				}
 				Catch {
 					Write-Output "`nERROR: could not update settings for existing scheduled task '$TaskName' at path '$TaskPath'"
 					Return $_
 				}
 			}
+			# ...verify task principal components
+			$FixUserId = $Existing.Principal.UserId -ne $Principal.UserId
+			If ($null -ne $LogonType) {
+				$FixLogonType = $Existing.Principal.LogonType -ne $Principal.LogonType
+			}
+			If ($null -ne $RunLevel) {
+				$FixRunLevel = $Existing.Principal.RunLevel -ne $Principal.RunLevel
+			}
 			# ...verify task principal
-			If ($Existing.Principal -ne $Principal) {
+			If ($FixUserId -or $FixLogonType -or $FixRunLevel) {
 				Try {
-					Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Principal $Principal
+					Write-Output "Updating principal for existing scheduled task '$TaskName' at path '$TaskPath'"
+					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Principal $Principal
 				}
 				Catch {
 					Write-Output "`nERROR: could not update principal for existing scheduled task '$TaskName' at path '$TaskPath'"
@@ -233,6 +269,7 @@ Begin {
 				}
 			}
 			# ...then return and move to next task
+			Write-Output "Verified existing scheduled task '$TaskName' at path '$TaskPath'"
 			Return
 		}
 		# if scheduled task does not exist...
@@ -254,39 +291,45 @@ Begin {
 			Catch {
 				Return $_
 			}
+			# ...then return and move to next tasks
+			Write-Output "Created new scheduled task '$TaskName' at path '$TaskPath'"
+			Return
 		}
 	}
 }
 
 Process {
-	# if JSON file does not exist...
+	# if JSON file was not found...
 	If (-not (Test-Path -Path $Json)) {
-		# ...and Add...
+		# if Add set...
 		If ($Add) {
-			# ...create the JSON file
+			# ...try to create the JSON file
 			Try {
-				$null = New-Item -ItemType 'File' -Path $Json
+				$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
 			}
 			Catch {
 				Write-Output "`nERROR: could not create configuration file: '$Json'"
 				Return $_
 			}
+			# ...create empty JSON data object
+			$JsonData = [PSCustomObject]@{}
 		}
-		# ...if not Add...
+		# if Add not set...
 		Else {
-			# ...report error and break
+			# ...report and return
 			Write-Output "`nERROR: could not find configuration file: '$Json'"
 			Return
 		}
 	}
-
-	# import JSON data
-	Try {
-		$json_data = [array](Get-Content -Path $Json | ConvertFrom-Json)
-	}
-	Catch {
-		Write-Output "`nERROR: could not convert configuration file: '$Json'"
-		Return $_
+	Else {
+		# import JSON data
+		Try {
+			$JsonData = [array](Get-Content -Path $Json | ConvertFrom-Json)
+		}
+		Catch {
+			Write-Output "`nERROR: could not read configuration file: '$Json'"
+			Return $_
+		}
 	}
 
 	# evaluate parameters
@@ -307,16 +350,16 @@ Process {
 		# remove entry from configuration file
 		$Remove {
 			Try {
-				$json_data = $json_data | Where-Object { -not ($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath) }
-				If ($null -eq $json_data) {
+				$JsonData = $JsonData | Where-Object { -not ($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath) }
+				If ($null -eq $JsonData) {
 					[string]::Empty | Set-Content -Path $Json
 					Write-Output "`nRemoved '$TaskName' at '$Taskpath' from configuration file: '$Json'"
 				}
 				Else {
-					$json_data | ConvertTo-Json | Set-Content -Path $Json
+					$JsonData | ConvertTo-Json | Set-Content -Path $Json
 					Write-Output "`nRemoved '$TaskName' at '$Taskpath' from configuration file: '$Json'"
 				}
-				$json_data | Format-List
+				$JsonData | Format-List
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
@@ -326,6 +369,11 @@ Process {
 		# add entry to configuration file
 		$Add {
 			Try {
+				# verify task path
+				If ($TaskPath.Substring(0, 1) -ne '\') {
+					$TaskPath = $TaskPath.Insert(0, '\')
+				}
+
 				# validate input
 				If (-not (Test-ScheduledTaskPath -TaskPath $TaskPath)) {
 					Write-Output "`nERROR: the path defined is not permitted: '$TaskPath'"
@@ -365,19 +413,19 @@ Process {
 				}
 
 				# create custom object from hashtable
-				$json_datum = [pscustomobject]$json_hashtable
+				$JsonDatum = [pscustomobject]$json_hashtable
 
 				# remove existing entry with same name
-				If ($json_data.TaskName -contains $TaskName) {
+				If ($JsonData.TaskName -contains $TaskName) {
 					Write-Warning -Message "Will overwrite existing entry for '$TaskName' configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
-					$json_data = $json_data | Where-Object { $_.TaskName -ne $TaskName }
+					$JsonData = $JsonData | Where-Object { $_.TaskName -ne $TaskName }
 				}
 
 				# add datum to data
-				$json_data += $json_datum
-				$json_data | ConvertTo-Json | Set-Content -Path $Json
+				$JsonData += $JsonDatum
+				$JsonData | ConvertTo-Json | Set-Content -Path $Json
 				Write-Output "`nAdded '$TaskName' to configuration file: '$Json'"
-				$json_data | Format-List
+				$JsonData | Format-List
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
@@ -389,7 +437,7 @@ Process {
 			Write-Host "`nUpdating scheduled tasks from '$Json'"
 
 			# check entry count in configuration file
-			If ($json_data.Count -eq 0) {
+			If ($JsonData.Count -eq 0) {
 				Write-Output "ERROR: no entries found in configuration file: $Json"
 				Return
 			}
@@ -404,73 +452,73 @@ Process {
 			}
 
 			# process configuration file
-			ForEach ($json_datum in $json_data) {
+			ForEach ($JsonDatum in $JsonData) {
 				# validate values in JSON file
 				Switch ($true) {
-					([string]::IsNullOrEmpty($json_datum.TaskName)) {
+					([string]::IsNullOrEmpty($JsonDatum.TaskName)) {
 						Write-Output "`nERROR: invalid entry (task name) in configuration file: $Json"; Break
 					}
-					([string]::IsNullOrEmpty($json_datum.TaskPath)) {
+					([string]::IsNullOrEmpty($JsonDatum.TaskPath)) {
 						Write-Output "`nERROR: invalid entry (task path) in configuration file: $Json"; Break
 					}
-					([string]::IsNullOrEmpty($json_datum.Execute)) {
+					([string]::IsNullOrEmpty($JsonDatum.Execute)) {
 						Write-Output "`nERROR: invalid entry (execute) in configuration file: $Json"; Break
 					}
-					([string]::IsNullOrEmpty($json_datum.Argument)) {
+					([string]::IsNullOrEmpty($JsonDatum.Argument)) {
 						Write-Output "`nERROR: invalid entry (argument) in configuration file: $Json"; Break
 					}
-					([string]::IsNullOrEmpty($json_datum.UserId)) {
+					([string]::IsNullOrEmpty($JsonDatum.UserId)) {
 						Write-Output "`nERROR: invalid entry (userid) in configuration file: $Json"; Break
 					}
-					([string]::IsNullOrEmpty($json_datum.LogonType)) {
+					([string]::IsNullOrEmpty($JsonDatum.LogonType)) {
 						Write-Output "`nERROR: invalid entry (logontype) in configuration file: $Json"; Break
 					}
-					($json_datum.TriggerAt -isnot [datetime]) {
+					($JsonDatum.TriggerAt -isnot [datetime]) {
 						Write-Output "`nERROR: invalid entry (datetime for trigger) in configuration file: $Json"; Break
 					}
 					Default {
 						# check tasks hashtable for path
-						If ($null -eq $ExpectedTasks[$json_datum.TaskPath]) {
-							$ExpectedTasks[$json_datum.TaskPath] = [System.Collections.Generic.List[string]]::new()
+						If ($ExpectedTasks.ContainsKey($JsonDatum.TaskPath) -eq $false -or $ExpectedTasks[$JsonDatum.TaskPath] -isnot [System.Collections.Generic.List[string]]) {
+							$ExpectedTasks[$JsonDatum.TaskPath] = [System.Collections.Generic.List[string]]::new()
 						}
 
 						# add task to tasks hashtable
 						Try {
-							$ExpectedTasks[$json_datum.TaskPath].Add($json_datum.TaskName)
+							$ExpectedTasks[$JsonDatum.TaskPath].Add($JsonDatum.TaskName)
 						}
 						Catch {
-							Write-Output "ERROR: adding task to hashtable: '$($json_datum.TaskName)'"
+							Write-Output "ERROR: adding task to hashtable: '$($JsonDatum.TaskName)'"
 							Return $_
 						}
 
 						# define hashtable for function
 						$UpdateScheduledTaskFromJson = @{
-							TaskName  = [string]$json_datum.TaskName
-							TaskPath  = [string]$json_datum.TaskPath
-							Execute   = [string]$json_datum.Execute
-							Argument  = [string]$json_datum.Argument
-							UserId    = [string]$json_datum.UserId
-							LogonType = [string]$json_datum.LogonType
-							TriggerAt = [datetime]$json_datum.TriggerAt
+							TaskName  = [string]$JsonDatum.TaskName
+							TaskPath  = [string]$JsonDatum.TaskPath
+							Execute   = [string]$JsonDatum.Execute
+							Argument  = [string]$JsonDatum.Argument
+							UserId    = [string]$JsonDatum.UserId
+							LogonType = [string]$JsonDatum.LogonType
+							TriggerAt = [datetime]$JsonDatum.TriggerAt
 						}
 
 						# add RandomDelay if RandomDelayTime in JSON
-						If ($null -ne $json_datum.RandomDelayTime -and $json_datum.RandomDelayTime -is [datetime]) {
-							$UpdateScheduledTaskFromJson['RandomDelayTime'] = [timespan]($json_datum.TriggerAt - $json_datum.RandomDelayTime)
+						If ($null -ne $JsonDatum.RandomDelayTime -and $JsonDatum.RandomDelayTime -is [datetime]) {
+							$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonDatum.TriggerAt - $JsonDatum.RandomDelayTime)
 						}
 
 						# add RepetitionInterval if RepetitionIntervalTime in JSON
-						If ($null -ne $json_datum.RepetitionIntervalTime -and $json_datum.RepetitionIntervalTime -is [datetime]) {
-							$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($json_datum.TriggerAt - $json_datum.RepetitionIntervalTime)
+						If ($null -ne $JsonDatum.RepetitionIntervalTime -and $JsonDatum.RepetitionIntervalTime -is [datetime]) {
+							$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonDatum.TriggerAt - $JsonDatum.RepetitionIntervalTime)
 						}
 
 						# add ExecutionTimeLimitTime if ExecutionTimeLimitTime in JSON
-						If ($null -ne $json_datum.ExecutionTimeLimitTime -and $json_datum.ExecutionTimeLimitTime -is [datetime]) {
-							$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($json_datum.TriggerAt - $json_datum.ExecutionTimeLimitTime)
+						If ($null -ne $JsonDatum.ExecutionTimeLimitTime -and $JsonDatum.ExecutionTimeLimitTime -is [datetime]) {
+							$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonDatum.TriggerAt - $JsonDatum.ExecutionTimeLimitTime)
 						}
 
 						# add RunLevel if provided
-						If ($null -ne $json_datum.RunLevel -and $json_datum.RunLevel -is [string]) {
+						If ($null -ne $JsonDatum.RunLevel -and $JsonDatum.RunLevel -is [string]) {
 							$UpdateScheduledTaskFromJson['RunLevel'] = [string]$RunLevel
 						}
 
@@ -519,7 +567,7 @@ Process {
 		}
 		Default {
 			Write-Output "Displaying '$Json'"
-			$json_data | Format-List
+			$JsonData | Format-List
 		}
 	}
 }
@@ -527,6 +575,23 @@ Process {
 End {
 	# if updating...
 	If ($Update) {
+		# get path for logss
+		$LogPathForClean = (Get-Item -Path $PSCommandPath).'DirectoryName'
+		# get name for logs
+		$LogNameForClean = (Split-Path -Path $LogPathWithName -Leaf).Replace('.txt', $null)
+		# get logs older than 7 days
+		$OldItems = Get-ChildItem -Path $LogPathForClean | Where-Object { $_.BaseName.StartsWith($LogNameForClean) -and $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) }
+		# remove old logs
+		ForEach ($OldItem in $OldItems) {
+			Write-Output "Removing old log file: $($OldItem.FullName)"
+			Try { 
+				Remove-Item -InputObject $OldItem -Force -ErrorAction Stop
+			}
+			Catch {
+				$_
+			}
+		}
+
 		# ...stop transcript
 		Stop-Transcript
 	}
