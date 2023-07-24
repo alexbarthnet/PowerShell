@@ -629,7 +629,7 @@ Begin {
 			Param($ArgumentList)
 
 			Function Get-CMDeviceFromCollection {
-				[CmdletBinding(DefaultParameterSetName = 'ResourceId')]
+				[CmdletBinding()]
 				Param(
 					[Parameter(Mandatory = $true)]
 					[string]$CollectionId,
@@ -721,6 +721,7 @@ Begin {
 			}
 
 			Function Add-CMDeviceToCollection {
+				[CmdletBinding()]
 				Param (
 					[string]$CollectionName,
 					[string]$ResourceId
@@ -784,6 +785,7 @@ Begin {
 			}
 
 			Function Update-CMDeviceVariable {
+				[CmdletBinding()]
 				Param (
 					[string]$ResourceId,
 					[string]$VariableName,
