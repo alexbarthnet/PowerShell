@@ -1491,7 +1491,6 @@ Begin {
 
 			# define parameters for Add-VMDvdDrive
 			$AddVMDvdDrive = @{
-				VM                = $VM
 				VMDriveController = $VMScsiController
 				Passthru          = $true
 				ErrorAction       = [System.Management.Automation.ActionPreference]::Stop
