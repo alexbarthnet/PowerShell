@@ -62,12 +62,37 @@ Param(
 Begin {
 	# if updating...
 	If ($Update) {
-		# append hostname to script path
-		$LogPathWithName = $PSCommandPath.Replace('.ps1', "_$HostName.txt")
-		# append datetime to script path
-		$LogPathWithDate = $LogPathWithName.Replace('.txt', "_$LogStart.txt")
-		# save transcript to updated script path
-		Start-Transcript -Path $LogPathWithDate -Force
+		# append hostname to script path to define transcript path
+		$PathWithHostName = $PSCommandPath.Replace('.ps1', "_$HostName.txt")
+		# append datetime to transcript path
+		$PathWithLogStart = $PathWithHostName.Replace('.txt', "_$LogStart.txt")
+		# define parameters for Start-Transcript
+		$StartTranscript = @{
+			Path        = $PathWithLogStart
+			Force       = $true
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+		# start transcript in script directory
+		Try {
+			Start-Transcript @StartTranscript
+		}
+		Catch {
+			# get script directory name
+			$PSScriptDirectory = (Get-Item -Path $PSCommandPath).DirectoryName
+			# get program data path
+			$PathOfProgramData = [System.Environment]::GetFolderPath('CommonApplicationData')
+			# redirect transcript from script directory to programdata path
+			$PathInProgramData = $PathWithLogStart.Replace($PSScriptDirectory, $PathOfProgramData)
+			# update parameters for Start-Transcript
+			$StartTranscript['Path'] = $PathInProgramData
+			# start transcript in programdata path
+			Try {
+				Start-Transcript @StartTranscript
+			}
+			Catch {
+				Throw $_
+			}
+		}
 	}
 
 	Function Test-ScheduledTaskPath {
@@ -575,15 +600,15 @@ Process {
 End {
 	# if updating...
 	If ($Update) {
-		# get path for logss
-		$LogPathForClean = (Get-Item -Path $PSCommandPath).'DirectoryName'
-		# get name for logs
-		$LogNameForClean = (Split-Path -Path $LogPathWithName -Leaf).Replace('.txt', $null)
+		# get transcript path
+		$PathForTranscript = Split-Path -Path $StartTranscript['Path'] -Parent
+		# get transcript name
+		$NameForTranscript = (Split-Path -Path $StartTranscript['Path'] -Leaf).Replace("_$LogStart.txt", $null)
 		# get logs older than 7 days
-		$OldItems = Get-ChildItem -Path $LogPathForClean | Where-Object { $_.BaseName.StartsWith($LogNameForClean) -and $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) }
+		$OldItems = Get-ChildItem -Path $PathForTranscript | Where-Object { $_.BaseName.StartsWith($NameForTranscript) -and $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) }
 		# remove old logs
 		ForEach ($OldItem in $OldItems) {
-			Write-Output "Removing old log file: $($OldItem.FullName)"
+			Write-Output "Removing old transcript file: $($OldItem.FullName)"
 			Try { 
 				Remove-Item -InputObject $OldItem -Force -ErrorAction Stop
 			}
