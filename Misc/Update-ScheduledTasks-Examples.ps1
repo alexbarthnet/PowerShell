@@ -2,7 +2,7 @@ $Json = 'C:\Content\local\tasks.json'
 
 $UpdateScheduledTasks = @{
 	Add                = $true
-	Taskpath           = $env:USERDOMAIN
+	TaskPath           = $env:USERDOMAIN
 	TaskName           = 'Import-CertificateFromPath'
 	Execute            = 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
 	Argument           = '-NonInteractive -NoProfile -ExecutionPolicy ByPass -File "C:\Content\local\scripts\Import-CertificateFromPath.ps1" -Import'
@@ -12,4 +12,4 @@ $UpdateScheduledTasks = @{
 	ExecutionTimeLimit = (New-TimeSpan -Minutes 15)
 }
 
-.\Update-ScheduledTasks.ps1 -Json $Json @UpdateScheduledTasks -Json $Json
+.\Update-ScheduledTasks.ps1 -Json $Json @UpdateScheduledTasks
