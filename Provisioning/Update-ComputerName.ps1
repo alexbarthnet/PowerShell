@@ -1,4 +1,50 @@
 Begin {
+	Function Rename-VirtualMachine {
+		Param(
+			[string]$NewName
+		)
+
+		# declare and begin
+		Write-Host "Renaming computer to: $NewName"
+
+		# define variables for loop
+		$HasSucceeded = $false
+		$Counter = 1
+
+		# define paramters for Rename-Computer
+		$RenameComputer = @{
+			NewName  = $NewName
+			Force    = $true
+			Passthru = $true
+		}
+
+		# make 5 attempsts at renaming computer
+		Do {
+			# sleep to allow for domain replication of new computer objects
+			Start-Sleep -Seconds 5
+			# rename computer
+			Try {
+				$HasSucceeded = Rename-Computer @RenameComputer | Select-Object 'HasSucceeded' -ExpandProperty 'HasSucceeded'
+				Write-Host "...renamed computer on try #$($Counter)"
+			}
+			Catch {
+				Write-Host "...error renaming computer on try #$($Counter)..."
+			}
+			Finally {
+				$Counter++
+			}
+		}
+		Until ($HasSucceeded -or $Counter -gt 5)
+
+		# return
+		If ($HasSucceeded) {
+			Return $true
+		}
+		Else {
+			Return $false
+		}
+	}
+
 	# create path from environment
 	Try {
 		$LogFolderPath = (Get-CimInstance -Class Win32_OperatingSystem).WindowsDirectory
@@ -65,7 +111,7 @@ Process {
 		Return
 	}
 	Else {
-		Write-Output "Found active computer name: $ComputerName"
+		Write-Host "Found active computer name: $ComputerName"
 	}
 
 	# get virtual machine name
@@ -74,44 +120,28 @@ Process {
 		Return
 	}
 	Else {
-		Write-Output "Found virtual machine name: $VirtualMachineName"
+		Write-Host "Found virtual machine name: $VirtualMachineName"
 	}
 
-	If ($ComputerName -ne $VirtualMachineName) {
-		# if transcript not previously started...
-		If (-not $TestPath) {
-			# sleep and restart
-			Write-Output 'Restarting computer in first pass...'
-			Restart-Computer -Force
-		}
-		Else {
-			# 
-			Write-Output 'Renaming computer in second pass...'
-			Write-Output "Renaming computer to: $VirtualMachineName"
-			# define variables for loop
-			$HasSucceeded = $false
-			$Counter = 0
-			# make 5 attempsts at renaming computer
-			Do {
-				Try {
-					# sleep to allow for domain replication of new computer objects
-					Start-Sleep -Seconds 5
-					# get boolean from returned object
-					$HasSucceeded = Rename-Computer -NewName $VirtualMachineName -Force -PassThru | Select-Object 'HasSucceeded' -ExpandProperty 'HasSucceeded'
-				}
-				Catch {
-					Write-Output "...error renaming computer on try #$($Counter)..."
-				}
-				Finally {
-					$Counter++
-				}
-			}
-			Until ($HasSucceeded -or $Counter -gt 5)
-			If ($HasSucceeded) {
-				Write-Output "...renamed computer on try #$($Counter)"
-				Restart-Computer -Force
-			}
-		}
+	# declare pass
+	If (-not $TestPath) {
+		Write-Host 'First pass at renaming...'
+	}
+	Else {
+		Write-Host 'Second pass at renaming...'
+	}
+
+	# call function
+	Try {
+		$HasSucceeded = Rename-VirtualMachine -NewName $VirtualMachineName
+	}
+	Catch {
+		Throw $_
+	}
+	
+	# restart computer on success in either pass or on failure in first pass
+	If ($HasSucceeded -or -not $TestPath) {
+		Restart-Computer -Force
 	}
 }
 
