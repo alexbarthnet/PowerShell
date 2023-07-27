@@ -1,8 +1,12 @@
+Write-Host 'This file contains example hashtables for splatting Write-VMFromJsonFile.ps1'
+Get-Content -Path $PSCommandPath
+Return
+
 $Json = 'C:\Content\local\tasks.json'
 
 $UpdateScheduledTasks = @{
 	Add                = $true
-	TaskPath           = $env:USERDOMAIN
+	TaskPath           = "\$env:USERDOMAIN"
 	TaskName           = 'Import-CertificateFromPath'
 	Execute            = 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
 	Argument           = '-NonInteractive -NoProfile -ExecutionPolicy ByPass -File "C:\Content\local\scripts\Import-CertificateFromPath.ps1" -Import'
