@@ -1,6 +1,6 @@
 [CmdletBinding(DefaultParameterSetName = 'Password')]
 Param(
-	# path for exported PFX files 
+	# path for exported PFX files
 	[Parameter(Position = 0, Mandatory = $True)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
 	[string]$Path,
 	# password for exported PFX files
@@ -107,6 +107,16 @@ Begin {
 		}
 	}
 
+	# create CertStoreLocation if not found
+	If (-not (Test-Path -Path $CertStoreLocation)) {
+		Try {
+			New-Item -ItemType Directory -Path 'Cert:\LocalMachine' -Name 'Shielded VM Local Certificates'
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
 	# throw error "either or" parameter requirements not met
 	If ($null -eq $Principals -and $null -eq $Password) {
 		Throw [System.Management.Automation.ParameterBindingException]::New('The Password or Principals parameter must be provided.')
@@ -119,56 +129,65 @@ Begin {
 			[Parameter(Position = 1, Mandatory = $true)]
 			[string]$Prefix
 		)
-	
+
 		# retrieve required certificate properties
 		$NotBefore = Get-Date -Date $Certificate.NotBefore -Format 'FileDateTimeUniversal'
-	
+
 		# create file paths
-		$FilePathPfx = Join-Path -Path $Path -ChildPath "$($Prefix, $NotBefore -join '_').pfx"
-		$FilePathCer = Join-Path -Path $Path -ChildPath "$($Prefix, $NotBefore -join '_').cer"
-	
+		$PfxPath = Join-Path -Path $Path -ChildPath "$($Prefix, $NotBefore -join '_').pfx"
+		$CerPath = Join-Path -Path $Path -ChildPath "$($Prefix, $NotBefore -join '_').cer"
+
 		# if both files already exist and Force not set...
-		If ((Test-Path -Path $FilePathCer) -and (Test-Path -Path $FilePathPfx) -and -not $Force) {
-			# ...create Cert object from .cer file...
+		If ((Test-Path -Path $CerPath) -and (Test-Path -Path $PfxPath) -and -not $Force) {
+			# ...create empty certificate object then...
 			Try {
-				$X509Certificate2 = New-Object 'System.Security.Cryptography.X509Certificates.X509Certificate2' -ArgumentList $FilePathCer
+				$X509Certificate2 = New-Object -TypeName 'System.Security.Cryptography.X509Certificates.X509Certificate2'
 			}
 			Catch {
-				Write-Error -Message "could not create X.509 certificate from '$FilePathCer'"
+				Write-Error -Message "could not create X.509 certificate object"
 			}
+
+			# ...import .cer file into object
+			Try {
+				$X509Certificate2.Import($CerPath)
+			}
+			Catch {
+				Write-Error -Message "could not import X.509 certificate from '$CerPath'"
+			}
+		}
+
+		# if X509Certificate2 was created...
+		If ($null -ne $X509Certificate2.Thumbprint) {
 			# ...then compare the thumbprints of the Certificate and the Cert object
 			If ($X509Certificate2.Thumbprint -eq $Certificate.Thumbprint) {
 				Write-Output 'Certificates in path and store match; skipping export of:'
-				Write-Output "`tCerPath : '$($FilePathCer)'"
-				Write-Output "`tPfxPath : '$($FilePathPfx)'"
+				Write-Output "`tCerPath : '$($CerPath)'"
+				Write-Output "`tPfxPath : '$($PfxPath)'"
 				Write-Output "`tSubject : '$($X509Certificate2.Subject)'"
 				Return
 			}
 		}
-		# if either files does not exist or Force set...
-		Else {
-			# declare paths
-			Write-Output 'Exporting certificate to path:'
-			Write-Output "`tCerPath : '$($FilePathCer)'"
-			Write-Output "`tPfxPath : '$($FilePathPfx)'"
-			Write-Output "`tSubject : '$($Certificate.Subject)'"
-			Write-Output "`tPrincipals : $($Principals -join ', ')"
 
-		}
-	
+		# declare paths
+		Write-Output 'Exporting certificate to path:'
+		Write-Output "`tCerPath : '$($CerPath)'"
+		Write-Output "`tPfxPath : '$($PfxPath)'"
+		Write-Output "`tSubject : '$($Certificate.Subject)'"
+		Write-Output "`tPrincipals : $($Principals -join ', ')"
+
 		# create hashtable for .pfx file
 		$ExportPfxCertificate = @{
-			Cert                  = $Certificate 
-			FilePath              = $FilePathPfx
+			Cert                  = $Certificate
+			FilePath              = $PfxPath
 			ChainOption           = 'EndEntityCertOnly'
 			CryptoAlgorithmOption = 'AES256_SHA256'
 		}
-	
+
 		# add principals to hashtable
 		If ($null -ne $Principals) {
 			$ExportPfxCertificate['ProtectTo'] = $Principals
 		}
-	
+
 		# add password to hashtable
 		If ($null -ne $Password) {
 			$ExportPfxCertificate['Password'] = $Password
@@ -177,7 +196,7 @@ Begin {
 		# export certificate as .pfx
 		Try {
 			$null = Export-PfxCertificate @ExportPfxCertificate
-			Write-Output "...exported PFX file: '$FilePathPfx'"
+			Write-Output "...exported PFX file: '$PfxPath'"
 		}
 		Catch {
 			Throw $_
@@ -185,12 +204,12 @@ Begin {
 
 		# export certificate as .cer
 		Try {
-			$null = Export-Certificate -Cert $Certificate -FilePath $FilePathCer
-			Write-Output "...exported CER file: '$FilePathCer'"
+			$null = Export-Certificate -Cert $Certificate -FilePath $CerPath
+			Write-Output "...exported CER file: '$CerPath'"
 		}
 		Catch {
 			Throw $_
-		}	
+		}
 	}
 }
 
@@ -234,7 +253,7 @@ End {
 		# remove old logs
 		ForEach ($OldFile in $OldFiles) {
 			Write-Output "Removing old transcript file: $($OldFile.FullName)"
-			Try { 
+			Try {
 				Remove-Item -InputObject $OldFile -Force -ErrorAction Stop
 			}
 			Catch {

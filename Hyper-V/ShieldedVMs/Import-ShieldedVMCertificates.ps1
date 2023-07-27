@@ -77,24 +77,34 @@ Begin {
 
 		# define expected .cer file
 		$CerPath = $PfxFile.FullName.Replace($PfxFile.Extension, '.cer')
+		Write-Verbose $CerPath
+
 
 		# if .cer file exists and Force not set...
 		If ((Test-Path -Path $CerPath) -and -not $Force) {
-			# ...create X509 object from .cer file...
+			# ...create empty certificate object then...
 			Try {
-				$X509Certificate2 = New-Object 'System.Security.Cryptography.X509Certificates.X509Certificate2' -ArgumentList $CerFile
+				$X509Certificate2 = New-Object -TypeName 'System.Security.Cryptography.X509Certificates.X509Certificate2'
 			}
 			Catch {
-				Write-Error -Message "could not create X.509 certificate from '$CerFile'"
+				Write-Error -Message "could not create X.509 certificate object"
+			}
+
+			# ...import .cer file into object
+			Try {
+				$X509Certificate2.Import($CerPath)
+			}
+			Catch {
+				Write-Error -Message "could not import X.509 certificate from '$CerPath'"
 			}
 		}
 
 		# if X509Certificate2 was created...
-		If ($null -ne $X509Certificate2) {
+		If ($null -ne $X509Certificate2.Thumbprint) {
 			# ...then retrieve any Shielded VM certificates with the same thumbprint as the X509 object
-			$ImportedCertificates = Get-ChildItem -Path $CertStoreLocation | Where-Object { $_.Thumbprint -eq $X509Certificate2.Thumbprint }
+			$Certificate = Get-ChildItem -Path $CertStoreLocation | Where-Object { $_.Thumbprint -eq $X509Certificate2.Thumbprint }
 			# ...then compare the thumbprints of the Certificate and the Cert object
-			If ($ImportedCertificates.Count -gt 0) {
+			If ($X509Certificate2.Thumbprint -eq $Certificate.Thumbprint) {
 				Write-Output 'Certificates in path and store match; skipping import of:'
 				Write-Output "`tCerPath : '$($CerPath)'"
 				Write-Output "`tPfxPath : '$($PfxFile.FullName)'"
@@ -102,6 +112,10 @@ Begin {
 				Return
 			}
 		}
+
+		# declare paths
+		Write-Output 'Importing certificate to store:'
+		Write-Output "`tPfxPath : '$($PfxFile.FullName)'"
 
 		# create hashtable for .pfx file
 		$ImportPfxCertificate = @{
@@ -118,6 +132,7 @@ Begin {
 		# export certificate as .pfx
 		Try {
 			$null = Import-PfxCertificate @ImportPfxCertificate
+			Write-Output "...imported PFX file: '$($PfxFile.FullName)'"
 		}
 		Catch {
 			Throw $_
@@ -127,7 +142,8 @@ Begin {
 
 Process {
 	$PfxFiles = Get-ChildItem -Path $Path -Filter 'untrustedguardian*' | Where-Object { $_.Extension -eq '.pfx' -or $_.Extension -eq '.p12' }
-	foreach ($PfxFile in $PfxFiles) {
+	ForEach ($PfxFile in $PfxFiles) {
+		Write-Verbose $PfxFile.FullName
 		Import-CertificatePair -PfxFile $PfxFile
 	}
 }
@@ -153,7 +169,7 @@ End {
 		# remove old logs
 		ForEach ($OldFile in $OldFiles) {
 			Write-Output "Removing old transcript file: $($OldFile.FullName)"
-			Try { 
+			Try {
 				Remove-Item -InputObject $OldFile -Force -ErrorAction Stop
 			}
 			Catch {
