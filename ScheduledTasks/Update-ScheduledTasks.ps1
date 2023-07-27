@@ -423,17 +423,17 @@ Process {
 
 				# add RandomDelay if provided as datetime value
 				If ($null -ne $RandomDelay) {
-					$json_hashtable['RandomDelayTime'] = [datetime]($TriggerAt + $RandomDelay)
+					$json_hashtable['RandomDelayTime'] = [datetime]($RandomDelay - $TriggerAt)
 				}
 
 				# add ExecutionTimeLimitTime1 if provided as datetime value
 				If ($null -ne $ExecutionTimeLimit) {
-					$json_hashtable['ExecutionTimeLimitTime'] = [datetime]($TriggerAt + $ExecutionTimeLimit)
+					$json_hashtable['ExecutionTimeLimitTime'] = [datetime]($ExecutionTimeLimit - $TriggerAt)
 				}
 
 				# add RepetitionInterval if provided as datetime value
 				If ($null -ne $RepetitionInterval) {
-					$json_hashtable['RepetitionIntervalTime'] = [datetime]($TriggerAt + $RepetitionInterval)
+					$json_hashtable['RepetitionIntervalTime'] = [datetime]($RepetitionInterval - $TriggerAt)
 				}
 
 				# add RunLevel if provided
@@ -533,17 +533,17 @@ Process {
 
 						# add RandomDelay if RandomDelayTime in JSON
 						If ($null -ne $JsonDatum.RandomDelayTime -and $JsonDatum.RandomDelayTime -is [datetime]) {
-							$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonDatum.TriggerAt + $JsonDatum.RandomDelayTime)
+							$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonDatum.RandomDelayTime - $JsonDatum.TriggerAt)
 						}
 
 						# add RepetitionInterval if RepetitionIntervalTime in JSON
 						If ($null -ne $JsonDatum.RepetitionIntervalTime -and $JsonDatum.RepetitionIntervalTime -is [datetime]) {
-							$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonDatum.TriggerAt + $JsonDatum.RepetitionIntervalTime)
+							$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonDatum.RepetitionIntervalTime - $JsonDatum.TriggerAt)
 						}
 
 						# add ExecutionTimeLimitTime if ExecutionTimeLimitTime in JSON
 						If ($null -ne $JsonDatum.ExecutionTimeLimitTime -and $JsonDatum.ExecutionTimeLimitTime -is [datetime]) {
-							$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonDatum.TriggerAt + $JsonDatum.ExecutionTimeLimitTime)
+							$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonDatum.ExecutionTimeLimitTime - $JsonDatum.TriggerAt)
 						}
 
 						# add RunLevel if provided
