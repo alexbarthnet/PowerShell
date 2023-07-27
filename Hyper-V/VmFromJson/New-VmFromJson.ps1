@@ -1048,37 +1048,65 @@ Begin {
 					Throw $_
 				}
 
-				# process each CIM instance
-				ForEach ($CimInstance in $CimInstanceForPXE) {
-					# get CM resource with matching NetBiosName and SMBIOSGUID
-					Try {
-						$Resource = Get-CMResource -Fast | Where-Object { $_.NetBiosName -eq $CimInstance.NetBiosName -and $_.SMBIOSGUID -eq $CimInstance.SMBIOSGUID }
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving CM resource from CIM instance data")
-						Throw $_
-					}
-
-					# report advertisement ID
-					Write-Host ("$Hostname,$ComputerName,$Name - clearing PXE deployment for advertisement ID: '$($CimInstance.AdvertisementID)'")
-
-					# define parameters for Clear-CMPxeDeployment
-					$ClearCMPxeDeployment = @{
-						ResourceId  = $Resource.ResourceId
+				# if CIM instances found for PXE advertisements...
+				If ($null -eq $CimInstanceForPXE) {
+					# report and continue
+					Write-Host ("$Hostname,$ComputerName,$Name - ...matching PXE deployments not foound")
+				}
+				Else {
+					# define parameters for Get-CMResource
+					$GetCMResource = @{
+						Fast        = $true
 						ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 					}
 
-					# clear PXE flag on CM resource
+					# retrieve CM resources
 					Try {
-						Clear-CMPxeDeployment @ClearCMPxeDeployment
+						$CMResources = Get-CMResource @GetCMResource
 					}
 					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: clearing CM PXE deployment")
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving CM resources for PXE cleanup")
 						Throw $_
 					}
 
-					# report and continue
-					Write-Host ("$Hostname,$ComputerName,$Name - ...cleared PXE deployment for resource")
+					# process each CIM instance
+					ForEach ($CimInstance in $CimInstanceForPXE) {
+						# report advertisement ID
+						Write-Host ("$Hostname,$ComputerName,$Name - checking PXE deployment for advertisement ID: '$($CimInstance.AdvertisementID)'")
+
+						# get CM resource with matching NetBiosName and SMBIOSGUID
+						Try {
+							$CMResource = $CMResources | Where-Object { $_.SMBIOSGUID -eq $CimInstance.SMBIOSGUID }
+						}
+						Catch {
+							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving CM resource from CIM instance data")
+							Throw $_
+						}
+
+						# check resource
+						If ($null -eq $CMResource) {
+							Write-Host ("$Hostname,$ComputerName,$Name - WARNING: CM resource not found for GUID: $($CimInstance.SMBIOSGUID)")
+							Continue
+						}
+
+						# define parameters for Clear-CMPxeDeployment
+						$ClearCMPxeDeployment = @{
+							ResourceId  = $CMResource.ResourceId
+							ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+						}
+
+						# clear PXE flag on CM resource
+						Try {
+							Clear-CMPxeDeployment @ClearCMPxeDeployment
+						}
+						Catch {
+							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: clearing CM PXE deployment")
+							Throw $_
+						}
+
+						# report and continue
+						Write-Host ("$Hostname,$ComputerName,$Name - ...cleared PXE deployment for resource")
+					}
 				}
 			}
 
