@@ -327,9 +327,20 @@ Begin {
 }
 
 Process {
+	# if JSON file found...
+	If (Test-Path -Path $Json) {
+		# ...create JSON data object as array of PSCustomObjects from JSON file content
+		Try {
+			$JsonData = [array](Get-Content -Path $Json | ConvertFrom-Json)
+		}
+		Catch {
+			Write-Output "`nERROR: could not read configuration file: '$Json'"
+			Return $_
+		}
+	}
 	# if JSON file was not found...
-	If (-not (Test-Path -Path $Json)) {
-		# if Add set...
+	Else {
+		# ...and Add set...
 		If ($Add) {
 			# ...try to create the JSON file
 			Try {
@@ -339,24 +350,14 @@ Process {
 				Write-Output "`nERROR: could not create configuration file: '$Json'"
 				Return $_
 			}
-			# ...create empty JSON data object
-			$JsonData = [PSCustomObject]@{}
+			# ...create JSON data object as empty array
+			$JsonData = @()
 		}
-		# if Add not set...
+		# ...and Add not set...
 		Else {
 			# ...report and return
 			Write-Output "`nERROR: could not find configuration file: '$Json'"
 			Return
-		}
-	}
-	Else {
-		# import JSON data
-		Try {
-			$JsonData = [array](Get-Content -Path $Json | ConvertFrom-Json)
-		}
-		Catch {
-			Write-Output "`nERROR: could not read configuration file: '$Json'"
-			Return $_
 		}
 	}
 
@@ -409,10 +410,10 @@ Process {
 				}
 
 				# create hashtable for custom object
-				$json_hashtable = @{
+				$json_hashtable = [ordered]@{
 					Updated   = (Get-Date -Format FileDateTimeUniversal)
-					TaskName  = $TaskName
 					TaskPath  = $TaskPath
+					TaskName  = $TaskName
 					Execute   = $Execute
 					Argument  = $Argument
 					UserId    = $UserId
@@ -422,17 +423,17 @@ Process {
 
 				# add RandomDelay if provided as datetime value
 				If ($null -ne $RandomDelay) {
-					$json_hashtable['RandomDelayTime'] = [datetime]($TriggerAt - $RandomDelay)
-				}
-
-				# add RepetitionInterval if provided as datetime value
-				If ($null -ne $RepetitionInterval) {
-					$json_hashtable['RepetitionIntervalTime'] = [datetime]($TriggerAt - $RepetitionInterval)
+					$json_hashtable['RandomDelayTime'] = [datetime]($TriggerAt + $RandomDelay)
 				}
 
 				# add ExecutionTimeLimitTime1 if provided as datetime value
 				If ($null -ne $ExecutionTimeLimit) {
-					$json_hashtable['ExecutionTimeLimitTime'] = [datetime]($TriggerAt - $ExecutionTimeLimit)
+					$json_hashtable['ExecutionTimeLimitTime'] = [datetime]($TriggerAt + $ExecutionTimeLimit)
+				}
+
+				# add RepetitionInterval if provided as datetime value
+				If ($null -ne $RepetitionInterval) {
+					$json_hashtable['RepetitionIntervalTime'] = [datetime]($TriggerAt + $RepetitionInterval)
 				}
 
 				# add RunLevel if provided
@@ -532,17 +533,17 @@ Process {
 
 						# add RandomDelay if RandomDelayTime in JSON
 						If ($null -ne $JsonDatum.RandomDelayTime -and $JsonDatum.RandomDelayTime -is [datetime]) {
-							$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonDatum.TriggerAt - $JsonDatum.RandomDelayTime)
+							$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonDatum.TriggerAt + $JsonDatum.RandomDelayTime)
 						}
 
 						# add RepetitionInterval if RepetitionIntervalTime in JSON
 						If ($null -ne $JsonDatum.RepetitionIntervalTime -and $JsonDatum.RepetitionIntervalTime -is [datetime]) {
-							$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonDatum.TriggerAt - $JsonDatum.RepetitionIntervalTime)
+							$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonDatum.TriggerAt + $JsonDatum.RepetitionIntervalTime)
 						}
 
 						# add ExecutionTimeLimitTime if ExecutionTimeLimitTime in JSON
 						If ($null -ne $JsonDatum.ExecutionTimeLimitTime -and $JsonDatum.ExecutionTimeLimitTime -is [datetime]) {
-							$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonDatum.TriggerAt - $JsonDatum.ExecutionTimeLimitTime)
+							$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonDatum.TriggerAt + $JsonDatum.ExecutionTimeLimitTime)
 						}
 
 						# add RunLevel if provided
