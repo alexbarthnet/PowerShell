@@ -1701,6 +1701,9 @@ Process {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: stopping VM")
 					Throw $_
 				}
+
+				# report
+				Write-Host ("$Hostname,$ComputerName,$Name - ...VM powered off")
 			}
 
 			# define parameters for Remove-VM
@@ -1719,6 +1722,9 @@ Process {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: removing VM")
 				Throw $_
 			}
+
+			# report
+			Write-Host ("$Hostname,$ComputerName,$Name - ...VM removed")
 		}
 
 		# remove VHDs from host
