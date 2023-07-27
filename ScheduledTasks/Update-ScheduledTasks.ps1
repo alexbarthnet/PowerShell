@@ -452,9 +452,9 @@ Process {
 
 				# add datum to data
 				$JsonData += $JsonDatum
-				$JsonData | ConvertTo-Json | Set-Content -Path $Json
+				$JsonData | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 				Write-Output "`nAdded '$TaskName' to configuration file: '$Json'"
-				$JsonData | Format-List
+				$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
@@ -596,7 +596,7 @@ Process {
 		}
 		Default {
 			Write-Output "Displaying '$Json'"
-			$JsonData | Format-List
+			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 	}
 }
