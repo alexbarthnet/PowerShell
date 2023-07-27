@@ -48,10 +48,13 @@ Param(
 	# path to JSON configuration file
 	[Parameter(Mandatory = $True)]
 	[string]$Json,
-	# start time
+	# log file max age
 	[Parameter(DontShow)]
 	[double]$LogDays = 7,
-	# start time
+	# log file min count
+	[Parameter(DontShow)]
+	[uint16]$LogCount = 7,
+	# log start time
 	[Parameter(DontShow)]
 	[string]$LogStart = (Get-Date -Format FileDateTimeUniversal),
 	# local hostname
@@ -604,20 +607,37 @@ End {
 		$PathForTranscript = Split-Path -Path $StartTranscript['Path'] -Parent
 		# get transcript name
 		$NameForTranscript = (Split-Path -Path $StartTranscript['Path'] -Leaf).Replace("_$LogStart.txt", $null)
-		# get logs older than 7 days
-		$OldItems = Get-ChildItem -Path $PathForTranscript | Where-Object { $_.BaseName.StartsWith($NameForTranscript) -and $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) }
-		# remove old logs
-		ForEach ($OldItem in $OldItems) {
-			Write-Output "Removing old transcript file: $($OldItem.FullName)"
-			Try { 
-				Remove-Item -InputObject $OldItem -Force -ErrorAction Stop
-			}
-			Catch {
-				$_
+		# get transcript files
+		$TranscriptFiles = Get-ChildItem -Path $PathForTranscript | Where-Object { $_.BaseName.StartsWith($NameForTranscript) -and $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) }
+		# get transcript files newer than cleanup date
+		$NewFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-$LogDays) }
+		# if count of transcript files count is less than cleanup threshold...
+		If ($LogCount -lt $NewFiles.Count ) {
+			# declare and continue
+			Write-Output "Skipping transcript file cleanup; count of transcript files ($($NewFiles.Count)) is below cleanup threshold ($LogCount)"
+		}
+		# if count of transcript files is not less than cleanup threshold...
+		Else {
+			# get log files older than cleanup date
+			$OldFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) } | Sort-Object -Property FullName
+			# remove old logs
+			ForEach ($OldFile in $OldFiles) {
+				Write-Output "Removing old transcript file: $($OldFile.FullName)"
+				Try { 
+					Remove-Item -InputObject $OldFile -Force -ErrorAction Stop
+				}
+				Catch {
+					$_
+				}
 			}
 		}
 
 		# ...stop transcript
-		Stop-Transcript
+		Try {
+			Stop-Transcript
+		}
+		Catch {
+			Throw $_
+		}
 	}
 }

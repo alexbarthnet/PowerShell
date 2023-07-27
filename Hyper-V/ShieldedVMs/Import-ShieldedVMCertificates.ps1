@@ -12,6 +12,15 @@ Param(
 	# certificate store location
 	[Parameter(DontShow)]
 	[string]$CertStoreLocation = 'Cert:\LocalMachine\Shielded VM Local Certificates',
+	# log file max age
+	[Parameter(DontShow)]
+	[double]$LogDays = 7,
+	# log file min count
+	[Parameter(DontShow)]
+	[uint16]$LogCount = 7,
+	# log start time
+	[Parameter(DontShow)]
+	[string]$LogStart = (Get-Date -Format FileDateTimeUniversal),
 	# local hostname
 	[Parameter(DontShow)]
 	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
@@ -21,13 +30,42 @@ Begin {
 	# force close open transcript
 	Try { Stop-Transcript } Catch [System.Management.Automation.PSInvalidOperationException] { $Error.Clear() }
 
-	# define transcript file from script path and start transcript
-	Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, "_$Hostname.txt") -Force
+	# append hostname to script path to define transcript path
+	$PathWithHostName = $PSCommandPath.Replace('.ps1', "_$HostName.txt")
+	# append datetime to transcript path
+	$PathWithLogStart = $PathWithHostName.Replace('.txt', "_$LogStart.txt")
+	# define parameters for Start-Transcript
+	$StartTranscript = @{
+		Path        = $PathWithLogStart
+		Force       = $true
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+	}
+	# start transcript in script directory
+	Try {
+		Start-Transcript @StartTranscript
+	}
+	Catch {
+		# get script directory name
+		$PSScriptDirectory = (Get-Item -Path $PSCommandPath).DirectoryName
+		# get program data path
+		$PathOfProgramData = [System.Environment]::GetFolderPath('CommonApplicationData')
+		# redirect transcript from script directory to programdata path
+		$PathInProgramData = $PathWithLogStart.Replace($PSScriptDirectory, $PathOfProgramData)
+		# update parameters for Start-Transcript
+		$StartTranscript['Path'] = $PathInProgramData
+		# start transcript in programdata path
+		Try {
+			Start-Transcript @StartTranscript
+		}
+		Catch {
+			Throw $_
+		}
+	}
 
 	# create CertStoreLocation if not found
 	If (-not (Test-Path -Path $CertStoreLocation)) {
 		Try {
-			New-Item -ItemType Directory -Path 'Cert:\LocalMachine'  -Name 'Shielded VM Local Certificates'
+			New-Item -ItemType Directory -Path 'Cert:\LocalMachine' -Name 'Shielded VM Local Certificates'
 		}
 		Catch {
 			Throw $_
@@ -56,7 +94,7 @@ Begin {
 
 		# if X509Certificate2 was created...
 		If ($null -ne $X509Certificate2) {
-			# ...then retrieve any Shielded VM certificates with the same thumbprint as the X509 object 
+			# ...then retrieve any Shielded VM certificates with the same thumbprint as the X509 object
 			$ImportedCertificates = Get-ChildItem -Path $CertStoreLocation | Where-Object { $_.Thumbprint -eq $X509Certificate2.Thumbprint }
 			# ...then compare the thumbprints of the Certificate and the Cert object
 			If ($ImportedCertificates.Count -gt 0) {
@@ -79,7 +117,7 @@ Begin {
 		If ($null -ne $Password) {
 			$ImportPfxCertificate['Password'] = $Password
 		}
-	
+
 		# export certificate as .pfx
 		Try {
 			$null = Import-PfxCertificate @ImportPfxCertificate
@@ -91,13 +129,47 @@ Begin {
 }
 
 Process {
-	$PfxFiles = Get-ChildItem -Path $Path | Where-Object { $_.Extension -eq '.pfx' -or $_.Extension -eq '.p12' }
+	$PfxFiles = Get-ChildItem -Path $Path -Filter 'untrustedguardian*' | Where-Object { $_.Extension -eq '.pfx' -or $_.Extension -eq '.p12' }
 	foreach ($PfxFile in $PfxFiles) {
 		Import-CertificatePair -PfxFile $PfxFile
 	}
 }
 
 End {
-	# stop transcript
-	Stop-Transcript
+	# get transcript path
+	$PathForTranscript = Split-Path -Path $StartTranscript['Path'] -Parent
+	# get transcript name
+	$NameForTranscript = (Split-Path -Path $StartTranscript['Path'] -Leaf).Replace("_$LogStart.txt", $null)
+	# get transcript files
+	$TranscriptFiles = Get-ChildItem -Path $PathForTranscript | Where-Object { $_.BaseName.StartsWith($NameForTranscript) -and $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) }
+	# get transcript files newer than cleanup date
+	$NewFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-$LogDays) }
+	# if count of transcript files count is less than cleanup threshold...
+	If ($LogCount -lt $NewFiles.Count ) {
+		# declare and continue
+		Write-Output "Skipping transcript file cleanup; count of transcript files ($($NewFiles.Count)) is below cleanup threshold ($LogCount)"
+	}
+	# if count of transcript files is not less than cleanup threshold...
+	Else {
+		# get log files older than cleanup date
+		$OldFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) } | Sort-Object -Property FullName
+		# remove old logs
+		ForEach ($OldFile in $OldFiles) {
+			Write-Output "Removing old transcript file: $($OldFile.FullName)"
+			Try { 
+				Remove-Item -InputObject $OldFile -Force -ErrorAction Stop
+			}
+			Catch {
+				$_
+			}
+		}
+	}
+
+	# ...stop transcript
+	Try {
+		Stop-Transcript
+	}
+	Catch {
+		Throw $_
+	}
 }
