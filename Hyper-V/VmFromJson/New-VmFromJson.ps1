@@ -1030,84 +1030,25 @@ Begin {
 
 				# ...report
 				Write-Host ("$Hostname,$ComputerName,$Name - ...found existing device with resource ID: '$ResourceId'")
-
-				# define parameters for Get-CimInstance
-				$GetCimInstanceForPXE = @{
-					Namespace   = "ROOT\SMS\site_$($ArgumentList['SiteCode'])"
-					Query       = "SELECT * FROM SMS_LastPXEAdvertisement WHERE NetBiosName = '$($Device.Name)' OR SMBIOSGUID = '$($Device.SMBIOSGUID)'"
+			
+				# define parameters for Clear-CMPxeDeployment
+				$ClearCMPxeDeployment = @{
+					Device      = $Device
 					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 				}
 
-				# retrieve CIM instances for matching PXE advertisements
+				# clear PXE flag on CM resource
 				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - checking for PXE deployments for existing device...")
-					$CimInstanceForPXE = Get-CimInstance @GetCimInstanceForPXE
+					Write-Host ("$Hostname,$ComputerName,$Name - clearing any PXE deployments for existing device...")
+					Clear-CMPxeDeployment @ClearCMPxeDeployment
 				}
 				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving PXE deployment for device")
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: clearing CM PXE deployment")
 					Throw $_
 				}
 
-				# if CIM instances found for PXE advertisements...
-				If ($null -eq $CimInstanceForPXE) {
-					# report and continue
-					Write-Host ("$Hostname,$ComputerName,$Name - ...matching PXE deployments not foound")
-				}
-				Else {
-					# define parameters for Get-CMResource
-					$GetCMResource = @{
-						Fast        = $true
-						ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-					}
-
-					# retrieve CM resources
-					Try {
-						$CMResources = Get-CMResource @GetCMResource
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving CM resources for PXE cleanup")
-						Throw $_
-					}
-
-					# process each CIM instance
-					ForEach ($CimInstance in $CimInstanceForPXE) {
-						# report advertisement ID
-						Write-Host ("$Hostname,$ComputerName,$Name - checking PXE deployment for advertisement ID: '$($CimInstance.AdvertisementID)'")
-
-						# get CM resource with matching NetBiosName and SMBIOSGUID
-						Try {
-							$CMResource = $CMResources | Where-Object { $_.SMBIOSGUID -eq $CimInstance.SMBIOSGUID }
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving CM resource from CIM instance data")
-							Throw $_
-						}
-
-						# check resource
-						If ($null -eq $CMResource) {
-							Write-Host ("$Hostname,$ComputerName,$Name - WARNING: CM resource not found for GUID: $($CimInstance.SMBIOSGUID)")
-							Continue
-						}
-
-						# define parameters for Clear-CMPxeDeployment
-						$ClearCMPxeDeployment = @{
-							ResourceId  = $CMResource.ResourceId
-							ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-						}
-
-						# clear PXE flag on CM resource
-						Try {
-							Clear-CMPxeDeployment @ClearCMPxeDeployment
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: clearing CM PXE deployment")
-							Throw $_
-						}
-
-						# report and continue
-						Write-Host ("$Hostname,$ComputerName,$Name - ...cleared PXE deployment for resource")
-					}
-				}
+				# report and continue
+				Write-Host ("$Hostname,$ComputerName,$Name - ...cleared PXE deployment for existing device")
 			}
 
 			# if device variable not provided...
