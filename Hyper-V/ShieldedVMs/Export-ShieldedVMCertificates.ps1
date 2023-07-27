@@ -9,9 +9,18 @@ Param(
 	# prinicpals that can access exported PFX files
 	[Parameter(Position = 2)]
 	[string[]]$Principals,
+	# overwrite existing PFX and CER file to reset security
+	[Parameter(Position = 3)]
+	[switch]$Force,
 	# certificate store location
 	[Parameter(DontShow)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
 	[string]$CertStoreLocation = 'Cert:\LocalMachine\Shielded VM Local Certificates',
+	# switch to create any missing parameters from JSON file
+	[Parameter(DontShow)]
+	[switch]$ParametersFromJson,
+	# path to JSON file with parameters
+	[Parameter(DontShow)]
+	[string]$ParametersFromJsonPath,
 	# log file max age
 	[Parameter(DontShow)]
 	[double]$LogDays = 7,
@@ -59,6 +68,45 @@ Begin {
 		}
 	}
 
+	# load missing parameters from JSON file
+	If ($ParametersFromJson) {
+		# retrieve all parameters
+		$Parameters = (Get-Command -Name $PSCommandPath).Parameters.Values
+
+		# filter parameters to parameter set
+		If ($PSCmdlet.ParameterSetName) {
+			$Parameters = $Parameters | Where-Object { $_.ParameterSets[$PSCmdlet.ParameterSetName] -or $_.ParameterSets['__AllParameterSets'] }
+		}
+
+		# define unbound parameters
+		$PSUnboundParameters = @{}
+		ForEach ($ParameterName in $Parameters.Name) {
+			If (-not $PSBoundParameters.ContainsKey($ParameterName)) {
+				$PSUnboundParameters[$ParameterName] = $null
+			}
+		}
+
+		# if ParametersFromJsonPath was not defined...
+		If (-not $PSBoundParameters.ContainsKey('ParametersFromJsonPath')) {
+			$ParametersFromJsonPath = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
+		}
+
+		# get data in JSON file
+		Try {
+			$Json = Get-Content -Path $ParametersFromJsonPath -ErrorAction Stop | ConvertFrom-Json
+		}
+		Catch {
+			Throw $_
+		}
+
+		# create parameters from data in JSON file
+		ForEach ($ParameterName in $PSUnboundParameters.Keys) {
+			If ($ParameterName -in ($Json.PSObject.Properties.Name)) {
+				Set-Variable -Name $ParameterName -Value $Json.$ParameterName -Scope 'Script'
+			}
+		}
+	}
+
 	# throw error "either or" parameter requirements not met
 	If ($null -eq $Principals -and $null -eq $Password) {
 		Throw [System.Management.Automation.ParameterBindingException]::New('The Password or Principals parameter must be provided.')
@@ -91,11 +139,21 @@ Begin {
 			# ...then compare the thumbprints of the Certificate and the Cert object
 			If ($X509Certificate2.Thumbprint -eq $Certificate.Thumbprint) {
 				Write-Output 'Certificates in path and store match; skipping export of:'
-				Write-Output "`tCerPath : '$($FilePathCer.FullName)'"
-				Write-Output "`tPfxPath : '$($FilePathPfx.FullName)'"
+				Write-Output "`tCerPath : '$($FilePathCer)'"
+				Write-Output "`tPfxPath : '$($FilePathPfx)'"
 				Write-Output "`tSubject : '$($X509Certificate2.Subject)'"
 				Return
 			}
+		}
+		# if either files does not exist or Force set...
+		Else {
+			# declare paths
+			Write-Output 'Exporting certificate to path:'
+			Write-Output "`tCerPath : '$($FilePathCer)'"
+			Write-Output "`tPfxPath : '$($FilePathPfx)'"
+			Write-Output "`tSubject : '$($Certificate.Subject)'"
+			Write-Output "`tPrincipals : $($Principals -join ', ')"
+
 		}
 	
 		# create hashtable for .pfx file
@@ -115,18 +173,20 @@ Begin {
 		If ($null -ne $Password) {
 			$ExportPfxCertificate['Password'] = $Password
 		}
-	
+
 		# export certificate as .pfx
 		Try {
 			$null = Export-PfxCertificate @ExportPfxCertificate
+			Write-Output "...exported PFX file: '$FilePathPfx'"
 		}
 		Catch {
 			Throw $_
 		}
-	
+
 		# export certificate as .cer
 		Try {
 			$null = Export-Certificate -Cert $Certificate -FilePath $FilePathCer
+			Write-Output "...exported CER file: '$FilePathCer'"
 		}
 		Catch {
 			Throw $_
