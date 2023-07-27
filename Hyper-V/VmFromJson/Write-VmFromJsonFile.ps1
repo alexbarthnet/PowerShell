@@ -166,50 +166,6 @@ Param(
 )
 
 Begin {
-	# load missing parameters from JSON file
-	If ($ParametersFromJson) {
-		# retrieve all parameters
-		$Parameters = (Get-Command -Name $PSCommandPath).Parameters.Values
-
-		# filter parameters to parameter set
-		If ($PSCmdlet.ParameterSetName) {
-			$Parameters = $Parameters | Where-Object { $_.ParameterSets[$PSCmdlet.ParameterSetName] -or $_.ParameterSets['__AllParameterSets'] }
-		}
-
-		# define unbound parameters
-		$PSUnboundParameters = @{}
-		ForEach ($ParameterName in $Parameters.Name) {
-			If (-not $PSBoundParameters.ContainsKey($ParameterName)) {
-				$PSUnboundParameters[$ParameterName] = $null
-			}
-		}
-
-		# check JSON file
-		If (Test-Path -Path $ParametersFromJsonPath -PathType Leaf) {
-			Write-LogToMultiple -LogSubject $HostName -LogText "get-jsonpath: $ParametersFromJsonPath"
-		}
-		Else {
-			Write-LogToMultiple -LogSubject $HostName -LogText "get-jsonpath-ERROR: $($_.Exception.Message)"
-			Throw
-		}
-
-		# get data in JSON file
-		Try {
-			$Json = Get-Content -Path $ParametersFromJsonPath | ConvertFrom-Json
-		}
-		Catch {
-			Write-LogToMultiple -LogSubject $HostName -LogText "get-vmpath-ERROR: $($_.Exception.Message)"
-			Throw $_
-		}
-
-		# create parameters from data in JSON file
-		ForEach ($ParameterName in $PSUnboundParameters.Keys) {
-			If ($ParameterName -in ($Json.PSObject.Properties.Name)) {
-				New-Variable -Name $ParameterName -Value $Json.$ParameterName -Scope 'Script'
-			}
-		}
-	}
-
 	Function Get-ParametersFromCommand {
 		Param(
 			[string]$CommandName = $PSCommandPath,
