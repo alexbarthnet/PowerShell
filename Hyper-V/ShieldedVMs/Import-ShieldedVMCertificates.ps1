@@ -27,9 +27,6 @@ Param(
 )
 
 Begin {
-	# force close open transcript
-	Try { Stop-Transcript } Catch [System.Management.Automation.PSInvalidOperationException] { $Error.Clear() }
-
 	# append hostname to script path to define transcript path
 	$PathWithHostName = $PSCommandPath.Replace('.ps1', "_$HostName.txt")
 	# append datetime to transcript path
@@ -74,7 +71,7 @@ Begin {
 
 	Function Import-CertificatePair {
 		Param(
-			[Parameter(Position = 0, Mandatory = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
+			[Parameter(Position = 0, Mandatory = $true)][ValidateScript({ Test-Path -Path $_.FullName -PathType 'Leaf' })]
 			[object]$PfxFile
 		)
 
