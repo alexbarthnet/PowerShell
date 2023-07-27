@@ -423,17 +423,17 @@ Process {
 
 				# add RandomDelay if provided as datetime value
 				If ($null -ne $RandomDelay) {
-					$json_hashtable['RandomDelayTime'] = [datetime]($RandomDelay - $TriggerAt)
+					$json_hashtable['RandomDelayTime'] = [datetime]($TriggerAt + $RandomDelay)
 				}
 
 				# add ExecutionTimeLimitTime1 if provided as datetime value
 				If ($null -ne $ExecutionTimeLimit) {
-					$json_hashtable['ExecutionTimeLimitTime'] = [datetime]($ExecutionTimeLimit - $TriggerAt)
+					$json_hashtable['ExecutionTimeLimitTime'] = [datetime]($TriggerAt + $ExecutionTimeLimit)
 				}
 
 				# add RepetitionInterval if provided as datetime value
 				If ($null -ne $RepetitionInterval) {
-					$json_hashtable['RepetitionIntervalTime'] = [datetime]($RepetitionInterval - $TriggerAt)
+					$json_hashtable['RepetitionIntervalTime'] = [datetime]($TriggerAt + $RepetitionInterval)
 				}
 
 				# add RunLevel if provided
