@@ -387,6 +387,109 @@ Begin {
 		}
 	}
 
+	Function Get-VMFromComputerName {
+		[CmdletBinding()]
+		Param(
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName,
+			[Parameter(Mandatory = $true)]
+			[string]$Name,
+			[string]$ClusterName
+		)
+
+		# if cluster name was provided...
+		If ($PSBoundParameters['ClusterName']) {
+			# define paramters for Get-ClusterNodeNames
+			$GetClusterNodeNames = @{
+				ComputerName = $ComputerName
+				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# define computernames as cluster node names
+			Try {
+				$ComputerNames = Get-ClusterNodeNames @GetClusterNodeNames
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving cluster node names from computer name")
+				Throw $_
+			}
+		}
+		Else {
+			# define computernames as single computername
+			$ComputerNames = $ComputerName
+		}
+
+		# create list for VMs
+		$VMList = [System.Collections.Generic.List[object]]::new()
+
+		# check for VM on each node
+		:ComputerNames ForEach ($ComputerNameForGetVM in $ComputerNames) {
+			# declare and begin
+			Write-Host ("$Hostname,$ComputerName,$Name - checking for VM on host: '$ComputerNameForGetVM'")
+
+			# define parameters for Get-VMHost
+			$GetVMHost = @{
+				ComputerName = $ComputerNameForGetVM
+				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# validate host before continuing
+			Try {
+				$null = Get-VMHost @GetVMHost
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - WARNING: could not connect to host: '$ComputerNameForGetVM'")
+				Continue ComputerNames
+			}
+
+			# define parameters for Get-VM
+			$GetVM = @{
+				Name         = $Name
+				ComputerName = $ComputerNameForGetVM
+				ErrorAction  = [System.Management.Automation.ActionPreference]::SilentlyContinue
+			}
+
+			# get VMs with Name from ComputerName
+			Try {
+				$VMsFromGetVM = Get-VM @GetVM
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving VMs from host")
+				Throw $_
+			}
+
+			# add each VM to VM list
+			ForEach ($VMFromGetVM in $VMsFromGetVM) {
+				$VMList.Add($VMFromGetVM)
+			}
+		}
+
+		# check VM list
+		switch ($VMList.Count) {
+			# no VMs found
+			0 {
+				# declare then return null
+				Write-Host ("$Hostname,$ComputerName,$Name - ....VM not found on provided host")
+				Return $null
+			}
+			# one VM found
+			1 {
+				# declare then return VM
+				Write-Host ("$Hostname,$ComputerName,$Name - ....VM found via provided host")
+				Return $VMList[0]
+			}
+			# multiple VMs found
+			Default {
+				# declare and report then return null
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: multiple VMs found with name")
+				ForEach ($VMObject in $VMList) {
+					Write-Host ("$Hostname,$ComputerName,$Name - ...found VM on '$($VMObject.ComputerName)' with Id: '$($VMObject.Id)'")
+				}
+				Return 'multiple'
+			}
+		}
+	}
+
 	Function Get-VMFromParameters {
 		[CmdletBinding()]
 		Param(
@@ -913,7 +1016,7 @@ Begin {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving device by name from 'All Systems' collection")
 					Throw $_
 				}
-	
+
 				# if multiple devices found by name...
 				If ($Device.Count -gt 1) {
 					# ...warn and return
@@ -921,7 +1024,7 @@ Begin {
 					Write-Host ("$Hostname,$ComputerName,$Name - ...remove extra devices from SCCM before continuing")
 					Return
 				}
-	
+
 				# if device found by name and Device is a full client...
 				If ($null -ne $Device -and $Device.Client -eq 1) {
 					# ...warn and return
@@ -929,7 +1032,7 @@ Begin {
 					Write-Host ("$Hostname,$ComputerName,$Name - ...remove device from SCCM before continuing")
 					Return
 				}
-	
+
 				# if device found by name with different BIOSGUID...
 				If ($null -ne $Device -and $Device.SMBIOSGUID -ne $ArgumentList['BIOSGUID']) {
 					# ...warn and return
@@ -985,7 +1088,7 @@ Begin {
 					SMBiosGuid   = $ArgumentList['BIOSGUID']
 					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 				}
-				
+
 				# import the device into SCCM
 				Try {
 					Write-Host ("$Hostname,$ComputerName,$Name - ...adding device to SCCM")
@@ -995,7 +1098,7 @@ Begin {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: adding device to SCCM")
 					Throw $_
 				}
-				
+
 				# define parameters for Get-CMDeviceFromCollection
 				$GetCMDeviceFromCollection = @{
 					CollectionId = $AllSystems.CollectionID
@@ -1011,7 +1114,7 @@ Begin {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving device from collection: '$($AllSystems.Name)'")
 					Throw $_
 				}
-				
+
 				# if device still not found...
 				If ($null -eq $Device) {
 					Return
@@ -1030,7 +1133,7 @@ Begin {
 
 				# ...report
 				Write-Host ("$Hostname,$ComputerName,$Name - ...found existing device with resource ID: '$ResourceId'")
-			
+
 				# define parameters for Clear-CMPxeDeployment
 				$ClearCMPxeDeployment = @{
 					Device      = $Device
@@ -1297,7 +1400,7 @@ Begin {
 			ElseIf ($null -ne ($WdsClient | Where-Object { $_.DeviceName -eq $Name })) {
 				# ...remove existing WDS clients by DeviceName
 				Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing WDS devices with matching DeviceName")
-				
+
 				# define parameters for Remove-WdsClient
 				$RemoveWdsClient = @{
 					DeviceId    = $Name
@@ -1742,7 +1845,7 @@ Begin {
 				Force        = $true
 				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 			}
-			
+
 			# replicate DHCP scope to peer
 			Try {
 				Write-Host ("$Hostname,$ComputerName,$Name - replicating DHCP scope to peer: '$($Failover.PartnerServer)'")
@@ -2697,7 +2800,7 @@ Process {
 	}
 
 	# process each VMname
-	ForEach ($Name in $VMName) {
+	:VMName ForEach ($Name in $VMName) {
 		# check if JSON contains VM
 		If ($null -eq $JsonData.$Name) {
 			Write-Host ("$Hostname - VM not found in Json: '$Name")
@@ -2707,6 +2810,7 @@ Process {
 		# override ComputerName with bound parameters if provided
 		If ($PSBoundParameters['ComputerName']) {
 			$ComputerName = $ComputerName
+			Write-Host ("$Hostname,$ComputerName,$Name - WARNING: overriding ComputerName from JSON: '$($JsonData.$Name.ComputerName)'")
 		}
 		Else {
 			$ComputerName = $JsonData.$Name.ComputerName
@@ -2715,6 +2819,7 @@ Process {
 		# override VirtualMachinePath with bound parameters if provided
 		If ($PSBoundParameters['Path']) {
 			$Path = $Path
+			Write-Host ("$Hostname,$ComputerName,$Name - WARNING: overriding Path from JSON: '$($JsonData.$Name.Path)'")
 		}
 		Else {
 			$Path = $JsonData.$Name.Path
@@ -2722,83 +2827,69 @@ Process {
 
 		# if VM has host...
 		If ($null -ne $ComputerName) {
+			# define parameters for Get-ClusterName
+			$GetClusterName = @{
+				ComputerName = $ComputerName
+				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			}
+
 			# check if host is clustered
 			Try {
 				Write-Host ("$Hostname,$ComputerName,$Name - checking if host is clustered...")
-				$ClusterName = Get-ClusterName -ComputerName $ComputerName
+				$ClusterName = Get-ClusterName @GetClusterName
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: checking if host is clustered")
 				Throw $_
 			}
 
-			# if host is not clustered...
+			# define parameters for Get-VMFromComputerName
+			$GetVMFromComputerName = @{
+				Name         = $Name
+				ComputerName = $ComputerName
+				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# if clustername not defined...
 			If ([string]::IsNullOrEmpty($ClusterName)) {
+				# declare and continue
 				Write-Host ("$Hostname,$ComputerName,$Name - ...host is not clustered")
-				$ComputerNames = $ComputerName
 			}
-			# if host is not clustered...
 			Else {
+				# declare and define optional parameters for Get-VMFromComputerName
 				Write-Host ("$Hostname,$ComputerName,$Name - ...host is in cluster: '$ClusterName'")
-				$ComputerNames = Get-ClusterNodeNames -ComputerName $ComputerName
+				$GetVMFromComputerName['ClusterName'] = $ClusterName
 			}
 
-			# create list for VMs
-			$VMList = [System.Collections.Generic.List[object]]::new()
-
-			# check for VM on each node
-			ForEach ($ComputerNameForGetVM in $ComputerNames) {
-				Write-Host ("$Hostname,$ComputerName,$Name - checking for VM on host: '$ComputerNameForGetVM'")
-				# get VMs with Name from ComputerName
-				Try {
-					$VMsFromGetVM = (Get-VM -ComputerName $ComputerNameForGetVM).Where({ $_.Name -eq $Name })
-				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving VMs from host")
-					Throw $_
-				}
-
-				# add each VM to VM list
-				ForEach ($VMFromGetVM in $VMsFromGetVM) {
-					$VMList.Add($VMFromGetVM)
-				}
+			# retrieve VM
+			Try {
+				$VM = Get-VMFromComputerName @GetVMFromComputerName
+			}
+			Catch {
+				Throw $_
 			}
 
-			# check VM list
-			If ($VMList.Count -gt 1) {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: multiple VMs found with name")
-				ForEach ($VMObject in $VMList) {
-					Write-Host ("$Hostname,$ComputerName,$Name - ...found VM on '$($VMObject.ComputerName)' with Id: '$($VMObject.Id)'")
-				}
-				Return
+			# check VM
+			If ($VM -eq 'multiple') {
+				Continue VMName
+			}
+		}
+
+		# if VM is on a different computer...
+		If ($null -ne $VM -and $ComputerName -ne $VM.ComputerName) {
+			# declare and begin
+			Write-Host ("$Hostname,$ComputerName,$Name - VM found on another computer...")
+
+			# update computer name
+			Try {
+				$ComputerName = $VM.ComputerName.ToLower()
+			}
+			Catch {
+				Throw $_
 			}
 
-			# check VM list
-			switch ($VMList.Count) {
-				# no VMs found
-				0 {
-					Write-Host ("$Hostname,$ComputerName,$Name - ....VM not found via provided host")
-					$VM = $null
-				}
-				# one VM found
-				1 {
-					Write-Host ("$Hostname,$ComputerName,$Name - ....VM found via provided host")
-					$VM = $VMList[0]
-					# update ComputerName
-					If ($ComputerName -ne $VM.ComputerName) {
-						$ComputerName = $VM.ComputerName.ToLower()
-						Write-Host ("$Hostname,$ComputerName,$Name - ....VM found on another host: $ComputerName")
-					}
-				}
-				# multiple VMs found
-				Default {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: multiple VMs found with name")
-					ForEach ($VMObject in $VMList) {
-						Write-Host ("$Hostname,$ComputerName,$Name - ...found VM on '$($VMObject.ComputerName)' with Id: '$($VMObject.Id)'")
-					}
-					Return
-				}
-			}
+			# declare and continue
+			Write-Host ("$Hostname,$ComputerName,$Name - ....updated computer name")
 		}
 
 		# if VM not found...
@@ -3123,7 +3214,7 @@ Process {
 					If ($ClusterGroup.Priority -ne $ClusterPriority) {
 						# declare and begin
 						Write-Host ("$Hostname,$ComputerName,$Name - ...setting cluster group priority to: $ClusterPriority")
-				
+
 						# set cluster priority
 						Try {
 							$ClusterGroup.Priority = $ClusterPriority
@@ -3161,7 +3252,7 @@ Process {
 						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: starting VM on cluster")
 						Throw $_
 					}
-			
+
 					# declare and continue
 					Write-Host ("$Hostname,$ComputerName,$Name - ...started VM on cluster")
 					Continue
@@ -3231,7 +3322,7 @@ Process {
 			If ($VM.State -eq 'Off') {
 				# ...start VM
 				Write-Host ("$Hostname,$ComputerName,$Name - starting VM on host...")
-				
+
 				# start VM
 				Try {
 					Start-VM -VM $VM

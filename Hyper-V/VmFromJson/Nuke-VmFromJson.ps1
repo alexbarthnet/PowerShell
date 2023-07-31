@@ -219,9 +219,12 @@ Begin {
 		# test for cluster
 		Try {
 			$ClusterNodeNames = Invoke-Command @InvokeCommand -ScriptBlock {
+				# define paramters for Get-ClusterNode
 				$GetClusterNode = @{
 					ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
 				}
+
+				# retrieve names of cluster nodes
 				Get-ClusterNode @GetClusterNode | Select-Object -ExpandProperty 'Name'
 			}
 		}
@@ -352,6 +355,109 @@ Begin {
 		Else {
 			# ...return CM site code
 			Return $CMSiteCode
+		}
+	}
+
+	Function Get-VMFromComputerName {
+		[CmdletBinding()]
+		Param(
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName,
+			[Parameter(Mandatory = $true)]
+			[string]$Name,
+			[string]$ClusterName
+		)
+
+		# if cluster name was provided...
+		If ($PSBoundParameters['ClusterName']) {
+			# define paramters for Get-ClusterNodeNames
+			$GetClusterNodeNames = @{
+				ComputerName = $ComputerName
+				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# define computernames as cluster node names
+			Try {
+				$ComputerNames = Get-ClusterNodeNames @GetClusterNodeNames
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving cluster node names from computer name")
+				Throw $_
+			}
+		}
+		Else {
+			# define computernames as single computername
+			$ComputerNames = $ComputerName
+		}
+
+		# create list for VMs
+		$VMList = [System.Collections.Generic.List[object]]::new()
+
+		# check for VM on each node
+		:ComputerNames ForEach ($ComputerNameForGetVM in $ComputerNames) {
+			# declare and begin
+			Write-Host ("$Hostname,$ComputerName,$Name - checking for VM on host: '$ComputerNameForGetVM'")
+
+			# define parameters for Get-VMHost
+			$GetVMHost = @{
+				ComputerName = $ComputerNameForGetVM
+				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# validate host before continuing
+			Try {
+				$null = Get-VMHost @GetVMHost
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - WARNING: could not connect to host: '$ComputerNameForGetVM'")
+				Continue ComputerNames
+			}
+
+			# define parameters for Get-VM
+			$GetVM = @{
+				Name         = $Name
+				ComputerName = $ComputerNameForGetVM
+				ErrorAction  = [System.Management.Automation.ActionPreference]::SilentlyContinue
+			}
+
+			# get VMs with Name from ComputerName
+			Try {
+				$VMsFromGetVM = Get-VM @GetVM
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving VMs from host")
+				Throw $_
+			}
+
+			# add each VM to VM list
+			ForEach ($VMFromGetVM in $VMsFromGetVM) {
+				$VMList.Add($VMFromGetVM)
+			}
+		}
+
+		# check VM list
+		switch ($VMList.Count) {
+			# no VMs found
+			0 {
+				# declare then return null
+				Write-Host ("$Hostname,$ComputerName,$Name - ....VM not found on provided host")
+				Return $null
+			}
+			# one VM found
+			1 {
+				# declare then return VM
+				Write-Host ("$Hostname,$ComputerName,$Name - ....VM found via provided host")
+				Return $VMList[0]
+			}
+			# multiple VMs found
+			Default {
+				# declare and report then return null
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: multiple VMs found with name")
+				ForEach ($VMObject in $VMList) {
+					Write-Host ("$Hostname,$ComputerName,$Name - ...found VM on '$($VMObject.ComputerName)' with Id: '$($VMObject.Id)'")
+				}
+				Return "multiple"
+			}
 		}
 	}
 
@@ -579,7 +685,7 @@ Begin {
 					Write-Host ("$Hostname,$ComputerName,$Name - WARNING: device found by name with unexpected SMBIOSGUID: '$($ArgumentList['BIOSGUID'])'")
 					Write-Host ("$Hostname,$ComputerName,$Name - ...remove device from SCCM before continuing")
 					Return
-				} 
+				}
 			}
 
 			# retrieve device by BIOSGUID
@@ -805,7 +911,7 @@ Begin {
 			ElseIf ($null -ne ($WdsClient | Where-Object { $_.DeviceName -eq $Name })) {
 				# ...remove existing WDS clients by DeviceName
 				Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing WDS devices with matching DeviceName")
-				
+
 				# define parameters for Remove-WdsClient
 				$RemoveWdsClient = @{
 					DeviceId    = $Name
@@ -858,12 +964,12 @@ Begin {
 			$Hostname = $ArgumentList['Hostname']
 			$ComputerName = $ArgumentList['ComputerName']
 			$Name = $ArgumentList['Name']
-				
+
 			# create object for path
 			$Path = $ArgumentList['Path']
 
 			# if path not found....
-			If ( -not (Test-Path -Path $Path -PathType Container)) { 
+			If ( -not (Test-Path -Path $Path -PathType Container)) {
 				# warn and return
 				Write-Host ("$Hostname,$ComputerName,$Name - WARNING: path not found")
 				Return
@@ -953,7 +1059,7 @@ Begin {
 			$Hostname = $ArgumentList['Hostname']
 			$ComputerName = $ArgumentList['ComputerName']
 			$Name = $ArgumentList['Name']
-				
+
 			# create object for path
 			$Path = $ArgumentList['Path']
 
@@ -1003,7 +1109,7 @@ Begin {
 					Confirm     = $false
 					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 				}
-					
+
 				# remove item
 				Try {
 					Write-Host ("$Hostname,$ComputerName,$Name - ...removing item: '$($ItemToRemove.FullName)'")
@@ -1186,7 +1292,7 @@ Begin {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...DNS record not found")
 			Return
 		}
-		
+
 		# define parameters for Remove-DnsServerResourceRecord
 		$RemoveDnsServerResourceRecord = @{
 			ComputerName = $ComputerName
@@ -1381,7 +1487,7 @@ Begin {
 				Force        = $true
 				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 			}
-			
+
 			# replicate DHCP scope to peer
 			Try {
 				Write-Host ("$Hostname,$ComputerName,$Name - replicating DHCP scope to peer: '$($Failover.PartnerServer)'")
@@ -1415,7 +1521,7 @@ Process {
 	}
 
 	# process each VMname
-	ForEach ($Name in $VMName) {
+	:VMName ForEach ($Name in $VMName) {
 		# check if VMParams contains VM
 		If ($null -eq $JsonData.$Name) {
 			Write-Host ("$Hostname - VM not found in Json: '$Name")
@@ -1425,6 +1531,7 @@ Process {
 		# override ComputerName with bound parameters if provided
 		If ($PSBoundParameters['ComputerName']) {
 			$ComputerName = $ComputerName
+			Write-Host ("$Hostname,$ComputerName,$Name - WARNING: overriding ComputerName from JSON: '$($JsonData.$Name.ComputerName)'")
 		}
 		Else {
 			$ComputerName = $JsonData.$Name.ComputerName
@@ -1433,6 +1540,7 @@ Process {
 		# override VirtualMachinePath with bound parameters if provided
 		If ($PSBoundParameters['Path']) {
 			$Path = $Path
+			Write-Host ("$Hostname,$ComputerName,$Name - WARNING: overriding Path from JSON: '$($JsonData.$Name.Path)'")
 		}
 		Else {
 			$Path = $JsonData.$Name.Path
@@ -1440,83 +1548,69 @@ Process {
 
 		# if VM has host...
 		If ($null -ne $ComputerName) {
+			# define parameters for Get-ClusterName
+			$GetClusterName = @{
+				ComputerName = $ComputerName
+				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			}
+
 			# check if host is clustered
 			Try {
 				Write-Host ("$Hostname,$ComputerName,$Name - checking if host is clustered...")
-				$ClusterName = Get-ClusterName -ComputerName $ComputerName
+				$ClusterName = Get-ClusterName @GetClusterName
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: checking if host is clustered")
 				Throw $_
 			}
 
-			# if host is not clustered...
+			# define parameters for Get-VMFromComputerName
+			$GetVMFromComputerName = @{
+				Name         = $Name
+				ComputerName = $ComputerName
+				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# if clustername not defined...
 			If ([string]::IsNullOrEmpty($ClusterName)) {
+				# declare and continue
 				Write-Host ("$Hostname,$ComputerName,$Name - ...host is not clustered")
-				$ComputerNames = $ComputerName
 			}
-			# if host is not clustered...
 			Else {
+				# declare and define optional parameters for Get-VMFromComputerName
 				Write-Host ("$Hostname,$ComputerName,$Name - ...host is in cluster: '$ClusterName'")
-				$ComputerNames = Get-ClusterNodeNames -ComputerName $ComputerName
+				$GetVMFromComputerName['ClusterName'] = $ClusterName
 			}
 
-			# create list for VMs
-			$VMList = [System.Collections.Generic.List[object]]::new()
-
-			# check for VM on each node
-			ForEach ($ComputerNameForGetVM in $ComputerNames) {
-				Write-Host ("$Hostname,$ComputerName,$Name - checking for VM on host: '$ComputerNameForGetVM'")
-				# get VMs with Name from ComputerName
-				Try {
-					$VMsFromGetVM = (Get-VM -ComputerName $ComputerNameForGetVM).Where({ $_.Name -eq $Name })
-				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving VMs from host")
-					Throw $_
-				}
-
-				# add each VM to VM list
-				ForEach ($VMFromGetVM in $VMsFromGetVM) {
-					$VMList.Add($VMFromGetVM)
-				}
+			# retrieve VM
+			Try {
+				$VM = Get-VMFromComputerName @GetVMFromComputerName
+			}
+			Catch {
+				Throw $_
 			}
 
-			# check VM list
-			If ($VMList.Count -gt 1) {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: multiple VMs found with name")
-				ForEach ($VMObject in $VMList) {
-					Write-Host ("$Hostname,$ComputerName,$Name - ...found VM on '$($VMObject.ComputerName)' with Id: '$($VMObject.Id)'")
-				}
-				Return
+			# check VM
+			If ($VM -eq 'multiple') {
+				Continue VMName
+			}
+		}
+
+		# if VM is on a different computer...
+		If ($null -ne $VM -and $ComputerName -ne $VM.ComputerName) {
+			# declare and begin
+			Write-Host ("$Hostname,$ComputerName,$Name - VM found on another computer...")
+
+			# update computer name
+			Try {
+				$ComputerName = $VM.ComputerName.ToLower()
+			}
+			Catch {
+				Throw $_
 			}
 
-			# check VM list
-			switch ($VMList.Count) {
-				# no VMs found
-				0 {
-					Write-Host ("$Hostname,$ComputerName,$Name - ....VM not found via provided host")
-					$VM = $null
-				}
-				# one VM found
-				1 {
-					Write-Host ("$Hostname,$ComputerName,$Name - ....VM found via provided host")
-					$VM = $VMList[0]
-					# update ComputerName
-					If ($ComputerName -ne $VM.ComputerName) {
-						$ComputerName = $VM.ComputerName.ToLower()
-						Write-Host ("$Hostname,$ComputerName,$Name - ....VM found on another host: $ComputerName")
-					}
-				}
-				# multiple VMs found
-				Default {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: multiple VMs found with name")
-					ForEach ($VMObject in $VMList) {
-						Write-Host ("$Hostname,$ComputerName,$Name - ...found VM on '$($VMObject.ComputerName)' with Id: '$($VMObject.Id)'")
-					}
-					Return
-				}
-			}
+			# declare and continue
+			Write-Host ("$Hostname,$ComputerName,$Name - ....updated computer name")
 		}
 
 		# if VM is on a cluster...
@@ -1541,85 +1635,66 @@ Process {
 			# ...retrieve OS deployment method
 			$DeploymentMethod = $JsonData.$Name.OSDeployment.DeploymentMethod
 
-			# ...configure OS deployment
-			If ($DeploymentMethod -isnot [System.String]) {
-				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping OSD cleanup, method is an invalid type: '$($DeploymentMethod.GetType().FullName)'")
-			}
-			ElseIf ([string]::IsNullOrEmpty($DeploymentMethod)) {
-				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping OSD cleanup, no method found")
-			}
-			ElseIf ($SkipProvisioning) {
+			# if SkipProvisioning set...
+			If ($SkipProvisioning) {
+				# declare and continue
 				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping OSD cleanup, SkipProvisioning set")
 			}
+			# if SkipProvisioning not set...
 			Else {
-				# uppercase deployment method
-				$DeploymentMethod = $DeploymentMethod.ToUpper()
-				# check deployment method
-				switch ($DeploymentMethod) {
-					'ISO' {
-						Write-Host ("$Hostname,$ComputerName,$Name - skipping OSD cleanup; ISO removed from VM during VM removal")
-					}
-					'WDS' {
-						# define parameters for Remove-DeviceFromWds
-						$RemoveDeviceFromWds = @{
-							VM               = $VM
-							DeploymentServer = $JsonData.$Name.OSDeployment.DeploymentServer
-						}
-						
-						# remove VM from WDS
-						Try {
-							Write-Host ("$Hostname,$ComputerName,$Name - removing VM from WDS...")
-							Remove-DeviceFromWds @RemoveDeviceFromWds
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove VM from WDS")
-							Throw $_
-						}
-					}
-					'SCCM' {
-						# define parameters for Remove-DeviceFromSccm
-						$RemoveDeviceFromSccm = @{
-							VM               = $VM
-							# DeploymentPath        = $JsonData.$Name.OSDeployment.DeploymentPath
-							DeploymentServer = $JsonData.$Name.OSDeployment.DeploymentServer
-							# DeploymentDomain      = $JsonData.$Name.OSDeployment.DeploymentDomain
-							# DeploymentCollection  = $JsonData.$Name.OSDeployment.DeploymentCollection
-							# MaintenanceCollection = $JsonData.$Name.OSDeployment.MaintenanceCollection
-						}
-
-						# remove VM from SCCM
-						Try {
-							Write-Host ("$Hostname,$ComputerName,$Name - removing VM from SCCM...")
-							Remove-DeviceFromSccm @RemoveDeviceFromSccm
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove VM from SCCM")
-							Throw $_
-						}
-					}
-					Default {
-						Write-Host ("$Hostname,$ComputerName,$Name - ...skipping OSD cleanup, unknown method provided: '$DeploymentMethod'")
-					}
+				# retrieve OS deployment method
+				$DeploymentMethod = $JsonData.$Name.OSDeployment.DeploymentMethod
+				# if DeploymentMethod is not present...
+				If ([string]::IsNullOrEmpty($DeploymentMethod)) {
+					Write-Host ("$Hostname,$ComputerName,$Name - ...skipping OSD cleanup, no method found")
 				}
-			}
-		}
+				# if DeploymentMethod is present...
+				Else {
+					# check deployment method
+					switch ($DeploymentMethod) {
+						'ISO' {
+							# declare and continue
+							Write-Host ("$Hostname,$ComputerName,$Name - skipping OSD cleanup; ISO removed from VM during VM removal")
+						}
+						'WDS' {
+							# declare and begin
+							Write-Host ("$Hostname,$ComputerName,$Name - removing VM from WDS...")
 
-		# if VM has network adapters...
-		If ($null -ne $VM -and $null -ne $JsonData.$Name.VMNetworkAdapters) {
-			# check each network adapter
-			ForEach ($VMNetworkAdapter in $JsonData.$Name.VMNetworkAdapters) {
-				# remove DHCP reservation by IP address only
-				If ($null -ne $VMNetworkAdapter.DhcpServer -and $null -ne $VMNetworkAdapter.DhcpScope -and $null -ne $VMNetworkAdapter.IPAddress) {
-					$RemoveVMNetworkAdapterFromDHCP = @{
-						ComputerName = $VMNetworkAdapter.DhcpServer
-						ScopeId      = $VMNetworkAdapter.DhcpScope
-						IPAddress    = $VMNetworkAdapter.IPAddress
-					}
-					Try {
-						Remove-VMNetworkAdapterFromDHCP @RemoveVMNetworkAdapterFromDHCP
-					}
-					Catch {
-						Throw $_
+							# define parameters for Remove-DeviceFromWds
+							$RemoveDeviceFromWds = @{
+								VM               = $VM
+								DeploymentServer = $JsonData.$Name.OSDeployment.DeploymentServer
+							}
+
+							# remove VM from WDS
+							Try {
+								Remove-DeviceFromWds @RemoveDeviceFromWds
+							}
+							Catch {
+								Throw $_
+							}
+						}
+						'SCCM' {
+							# declare and begin
+							Write-Host ("$Hostname,$ComputerName,$Name - removing VM from SCCM...")
+
+							# define parameters for Remove-DeviceFromSccm
+							$RemoveDeviceFromSccm = @{
+								VM               = $VM
+								DeploymentServer = $JsonData.$Name.OSDeployment.DeploymentServer
+							}
+
+							# remove VM from SCCM
+							Try {
+								Remove-DeviceFromSccm @RemoveDeviceFromSccm
+							}
+							Catch {
+								Throw $_
+							}
+						}
+						Default {
+							Write-Host ("$Hostname,$ComputerName,$Name - ...skipping OSD cleanup, unknown method provided: '$DeploymentMethod'")
+						}
 					}
 				}
 			}
@@ -1800,13 +1875,33 @@ Process {
 			}
 		}
 
-		# remove network objects 
+		# remove network objects
 		If ($RemoveNetworkObjects) {
+			# process each VMNetworkAdapter defined in JSON
+			ForEach ($VMNetworkAdapter in $JsonData.$Name.VMNetworkAdapters) {
+				If ($null -ne $VMNetworkAdapter.DhcpServer -and $null -ne $VMNetworkAdapter.DhcpScope -and $null -ne $VMNetworkAdapter.IPAddress) {
+					# define parameters for Remove-VMNetworkAdapterFromDHCP
+					$RemoveVMNetworkAdapterFromDHCP = @{
+						ComputerName = $VMNetworkAdapter.DhcpServer
+						ScopeId      = $VMNetworkAdapter.DhcpScope
+						IPAddress    = $VMNetworkAdapter.IPAddress
+					}
+
+					# remove VMNetworkAdapter from DHCP
+					Try {
+						Remove-VMNetworkAdapterFromDHCP @RemoveVMNetworkAdapterFromDHCP
+					}
+					Catch {
+						Throw $_
+					}
+				}
+			}
+
 			# define parameters for Remove-VMFromDnsServer
 			$RemoveVMFromDnsServer = @{
 				Name = $Name
 			}
-		
+
 			# remove VM from DNS
 			Try {
 				Remove-VMFromDnsServer @RemoveVMFromDnsServer
