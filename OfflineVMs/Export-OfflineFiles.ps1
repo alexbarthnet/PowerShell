@@ -43,7 +43,7 @@ Function Export-OfflineFilesFromVM {
 	If ($vm_check) {
 		# retrieve VM credentials
 		$Credential = $null
-		$Credential = Unprotect-CmsCredentials -Target $VMName
+		$Credential = Unprotect-CmsCredentials -Identity $VMName
 		If ($Credential) {
 			# connect to VM
 			$vm_direct = $null

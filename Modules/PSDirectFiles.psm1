@@ -15,7 +15,7 @@ Function Copy-PathFromPSDirect {
 	If ($vm_check) {
 		# retrieve VM credentials
 		$Credential = $null
-		$Credential = Unprotect-CmsCredentials -Target $VMName
+		$Credential = Unprotect-CmsCredentials -Identity $VMName
 		If ($Credential) {
 			# connect to VM
 			$vm_direct = $null
@@ -87,7 +87,7 @@ Function Copy-PathToPSDirect {
 	If ($vm_check) {
 		# retrieve VM credentials
 		$Credential = $null
-		$Credential = Unprotect-CmsCredentials -Target $VMName
+		$Credential = Unprotect-CmsCredentials -Identity $VMName
 		If ($Credential) {
 			# connect to VM
 			$vm_direct = $null
