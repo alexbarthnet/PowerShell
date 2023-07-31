@@ -464,10 +464,9 @@ Begin {
 	Function Get-VMFromParameters {
 		[CmdletBinding()]
 		Param(
-			[Parameter(Mandatory = $true)]
-			[string]$ComputerName,
 			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] -or $_ -is [guid] -or $_ -is [string] })]
 			[object]$VM,
+			[string]$ComputerName,
 			[switch]$Force
 		)
 
@@ -475,6 +474,19 @@ Begin {
 		If ($VM -is [Microsoft.HyperV.PowerShell.VirtualMachine] -and -not $Force) {
 			# ...return VM as-is
 			Return $VM
+		}
+
+		# if computername not provided...
+		If ([string]::IsNullOrEmpty($ComputerName)) {
+			# ...and VM is a virtual machine...
+			If ($VM -is [Microsoft.HyperV.PowerShell.VirtualMachine]) {
+				# get computer name from VM
+				$ComputerName = $VM.ComputerName
+			}
+			Else {
+				# get computer name from hostname
+				$ComputerName = $Hostname
+			}
 		}
 
 		# define parameters for Get-VM
