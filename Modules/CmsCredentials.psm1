@@ -80,7 +80,7 @@ Function New-CmsCredentialCertificate {
 	.DESCRIPTION
 	Internal function for creating a self-signed certificate. This function is called by Protect-CmsCredentialSecret.
 
-	.PARAMETER Target
+	.PARAMETER Identity
 	Specifies the identity for the CMS credential.
 
 	.PARAMETER Hostname
@@ -97,7 +97,7 @@ Function New-CmsCredentialCertificate {
 	[CmdletBinding()]
 	Param (
 		[Parameter(Position = 0, Mandatory = $true)]
-		[string]$Target,
+		[string]$Identity,
 		[Parameter(Position = 1)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
@@ -108,7 +108,7 @@ Function New-CmsCredentialCertificate {
 	$cms_date_tostring = $cms_date.ToUniversalTime().ToString('yyyyMMddTHHmmssffffZ')
 
 	# define certificate subject
-	$cms_subject = "CN=$($Hostname, $Target, $cms_date_tostring -join '-')"
+	$cms_subject = "CN=$($Hostname, $Identity, $cms_date_tostring -join '-')"
 
 	# define certificate values
 	$SelfSignedCertificate = @{
@@ -133,7 +133,7 @@ Function Protect-CmsCredentialSecret {
 	.DESCRIPTION
 	Internal function for protecting a credential with CMS. This function is called by Protect-CmsCredentials.
 
-	.PARAMETER Target
+	.PARAMETER Identity
 	Specifies the identity for the CMS credential.
 
 	.PARAMETER Cred
@@ -165,7 +165,7 @@ Function Protect-CmsCredentialSecret {
 	[CmdletBinding()]
 	Param (
 		[Parameter(Position = 0)]
-		[string]$Target,
+		[string]$Identity,
 		[Parameter(Position = 1)]
 		[pscredential]$Cred,
 		[Parameter(Position = 2)]
@@ -195,7 +195,7 @@ Function Protect-CmsCredentialSecret {
 	If (-not $Reset) {
 		# define required strings
 		$cms_date_regex = '[0-9TZ]+'
-		$cms_cert_regex = ("CN=$Hostname", $Target, $cms_date_regex) -join '-'
+		$cms_cert_regex = ("CN=$Hostname", $Identity, $cms_date_regex) -join '-'
 
 		# retrieve any certificates matching regex
 		$cms_cert = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_cert_regex } | Sort-Object NotBefore | Select-Object -Last 1
@@ -213,7 +213,7 @@ Function Protect-CmsCredentialSecret {
 	# create the certificate
 	If ($cms_make) {
 		Try {
-			$cms_cert = New-CmsCredentialCertificate -Target $Target -Hostname $Hostname
+			$cms_cert = New-CmsCredentialCertificate -Identity $Identity -Hostname $Hostname
 		}
 		Catch {
 			Return $_
@@ -250,7 +250,7 @@ Function Protect-CmsCredentialSecret {
 		If ($cms_made -and $Cleanup) {
 			Write-Host 'Removing old CMS certificates and credenials...'
 			$RemoveCmsCredentialSecret = @{
-				Target     = $Target
+				Identity   = $Identity
 				Prefix     = $Prefix
 				Hostname   = $Hostname
 				ParentPath = $ParentPath
@@ -274,7 +274,7 @@ Function Remove-CmsCredentialSecret {
 	.DESCRIPTION
 	Internal function for removing a CMS credential. This function is called by Remove-CmsCredentials.
 
-	.PARAMETER Target
+	.PARAMETER Identity
 	Specifies the identity of a CMS credential.
 
 	.PARAMETER Prefix
@@ -300,7 +300,7 @@ Function Remove-CmsCredentialSecret {
 	[CmdletBinding()]
 	Param (
 		[Parameter(Position = 0)]
-		[string]$Target,
+		[string]$Identity,
 		[Parameter(Position = 1)]
 		[string]$Prefix = 'cms',
 		[Parameter(Position = 2)]
@@ -341,7 +341,7 @@ Function Show-CmsCredentialSecret {
 	.DESCRIPTION
 	Internal function for retrieving a CMS credential. This function is called by Show-CmsCredentials.
 
-	.PARAMETER Target
+	.PARAMETER Identity
 	Specifies the identity of a CMS credential.
 
 	.PARAMETER Prefix
@@ -364,7 +364,7 @@ Function Show-CmsCredentialSecret {
 	[CmdletBinding()]
 	Param (
 		[Parameter(Position = 0)]
-		[string]$Target,
+		[string]$Identity,
 		[Parameter(Position = 1)]
 		[string]$Prefix = 'cms',
 		[Parameter(Position = 2)]
@@ -377,7 +377,7 @@ Function Show-CmsCredentialSecret {
 	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_')
 	$cms_name_regex = '[0-9A-Za-z]+'
 	$cms_date_regex = '[0-9TZ]+'
-	If ([string]::IsNullOrEmpty($Target)) {
+	If ([string]::IsNullOrEmpty($Identity)) {
 		$cms_cert_regex = ("CN=$Hostname", '\w+', $cms_date_regex) -join '-'
 		$cms_file_regex = ($Prefix, $Hostname, '\w+', $cms_date_regex) -join '_'
 	}
@@ -410,7 +410,7 @@ Function Update-CmsCredentialAccess {
 	.PARAMETER Mode
 	Specifies the mode for the function.
 
-	.PARAMETER Target
+	.PARAMETER Identity
 	Specifies the identity of a CMS credential.
 
 	.PARAMETER Principals
@@ -432,15 +432,15 @@ Function Update-CmsCredentialAccess {
 		[Parameter(Position = 0)]
 		[string]$Mode,
 		[Parameter(Position = 1)]
-		[string]$Target,
+		[string]$Identity,
 		[Parameter(Position = 2)]
 		[string[]]$Principals,
 		[Parameter(Position = 3)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
-	# create regex to match expected CMS certificate name of machinename followed by the target name then either a simple date or a FileDateTimeUniversal
-	$cms_regx = "CN=$Hostname-$Target-\d{8}"
+	# create regex to match expected CMS certificate name of machinename followed by the Identity name then either a simple date or a FileDateTimeUniversal
+	$cms_regx = "CN=$Hostname-$Identity-\d{8}"
 
 	# retrieve SIDs for principals
 	$cms_sids = @()
@@ -581,23 +581,23 @@ Function Protect-CmsCredentials {
 	None.
 
 	.EXAMPLE
-	PS> Protect-CmsCredentials -Target "testcredential"
+	PS> Protect-CmsCredentials -Identity "testcredential"
 
 	.EXAMPLE
-	PS> Protect-CmsCredentials -Target "testcredential" -Prefix "private"
+	PS> Protect-CmsCredentials -Identity "testcredential" -Prefix "private"
 
 	.EXAMPLE
-	PS> Protect-CmsCredentials -Target "testcredential" PasswordOnly
+	PS> Protect-CmsCredentials -Identity "testcredential" AsPlainText
 
 	.EXAMPLE
-	PS> Protect-CmsCredentials -Target "testcredential" -Prefix "private" -PasswordOnly
+	PS> Protect-CmsCredentials -Identity "testcredential" -Prefix "private" -AsPlainText
 
 	#>
 
 	[CmdletBinding(DefaultParameterSetName = 'Cred')]
 	Param(
 		[Parameter(Position = 0, Mandatory = $True)]
-		[string]$Target,
+		[string]$Identity,
 		[Parameter(Mandatory = $True, ParameterSetName = 'Cred', ValueFromPipeline = $true)]
 		[pscredential]$Cred,
 		[Parameter(Mandatory = $True, ParameterSetName = 'Pass')]
@@ -613,7 +613,9 @@ Function Protect-CmsCredentials {
 		[Parameter()]
 		[switch]$Cluster,
 		[Parameter()]
-		[switch]$Reset
+		[switch]$Reset,
+		[Parameter(DontShow)]
+		[string]$HostName = ([System.Environment]::Machinename).ToLowerInvariant()
 	)
 
 	# check credentials
@@ -627,20 +629,27 @@ Function Protect-CmsCredentials {
 		}
 	}
 
-	# get computer names
-	$CmsComputers = @()
-	$CmsComputers += Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+	# if parameters for computer name provided...
+	If ($PSBoundParameters.ContainsKey('Cluster') -or $PSBoundParameters.ContainsKey('ClusterName') -or $PSBoundParameters.ContainsKey('ComputerName')) {
+		# ...get computer names
+		$CmsComputers = Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+	}
+	# if parameters for computer name not provided...
+	Else {
+		# ...set computer names to localhost
+		$CmsComputers = $HostName
+	}
 
 	# define parameter hashtable
 	$ProtectParameters = @{
-		Target = $Target
-		Cred   = $Cred
-		Prefix = $Prefix
-		Reset  = $Reset
+		Identity = $Identity
+		Cred     = $Cred
+		Prefix   = $Prefix
+		Reset    = $Reset
 	}
 
-	# encrypt credentials to certificate
-	If ($CmsComputers.Count -gt 0) {
+	# if multiple computers defined or computer is remote...
+	If ($CmsComputers.Count -gt 1 -or $CmsComputers -notcontains $Hostname) {
 		# define modules for remote session
 		$Modules = @('CmsCredentials')
 
@@ -659,31 +668,46 @@ Function Protect-CmsCredentials {
 				$ModuleAliases[$ModuleAlias] = (Get-Item -Path alias:$ModuleAlias).Definition
 			}
 		}
+	}
 
-		# protect credentials on remote computers
-		ForEach ($CmsComputer in $CmsComputers) {
+	# protect credentials on each computer
+	ForEach ($CmsComputer in $CmsComputers) {
+		If ($CmsComputer -eq $Hostname -or $CmsComputer.StartsWith("$Hostname.", [System.StringComparer]::InvariantCultureIgnoreCase)) {
+			# protect credentials on local computer
+			Try {
+				Protect-CmsCredentialSecret @ProtectParameters
+			}
+			Catch {
+				Write-Error "could not protect credentials on '$CmsComputer'"
+			}
+		}
+		Else {
+			# protect credentials on remote computer
 			Try {
 				Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
+					# create objects in session
+					$ModuleFunctions = $using:ModuleFunctions
+					$ModuleAliases = $using:ModuleAliases
+					$CmsComputer = $using:CmsComputer
+
 					# load functions of local modules in remote session
-					$ModuleFunction = $using:ModuleFunctions
 					ForEach ($ModuleFunction in $ModuleFunctions.Keys) {
 						Try {
 							. ([ScriptBlock]::Create("function $ModuleFunction {$ModuleFunctions[$ModuleFunction]}"))
 						}
 						Catch {
-							Write-Host "ERROR: could not load function '$ModuleFunction' on '$using:CmsComputer'"
+							Write-Host "ERROR: could not define function '$ModuleFunction' on '$CmsComputer'"
 							Return
 						}
 					}
 
 					# load aliases of local modules in remote session
-					$ModuleAliases = $using:ModuleAliases
-					ForEach ($ModuleAlias in $using:ModuleAliases.Keys) {
+					ForEach ($ModuleAlias in $ModuleAliases.Keys) {
 						Try {
 							New-Alias -Name $ModuleAlias -Value $ModuleAliases[$ModuleAlias]
 						}
 						Catch {
-							Write-Host "ERROR: could not load alias '$ModuleAlias' on '$using:CmsComputer'"
+							Write-Host "ERROR: could not define alias '$ModuleAlias' on '$CmsComputer'"
 							Return
 						}
 					}
@@ -693,22 +717,13 @@ Function Protect-CmsCredentials {
 						Protect-CmsCredentialSecret @using:ProtectParameters
 					}
 					Catch {
-						Write-Error "could not revoke credential access on '$using:CmsComputer'"
+						Write-Error "could not protect credentials on '$CmsComputer'"
 					}
 				}
 			}
 			Catch {
 				Write-Error "could not connect to '$CmsComputer'"
 			}
-		}
-	}
-	Else {
-		# protect credentials on local computer
-		Try {
-			Protect-CmsCredentialSecret @ProtectParameters
-		}
-		Catch {
-			Write-Error "could not protect credentials on '$env:computername''"
 		}
 	}
 }
@@ -721,7 +736,7 @@ Function Remove-CmsCredentials {
 	.DESCRIPTION
 	Removes the certificate and encrypted file for a credential protected by CMS.
 
-	.PARAMETER Target
+	.PARAMETER Identity
 	Specifies the identity of a CMS credential.
 
 	.PARAMETER Prefix
@@ -743,29 +758,29 @@ Function Remove-CmsCredentials {
 	None.
 
 	.EXAMPLE
-	PS> Remove-CmsCredentials -Target "testcredential"
+	PS> Remove-CmsCredentials -Identity "testcredential"
 
 	.EXAMPLE
-	PS> Remove-CmsCredentials -Target "testcredential" -Prefix "private"
+	PS> Remove-CmsCredentials -Identity "testcredential" -Prefix "private"
 
 	.EXAMPLE
-	PS> Remove-CmsCredentials -Target "testcredential" -ComputerName "server1", "server2"
+	PS> Remove-CmsCredentials -Identity "testcredential" -ComputerName "server1", "server2"
 
 	.EXAMPLE
-	PS> Remove-CmsCredentials -Target "testcredential" -ClusterName "cluster1", "cluster2"
+	PS> Remove-CmsCredentials -Identity "testcredential" -ClusterName "cluster1", "cluster2"
 
 	.EXAMPLE
-	PS> Remove-CmsCredentials -Target "testcredential" -Cluster
+	PS> Remove-CmsCredentials -Identity "testcredential" -Cluster
 
 	.EXAMPLE
-	PS> Remove-CmsCredentials -Target "testcredential" -Prefix "private" -ComputerName "server1", "server2" -ClusterName "cluster1", "cluster2" -Cluster
+	PS> Remove-CmsCredentials -Identity "testcredential" -Prefix "private" -ComputerName "server1", "server2" -ClusterName "cluster1", "cluster2" -Cluster
 
 	#>
 
 	[CmdletBinding()]
 	Param(
 		[Parameter(Position = 0, Mandatory = $True)]
-		[string]$Target,
+		[string]$Identity,
 		[Parameter(Position = 1)]
 		[string]$Prefix = 'cms',
 		[Parameter(Position = 2)]
@@ -773,21 +788,30 @@ Function Remove-CmsCredentials {
 		[Parameter(Position = 3)]
 		[string[]]$ClusterName,
 		[Parameter(Position = 4)]
-		[switch]$Cluster
+		[switch]$Cluster,
+		[Parameter(DontShow)]
+		[string]$HostName = ([System.Environment]::Machinename).ToLowerInvariant()
 	)
 
-	# get computer names
-	$CmsComputers = @()
-	$CmsComputers += Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+	# if parameters for computer name provided...
+	If ($PSBoundParameters.ContainsKey('Cluster') -or $PSBoundParameters.ContainsKey('ClusterName') -or $PSBoundParameters.ContainsKey('ComputerName')) {
+		# ...get computer names
+		$CmsComputers = Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+	}
+	# if parameters for computer name not provided...
+	Else {
+		# ...set computer names to localhost
+		$CmsComputers = $HostName
+	}
 
 	# define parameter hashtable
 	$RemoveParameters = @{
-		Target = $Target
-		Prefix = $Prefix
+		Identity = $Identity
+		Prefix   = $Prefix
 	}
 
-	# remove credentials
-	If ($CmsComputers.Count -gt 0) {
+	# if multiple computers defined or computer is remote...
+	If ($CmsComputers.Count -gt 1 -or $CmsComputers -notcontains $Hostname) {
 		# define modules for remote session
 		$Modules = @('CmsCredentials')
 
@@ -806,9 +830,21 @@ Function Remove-CmsCredentials {
 				$ModuleAliases[$ModuleAlias] = (Get-Item -Path alias:$ModuleAlias).Definition
 			}
 		}
+	}
 
-		# remove credentials on remote computers
-		ForEach ($CmsComputer in $CmsComputers) {
+	# remove credentials on each computer
+	ForEach ($CmsComputer in $CmsComputers) {
+		If ($CmsComputer -eq $Hostname -or $CmsComputer.StartsWith("$Hostname.", [System.StringComparer]::InvariantCultureIgnoreCase)) {
+			# remove credentials on local computer
+			Try {
+				Remove-CmsCredentialSecret @RemoveParameters
+			}
+			Catch {
+				Write-Error "could not remove credentials on '$CmsComputer''"
+			}
+		}
+		Else {
+			# remove credentials on remote computer
 			$RemoveFunction = "function Remove-CmsCredentialSecret {${function:Remove-CmsCredentialSecret}}"
 			Try {
 				Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
@@ -821,15 +857,6 @@ Function Remove-CmsCredentials {
 			}
 		}
 	}
-	Else {
-		# remove credentials on local computer
-		Try {
-			Remove-CmsCredentialSecret @RemoveParameters
-		}
-		Catch {
-			Write-Error "could not remove credentials on '$env:computername''"
-		}
-	}
 }
 
 Function Show-CmsCredentials {
@@ -840,7 +867,7 @@ Function Show-CmsCredentials {
 	.DESCRIPTION
 	Display the certificate and encrypted file for a credential protected by CMS.
 
-	.PARAMETER Target
+	.PARAMETER Identity
 	Specifies the identity of a CMS credential.
 
 	.PARAMETER Prefix
@@ -862,29 +889,29 @@ Function Show-CmsCredentials {
 	None.
 
 	.EXAMPLE
-	PS> Show-CmsCredentials -Target "testcredential"
+	PS> Show-CmsCredentials -Identity "testcredential"
 
 	.EXAMPLE
-	PS> Show-CmsCredentials -Target "testcredential" -Prefix "private"
+	PS> Show-CmsCredentials -Identity "testcredential" -Prefix "private"
 
 	.EXAMPLE
-	PS> Show-CmsCredentials -Target "testcredential" -ComputerName "server1", "server2"
+	PS> Show-CmsCredentials -Identity "testcredential" -ComputerName "server1", "server2"
 
 	.EXAMPLE
-	PS> Show-CmsCredentials -Target "testcredential" -ClusterName "cluster1", "cluster2"
+	PS> Show-CmsCredentials -Identity "testcredential" -ClusterName "cluster1", "cluster2"
 
 	.EXAMPLE
-	PS> Show-CmsCredentials -Target "testcredential" -Cluster
+	PS> Show-CmsCredentials -Identity "testcredential" -Cluster
 
 	.EXAMPLE
-	PS> Show-CmsCredentials -Target "testcredential" -Prefix "private" -ComputerName "server1", "server2" -ClusterName "cluster1", "cluster2" -Cluster
+	PS> Show-CmsCredentials -Identity "testcredential" -Prefix "private" -ComputerName "server1", "server2" -ClusterName "cluster1", "cluster2" -Cluster
 
 	#>
 
 	[CmdletBinding()]
 	Param(
 		[Parameter(Position = 0)][AllowEmptyString()]
-		[string]$Target,
+		[string]$Identity,
 		[Parameter(Position = 1)]
 		[string]$Prefix = 'cms',
 		[Parameter(Position = 2)]
@@ -892,21 +919,30 @@ Function Show-CmsCredentials {
 		[Parameter(Position = 3)]
 		[string[]]$ClusterName,
 		[Parameter(Position = 4)]
-		[switch]$Cluster
+		[switch]$Cluster,
+		[Parameter(DontShow)]
+		[string]$HostName = ([System.Environment]::Machinename).ToLowerInvariant()
 	)
 
-	# get computer names
-	$CmsComputers = @()
-	$CmsComputers += Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+	# if parameters for computer name provided...
+	If ($PSBoundParameters.ContainsKey('Cluster') -or $PSBoundParameters.ContainsKey('ClusterName') -or $PSBoundParameters.ContainsKey('ComputerName')) {
+		# ...get computer names
+		$CmsComputers = Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+	}
+	# if parameters for computer name not provided...
+	Else {
+		# ...set computer names to localhost
+		$CmsComputers = $HostName
+	}
 
 	# define parameter hashtable
 	$ShowParameters = @{
-		Target = $Target
-		Prefix = $Prefix
+		Identity = $Identity
+		Prefix   = $Prefix
 	}
 
-	# show credentials
-	If ($CmsComputers.Count -gt 0) {
+	# if multiple computers defined or computer is remote...
+	If ($CmsComputers.Count -gt 1 -or $CmsComputers -notcontains $Hostname) {
 		# define modules for remote session
 		$Modules = @('CmsCredentials')
 
@@ -925,9 +961,21 @@ Function Show-CmsCredentials {
 				$ModuleAliases[$ModuleAlias] = (Get-Item -Path alias:$ModuleAlias).Definition
 			}
 		}
+	}
 
-		# show credentials on remote computers
-		ForEach ($CmsComputer in $CmsComputers) {
+	# show credentials on each computer
+	ForEach ($CmsComputer in $CmsComputers) {
+		If ($CmsComputer -eq $Hostname -or $CmsComputer.StartsWith("$Hostname.", [System.StringComparer]::InvariantCultureIgnoreCase)) {
+			# show credentials on local computer
+			Try {
+				Show-CmsCredentialSecret @ShowParameters
+			}
+			Catch {
+				Write-Error "could not display credentials on '$CmsComputer''"
+			}
+		}
+		Else {
+			# show credentials on remote computer
 			$ShowFunction = "function Show-CmsCredentialSecret {${function:Show-CmsCredentialSecret}}"
 			Try {
 				Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
@@ -940,15 +988,6 @@ Function Show-CmsCredentials {
 			}
 		}
 	}
-	Else {
-		# show credentials on local computer
-		Try {
-			Show-CmsCredentialSecret @ShowParameters
-		}
-		Catch {
-			Write-Error "could not display credentials on '$env:computername''"
-		}
-	}
 }
 
 Function Unprotect-CmsCredentials {
@@ -959,10 +998,10 @@ Function Unprotect-CmsCredentials {
 	.DESCRIPTION
 	Retrieves a credential encrypted by a CMS certificate. The calling user must have read access to the private key of the certificate that protects the credential.
 
-	.PARAMETER Target
+	.PARAMETER Identity
 	Specifies the identity of a CMS credential.
 
-	.PARAMETER PasswordOnly
+	.PARAMETER AsPlainText
 	Specifies the credential should be returned as a plain-text password. This changes the output to a PSCustomObject with Username and Password properties.
 
 	.PARAMETER Prefix
@@ -981,25 +1020,25 @@ Function Unprotect-CmsCredentials {
 	System.Management.Automation.PSCredential or System.Management.Automation.PSCustomObject.
 
 	.EXAMPLE
-	PS> Unprotect-CmsCredentials -Target "testcredential"
+	PS> Unprotect-CmsCredentials -Identity "testcredential"
 
 	.EXAMPLE
-	PS> Unprotect-CmsCredentials -Target "testcredential" -Prefix "private"
+	PS> Unprotect-CmsCredentials -Identity "testcredential" -Prefix "private"
 
 	.EXAMPLE
-	PS> Unprotect-CmsCredentials -Target "testcredential" PasswordOnly
+	PS> Unprotect-CmsCredentials -Identity "testcredential" AsPlainText
 
 	.EXAMPLE
-	PS> Unprotect-CmsCredentials -Target "testcredential" -Prefix "private" -PasswordOnly
+	PS> Unprotect-CmsCredentials -Identity "testcredential" -Prefix "private" -AsPlainText
 
 	#>
 
 	[CmdletBinding()]
 	Param(
 		[Parameter(Position = 0, Mandatory = $True)]
-		[string]$Target,
+		[string]$Identity,
 		[Parameter(Position = 1)]
-		[switch]$PasswordOnly,
+		[switch]$AsPlainText,
 		[Parameter(Position = 2)]
 		[string]$Prefix = 'cms',
 		[Parameter(Position = 3)]
@@ -1013,8 +1052,8 @@ Function Unprotect-CmsCredentials {
 
 	# verify cms folder
 	If (Test-Path -Path $cms_path) {
-		# get cms file matching the host and target
-		$cms_file = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $Target -and $_.BaseName -match $Hostname } | Sort-Object BaseName | Select-Object -Last 1
+		# get cms file matching the host and Identity
+		$cms_file = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $Identity -and $_.BaseName -match $Hostname } | Sort-Object BaseName | Select-Object -Last 1
 		If ($cms_file) {
 			# convert the encrypted file into an object
 			Try {
@@ -1026,7 +1065,7 @@ Function Unprotect-CmsCredentials {
 			}
 			# return the credentials based upon the params
 			If ($cms_object.Username -and $cms_object.Password) {
-				If ($PasswordOnly) {
+				If ($AsPlainText) {
 					# return a PSCustomObject with username and password
 					[PSCustomObject]@{Username = $cms_object.Username; Password = $cms_object.Password }
 				}
@@ -1041,7 +1080,7 @@ Function Unprotect-CmsCredentials {
 			}
 		}
 		Else {
-			Write-Host "could not find a CMS file for target: $Target"
+			Write-Host "could not find a CMS file for Identity: $Identity"
 			Throw [System.Management.Automation.ItemNotFoundException]
 		}
 	}
@@ -1059,7 +1098,7 @@ Function Grant-CmsCredentialAccess {
 	.DESCRIPTION
 	Grants read access to the private key protecting a CMS credential. This allows the permitted principal to decrypt the CMS credential.
 
-	.PARAMETER Target
+	.PARAMETER Identity
 	Specifies the identity of a CMS credential.
 
 	.PARAMETER Principals
@@ -1081,26 +1120,26 @@ Function Grant-CmsCredentialAccess {
 	None.
 
 	.EXAMPLE
-	PS> Grant-CmsCredentialAccess -Target "testcredential" -Principals "DOMAIN\TestUser"
+	PS> Grant-CmsCredentialAccess -Identity "testcredential" -Principals "DOMAIN\TestUser"
 
 	.EXAMPLE
-	PS> Grant-CmsCredentialAccess -Target "testcredential" -Principals "DOMAIN\TestUser" -ComputerName "server1", "server2"
+	PS> Grant-CmsCredentialAccess -Identity "testcredential" -Principals "DOMAIN\TestUser" -ComputerName "server1", "server2"
 
 	.EXAMPLE
-	PS> Grant-CmsCredentialAccess -Target "testcredential" -Principals "DOMAIN\TestUser" -ClusterName "cluster1", "cluster2"
+	PS> Grant-CmsCredentialAccess -Identity "testcredential" -Principals "DOMAIN\TestUser" -ClusterName "cluster1", "cluster2"
 
 	.EXAMPLE
-	PS> Grant-CmsCredentialAccess -Target "testcredential" -Principals "DOMAIN\TestUser" -Cluster
+	PS> Grant-CmsCredentialAccess -Identity "testcredential" -Principals "DOMAIN\TestUser" -Cluster
 
 	.EXAMPLE
-	PS> Grant-CmsCredentialAccess -Target "testcredential" -Principals "DOMAIN\TestUser" -ComputerName "server1", "server2" -ClusterName "cluster1", "cluster2" -Cluster
+	PS> Grant-CmsCredentialAccess -Identity "testcredential" -Principals "DOMAIN\TestUser" -ComputerName "server1", "server2" -ClusterName "cluster1", "cluster2" -Cluster
 
 	#>
 
 	[CmdletBinding()]
 	Param(
 		[Parameter(Position = 0, Mandatory = $True)]
-		[string]$Target,
+		[string]$Identity,
 		[Parameter(Position = 1, Mandatory = $True)]
 		[string[]]$Principals,
 		[Parameter(Position = 2)]
@@ -1108,22 +1147,31 @@ Function Grant-CmsCredentialAccess {
 		[Parameter(Position = 3)]
 		[string[]]$ClusterName,
 		[Parameter(Position = 4)]
-		[switch]$Cluster
+		[switch]$Cluster,
+		[Parameter(DontShow)]
+		[string]$HostName = ([System.Environment]::Machinename).ToLowerInvariant()
 	)
 
-	# get computer names
-	$CmsComputers = @()
-	$CmsComputers += Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+	# if parameters for computer name provided...
+	If ($PSBoundParameters.ContainsKey('Cluster') -or $PSBoundParameters.ContainsKey('ClusterName') -or $PSBoundParameters.ContainsKey('ComputerName')) {
+		# ...get computer names
+		$CmsComputers = Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+	}
+	# if parameters for computer name not provided...
+	Else {
+		# ...set computer names to localhost
+		$CmsComputers = $HostName
+	}
 
 	# define parameter hashtable
 	$UpdateParameters = @{
 		Mode       = 'Grant'
-		Target     = $Target
+		Identity   = $Identity
 		Principals = $Principals
 	}
 
-	# grant credential access
-	If ($CmsComputers.Count -gt 0) {
+	# if multiple computers defined or computer is remote...
+	If ($CmsComputers.Count -gt 1 -or $CmsComputers -notcontains $Hostname) {
 		# define modules for remote session
 		$Modules = @('CmsCredentials')
 
@@ -1142,51 +1190,57 @@ Function Grant-CmsCredentialAccess {
 				$ModuleAliases[$ModuleAlias] = (Get-Item -Path alias:$ModuleAlias).Definition
 			}
 		}
+	}
 
-		# grant credential access on remote computers
-		ForEach ($CmsComputer in $CmsComputers) {
+	# grant credential access on each computer
+	ForEach ($CmsComputer in $CmsComputers) {
+		If ($CmsComputer -eq $Hostname -or $CmsComputer.StartsWith("$Hostname.", [System.StringComparer]::InvariantCultureIgnoreCase)) {
+			# grant credential access on local computer
+			Try {
+				Update-CmsCredentialAccess @UpdateParameters
+			}
+			Catch {
+				Write-Error "could not grant credential access on '$CmsComputer''"
+			}
+		}
+		Else {
+			# grant credential access on remote computer
 			Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
+				# create objects in session
+				$ModuleFunctions = $using:ModuleFunctions
+				$ModuleAliases = $using:ModuleAliases
+				$CmsComputer = $using:CmsComputer
+
 				# load functions of local modules in remote session
-				$ModuleFunction = $using:ModuleFunctions
 				ForEach ($ModuleFunction in $ModuleFunctions.Keys) {
 					Try {
 						. ([ScriptBlock]::Create("function $ModuleFunction {$ModuleFunctions[$ModuleFunction]}"))
 					}
 					Catch {
-						Write-Host "could not load function '$ModuleFunction' on '$using:CmsComputer'"
+						Write-Host "could not load function '$ModuleFunction' on '$CmsComputer'"
 						Return $_
 					}
 				}
-				
+
 				# load aliases of local modules in remote session
-				$ModuleAliases = $using:ModuleAliases
-				ForEach ($ModuleAlias in $using:ModuleAliases.Keys) {
+				ForEach ($ModuleAlias in $ModuleAliases.Keys) {
 					Try {
 						New-Alias -Name $ModuleAlias -Value $ModuleAliases[$ModuleAlias]
 					}
 					Catch {
-						Write-Host "could not load alias '$ModuleAlias' on '$using:CmsComputer'"
+						Write-Host "could not load alias '$ModuleAlias' on '$CmsComputer'"
 						Return $_
 					}
 				}
-				
+
 				# run commands in remote session
 				Try {
 					Update-CmsCredentialAccess @using:UpdateParameters
 				}
 				Catch {
-					Write-Error "could not grant credential access on '$using:CmsComputer'"
+					Write-Error "could not grant credential access on '$CmsComputer'"
 				}
 			}
-		}
-	}
-	Else {
-		# grant credential access on local computer
-		Try {
-			Update-CmsCredentialAccess @UpdateParameters
-		}
-		Catch {
-			Write-Error "could not grant credential access on '$env:computername''"
 		}
 	}
 }
@@ -1199,7 +1253,7 @@ Function Reset-CmsCredentialAccess {
 	.DESCRIPTION
 	Resets read access to the private key protecting a CMS credential. Only the built-in Administrators and SYSTEM will have access to the private key after this command is run against a CMS credential.
 
-	.PARAMETER Target
+	.PARAMETER Identity
 	Specifies the identity of a CMS credential.
 
 	.PARAMETER ComputerName
@@ -1218,46 +1272,55 @@ Function Reset-CmsCredentialAccess {
 	None.
 
 	.EXAMPLE
-	PS> Reset-CmsCredentialAccess -Target "testcredential"
+	PS> Reset-CmsCredentialAccess -Identity "testcredential"
 
 	.EXAMPLE
-	PS> Reset-CmsCredentialAccess -Target "testcredential" -ComputerName "server1", "server2"
+	PS> Reset-CmsCredentialAccess -Identity "testcredential" -ComputerName "server1", "server2"
 
 	.EXAMPLE
-	PS> Reset-CmsCredentialAccess -Target "testcredential" -ClusterName "cluster1", "cluster2"
+	PS> Reset-CmsCredentialAccess -Identity "testcredential" -ClusterName "cluster1", "cluster2"
 
 	.EXAMPLE
-	PS> Reset-CmsCredentialAccess -Target "testcredential" -Cluster
+	PS> Reset-CmsCredentialAccess -Identity "testcredential" -Cluster
 
 	.EXAMPLE
-	PS> Reset-CmsCredentialAccess -Target "testcredential" -ComputerName "server1", "server2" -ClusterName "cluster1", "cluster2" -Cluster
+	PS> Reset-CmsCredentialAccess -Identity "testcredential" -ComputerName "server1", "server2" -ClusterName "cluster1", "cluster2" -Cluster
 
 	#>
 
 	[CmdletBinding()]
 	Param(
 		[Parameter(Position = 0, Mandatory = $True)]
-		[string]$Target,
+		[string]$Identity,
 		[Parameter(Position = 1)]
 		[string[]]$ComputerName,
 		[Parameter(Position = 2)]
 		[string[]]$ClusterName,
 		[Parameter(Position = 3)]
-		[switch]$Cluster
+		[switch]$Cluster,
+		[Parameter(DontShow)]
+		[string]$HostName = ([System.Environment]::Machinename).ToLowerInvariant()
 	)
 
-	# get computer names
-	$CmsComputers = @()
-	$CmsComputers += Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+	# if parameters for computer name provided...
+	If ($PSBoundParameters.ContainsKey('Cluster') -or $PSBoundParameters.ContainsKey('ClusterName') -or $PSBoundParameters.ContainsKey('ComputerName')) {
+		# ...get computer names
+		$CmsComputers = Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+	}
+	# if parameters for computer name not provided...
+	Else {
+		# ...set computer names to localhost
+		$CmsComputers = $HostName
+	}
 
 	# define parameter hashtable
 	$UpdateParameters = @{
-		Mode   = 'Reset'
-		Target = $Target
+		Mode     = 'Reset'
+		Identity = $Identity
 	}
 
-	# reset credential access
-	If ($CmsComputers.Count -gt 0) {
+	# if multiple computers defined or computer is remote...
+	If ($CmsComputers.Count -gt 1 -or $CmsComputers -notcontains $Hostname) {
 		# define modules for remote session
 		$Modules = @('CmsCredentials')
 
@@ -1276,30 +1339,45 @@ Function Reset-CmsCredentialAccess {
 				$ModuleAliases[$ModuleAlias] = (Get-Item -Path alias:$ModuleAlias).Definition
 			}
 		}
+	}
 
-		# reset credential access on remote computers
-		ForEach ($CmsComputer in $CmsComputers) {
+	# reset credential access on each computer
+	ForEach ($CmsComputer in $CmsComputers) {
+		If ($CmsComputer -eq $Hostname -or $CmsComputer.StartsWith("$Hostname.", [System.StringComparer]::InvariantCultureIgnoreCase)) {
+			# reset credential access on local computer
+			Try {
+				Update-CmsCredentialAccess @UpdateParameters
+			}
+			Catch {
+				Write-Error "could not reset credential access on '$CmsComputer''"
+			}
+		}
+		Else {
+			# reset credential access on remote computer
 			Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
+				# create objects in session
+				$ModuleFunctions = $using:ModuleFunctions
+				$ModuleAliases = $using:ModuleAliases
+				$CmsComputer = $using:CmsComputer
+
 				# load functions of local modules in remote session
-				$ModuleFunction = $using:ModuleFunctions
 				ForEach ($ModuleFunction in $ModuleFunctions.Keys) {
 					Try {
 						. ([ScriptBlock]::Create("function $ModuleFunction {$ModuleFunctions[$ModuleFunction]}"))
 					}
 					Catch {
-						Write-Error "could not load function '$ModuleFunction' on '$using:CmsComputer'"
+						Write-Error "could not load function '$ModuleFunction' on '$CmsComputer'"
 						Return
 					}
 				}
 
 				# load aliases of local modules in remote session
-				$ModuleAliases = $using:ModuleAliases
-				ForEach ($ModuleAlias in $using:ModuleAliases.Keys) {
+				ForEach ($ModuleAlias in $ModuleAliases.Keys) {
 					Try {
 						New-Alias -Name $ModuleAlias -Value $ModuleAliases[$ModuleAlias]
 					}
 					Catch {
-						Write-Error "could not load alias '$ModuleAlias' on '$using:CmsComputer'"
+						Write-Error "could not load alias '$ModuleAlias' on '$CmsComputer'"
 						Return
 					}
 				}
@@ -1309,18 +1387,9 @@ Function Reset-CmsCredentialAccess {
 					Update-CmsCredentialAccess @using:UpdateParameters
 				}
 				Catch {
-					Write-Error "could not reset credential access on '$using:CmsComputer'"
+					Write-Error "could not reset credential access on '$CmsComputer'"
 				}
 			}
-		}
-	}
-	Else {
-		# reset credential access on local computer
-		Try {
-			Update-CmsCredentialAccess @UpdateParameters
-		}
-		Catch {
-			Write-Error "could not reset credential access on '$env:computername''"
 		}
 	}
 }
@@ -1333,7 +1402,7 @@ Function Revoke-CmsCredentialAccess {
 	.DESCRIPTION
 	Revokes read access to the private key protecting a CMS credential. This function cannot revoke access to SYSTEM or the built-in Administrators.
 
-	.PARAMETER Target
+	.PARAMETER Identity
 	Specifies the identity of a CMS credential.
 
 	.PARAMETER Principals
@@ -1355,26 +1424,26 @@ Function Revoke-CmsCredentialAccess {
 	None.
 
 	.EXAMPLE
-	PS> Revoke-CmsCredentialAccess -Target "testcredential" -Principals "DOMAIN\TestUser"
+	PS> Revoke-CmsCredentialAccess -Identity "testcredential" -Principals "DOMAIN\TestUser"
 
 	.EXAMPLE
-	PS> Revoke-CmsCredentialAccess -Target "testcredential" -Principals "DOMAIN\TestUser" -ComputerName "server1", "server2"
+	PS> Revoke-CmsCredentialAccess -Identity "testcredential" -Principals "DOMAIN\TestUser" -ComputerName "server1", "server2"
 
 	.EXAMPLE
-	PS> Revoke-CmsCredentialAccess -Target "testcredential" -Principals "DOMAIN\TestUser" -ClusterName "cluster1", "cluster2"
+	PS> Revoke-CmsCredentialAccess -Identity "testcredential" -Principals "DOMAIN\TestUser" -ClusterName "cluster1", "cluster2"
 
 	.EXAMPLE
-	PS> Revoke-CmsCredentialAccess -Target "testcredential" -Principals "DOMAIN\TestUser" -Cluster
+	PS> Revoke-CmsCredentialAccess -Identity "testcredential" -Principals "DOMAIN\TestUser" -Cluster
 
 	.EXAMPLE
-	PS> Revoke-CmsCredentialAccess -Target "testcredential" -Principals "DOMAIN\TestUser" -ComputerName "server1", "server2" -ClusterName "cluster1", "cluster2" -Cluster
+	PS> Revoke-CmsCredentialAccess -Identity "testcredential" -Principals "DOMAIN\TestUser" -ComputerName "server1", "server2" -ClusterName "cluster1", "cluster2" -Cluster
 
 	#>
 
 	[CmdletBinding()]
 	Param(
 		[Parameter(Position = 0, Mandatory = $True)]
-		[string]$Target,
+		[string]$Identity,
 		[Parameter(Position = 1, Mandatory = $True)]
 		[string[]]$Principals,
 		[Parameter(Position = 2)]
@@ -1382,22 +1451,31 @@ Function Revoke-CmsCredentialAccess {
 		[Parameter(Position = 3)]
 		[string[]]$ClusterName,
 		[Parameter(Position = 4)]
-		[switch]$Cluster
+		[switch]$Cluster,
+		[Parameter(DontShow)]
+		[string]$HostName = ([System.Environment]::Machinename).ToLowerInvariant()
 	)
 
-	# get computer names
-	$CmsComputers = @()
-	$CmsComputers += Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+	# if parameters for computer name provided...
+	If ($PSBoundParameters.ContainsKey('Cluster') -or $PSBoundParameters.ContainsKey('ClusterName') -or $PSBoundParameters.ContainsKey('ComputerName')) {
+		# ...get computer names
+		$CmsComputers = Get-ComputersFromParams -Cluster:$Cluster -ClusterName $ClusterName -ComputerName $ComputerName
+	}
+	# if parameters for computer name not provided...
+	Else {
+		# ...set computer names to localhost
+		$CmsComputers = $HostName
+	}
 
 	# define parameter hashtable
 	$UpdateParameters = @{
 		Mode       = 'Revoke'
-		Target     = $Target
+		Identity   = $Identity
 		Principals = $Principals
 	}
 
-	# update credential access
-	If ($CmsComputers.Count -gt 0) {
+	# if multiple computers defined or computer is remote...
+	If ($CmsComputers.Count -gt 1 -or $CmsComputers -notcontains $Hostname) {
 		# define modules for remote session
 		$Modules = @('CmsCredentials')
 
@@ -1416,51 +1494,57 @@ Function Revoke-CmsCredentialAccess {
 				$ModuleAliases[$ModuleAlias] = (Get-Item -Path alias:$ModuleAlias).Definition
 			}
 		}
+	}
 
-		# update credential access on remote computers
-		ForEach ($CmsComputer in $CmsComputers) {
+	# revokoe credential access on each computer
+	ForEach ($CmsComputer in $CmsComputers) {
+		If ($CmsComputer -eq $Hostname -or $CmsComputer.StartsWith("$Hostname.", [System.StringComparer]::InvariantCultureIgnoreCase)) {
+			# revoke credential access on local computer
+			Try {
+				Update-CmsCredentialAccess @UpdateParameters
+			}
+			Catch {
+				Write-Error "could not revoke credential access on '$CmsComputer''"
+			}
+		}
+		Else {
+			# revoke credential access on remote computer
 			Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
+				# create objects in session
+				$ModuleFunctions = $using:ModuleFunctions
+				$ModuleAliases = $using:ModuleAliases
+				$CmsComputer = $using:CmsComputer
+
 				# load functions of local modules in remote session
-				$ModuleFunction = $using:ModuleFunctions
 				ForEach ($ModuleFunction in $ModuleFunctions.Keys) {
 					Try {
 						. ([ScriptBlock]::Create("function $ModuleFunction {$ModuleFunctions[$ModuleFunction]}"))
 					}
 					Catch {
-						Write-Error "could not load function '$ModuleFunction' on '$using:CmsComputer'"
+						Write-Error "could not load function '$ModuleFunction' on '$CmsComputer'"
 						Return
 					}
 				}
 
 				# load aliases of local modules in remote session
-				$ModuleAliases = $using:ModuleAliases
-				ForEach ($ModuleAlias in $using:ModuleAliases.Keys) {
+				ForEach ($ModuleAlias in $ModuleAliases.Keys) {
 					Try {
 						New-Alias -Name $ModuleAlias -Value $ModuleAliases[$ModuleAlias]
 					}
 					Catch {
-						Write-Error "could not load alias '$ModuleAlias' on '$using:CmsComputer'"
+						Write-Error "could not load alias '$ModuleAlias' on '$CmsComputer'"
 						Return
 					}
 				}
 
-				# run commands in remote session
+				# update credential access on remote computer
 				Try {
 					Update-CmsCredentialAccess @using:UpdateParameters
 				}
 				Catch {
-					Write-Error "could not revoke credential access on '$using:CmsComputer'"
+					Write-Error "could not revoke credential access on '$CmsComputer'"
 				}
 			}
-		}
-	}
-	Else {
-		# update credential access on local computer
-		Try {
-			Update-CmsCredentialAccess @UpdateParameters
-		}
-		Catch {
-			Write-Error "could not revoke credential access on '$env:computername''"
 		}
 	}
 }
