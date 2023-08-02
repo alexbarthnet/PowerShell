@@ -94,41 +94,41 @@ Param(
 	[Parameter(Position = 5, ParameterSetName = 'AddVMNetworkAdapter')]
 	[ValidateRange(0, 4094)]
 	[uint16]$VlanId,
-	# VM - MAC address for default network adapter
-	# VMNetworkAdapter - MAC address for network adapter
-	[Parameter(Position = 13, ParameterSetName = 'Add')]
-	[Parameter(Position = 6, ParameterSetName = 'AddVMNetworkAdapter')]
-	[string]$MacAddress,
-	# VM - MAC address prefix for default network adapter, paired with the IP address to create a MAC address
-	# VMNetworkAdapter - MAC address prefix for network adapter, paired with the IP address to create a MAC address
-	[Parameter(Position = 14, ParameterSetName = 'Add')]
-	[Parameter(Position = 6, ParameterSetName = 'AddVMNetworkAdapter')]
-	[ValidateScript({ ($_.Length -eq 4) -and ($_ -match '^[0-9A-F]+$') })]
-	[string]$MacAddressPrefix,
-	# VM - IP address for default network adapter, paired with the MAC address prefix to create a MAC address
-	# VMNetworkAdapter - IP address for network adapter, paired with the MAC address prefix to create a MAC address
-	[Parameter(Position = 15, ParameterSetName = 'Add')]
-	[Parameter(Position = 7, ParameterSetName = 'AddVMNetworkAdapter')]
-	[string]$IPAddress,
 	# VM - name of DHCP server for default network adapter
 	# VMNetworkAdapter - name of DHCP server for network adapter
-	[Parameter(Position = 16, ParameterSetName = 'Add')]
-	[Parameter(Position = 8, ParameterSetName = 'AddVMNetworkAdapter')]
+	[Parameter(Position = 13, ParameterSetName = 'Add')]
+	[Parameter(Position = 6, ParameterSetName = 'AddVMNetworkAdapter')]
 	[string]$DhcpServer,
 	# VM - name of DHCP scope on DHCP server for default network adapter
 	# VMNetworkAdapter - name of DHCP scope on DHCP server for network adapter
-	[Parameter(Position = 17, ParameterSetName = 'Add')]
-	[Parameter(Position = 9, ParameterSetName = 'AddVMNetworkAdapter')]
+	[Parameter(Position = 14, ParameterSetName = 'Add')]
+	[Parameter(Position = 7, ParameterSetName = 'AddVMNetworkAdapter')]
 	[string]$DhcpScope,
-	# OS Deployment - multiple - path to 
+	# VM - IP address for default network adapter, paired with the MAC address prefix to create a MAC address
+	# VMNetworkAdapter - IP address for network adapter, paired with the MAC address prefix to create a MAC address
+	[Parameter(Position = 15, ParameterSetName = 'Add')]
+	[Parameter(Position = 8, ParameterSetName = 'AddVMNetworkAdapter')]
+	[string]$IPAddress,
+	# VM - MAC address for default network adapter
+	# VMNetworkAdapter - MAC address for network adapter
+	[Parameter(Position = 16, ParameterSetName = 'Add')]
+	[Parameter(Position = 9, ParameterSetName = 'AddVMNetworkAdapter')]
+	[string]$MacAddress,
+	# VM - MAC address prefix for default network adapter, paired with the IP address to create a MAC address
+	# VMNetworkAdapter - MAC address prefix for network adapter, paired with the IP address to create a MAC address
+	[Parameter(Position = 17, ParameterSetName = 'Add')]
+	[Parameter(Position = 10, ParameterSetName = 'AddVMNetworkAdapter')]
+	[ValidateScript({ ($_.Length -eq 4) -and ($_ -match '^[0-9A-F]+$') })]
+	[string]$MacAddressPrefix,
+	# OS Deployment - multiple - server name for WDS or SCCM
+	[Parameter(Position = 4, ParameterSetName = 'AddOSD')]
+	[string]$DeploymentServer,
+	# OS Deployment - multiple - path to...
 	#  ISO	: literal path to ISO file on hypervisor
 	#  WDS	: relative path to unattend XML file on WDS server
 	#  SCCM	: distinguished name of OU where VM will be created
-	[Parameter(Position = 4, ParameterSetName = 'AddOSD')]
-	[string]$DeploymentPath,
-	# OS Deployment - multiple - server name for WDS or SCCM
 	[Parameter(Position = 5, ParameterSetName = 'AddOSD')]
-	[string]$DeploymentServer,
+	[string]$DeploymentPath,
 	# OS Deployment - SCCM - NetBIOS name of Windows domain
 	[Parameter(Position = 6, ParameterSetName = 'AddOSD')]
 	[string]$DeploymentDomain,
