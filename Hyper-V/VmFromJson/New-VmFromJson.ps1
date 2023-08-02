@@ -775,6 +775,7 @@ Begin {
 				# if device found
 				If ($null -ne $Device) {
 					# ...return device
+					Write-Host ("$Hostname,$ComputerName,$Name - ...found device in collection immediately")
 					Return $Device
 				}
 				# if skip update...
@@ -2120,7 +2121,7 @@ Begin {
 			$StaticMacAddress = ($MacAddressPrefix, $MacAddressSuffix) -join $null
 		}
 		# if MAC address was not provided and VMNetworkAdapter has default MAC address
-		ElseIf ($VMNetworkAdapter.MacAddress -eq '00000000000') {
+		ElseIf ($VMNetworkAdapter.MacAddress -eq '000000000000') {
 			# retrieve MAC address from host
 			Try {
 				Write-Host ("$Hostname,$ComputerName,$Name - ...retrieving next MAC address from host")
