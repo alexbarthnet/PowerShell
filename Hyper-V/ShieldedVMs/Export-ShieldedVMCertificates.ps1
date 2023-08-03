@@ -13,7 +13,7 @@ Param(
 	[Parameter(Position = 3)]
 	[switch]$Force,
 	# certificate store location
-	[Parameter(DontShow)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
+	[Parameter(DontShow)]
 	[string]$CertStoreLocation = 'Cert:\LocalMachine\Shielded VM Local Certificates',
 	# switch to create any missing parameters from JSON file
 	[Parameter(DontShow)]
