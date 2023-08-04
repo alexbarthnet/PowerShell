@@ -1,8 +1,14 @@
 # ignore data files
 *.csv
-*.dat
+*.json
 *.txt
+# ignore binary files
+*.dat
+*.exe
+*.msi
 # ignore archived files
-Archived/*
+*.7z
+*.cab
+*.zip
 # ignore Mac specific files
 .DS_Store
