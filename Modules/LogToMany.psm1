@@ -81,24 +81,9 @@ Function Write-LogToMany {
 			Message   = $LogText
 		}
 		switch ($LogLevel) {
-			'warning' {
-				If ($null -eq $EventId) {
-					$EventId = [int32]2
-				}
-				Write-EventLog @WriteEvenLog -EventId $EventId
-			}
-			'error' {
-				If ($null -eq $EventId) {
-					$EventId = [int32]1
-				}
-				Write-EventLog @WriteEvenLog -EventId $EventId
-			}
-			Default {
-				If ($null -eq $EventId) {
-					$EventId = [int32]0
-				}
-				Write-EventLog @WriteEvenLog -EventId $EventId
-			}
+			'warning' { If ($null -eq $EventId) { $EventId = [int32]2 }; Write-EventLog @WriteEvenLog -EventId $EventId }
+			'error' { If ($null -eq $EventId) { $EventId = [int32]1 }; Write-EventLog @WriteEvenLog -EventId $EventId }
+			Default { If ($null -eq $EventId) { $EventId = [int32]0 }; Write-EventLog @WriteEvenLog -EventId $EventId }
 		}
 	}
 
