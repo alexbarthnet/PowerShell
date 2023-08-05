@@ -6,7 +6,7 @@
 *.dat
 *.exe
 *.msi
-# ignore archived files
+# ignore archive files
 *.7z
 *.cab
 *.zip
