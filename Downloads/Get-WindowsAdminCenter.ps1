@@ -211,11 +211,7 @@ If ($PSBoundParameters['Thumbprint']) {
 }
 Else {
 	$Certificate = Get-ChildItem -Path 'Cert:\LocalMachine\My' | Where-Object { $_.Subject.StartsWith("CN=$env:computername.", [System.StringComparison]::InvariantCultureIgnoreCase) } | Sort-Object NotBefore | Select-Object -Last 1
-	If ($null -eq $Certificate) {
-		Write-Host 'ERROR: no certificate found with subject matching computer name'
-		Return
-	}
-	Else {
+	If ($null -ne $Certificate) {
 		$Thumbprint = $Certificate.Thumbprint
 	}
 }
@@ -223,10 +219,22 @@ Else {
 # get log path
 $LogPath = $FilePath.Replace((Get-Item -Path $FilePath).Extension, '.txt')
 
+# define arguments for Start-Process
+$ArgumentList = "/i $FilePath /qn /L*v $LogPath SME_PORT=443"
+
+# if thumbprint found...
+If ($null -eq $Thumbprint) {
+	$ArgumentList = "$ArgumentList CHK_REDIRECT_PORT_80=1 SSL_CERTIFICATE_OPTION=generate"
+}
+Else {
+	$ArgumentList = "$ArgumentList CHK_REDIRECT_PORT_80=1 SSL_CERTIFICATE_OPTION=installed SME_THUMBPRINT=$Thumbprint"
+}
+
+# define parameters for Start-Process
 $StartProcess = @{
 	Wait         = $true
 	FilePath     = 'msiexec.exe'
-	ArgumentList = "/i $FilePath /qn /L*v $LogPath SME_PORT=443 SME_THUMBPRINT=$Thumbprint SSL_CERTIFICATE_OPTION=installed CHK_REDIRECT_PORT_80=1"
+	ArgumentList = $ArgumentList
 }
 
 # install / update WAC
