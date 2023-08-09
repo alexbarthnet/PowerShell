@@ -23,10 +23,8 @@ $features += 'Failover-Clustering' # enable failover clustering
 $features += 'FS-FileServer' # base feature for dedupe and bandwidth limits
 $features += 'FS-Data-Deduplication' # deduplicate cluster shared volumes
 $features += 'FS-SMBBW' # limit live migration bandwidth
-$features += 'GPMC' # console for handling group policy
 $features += 'Hyper-V' # enable virtualization
 $features += 'Hyper-V-PowerShell' # powershell for hyper-v
-$features += 'NetworkVirtualization' # network virtualization for SDN and SCVMM
 $features += 'RSAT-AD-Powershell' # powershell for AD
 $features += 'RSAT-Clustering-PowerShell' # powershell for failover clustering
 $features += 'Storage-Replica' # enable stretch clusters
@@ -92,7 +90,23 @@ $host_list | Sort-Object 'Host' -Unique | ForEach-Object {
 	# run remote commands
 	Write-Host "$host_name - running commands..."
 	$log_feature += $out_feature = Invoke-Command -Session $pss_main -ScriptBlock {
-		Get-WindowsFeature -Name $using:features | Sort-Object 'Name'
+		# define local object
+		$features = $using:features
+
+		# get Windows edition
+		$WindowsEdition = Get-WindowsEdition -Online | Select-Object -ExpandProperty Edition
+
+		# define edition-specific roles
+		If ($WindowsEdition -like 'ServerAzure*') {
+			$features += 'NetworkATC' # network ATC for Azure Stack HCI
+			$features += 'NetworkHUD' # network HUD for Azure Stack HCI
+		}
+		Else {
+			$features += 'GPMC' # console for handling group policy
+		}
+
+		# get features
+		Get-WindowsFeature -Name $features | Sort-Object 'Name'
 	}
 
 	# save output to host
