@@ -29,8 +29,8 @@ param (
 	[string]$SmbDirectLabel = 'SMB_Direct',
 	[Parameter()][ValidateRange(1, 100)]
 	[uint16]$SmbDirectPercent = 50,
-	[Parameter()]
-	[string]$ClusterPortLabel = 'ClusterPort',
+	# [Parameter()]
+	# [string]$ClusterPortLabel = 'ClusterPort',
 	[Parameter()]
 	[string]$ClusterLabel = 'Cluster',
 	[Parameter()][ValidateRange(1, 100)]
@@ -170,23 +170,23 @@ Try {
 		New-NetQosPolicy -Name $SmbLabel -PriorityValue8021Action 3 -SMB
 	}
 
-	# check for Cluster Port QoS policy
-	Write-Host "$Hostname - checking Cluster Port QoS policy"
-	$qos_policy_cluster_port = Get-NetQosPolicy | Where-Object { $_.Name -eq $ClusterPortLabel -and $_.PriorityValue -eq 7 -and $_.IPDstPortStart -eq '3343' -and $_.IPDstPortEnd -eq '3343' }
-	If ($qos_policy_cluster_port) {
-		Write-Host "$Hostname - verified Cluster Port QoS policy"
-	}
-	Else {
-		$qos_policy_cluster_port = Get-NetQosPolicy | Where-Object { $_.Name -eq $ClusterPortLabel -or $_.IPDstPortStart -eq '3343' -or $_.IPDstPortEnd -eq '3343' }
-		$qos_policy_cluster_port | ForEach-Object {
-			If ($_.Name -ne $ClusterPortLabel -or $_.PriorityValue -ne 7 -or $_.IPDstPortStart -eq '3343' -or $_.IPDstPortEnd -eq '3343') {
-				Write-Host "$Hostname - removing incorrect Cluster Port QoS policy: $($_.Name)"
-				$_ | Remove-NetQosPolicy -Confirm:$false
-			}
-		}
-		Write-Host "$Hostname - creating Cluster Port QoS policy"
-		New-NetQosPolicy -Name $ClusterPortLabel -PriorityValue8021Action 7 -IPDstPort 3343
-	}
+	# # check for Cluster Port QoS policy
+	# Write-Host "$Hostname - checking Cluster Port QoS policy"
+	# $qos_policy_cluster_port = Get-NetQosPolicy | Where-Object { $_.Name -eq $ClusterPortLabel -and $_.PriorityValue -eq 7 -and $_.IPDstPortStart -eq '3343' -and $_.IPDstPortEnd -eq '3343' }
+	# If ($qos_policy_cluster_port) {
+	# 	Write-Host "$Hostname - verified Cluster Port QoS policy"
+	# }
+	# Else {
+	# 	$qos_policy_cluster_port = Get-NetQosPolicy | Where-Object { $_.Name -eq $ClusterPortLabel -or $_.IPDstPortStart -eq '3343' -or $_.IPDstPortEnd -eq '3343' }
+	# 	$qos_policy_cluster_port | ForEach-Object {
+	# 		If ($_.Name -ne $ClusterPortLabel -or $_.PriorityValue -ne 7 -or $_.IPDstPortStart -eq '3343' -or $_.IPDstPortEnd -eq '3343') {
+	# 			Write-Host "$Hostname - removing incorrect Cluster Port QoS policy: $($_.Name)"
+	# 			$_ | Remove-NetQosPolicy -Confirm:$false
+	# 		}
+	# 	}
+	# 	Write-Host "$Hostname - creating Cluster Port QoS policy"
+	# 	New-NetQosPolicy -Name $ClusterPortLabel -PriorityValue8021Action 7 -IPDstPort 3343
+	# }
 
 	# check for Cluster QoS policy
 	Write-Host "$Hostname - checking Cluster QoS policy"
