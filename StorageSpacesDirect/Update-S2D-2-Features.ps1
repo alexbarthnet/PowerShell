@@ -35,12 +35,8 @@ Try {
 	$features += 'FS-FileServer' # base feature for dedupe and bandwidth limits
 	$features += 'FS-Data-Deduplication' # deduplicate cluster shared volumes
 	$features += 'FS-SMBBW' # limit live migration bandwidth
-	$features += 'GPMC' # console for handling group policy
 	$features += 'Hyper-V' # enable virtualization
 	$features += 'Hyper-V-PowerShell' # powershell for hyper-v
-	$features += 'NetworkATC' # network ATC for Azure Stack HCI
-	$features += 'NetworkHUD' # network HUD for visualization
-	$features += 'NetworkVirtualization' # network virtualization for SDN and SCVMM
 	$features += 'RSAT-AD-Powershell' # powershell for AD
 	$features += 'RSAT-Clustering-PowerShell' # powershell for failover clustering
 	$features += 'Storage-Replica' # enable stretch clusters
