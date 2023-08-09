@@ -79,11 +79,32 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 		$nic_out = @()
 		$nic_list = Get-NetAdapter -Physical
 		ForEach ($nic in $nic_list) {
+			# get NIC properties
 			$nic_client = $nic | Get-DnsClient
 			$nic_route = $nic | Get-NetRoute -AddressFamily 'IPv4'
 			$nic_addr = $nic | Get-NetIPAddress -AddressFamily 'IPv4' -SkipAsSource $false -ErrorAction 'SilentlyContinue'
-			$nic_prop = $nic | Get-NetAdapterAdvancedProperty
+			$nic_info = $nic | Get-NetAdapterHardwareInfo -ErrorAction 'SilentlyContinue'
+			$nic_prop = $nic | Get-NetAdapterAdvancedProperty -ErrorAction 'SilentlyContinue'
 			$nic_rdma = $nic | Get-NetAdapterRdma -ErrorAction 'SilentlyContinue'
+			# construct name
+
+			# try to build the name from slot and port information
+			If ($nic_info.SlotNumber) {
+				$nic_name = ('Slot ' + $nic_info.SlotNumber + ' Port ' + ($nic_info.FunctionNumber + 1))
+			}
+			Else {
+				$nic_name = ('Port ' + ($nic_info.FunctionNumber + 1))
+			}
+
+			# try to build the name from PCI device label
+			$nic_pci = $nic_info.PciDeviceLabelString
+			If ($null -ne $nic_pci) { $nic_name = $nic_pci }
+
+			# try to build the name from Hyper-V
+			$nic_adv = ($nic_prop | Where-Object { $_.RegistryKeyword -eq 'HyperVNetworkAdapterName' }).DisplayValue
+			If ($null -ne $nic_adv) { $nic_name = $nic_adv }
+
+			# create output object
 			$nic_out += [pscustomobject]@{
 				Name      = $nic.Name;
 				IPAddress = $nic_addr.IPv4Address
@@ -96,6 +117,7 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 				RdmaType  = $nic_prop | Where-Object { $_.RegistryKeyword -eq '*NetworkDirectTechnology' } | Select-Object -ExpandProperty 'DisplayValue'
 				PFC       = $nic_rdma.PFC
 				ETS       = $nic_rdma.ETS
+				NewName   = $nic_name
 			}
 		}
 		$nic_out | Sort-Object Name
@@ -108,7 +130,7 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 		$host_review = Join-Path -Path $using:host_path.FullName -ChildPath ('ash-get-physical-' + (Get-Date -Format 'FileDateTime') + '.txt')
 		# build the file
 		$file_headers = "======================== $(Get-Date -Format 'FileDateTime') ========================"
-		$file_output1 = $using:out_physical | Format-Table Name, VLAN, IPAddress, Mask, Gateway, Register, Jumbo, Rdma, RdmaType, PFC, ETS
+		$file_output1 = $using:out_physical | Format-Table Name, VLAN, IPAddress, Mask, Gateway, Register, Jumbo, Rdma, RdmaType, PFC, ETS, NewName
 		# write the file
 		$file_headers | Out-File -FilePath $host_review -Append
 		$file_output1 | Out-File -FilePath $host_review -Append
@@ -122,7 +144,7 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 # declare results
 Write-Host ''
 Write-Host '======================== Results ========================'
-$log_physical | Format-Table PSComputerName, Name, VLAN, IPAddress, Mask, Gateway, Register, Jumbo, Rdma, RdmaType, PFC, ETS
+$log_physical | Format-Table PSComputerName, Name, VLAN, IPAddress, Mask, Gateway, Register, Jumbo, Rdma, RdmaType, PFC, ETS, NewName
 
 # declare last run time
 Write-Host ''
