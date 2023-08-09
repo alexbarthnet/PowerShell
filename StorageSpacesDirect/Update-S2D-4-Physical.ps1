@@ -162,7 +162,7 @@ Try {
 				}
 
 				# check for gateway
-				If ([string]::IsNullOrEmpty($nic_gway)) {
+				If ([string]::IsNullOrEmpty($nic_gway) -or $nic_gway -eq 0) {
 					# check for default route on current NIC
 					$nic_wrong_gw = $null
 					$nic_wrong_gw = Get-NetRoute | Where-Object { $_.DestinationPrefix -eq '0.0.0.0/0' -and ($_.InterfaceAlias -eq $nic_name -or $_.InterfaceAlias -eq $nic_vnic) }
@@ -198,7 +198,7 @@ Try {
 					}
 					Else {
 						Write-Host ("$Hostname, $nic_name, $nic_addr - ...default gateway not found, adding to physical NIC")
-						New-NetRoute -DestinationPrefix '0.0.0.0/0' -NextHop $nic_gway -InterfaceAlias $nic_name
+						$null = New-NetRoute -DestinationPrefix '0.0.0.0/0' -NextHop $nic_gway -InterfaceAlias $nic_name
 					}
 
 					# current NIC has gateway, set the DNS servers
