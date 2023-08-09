@@ -41,7 +41,7 @@ If ($HostName) {
 	# process hostnames
 	$host_temp = @()
 	ForEach ($host_name in $HostName) {
-		$host_temp += $host_list | Where-Object { $_.Host -eq $host_name } 
+		$host_temp += $host_list | Where-Object { $_.Host -eq $host_name }
 	}
 	$host_list = $host_temp
 }

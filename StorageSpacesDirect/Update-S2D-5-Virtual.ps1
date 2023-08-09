@@ -145,8 +145,8 @@ Try {
 			Else {
 				# create virtual adapter after being found by switch name
 				Write-Host ("$Hostname,$vswitch_name,$vnic_name - Virtual adapter not found by name, creating then renaming...")
-				$nic_virtual = Add-VMNetworkAdapter -ManagementOS -SwitchName $vswitch_name -Name $vnic_name -PassThru
-				$nic_virtual = $nic_virtual | Rename-VMNetworkAdapter -NewName $vnic_name -PassThru
+				$nic_virtual = Add-VMNetworkAdapter -ManagementOS -SwitchName $vswitch_name -Name $vnic_name -Passthru
+				$nic_virtual = $nic_virtual | Rename-VMNetworkAdapter -NewName $vnic_name -Passthru
 			}
 
 			# set the virtual adapter VLAN modes

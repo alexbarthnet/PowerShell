@@ -18,7 +18,7 @@ Param(
 
 Function Format-Bytes {
 	Param (
-		[Parameter(Position = 0,Mandatory = $true)]
+		[Parameter(Position = 0, Mandatory = $true)]
 		[uint64]$Size,
 		[Parameter(Position = 1)]
 		[byte]$RoundTo = 2
@@ -47,7 +47,7 @@ If ($HostName) {
 	# process hostnames
 	$host_temp = @()
 	ForEach ($host_name in $HostName) {
-		$host_temp += $host_list | Where-Object { $_.Host -eq $host_name } 
+		$host_temp += $host_list | Where-Object { $_.Host -eq $host_name }
 	}
 	$host_list = $host_temp
 }

@@ -202,7 +202,7 @@ Try {
 					}
 
 					# current NIC has gateway, set the DNS servers
-					If ($nic_dns){
+					If ($nic_dns) {
 						Write-Host ("$Hostname, $nic_name, $nic_addr - ...setting DNS servers: $nic_dns")
 						$nic_exists | Set-DnsClientServerAddress -ServerAddress $nic_dns.Split(';')
 					}

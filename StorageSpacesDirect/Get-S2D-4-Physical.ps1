@@ -27,7 +27,7 @@ If ($HostName) {
 	# process hostnames
 	$host_temp = @()
 	ForEach ($host_name in $HostName) {
-		$host_temp += $host_list | Where-Object { $_.Host -eq $host_name } 
+		$host_temp += $host_list | Where-Object { $_.Host -eq $host_name }
 	}
 	$host_list = $host_temp
 }
@@ -85,7 +85,7 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 			$nic_prop = $nic | Get-NetAdapterAdvancedProperty
 			$nic_rdma = $nic | Get-NetAdapterRdma -ErrorAction 'SilentlyContinue'
 			$nic_out += [pscustomobject]@{
-				Name   = $nic.Name;
+				Name      = $nic.Name;
 				IPAddress = $nic_addr.IPv4Address
 				Mask      = $nic_addr.PrefixLength
 				Register  = $nic_client.RegisterThisConnectionsAddress
