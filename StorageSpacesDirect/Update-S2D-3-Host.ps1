@@ -26,7 +26,7 @@ param (
 	[Parameter()]
 	[string]$SmbLabel = 'SMB',
 	[Parameter()]
-	[string]$SmbDirectLabel = 'SMBDirect',
+	[string]$SmbDirectLabel = 'SMB_Direct',
 	[Parameter()][ValidateRange(1, 100)]
 	[uint16]$SmbDirectPercent = 50,
 	[Parameter()]
