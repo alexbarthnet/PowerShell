@@ -168,7 +168,7 @@ Begin {
 		}
 
 		# create params for New-ScheduledTaskSettingsSet
-		$ScheduledTaskSettingsSet = @{
+		$ScheduledTaskSettingsSetParams = @{
 			ExecutionTimeLimit = $ExecutionTimeLimit
 		}
 
@@ -205,7 +205,7 @@ Begin {
 
 		# create scheduled task settings
 		Try {
-			$Settings = New-ScheduledTaskSettingsSet @ScheduledTaskSettingsSet
+			$Settings = New-ScheduledTaskSettingsSet @ScheduledTaskSettingsSetParams
 		}
 		Catch {
 			Return $_
@@ -411,9 +411,8 @@ Process {
 
 				# create hashtable for custom object
 				$json_hashtable = [ordered]@{
-					Updated   = (Get-Date -Format FileDateTimeUniversal)
-					TaskPath  = $TaskPath
 					TaskName  = $TaskName
+					TaskPath  = $TaskPath
 					Execute   = $Execute
 					Argument  = $Argument
 					UserId    = $UserId
@@ -440,6 +439,9 @@ Process {
 				If ($null -ne $RunLevel) {
 					$json_hashtable['RunLevel'] = $RunLevel
 				}
+
+				# add current time as FileDateTimeUniversal
+				$json_hashtable['Updated'] = $LogStart
 
 				# create custom object from hashtable
 				$JsonDatum = [pscustomobject]$json_hashtable
@@ -533,17 +535,39 @@ Process {
 
 						# add RandomDelay if RandomDelayTime in JSON
 						If ($null -ne $JsonDatum.RandomDelayTime -and $JsonDatum.RandomDelayTime -is [datetime]) {
-							$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonDatum.RandomDelayTime - $JsonDatum.TriggerAt)
+							# verify RandomDelayTime is after TriggerAt
+							If ($JsonDatum.RandomDelayTime -gt $JsonDatum.TriggerAt) {
+								$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonDatum.RandomDelayTime - $JsonDatum.TriggerAt)
+							}
+							Else {
+								Write-Output "ERROR: RandomDelayTime is before TriggerAt"
+								Return
+							}
 						}
 
 						# add RepetitionInterval if RepetitionIntervalTime in JSON
 						If ($null -ne $JsonDatum.RepetitionIntervalTime -and $JsonDatum.RepetitionIntervalTime -is [datetime]) {
-							$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonDatum.RepetitionIntervalTime - $JsonDatum.TriggerAt)
+							# verify RepetitionIntervalTime is after TriggerAt
+							If ($JsonDatum.RepetitionIntervalTime -gt $JsonDatum.TriggerAt) {
+								$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonDatum.RepetitionIntervalTime - $JsonDatum.TriggerAt)
+							}
+							Else {
+								Write-Output "ERROR: RepetitionIntervalTime is before TriggerAt"
+								Return
+							}
+
 						}
 
 						# add ExecutionTimeLimitTime if ExecutionTimeLimitTime in JSON
 						If ($null -ne $JsonDatum.ExecutionTimeLimitTime -and $JsonDatum.ExecutionTimeLimitTime -is [datetime]) {
-							$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonDatum.ExecutionTimeLimitTime - $JsonDatum.TriggerAt)
+							# verify ExecutionTimeLimitTime is after TriggerAt
+							If ($JsonDatum.ExecutionTimeLimitTime -gt $JsonDatum.TriggerAt) {
+								$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonDatum.ExecutionTimeLimitTime - $JsonDatum.TriggerAt)
+							}
+							Else {
+								Write-Output "ERROR: ExecutionTimeLimitTime is before TriggerAt"
+								Return
+							}
 						}
 
 						# add RunLevel if provided
@@ -595,7 +619,7 @@ Process {
 			}
 		}
 		Default {
-			Write-Output "Displaying '$Json'"
+			Write-Output "`nDisplaying '$Json'"
 			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 	}
