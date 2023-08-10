@@ -231,19 +231,22 @@ Function Get-CertificateFromAD {
 	}
 }
 
-Function Get-CertificateFromHost {
+Function Get-CertificateFromUri {
 	<#
 	.SYNOPSIS
-	Retrieve or validate the certificate presented by a remote host.
+	Retrieve or validate the certificate presented when requesting a URI from a remote host.
 
 	.DESCRIPTION
-	Retrieve or validate the certificate or certificate chain presented by a remote host.
+	Retrieve or validate the certificate or certificate chain presented when requesting a URI from a remote host.
 
-	.PARAMETER Hostname
-	Specifies the DNS hostname of the remote host.
+	.PARAMETER Uri
+	Specifies the URI to query.
+
+	.PARAMETER IPAddress
+	Specifies the IP address of the remote host. This overrides the hostname discovered from the URI.
 
 	.PARAMETER Port
-	Specifies the TCP port on the remote host.
+	Specifies the TCP port on the remote host. This overrides the port discovered from the URI.
 
 	.PARAMETER Timeout
 	Specifies the connection timeout in milliseconds.
@@ -261,72 +264,138 @@ Function Get-CertificateFromHost {
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param (
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
-		[string]$Hostname,
-		[Parameter(Position = 1)]
-		[int32]$Port = 443,
-		[Parameter(Position = 2)]
+		[string]$Uri,
+		[Parameter()]
+		[string]$IPAddress,
+		[Parameter()]
+		[int32]$Port,
+		[Parameter()]
 		[int32]$Timeout = 3000,
 		[Parameter()]
-		[switch]$Chain,
-		[Parameter(ParameterSetName = 'Validate')]
-		[switch]$Validate
+		[switch]$Chain
 	)
 
-	# check hostname for included port number
-	If ($Hostname -match '([0-9A-z.\-:]*):([0-9]*)') {
-		# set hostname to first match
-		$Hostname = $matches[1]
-		# if port not explicitly set...
-		If ($null -eq $PSBoundParameters['Port']) {
-			# ...set port to second match
-			$Port = $matches[2]
+	Begin {
+		# construct Uri object from parameter
+		If ($Uri.Contains('://')) {
+			$UriBuilder = [System.UriBuilder]::new($Uri)
 		}
-	}
-
-	# resolve hostname
-	Try {
-		$null = Resolve-DnsName -Name $Hostname -QuickTimeout -ErrorAction 'Stop' -Verbose:$false
-	}
-	Catch {
-		Write-Warning $_.ToString()
-		Return
-	}
-
-	# retrieve certificate from remote server
-	Try {
-		# define tcp client
-		$TcpClient = New-Object 'System.Net.Sockets.TcpClient'
-		# connect tcp client
-		$TcpHandle = $TcpClient.BeginConnect($Hostname, $Port, $null, $null)
-		# check tcp client
-		$TcpResult = $TcpHandle.AsyncWaitHandle.WaitOne($Timeout, $false)
-		# if connected before timeout...
-		If ($TcpResult) {
-			# ...complete connection
-			$TcpClient.EndConnect($TcpHandle)
-		}
-		# if not connected before timeout...
 		Else {
+			$UriBuilder = [System.UriBuilder]::new("https://$Uri")
+		}
+
+		# set hostname and targethost
+		If ($PSBoundParameters.ContainsKey('IPAddress')) {
+			$Hostname = $PSBoundParameters['IPAddress']
+		}
+		Else {
+			$Hostname = $UriBuilder.Host
+		}
+
+		# if port not set via parameter...
+		If (-not $PSBoundParameters.ContainsKey('Port')) {
+			# retrieve port from UriBuilder
+			$Port = $UriBuilder.Port
+		}
+	}
+
+	Process {
+		# create tcp client
+		Try {
+			$TcpClient = [System.Net.Sockets.TcpClient]::new()
+		}
+		Catch {
+			Throw $_
+		}
+
+		# begin tcp client connection phase
+		Try {
+			$TcpHandle = $TcpClient.BeginConnect($Hostname, $Port, $null, $null)
+		}
+		Catch {
+			Throw $_
+		}
+
+		# check tcp client connection phase
+		Try {
+			$TcpResult = $TcpHandle.AsyncWaitHandle.WaitOne($Timeout, $false)
+		}
+		Catch {
+			Throw $_
+		}
+
+		# if not connected before timeout...
+		If (-not $TcpResult) {
 			# ...close the connection and return a null
 			$TcpClient.Close()
 			Write-Warning 'connection timed out'
 			Return $null
 		}
-		# open stream to remove server
-		$TcpClientStream = $TcpClient.GetStream()
+
+		# end tcp client connection phase
+		Try {
+			$TcpClient.EndConnect($TcpHandle)
+		}
+		Catch [System.Management.Automation.MethodInvocationException] {
+			Write-Error $_.Exception.InnerException
+			Throw $_
+		}
+		Catch {
+			Throw $_
+		}
+
+		# open client stream to server
+		Try {
+			$TcpClientStream = $TcpClient.GetStream()
+		}
+		Catch {
+			Throw $_
+		}
+
 		# define System.Net.Security.RemoteCertificateValidationCallback delegate that always returns true
 		$RemoteCertificateValidationCallback = { param($delegate_sender, $delegate_certificate, $delegate_chain, $delegate_sslPolicyErrors) return $true }
-		# define sslstream
-		$SSLStream = New-Object -TypeName 'System.Net.Security.SSLStream' -ArgumentList @($TcpClientStream, $true, $RemoteCertificateValidationCallback)
-		# authenticate to hostname
-		$SSLStream.AuthenticateAsClient($Hostname)
-		# get certificate sent by remote server
-		$Certificate = New-Object -TypeName 'System.Security.Cryptography.X509Certificates.X509Certificate2' -ArgumentList $SSLStream.RemoteCertificate
+
+		# create sslstream
+		Try {
+			$SSLStream = [System.Net.Security.SSLStream]::new($TcpClientStream, $true, $RemoteCertificateValidationCallback)
+		}
+		Catch {
+			Throw $_
+		}
+
+		# submit SNI to server
+		Try {
+			$SSLStream.AuthenticateAsClient($UriBuilder.Host)
+		}
+		Catch {
+			Throw $_
+		}
+
+		# get certificate sent by server
+		Try {
+			
+			$Certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($SSLStream.RemoteCertificate)
+		}
+		Catch {
+			Throw $_
+		}
+
+		# return results
+		If ($Chain) {
+			Try {
+				$CertificateChain = Get-CertificateChain -Certificate $Certificate
+			}
+			Catch {
+				Throw $_
+			}
+			Return $CertificateChain
+		}
+		Else {
+			Return $Certificate
+		}
 	}
-	Catch {
-		Throw $_
-	}
-	Finally {
+
+	End {
 		If ($null -ne $SSLStream) {
 			$SSLStream.Dispose()
 		}
@@ -336,20 +405,6 @@ Function Get-CertificateFromHost {
 		If ($null -ne $TcpClient) {
 			$TcpClient.Dispose()
 		}
-	}
-
-	# return results
-	If ($Chain) {
-		Try {
-			$CertificateChain = Get-CertificateChain -Certificate $Certificate
-		}
-		Catch {
-			Throw $_
-		}
-		Return $CertificateChain
-	}
-	Else {
-		Return $Certificate
 	}
 }
 
@@ -679,7 +734,7 @@ $functions_to_export = @()
 $functions_to_export += 'ConvertTo-X509Certificate'
 $functions_to_export += 'Get-CertificateChain'
 $functions_to_export += 'Get-CertificateFromAD'
-$functions_to_export += 'Get-CertificateFromHost'
+$functions_to_export += 'Get-CertificateFromUri'
 $functions_to_export += 'Grant-CertificatePermissions'
 $functions_to_export += 'Revoke-CertificatePermissions'
 $functions_to_export += 'Test-Thumbprint'
