@@ -483,29 +483,29 @@ Process {
 			}
 
 			# process configuration file
-			ForEach ($JsonDatum in $JsonData) {
+			:JsonData ForEach ($JsonDatum in $JsonData) {
 				# validate values in JSON file
 				Switch ($true) {
 					([string]::IsNullOrEmpty($JsonDatum.TaskName)) {
-						Write-Output "`nERROR: invalid entry (task name) in configuration file: $Json"; Break
+						Write-Output "`nERROR: invalid entry (task name) in configuration file: $Json"; Continue JsonData
 					}
 					([string]::IsNullOrEmpty($JsonDatum.TaskPath)) {
-						Write-Output "`nERROR: invalid entry (task path) in configuration file: $Json"; Break
+						Write-Output "`nERROR: invalid entry (task path) in configuration file: $Json"; Continue JsonData
 					}
 					([string]::IsNullOrEmpty($JsonDatum.Execute)) {
-						Write-Output "`nERROR: invalid entry (execute) in configuration file: $Json"; Break
+						Write-Output "`nERROR: invalid entry (execute) in configuration file: $Json"; Continue JsonData
 					}
 					([string]::IsNullOrEmpty($JsonDatum.Argument)) {
-						Write-Output "`nERROR: invalid entry (argument) in configuration file: $Json"; Break
+						Write-Output "`nERROR: invalid entry (argument) in configuration file: $Json"; Continue JsonData
 					}
 					([string]::IsNullOrEmpty($JsonDatum.UserId)) {
-						Write-Output "`nERROR: invalid entry (userid) in configuration file: $Json"; Break
+						Write-Output "`nERROR: invalid entry (userid) in configuration file: $Json"; Continue JsonData
 					}
 					([string]::IsNullOrEmpty($JsonDatum.LogonType)) {
-						Write-Output "`nERROR: invalid entry (logontype) in configuration file: $Json"; Break
+						Write-Output "`nERROR: invalid entry (logontype) in configuration file: $Json"; Continue JsonData
 					}
 					($JsonDatum.TriggerAt -isnot [datetime]) {
-						Write-Output "`nERROR: invalid entry (datetime for trigger) in configuration file: $Json"; Break
+						Write-Output "`nERROR: invalid entry (datetime for trigger) in configuration file: $Json"; Continue JsonData
 					}
 					Default {
 						# check tasks hashtable for path
@@ -519,7 +519,7 @@ Process {
 						}
 						Catch {
 							Write-Output "ERROR: adding task to hashtable: '$($JsonDatum.TaskName)'"
-							Return $_
+							Continue JsonData
 						}
 
 						# define hashtable for function
@@ -533,46 +533,83 @@ Process {
 							TriggerAt = [datetime]$JsonDatum.TriggerAt
 						}
 
-						# add RandomDelay if RandomDelayTime in JSON
-						If ($null -ne $JsonDatum.RandomDelayTime -and $JsonDatum.RandomDelayTime -is [datetime]) {
-							# verify RandomDelayTime is after TriggerAt
-							If ($JsonDatum.RandomDelayTime -gt $JsonDatum.TriggerAt) {
-								$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonDatum.RandomDelayTime - $JsonDatum.TriggerAt)
-							}
-							Else {
-								Write-Output "ERROR: RandomDelayTime is before TriggerAt"
-								Return
-							}
-						}
-
-						# add RepetitionInterval if RepetitionIntervalTime in JSON
-						If ($null -ne $JsonDatum.RepetitionIntervalTime -and $JsonDatum.RepetitionIntervalTime -is [datetime]) {
-							# verify RepetitionIntervalTime is after TriggerAt
-							If ($JsonDatum.RepetitionIntervalTime -gt $JsonDatum.TriggerAt) {
-								$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonDatum.RepetitionIntervalTime - $JsonDatum.TriggerAt)
-							}
-							Else {
-								Write-Output "ERROR: RepetitionIntervalTime is before TriggerAt"
-								Return
-							}
-
-						}
-
-						# add ExecutionTimeLimitTime if ExecutionTimeLimitTime in JSON
-						If ($null -ne $JsonDatum.ExecutionTimeLimitTime -and $JsonDatum.ExecutionTimeLimitTime -is [datetime]) {
-							# verify ExecutionTimeLimitTime is after TriggerAt
-							If ($JsonDatum.ExecutionTimeLimitTime -gt $JsonDatum.TriggerAt) {
-								$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonDatum.ExecutionTimeLimitTime - $JsonDatum.TriggerAt)
-							}
-							Else {
-								Write-Output "ERROR: ExecutionTimeLimitTime is before TriggerAt"
-								Return
-							}
-						}
-
-						# add RunLevel if provided
+						# if RunLevel defind in JSON...
 						If ($null -ne $JsonDatum.RunLevel -and $JsonDatum.RunLevel -is [string]) {
+							# add RunLevel to hashtable
 							$UpdateScheduledTaskFromJson['RunLevel'] = [string]$RunLevel
+						}
+
+						# if TriggerAt defined in JSON...
+						If ($null -ne $JsonDatum.TriggerAt) {
+							# ...and TriggerAt is datetime...
+							If ($JsonDatum.TriggerAt -is [datetime]) {
+								# add TriggerAt to hashtable
+								$UpdateScheduledTaskFromJson['TriggerAt'] = [datetime]$JsonDatum.TriggerAt
+							}
+							Else {
+								Write-Output "ERROR: could not cast TriggerAt to [datetime] in task: '$($JsonDatum.TaskName)'"
+								Continue JsonData
+							}
+						}
+
+						# if RandomDelayTime defined in JSON...
+						If ($null -ne $JsonDatum.RandomDelayTime) {
+							# ...and RandomDelayTime is datetime...
+							If ($JsonDatum.RandomDelayTime -is [datetime]) {
+								# ...and RandomDelayTime is after TriggerAt
+								If ($JsonDatum.RandomDelayTime -gt $JsonDatum.TriggerAt) {
+									# compute RandomDelay and add to hashtable
+									$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonDatum.RandomDelayTime - $JsonDatum.TriggerAt)
+								}
+								Else {
+									Write-Output "ERROR: RandomDelayTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
+									Continue JsonData
+								}
+							}
+							Else {
+								Write-Output "ERROR: could not cast RandomDelayTime to [datetime] in task: '$($JsonDatum.TaskName)'"
+								Continue JsonData
+							}
+						}
+
+						# if RepetitionIntervalTime defined in JSON...
+						If ($null -ne $JsonDatum.RepetitionIntervalTime) {
+							# ...and RepetitionIntervalTime is datetime...
+							If ($JsonDatum.RepetitionIntervalTime -is [datetime]) {
+								# ...and RepetitionIntervalTime is after TriggerAt
+								If ($JsonDatum.RepetitionIntervalTime -gt $JsonDatum.TriggerAt) {
+									# compute RepetitionInterval and add to hashtable
+									$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonDatum.RepetitionIntervalTime - $JsonDatum.TriggerAt)
+								}
+								Else {
+									Write-Output "ERROR: RepetitionIntervalTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
+									Continue JsonData
+								}
+							}
+							Else {
+								Write-Output "ERROR: could not cast RepetitionIntervalTime to [datetime] in task: '$($JsonDatum.TaskName)'"
+								Continue JsonData
+							}
+						}
+
+						# if ExecutionTimeLimitTime defined in JSON...
+						If ($null -ne $JsonDatum.ExecutionTimeLimitTime) {
+							# ...and ExecutionTimeLimitTime is datetime...
+							If ($JsonDatum.ExecutionTimeLimitTime -is [datetime]) {
+								# ...and ExecutionTimeLimitTime is after TriggerAt
+								If ($JsonDatum.ExecutionTimeLimitTime -gt $JsonDatum.TriggerAt) {
+									# compute ExecutionTimeLimit and add to hashtable
+									$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonDatum.ExecutionTimeLimitTime - $JsonDatum.TriggerAt)
+								}
+								Else {
+									Write-Output "ERROR: ExecutionTimeLimitTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
+									Continue JsonData
+								}
+							}
+							Else {
+								Write-Output "ERROR: could not cast ExecutionTimeLimitTime to [datetime] in task: '$($JsonDatum.TaskName)'"
+								Continue JsonData
+							}
 						}
 
 						# update scheduled task
@@ -633,7 +670,7 @@ End {
 		# get transcript name
 		$NameForTranscript = (Split-Path -Path $StartTranscript['Path'] -Leaf).Replace("_$LogStart.txt", $null)
 		# get transcript files
-		$TranscriptFiles = Get-ChildItem -Path $PathForTranscript | Where-Object { $_.BaseName.StartsWith($NameForTranscript,[System.StringComparison]::InvariantCultureIgnoreCase) -and $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) }
+		$TranscriptFiles = Get-ChildItem -Path $PathForTranscript | Where-Object { $_.BaseName.StartsWith($NameForTranscript, [System.StringComparison]::InvariantCultureIgnoreCase) -and $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) }
 		# get transcript files newer than cleanup date
 		$NewFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-$LogDays) }
 		# if count of transcript files count is less than cleanup threshold...
