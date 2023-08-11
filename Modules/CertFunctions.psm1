@@ -300,6 +300,22 @@ Function Get-CertificateFromUri {
 	}
 
 	Process {
+		# validate port number
+		If ($Port -eq -1) {
+			switch ($UriBuilder.Scheme) {
+				'ldap' {
+					$Port = 389
+				}
+				'ldaps' {
+					$Port = 636
+				}
+				Default {
+					Write-Warning 'unable to determine port number from Uri'
+					Return $null
+				}
+			}
+		}
+
 		# create tcp client
 		Try {
 			$TcpClient = [System.Net.Sockets.TcpClient]::new()
