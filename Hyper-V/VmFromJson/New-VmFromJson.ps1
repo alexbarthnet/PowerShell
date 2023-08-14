@@ -2648,7 +2648,8 @@ Begin {
 			[uint64]$MemoryMinimumBytes,
 			[ValidateScript({ ($_ -ge 32MB) -and ($_ -le 12TB) })]
 			[uint64]$MemoryMaximumBytes,
-			[switch]$EnableVMTPM
+			[switch]$EnableVMTPM,
+			[uint16]$Generation = 2
 		)
 
 		# verify path
@@ -2673,7 +2674,7 @@ Begin {
 			Name               = $Name
 			Path               = $Path
 			MemoryStartupBytes = $MemoryStartupBytes
-			Generation         = 2
+			Generation         = $Generation
 			ErrorAction        = [System.Management.Automation.ActionPreference]::Stop
 		}
 
