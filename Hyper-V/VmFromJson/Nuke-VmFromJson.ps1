@@ -577,10 +577,11 @@ Begin {
 
 		# check cluster shared volumes
 		Invoke-Command @InvokeCommand -ScriptBlock {
+			Param($ArgumentList)
 			# define parameters for Get-ClusterSharedVolume
 			$GetClusterSharedVolume = @{
-				$ClusterName = $ArgumentList['ClusterName']
-				ErrorAction  = [System.Management.Automation.ActionPreference]::SilentlyContinue
+				Cluster     = $ArgumentList['ClusterName']
+				ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
 			}
 
 			# retrieve names of cluster nodes
@@ -1269,13 +1270,13 @@ Begin {
 		If ($Path.EndsWith('.VHD', [System.StringComparison]::InvariantCultureIgnoreCase)) {
 			Try {
 				# define parameters for Remove-Item
-				$RemoveItem = @{
-					Path        = $ArgumentList['Path']
-					Force       = $true
-					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				$MoveClusterSharedVolumeForPath = @{
+					ComputerName = $ComputerName
+					Path         = $Path
+					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 				}
 				# move cluster shared volume
-				Move-ClusterSharedVolumeForPath -ComputerName $ComputerName -Path $Path
+				Move-ClusterSharedVolumeForPath @MoveClusterSharedVolumeForPath
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: moving CSV for VHD removal")
