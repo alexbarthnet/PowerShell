@@ -219,7 +219,7 @@ Begin {
 		# test for cluster
 		Try {
 			$ClusterNodeNames = Invoke-Command @InvokeCommand -ScriptBlock {
-				# define paramters for Get-ClusterNode
+				# define parameters for Get-ClusterNode
 				$GetClusterNode = @{
 					ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
 				}
@@ -260,7 +260,7 @@ Begin {
 		# retrieve path to CM module from remote registry
 		Try {
 			$Path = Invoke-Command @InvokeCommand -ScriptBlock {
-				# define paramters for Get-ItemProperty
+				# define parameters for Get-ItemProperty
 				$GetItemProperty = @{
 					Path        = 'HKLM:\SOFTWARE\Microsoft\SMS\Setup'
 					Name        = 'UI Installation Directory'
@@ -288,7 +288,7 @@ Begin {
 		Try {
 			$CMModulePath = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
-				# define paramters for Join-Path
+				# define parameters for Join-Path
 				$JoinPath = @{
 					Path        = $ArgumentList['Path']
 					ChildPath   = $ArgumentList['ChildPath']
@@ -332,7 +332,7 @@ Begin {
 		# retrieve CM site code from remote registry
 		Try {
 			$CMSiteCode = Invoke-Command @InvokeCommand -ScriptBlock {
-				# define paramters for Get-ItemProperty
+				# define parameters for Get-ItemProperty
 				$GetItemProperty = @{
 					Path        = 'HKLM:\SOFTWARE\Microsoft\SMS\Identification'
 					Name        = 'Site Code'
@@ -370,7 +370,7 @@ Begin {
 
 		# if cluster name was provided...
 		If ($PSBoundParameters['ClusterName']) {
-			# define paramters for Get-ClusterNodeNames
+			# define parameters for Get-ClusterNodeNames
 			$GetClusterNodeNames = @{
 				ComputerName = $ComputerName
 				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
@@ -456,7 +456,7 @@ Begin {
 				ForEach ($VMObject in $VMList) {
 					Write-Host ("$Hostname,$ComputerName,$Name - ...found VM on '$($VMObject.ComputerName)' with Id: '$($VMObject.Id)'")
 				}
-				Return "multiple"
+				Return 'multiple'
 			}
 		}
 	}
@@ -530,6 +530,88 @@ Begin {
 		Else {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieved unexpected object type with provided parameters")
 			Throw $_
+		}
+	}
+
+	Function Move-ClusterSharedVolumeForPath {
+		[CmdletBinding()]
+		Param(
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName,
+			[Parameter(Mandatory = $true)]
+			[string]$Path
+		)
+
+		# define parameters for Get-ClusterName
+		$GetClusterName = @{
+			ComputerName = $ComputerName
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# check if host is clustered
+		Try {
+			$ClusterName = Get-ClusterName @GetClusterName
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: checking if host is clustered")
+			Throw $_
+		}
+
+		# if cluster name not found...
+		If ([string]::IsNullOrEmpty($ClusterName)) {
+			# ...return to caller
+			Return
+		}
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# update argument list for Invoke-Command
+		$InvokeCommand['ArgumentList']['ClusterName'] = $ClusterName
+		$InvokeCommand['ArgumentList']['ComputerName'] = $ComputerName
+
+		# check cluster shared volumes
+		Invoke-Command @InvokeCommand -ScriptBlock {
+			# define parameters for Get-ClusterSharedVolume
+			$GetClusterSharedVolume = @{
+				$ClusterName = $ArgumentList['ClusterName']
+				ErrorAction  = [System.Management.Automation.ActionPreference]::SilentlyContinue
+			}
+
+			# retrieve names of cluster nodes
+			$ClusterSharedVolumes = Get-ClusterSharedVolume @GetClusterSharedVolume
+
+			# process each volume
+			ForEach ($ClusterSharedVolume in $ClusterSharedVolumes) {
+				$CsvFriendlyName = $ClusterSharedVolume.SharedVolumeInfo.FriendlyVolumeName
+				# is path on CSV?
+				$PathOnVolume = $Path.StartsWith($CsvFriendlyName, [System.StringComparison]::InvariantCultureIgnoreCase)
+				# is CSV owned by requested computer?
+				$VolumeOnHost = $ClusterSharedVolume.OwnerNode.Name -eq $ArgumentList['ComputerName']
+				# if path on volume and volume on host or path not on volume...
+				If (-not $PathOnVolume -or ($PathOnVolume -and $VolumeOnHost)) {
+					# ...filter volume out of collection
+					$ClusterSharedVolumes = $ClusterSharedVolumes | Where-Object { $_.SharedVolumeInfo.FriendlyVolumeName -ne $CsvFriendlyName }
+				}
+			}
+
+			# process each remaining volume
+			ForEach ($ClusterSharedVolume in $ClusterSharedVolumes) {
+				# define parameters for Move-ClusterSharedVolume
+				$MoveClusterSharedVolume = @{
+					Name        = $ClusterSharedVolume.Name
+					Node        = $ArgumentList['ComputerName']
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# move cluster shared volume to requested computer
+				$null = Move-ClusterSharedVolume @MoveClusterSharedVolume
+			}
 		}
 	}
 
@@ -1144,31 +1226,37 @@ Begin {
 			[string]$Path
 		)
 
-		# define initial argument list for InvokeCommand
-		$ArgumentList = @{
-			Path = $Path
-		}
-
 		# get hashtable for InvokeCommand splat
 		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName -ArgumentList $ArgumentList
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not get initial hashtable for Invoke-Command")
 			Throw $_
 		}
 
+		# update argument list for removing files
+		$InvokeCommand['ArgumentList']['Path'] = $Path
+
 		# dismount VHD from system before removal
 		Try {
 			Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
-				# define paramters for Dismount-DiskImage
+				# define parameters for Dismount-DiskImage
 				$DismountDiskImage = @{
 					ImagePath   = $ArgumentList['Path']
-					StorageType = 'VHDX'
 					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 				}
-				# dismount VHDX from system
+				# define parameters for VHD files
+				If ($ArgumentList['Path'].EndsWith('.VHD', [System.StringComparison]::InvariantCultureIgnoreCase)) {
+					$DismountDiskImage['StorageType'] = 'VHD'
+				}
+				# define parameters for VHDX files
+				If ($ArgumentList['Path'].EndsWith('.VHDX', [System.StringComparison]::InvariantCultureIgnoreCase)) {
+					$DismountDiskImage['StorageType'] = 'VHDX'
+				}
+
+				# dismount disk image from system
 				Dismount-DiskImage @DismountDiskImage
 			}
 		}
@@ -1177,11 +1265,29 @@ Begin {
 			Throw $_
 		}
 
+		# if VHD, rotate CSV
+		If ($Path.EndsWith('.VHD', [System.StringComparison]::InvariantCultureIgnoreCase)) {
+			Try {
+				# define parameters for Remove-Item
+				$RemoveItem = @{
+					Path        = $ArgumentList['Path']
+					Force       = $true
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				# move cluster shared volume
+				Move-ClusterSharedVolumeForPath -ComputerName $ComputerName -Path $Path
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: moving CSV for VHD removal")
+				Throw $_
+			}
+		}
+
 		# remove VHD from system after dismount
 		Try {
 			Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
-				# define paramters for Remove-Item
+				# define parameters for Remove-Item
 				$RemoveItem = @{
 					Path        = $ArgumentList['Path']
 					Force       = $true
