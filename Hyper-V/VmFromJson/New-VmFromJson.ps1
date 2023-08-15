@@ -2737,13 +2737,13 @@ Begin {
 		}
 
 		# validate minimum memory
-		If ($null -ne $MemoryMinimumBytes -and $MemoryMinimumBytes -gt $MemoryStartupBytes) {
+		If ($null -ne $MemoryMinimumBytes -and $MemoryMinimumBytes -gt 0 -and $MemoryMinimumBytes -gt $MemoryStartupBytes) {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...overriding MemoryMinimumBytes; provided value is not less than or equal to MemoryStartupBytes")
 			$MemoryMinimumBytes = $MemoryStartupBytes
 		}
 
 		# validate maximum memory
-		If ($null -ne $MemoryMaximumBytes -and $MemoryMaximumBytes -lt $MemoryStartupBytes) {
+		If ($null -ne $MemoryMaximumBytes -and $MemoryMaximumBytes -gt 0 -and $MemoryMaximumBytes -lt $MemoryStartupBytes) {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...overriding MemoryMaximumBytes; provided value is not greater than or equal to MemoryStartupBytes")
 			$MemoryMaximumBytes = $MemoryStartupBytes
 		}
