@@ -1905,9 +1905,9 @@ Begin {
 
 		# define required parameters for Get-VMNetworkAdapter
 		$GetVMNetworkAdapter = @{
-			VM           = $VM
-			Name         = $NetworkAdapterName
-			ErrorAction  = [System.Management.Automation.ActionPreference]::SilentlyContinue
+			VM          = $VM
+			Name        = $NetworkAdapterName
+			ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
 		}
 
 		# retrieve existing NICs with requested values
@@ -2041,8 +2041,18 @@ Begin {
 			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VMNetworkAdapter] })]
 			[object]$VMNetworkAdapter,
 			[string]$ComputerName = $VMNetworkAdapter.ComputerName,
-			[int32]$VlanId
+			[string]$VlanMode,
+			[int32]$VlanId,
+			[string]$VlanIdList
 		)
+
+		# check parameters
+		If (($null -eq $VlanId -or $VlanId -eq 0) -and ($VlanMode -eq 'Access' -or $VlanMode -eq 'Trunk')) {
+			Write-Warning -Message "VlanMode is '$VlanMode' but VlanId is null; VMNetworkAdapter '$($VMNetworkAdapter.Name)' will be untagged" -WarningAction Inquire
+		}
+		ElseIf ($null -eq $VlanIdList -and $VlanMode -eq 'Trunk') {
+			Write-Warning -Message "VlanMode is '$VlanMode' but VlanIdList is null; VMNetworkAdapter '$($VMNetworkAdapter.Name)' will be untagged" -WarningAction Inquire
+		}
 
 		# get VLAN for network adapter
 		Try {
@@ -2053,14 +2063,14 @@ Begin {
 			Throw $_
 		}
 
-		# if VLAN is null...
-		If ($null -eq $VlanId) {
+		# if VLAN is null or mode is Isolation...
+		If (($null -eq $VlanId -or $VlanId -eq 0) -or ($null -eq $VlanIdList -and $VlanMode -eq 'Trunk') -or $VlanMode -eq 'Untagged' -or $VlanMode -eq 'Isolation') {
 			# ...and VLAN mode not untagged...
 			If ($VMNetworkAdapterVlan.OperationMode -ne 'Untagged') {
 				# define string for Write-Host
 				$SetVMNetworkAdapterVlanAnnounce = "...setting VLAN to 'Untagged'"
 				# define parameters for function
-				$SetVMNetworkAdapterVlanFunction = @{
+				$SetVMNetworkAdapterVlan = @{
 					VMNetworkAdapter = $VMNetworkAdapter
 					Untagged         = $true
 					Passthru         = $true
@@ -2068,17 +2078,35 @@ Begin {
 				}
 			}
 		}
-		# if VLAN is not null...
+		# if VLAN list is not null and mode is Trunk...
+		ElseIf ($null -ne $VlanIdList -and $VlanMode -eq 'Trunk') {
+			# ...and VLAN 
+			# ...and VLAN mode is not access or not VLAN list is not requested VLANs...
+			If ($VMNetworkAdapterVlan.OperationMode -ne 'Trunk' -or $VMNetworkAdapterVlan.NativeVlanId -ne $VlanId -or $VMNetworkAdapter.AllowedVlanIdListString -ne $VlanIdList) {
+				# define string for Write-Host
+				$SetVMNetworkAdapterVlanAnnounce = "...setting VLAN to 'Trunk' with native VLAN ID '$VlanId' and VLAN list '$VlanIdList'"
+				# define parameters for Set-VMNetworkAdapterVlan
+				$SetVMNetworkAdapterVlan = @{
+					VMNetworkAdapter  = $VMNetworkAdapter
+					Trunk             = $true
+					NativeVlanId      = $VlanId
+					AllowedVlanIdList = $VlanIdList
+					Passthru          = $true
+					ErrorAction       = [System.Management.Automation.ActionPreference]::Stop
+				}
+			}
+		}
+		# if VLAN is not null and mode is not Trunk...
 		Else {
 			# ...and VLAN mode is not access or not VLAN list is not requested VLANs...
 			If ($VMNetworkAdapterVlan.OperationMode -ne 'Access' -or $VMNetworkAdapterVlan.AccessVlanId -ne $VlanId) {
 				# define string for Write-Host
-				$SetVMNetworkAdapterVlanAnnounce = "...setting VLAN to 'Access' with VLAN IDs: '$($VlanId -join ' ')"
+				$SetVMNetworkAdapterVlanAnnounce = "...setting VLAN to 'Access' with access VLAN ID '$VlanId'"
 				# define parameters for Set-VMNetworkAdapterVlan
-				$SetVMNetworkAdapterVlanFunction = @{
+				$SetVMNetworkAdapterVlan = @{
 					VMNetworkAdapter = $VMNetworkAdapter
-					AccessVlanId     = $VlanId
 					Access           = $true
+					AccessVlanId     = $VlanId
 					Passthru         = $true
 					ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
 				}
@@ -2086,11 +2114,11 @@ Begin {
 		}
 
 		# if parameters defined...
-		If ($null -ne $SetVMNetworkAdapterVlanFunction) {
+		If ($null -ne $SetVMNetworkAdapterVlan) {
 			# ...set VLAN for VMNetworkAdapter
 			Try {
 				Write-Host ("$Hostname,$ComputerName,$Name - $SetVMNetworkAdapterVlanAnnounce")
-				$VMNetworkAdapterVlan = Set-VMNetworkAdapterVlan @SetVMNetworkAdapterVlanFunction
+				$VMNetworkAdapterVlan = Set-VMNetworkAdapterVlan @SetVMNetworkAdapterVlan
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not set VLAN for VMNetworkAdapter")
@@ -2098,6 +2126,113 @@ Begin {
 			}
 			# refresh VMNetworkAdapter
 			$VMNetworkAdapter = $VMNetworkAdapterVlan.ParentAdapter
+		}
+
+		# get Isolation for network adapter
+		Try {
+			$VMNetworkAdapterIsolation = Get-VMNetworkAdapterIsolation -VMNetworkAdapter $VMNetworkAdapter
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve Isolation for VMNetworkAdapter")
+			Throw $_
+		}
+
+		# if VlanMode is Isolation...
+		If ($VlanMode -eq 'Isolation') {
+			If ($null -eq $VlanId -or $VlanId -eq 0) {
+				If ($VMNetworkAdapterIsolation.IsolationMode -ne 'Vlan' -or $VMNetworkAdapterIsolation.AllowUntaggedTraffic -eq $true -or $VMNetworkAdapterIsolation.DefaultIsolationID -ne 0) {
+					# define string for Write-Host
+					$SetVMNetworkAdapterIsolationAnnounce = '...setting isolation mode to VLAN; untagged traffic will be dropped'
+					# define parameters for Set-VMNetworkAdapterIsolation
+					$SetVMNetworkAdapterIsolation = @{
+						VMNetworkAdapter     = $VMNetworkAdapter
+						IsolationMode        = 'Vlan'
+						AllowUntaggedTraffic = $false
+						ErrorAction          = [System.Management.Automation.ActionPreference]::Stop
+					}
+				}
+			}
+			Else {
+				If ($VMNetworkAdapterIsolation.IsolationMode -ne 'Vlan' -or $VMNetworkAdapterIsolation.AllowUntaggedTraffic -eq $false -or $VMNetworkAdapterIsolation.DefaultIsolationID -ne $VlanId) {
+					# define string for Write-Host
+					$SetVMNetworkAdapterIsolationAnnounce = "...setting isolation mode to VLAN; untagged traffic will be tagged to VLAN '$VlanId'"
+					# define parameters for Set-VMNetworkAdapterIsolation
+					$SetVMNetworkAdapterIsolation = @{
+						VMNetworkAdapter     = $VMNetworkAdapter
+						IsolationMode        = 'Vlan'
+						AllowUntaggedTraffic = $true
+						DefaultIsolationID   = $VlanId
+						ErrorAction          = [System.Management.Automation.ActionPreference]::Stop
+					}
+				}
+			}
+		}
+		Else {
+			If ($VMNetworkAdapterIsolation.IsolationMode -ne 'None') {
+				# define string for Write-Host
+				$SetVMNetworkAdapterIsolationAnnounce = '...setting isolation mode to None'
+				# define parameters for Set-VMNetworkAdapterIsolation
+				$SetVMNetworkAdapterIsolation = @{
+					VMNetworkAdapter = $VMNetworkAdapter
+					IsolationMode    = 'None'
+					ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
+				}
+			}
+		}
+
+		# if parameters defined...
+		If ($null -ne $SetVMNetworkAdapterIsolation) {
+			# ...set Isolation for VMNetworkAdapter
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - $SetVMNetworkAdapterIsolationAnnounce")
+				Set-VMNetworkAdapterIsolation @SetVMNetworkAdapterIsolation
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not set VLAN for VMNetworkAdapter")
+				Throw $_
+			}
+
+			# refresh VMNetworkAdapter
+			$VMNetworkAdapter = $VMNetworkAdapterVlan.ParentAdapter
+		}
+
+		# check if priority tag needs to be enabled
+		If ($VlanMode -eq 'Isolation' -and $VMNetworkAdapter.IeeePriorityTag -eq 'Off') {
+			# define string for Write-Host
+			$SetVMNetworkAdapterAnnounce = "...setting IeeePriorityTag mode to 'On'"
+			# define parameters for Set-VMNetworkAdapter
+			$SetVMNetworkAdapter = @{
+				VMNetworkAdapter = $VMNetworkAdapter
+				IeeePriorityTag  = 'On'
+				Passthru         = $true
+				ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
+			}
+		}
+
+		# check if priority tag needs to be disabled
+		If ($VlanMode -ne 'Isolation' -and $VMNetworkAdapter.IeeePriorityTag -eq 'On') {
+			# define string for Write-Host
+			$SetVMNetworkAdapterAnnounce = "...setting IeeePriorityTag mode to 'Off'"
+			# define parameters for Set-VMNetworkAdapter
+			$SetVMNetworkAdapter = @{
+				VMNetworkAdapter = $VMNetworkAdapter
+				IeeePriorityTag  = 'Off'
+				Passthru         = $true
+				ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
+			}
+		}
+
+		# if parameters defined...
+		If ($null -ne $SetVMNetworkAdapter) {
+			# ...set Isolation for VMNetworkAdapter
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - $SetVMNetworkAdapterAnnounce")
+				$VMNetworkAdapter = Set-VMNetworkAdapter @SetVMNetworkAdapter
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not set IeeePriorityTag for VMNetworkAdapter")
+				Throw $_
+			}
 		}
 
 		# return VMNetworkAdapter after VLAN update
@@ -3095,8 +3230,14 @@ Process {
 				}
 
 				# define optional parameters for VLAN
+				If ($null -ne $VMNetworkAdapter.VlanMode) {
+					$SetVMNetworkAdapterVlanId['VlanMode'] = $VMNetworkAdapter.VlanMode
+				}
 				If ($null -ne $VMNetworkAdapter.VlanId) {
 					$SetVMNetworkAdapterVlanId['VlanId'] = $VMNetworkAdapter.VlanId
+				}
+				If ($null -ne $VMNetworkAdapter.VlanIdList) {
+					$SetVMNetworkAdapterVlanId['VlanIdList'] = $VMNetworkAdapter.VlanIdList
 				}
 
 				# set VLAN on VMNetworkAdapter and get updated VMNetworkAdapter

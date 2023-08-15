@@ -92,32 +92,43 @@ Param(
 	# VMNetworkAdapter - VLAN ID for network adapter
 	[Parameter(Position = 12, ParameterSetName = 'Add')]
 	[Parameter(Position = 5, ParameterSetName = 'AddVMNetworkAdapter')]
-	[ValidateRange(0, 4094)]
-	[uint16]$VlanId,
-	# VM - name of DHCP server for default network adapter
-	# VMNetworkAdapter - name of DHCP server for network adapter
+	[ValidateSet('Untagged','Access', 'Trunk', 'Isolation')]
+	[string]$VlanMode,
+	# VM - VLAN ID for default network adapter
+	# VMNetworkAdapter - VLAN ID for network adapter
 	[Parameter(Position = 13, ParameterSetName = 'Add')]
 	[Parameter(Position = 6, ParameterSetName = 'AddVMNetworkAdapter')]
+	[ValidateRange(1, 4094)]
+	[uint16]$VlanId,
+	# VM - VLAN ID for default network adapter
+	# VMNetworkAdapter - VLAN ID for network adapter
+	[Parameter(Position = 14, ParameterSetName = 'Add')]
+	[Parameter(Position = 7, ParameterSetName = 'AddVMNetworkAdapter')]
+	[string]$VlanIdList,
+	# VM - name of DHCP server for default network adapter
+	# VMNetworkAdapter - name of DHCP server for network adapter
+	[Parameter(Position = 15, ParameterSetName = 'Add')]
+	[Parameter(Position = 8, ParameterSetName = 'AddVMNetworkAdapter')]
 	[string]$DhcpServer,
 	# VM - name of DHCP scope on DHCP server for default network adapter
 	# VMNetworkAdapter - name of DHCP scope on DHCP server for network adapter
-	[Parameter(Position = 14, ParameterSetName = 'Add')]
-	[Parameter(Position = 7, ParameterSetName = 'AddVMNetworkAdapter')]
+	[Parameter(Position = 16, ParameterSetName = 'Add')]
+	[Parameter(Position = 9, ParameterSetName = 'AddVMNetworkAdapter')]
 	[string]$DhcpScope,
 	# VM - IP address for default network adapter, paired with the MAC address prefix to create a MAC address
 	# VMNetworkAdapter - IP address for network adapter, paired with the MAC address prefix to create a MAC address
-	[Parameter(Position = 15, ParameterSetName = 'Add')]
-	[Parameter(Position = 8, ParameterSetName = 'AddVMNetworkAdapter')]
+	[Parameter(Position = 17, ParameterSetName = 'Add')]
+	[Parameter(Position = 10, ParameterSetName = 'AddVMNetworkAdapter')]
 	[string]$IPAddress,
 	# VM - MAC address for default network adapter
 	# VMNetworkAdapter - MAC address for network adapter
-	[Parameter(Position = 16, ParameterSetName = 'Add')]
-	[Parameter(Position = 9, ParameterSetName = 'AddVMNetworkAdapter')]
+	[Parameter(Position = 18, ParameterSetName = 'Add')]
+	[Parameter(Position = 11, ParameterSetName = 'AddVMNetworkAdapter')]
 	[string]$MacAddress,
 	# VM - MAC address prefix for default network adapter, paired with the IP address to create a MAC address
 	# VMNetworkAdapter - MAC address prefix for network adapter, paired with the IP address to create a MAC address
-	[Parameter(Position = 17, ParameterSetName = 'Add')]
-	[Parameter(Position = 10, ParameterSetName = 'AddVMNetworkAdapter')]
+	[Parameter(Position = 19, ParameterSetName = 'Add')]
+	[Parameter(Position = 12, ParameterSetName = 'AddVMNetworkAdapter')]
 	[ValidateScript({ ($_.Length -eq 4) -and ($_ -match '^[0-9A-F]+$') })]
 	[string]$MacAddressPrefix,
 	# OS Deployment - multiple - server name for WDS or SCCM
