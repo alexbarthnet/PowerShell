@@ -1902,9 +1902,16 @@ Begin {
 			Throw $_
 		}
 
+		# define required parameters for Get-VMNetworkAdapter
+		$GetVMNetworkAdapter = @{
+			VM           = $VM
+			Name         = $NetworkAdapterName
+			ErrorAction  = [System.Management.Automation.ActionPreference]::SilentlyContinue
+		}
+
 		# retrieve existing NICs with requested values
 		Try {
-			$VMNetworkAdapter = Get-VMNetworkAdapter -VM $VM -Name $NetworkAdapterName
+			$VMNetworkAdapter = Get-VMNetworkAdapter @GetVMNetworkAdapter
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VMNetworkAdapters for VM")
@@ -1982,10 +1989,15 @@ Begin {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...found multiple VMNetworkAdapters with name: '$NetworkAdapterName'")
 			# processs each VMNetwork adapter and...
 			ForEach ($NetworkAdapter in $VMNetworkAdapter) {
+				# define parameters for Remove-VMNetworkAdapter
+				$RemoveVMNetworkAdapter = @{
+					VMNetworkAdapter = $NetworkAdapter
+					ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
+				}
 				# ...remove VMNetworkAdapter with matching name
 				Try {
 					Write-Host ("$Hostname,$ComputerName,$Name - ...removing VMNetworkAdapter with ID: '$($NetworkAdapter.Id.Split('\')[-1])'")
-					Remove-VMNetworkAdapter -VMNetworkAdapter $VMNetworkAdapter -ErrorAction Stop
+					Remove-VMNetworkAdapter @RemoveVMNetworkAdapter
 				}
 				Catch {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove VMNetworkAdapter")
@@ -1998,9 +2010,9 @@ Begin {
 		$AddVMNetworkAdapter = @{
 			VM           = $VM
 			Name         = $NetworkAdapterName
-			DeviceNaming = On
-			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			DeviceNaming = 'On'
 			Passthru     = $true
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 		}
 
 		# define optional parameters for Add-VMNetworkAdapter
@@ -2931,6 +2943,9 @@ Process {
 			}
 			If ($null -ne $JsonData.$Name.EnableVMTPM) {
 				$NewVMFromParams['EnableVMTPM'] = $JsonData.$Name.EnableVMTPM
+			}
+			If ($null -ne $JsonData.$Name.Generation) {
+				$NewVMFromParams['Generation'] = $JsonData.$Name.Generation
 			}
 
 			# create VM from provided parameters
