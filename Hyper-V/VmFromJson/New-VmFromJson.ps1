@@ -7,6 +7,7 @@ Param(
 	[string]$Path,
 	[switch]$UseDefaultPathOnHost,
 	[switch]$SkipProvisioning,
+	[switch]$SkipStart,
 	[switch]$ForceRestart,
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
@@ -2928,24 +2929,34 @@ Process {
 				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 			}
 
+			Write-Host ("$Hostname,$ComputerName,$Name - defining VM for New-VMFromParams...")
+			Write-Host ("$Hostname,$ComputerName,$Name -   Name: $Name")
+			Write-Host ("$Hostname,$ComputerName,$Name -   Path: $Path")
+
 			# define optional parameters
 			If ($null -ne $JsonData.$Name.ProcessorCount) {
 				$NewVMFromParams['ProcessorCount'] = $JsonData.$Name.ProcessorCount
+				Write-Host ("$Hostname,$ComputerName,$Name -   ProcessorCount: $($NewVMFromParams['ProcessorCount'])")
 			}
 			If ($null -ne $JsonData.$Name.MemoryStartupBytes) {
 				$NewVMFromParams['MemoryStartupBytes'] = $JsonData.$Name.MemoryStartupBytes
+				Write-Host ("$Hostname,$ComputerName,$Name -   MemoryStartupBytes: $($NewVMFromParams['MemoryStartupBytes'])")
 			}
 			If ($null -ne $JsonData.$Name.MemoryMinimumBytes) {
 				$NewVMFromParams['MemoryMinimumBytes'] = $JsonData.$Name.MemoryMinimumBytes
+				Write-Host ("$Hostname,$ComputerName,$Name -   MemoryMinimumBytes: $($NewVMFromParams['MemoryMinimumBytes'])")
 			}
 			If ($null -ne $JsonData.$Name.MemoryMaximumBytes) {
 				$NewVMFromParams['MemoryMaximumBytes'] = $JsonData.$Name.MemoryMaximumBytes
+				Write-Host ("$Hostname,$ComputerName,$Name -   MemoryMaximumBytes: $($NewVMFromParams['MemoryMaximumBytes'])")
 			}
 			If ($null -ne $JsonData.$Name.EnableVMTPM) {
 				$NewVMFromParams['EnableVMTPM'] = $JsonData.$Name.EnableVMTPM
+				Write-Host ("$Hostname,$ComputerName,$Name -   EnableVMTPM: $($NewVMFromParams['EnableVMTPM'])")
 			}
 			If ($null -ne $JsonData.$Name.Generation) {
 				$NewVMFromParams['Generation'] = $JsonData.$Name.Generation
+				Write-Host ("$Hostname,$ComputerName,$Name -   Generation: $($NewVMFromParams['Generation'])")
 			}
 
 			# create VM from provided parameters
@@ -3209,7 +3220,7 @@ Process {
 		If ($null -ne $VM -and -not [string]::IsNullOrEmpty($ClusterName)) {
 			# if DoNotCluster is set...
 			If ($JsonData.$Name.DoNotCluster) {
-				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping clustering, DoNotCluster set")
+				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping clustering, DoNotCluster was set")
 			}
 			# if DoNotCluster is not set...
 			Else {
@@ -3260,8 +3271,12 @@ Process {
 					}
 				}
 
-				# if cluster group is not online...
-				If ($ClusterGroup.State -eq 'Offline') {
+				# if cluster group is not online and SkipStart set...
+				If ($ClusterGroup.State -eq 'Offline' -and $SkipStart) {
+					Write-Host ("$Hostname,$ComputerName,$Name - ...skipping Start, SkipStart was set...")
+				}
+				# if cluster group is not online and SkipStart not set...
+				ElseIf ($ClusterGroup.State -eq 'Offline') {
 					# declare and begin
 					Write-Host ("$Hostname,$ComputerName,$Name - VM cluster group is offline, starting VM on cluster...")
 
@@ -3347,8 +3362,12 @@ Process {
 
 		# if VM is not on a cluster or DoNotCluster set...
 		If ($null -ne $VM -and ([string]::IsNullOrEmpty($ClusterName) -or $JsonData.$Name.DoNotCluster -eq $true)) {
-			# if VM is not online...
-			If ($VM.State -eq 'Off') {
+			# if VM is not online and SkipStart set...
+			If ($VM.State -eq 'Off' -and $SkipStart) {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping Start, SkipStart was set...")
+			}
+			# if VM is not online and SkipStart not set...
+			ElseIf ($VM.State -eq 'Off') {
 				# ...start VM
 				Write-Host ("$Hostname,$ComputerName,$Name - starting VM on host...")
 
