@@ -2701,6 +2701,16 @@ Begin {
 			Throw $_
 		}
 
+		# remove default network adapter
+		Try {
+			Get-VMNetworkAdapter -VM $VM | Remove-VMNetworkAdapter -Confirm:$false
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove initial VMNetworkAdapter")
+			Throw $_
+		}
+		
+
 		# define parameters for integration services
 		$EnableVMIntegrationService = @{
 			VM          = $VM
