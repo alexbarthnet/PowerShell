@@ -31,7 +31,7 @@ Try {
 	Start-Transcript -Path $LogFile -Append -Force
 
 	# get the adapters that are a hardware device to exclude virtual adapters
-	$nic_hw_all = Get-NetAdapter | Where-Object { $_.HardwareInterface } | Sort-Object -Property 'InterfaceAlias'
+	$nic_hw_all = Get-NetAdapter -Physical | Where-Object { $_.PnPDeviceID -notlike 'USB*' } | Sort-Object -Property 'InterfaceAlias'
 	ForEach ($nic_hw in $nic_hw_all) {
 		# set base names
 		$nic_old = $nic_hw.Name
@@ -219,6 +219,28 @@ Try {
 				Write-Host ("$Hostname, $nic_name, $nic_addr - IPv4 not bound, skipping IP configuration...")
 			}
 
+			# check jumbo packet settings
+			$nic_size = $null
+			$nic_size = Get-NetAdapterAdvancedProperty | Where-Object { $_.Name -eq $nic_name -and $_.RegistryKeyword -eq '*JumboPacket' }
+			If ($nic_size) {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - Jumbo Packet settings found: " + $nic_size.DisplayValue)
+				If ($nic_name -notmatch 'Manage' -and $nic_name -notmatch 'Port 0') {
+					If ($nic_size.RegistryValue -ne 9014) {
+						Write-Host ("$Hostname, $nic_name, $nic_addr - Jumbo Packet on non-Management NIC not set to '9014', fixing...")
+						Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*JumboPacket' -RegistryValue 9014
+					}
+				}
+				Else {
+					If ($nic_size.RegistryValue -ne 1514) {
+						Write-Host ("$Hostname, $nic_name, $nic_addr - Jumbo Packet on Management NIC not set to '1514', fixing...")
+						Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*JumboPacket' -RegistryValue 1514
+					}
+				}
+			}
+			Else {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - Jumbo Packet settings not found")
+			}
+
 			# check encapsulation overhead
 			$nic_over = $null
 			$nic_over = Get-NetAdapterAdvancedProperty | Where-Object { $_.Name -eq $nic_name -and $_.RegistryKeyword -eq '*EncapOverhead' }
@@ -241,26 +263,185 @@ Try {
 				Write-Host ("$Hostname, $nic_name, $nic_addr - Encapsulation Overhead settings not found")
 			}
 
-			# check jumbo packet settings
-			$nic_size = $null
-			$nic_size = Get-NetAdapterAdvancedProperty | Where-Object { $_.Name -eq $nic_name -and $_.RegistryKeyword -eq '*JumboPacket' }
-			If ($nic_size) {
-				Write-Host ("$Hostname, $nic_name, $nic_addr - Jumbo Packet settings found: " + $nic_size.DisplayValue)
-				If ($nic_name -notmatch 'Manage' -and $nic_name -notmatch 'Port 0') {
-					If ($nic_size.RegistryValue -ne 9014) {
-						Write-Host ("$Hostname, $nic_name, $nic_addr - Jumbo Packet on non-Management NIC not set to '9014', fixing...")
-						Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*JumboPacket' -RegistryValue 9014
-					}
-				}
-				Else {
-					If ($nic_size.RegistryValue -ne 1514) {
-						Write-Host ("$Hostname, $nic_name, $nic_addr - Jumbo Packet on Management NIC not set to '1514', fixing...")
-						Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*JumboPacket' -RegistryValue 1514
-					}
+			# check Encapsulated Packet Offload
+			$nic_offp = $null
+			$nic_offp = Get-NetAdapterAdvancedProperty | Where-Object { $_.Name -eq $nic_name -and $_.RegistryKeyword -eq '*EncapsulatedPacketTaskOffload' }
+			If ($nic_offp) {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - Encapsulated Packet Offload settings found: " + $nic_offp.DisplayValue)
+				If ($nic_offp.RegistryValue -ne 1) {
+					Write-Host ("$Hostname, $nic_name, $nic_addr - Encapsulated Packet Offload not enabled, fixing...")
+					Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*EncapsulatedPacketTaskOffload' -RegistryValue 1
 				}
 			}
 			Else {
-				Write-Host ("$Hostname, $nic_name, $nic_addr - Jumbo Packet settings not found")
+				Write-Host ("$Hostname, $nic_name, $nic_addr - Encapsulated Packet Offload settings not found")
+			}
+
+			# check Encapsulated Packet Offload NVGRE
+			$nic_offn = $null
+			$nic_offn = Get-NetAdapterAdvancedProperty | Where-Object { $_.Name -eq $nic_name -and $_.RegistryKeyword -eq '*EncapsulatedPacketTaskOffloadNvgre' }
+			If ($nic_offn) {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - Encapsulated Packet Offload for NVGRE settings found: " + $nic_offn.DisplayValue)
+				If ($nic_offn.RegistryValue -ne 1) {
+					Write-Host ("$Hostname, $nic_name, $nic_addr - Encapsulated Packet Offload for NVGRE not enabled, fixing...")
+					Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*EncapsulatedPacketTaskOffloadNvgre' -RegistryValue 1
+				}
+			}
+			Else {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - Encapsulated Packet Offload for NVGRE settings not found")
+			}
+
+			# check Encapsulated Packet Offload VXLAN
+			$nic_offv = $null
+			$nic_offv = Get-NetAdapterAdvancedProperty | Where-Object { $_.Name -eq $nic_name -and $_.RegistryKeyword -eq '*EncapsulatedPacketTaskOffloadVxlan' }
+			If ($nic_offv) {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - Encapsulated Packet Offload for VXLAN settings found: " + $nic_offv.DisplayValue)
+				If ($nic_offv.RegistryValue -ne 1) {
+					Write-Host ("$Hostname, $nic_name, $nic_addr - Encapsulated Packet Offload for VXLAN not enabled, fixing...")
+					Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*EncapsulatedPacketTaskOffloadVxlan' -RegistryValue 1
+				}
+			}
+			Else {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - Encapsulated Packet Offload for VXLAN settings not found")
+			}
+
+			# check Flow Control
+			$nic_flow = $null
+			$nic_flow = Get-NetAdapterAdvancedProperty | Where-Object { $_.Name -eq $nic_name -and $_.RegistryKeyword -eq '*FlowControl' }
+			If ($nic_flow) {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - Flow Control settings found: " + $nic_flow.DisplayValue)
+				If ($nic_flow.RegistryValue -ne 4) {
+					Write-Host ("$Hostname, $nic_name, $nic_addr - Flow Control not set to 'Auto Negotiation', fixing...")
+					Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*FlowControl' -RegistryValue 4
+				}
+			}
+			Else {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - Flow Control settings not found")
+			}
+
+			# check NUMA node
+			$nic_numa = $null
+			$nic_numa = Get-NetAdapterAdvancedProperty | Where-Object { $_.Name -eq $nic_name -and $_.RegistryKeyword -eq '*NumaNodeId' }
+			If ($nic_numa) {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - NUMA node ID found: " + $nic_numa.DisplayValue)
+				If ($nic_numa.RegistryValue -ne 65535) {
+					Write-Host ("$Hostname, $nic_name, $nic_addr - NUMA node ID not set to '65535', fixing...")
+					Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*NumaNodeId' -RegistryValue 65535
+				}
+			}
+			Else {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - NUMA node ID settings not found")
+			}
+
+			# check PTP Hardware Timestamp
+			$nic_ptph = $null
+			$nic_ptph = Get-NetAdapterAdvancedProperty | Where-Object { $_.Name -eq $nic_name -and $_.RegistryKeyword -eq '*PtpHardwareTimestamp' }
+			If ($nic_ptph) {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - PTP Hardware Timestamp found: " + $nic_ptph.DisplayValue)
+				If ($nic_ptph.RegistryValue -ne 0) {
+					Write-Host ("$Hostname, $nic_name, $nic_addr - PTP Hardware Timestamp not disabled, fixing...")
+					Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*PtpHardwareTimestamp' -RegistryValue 0
+				}
+			}
+			Else {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - PTP Hardware Timestamp settings not found")
+			}
+
+			# check QoS Offload
+			$nic_qoff = $null
+			$nic_qoff = Get-NetAdapterAdvancedProperty | Where-Object { $_.Name -eq $nic_name -and $_.RegistryKeyword -eq '*QosOffload' }
+			If ($nic_qoff) {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - QoS Offload settings found: " + $nic_qoff.DisplayValue)
+				If ($nic_qoff.RegistryValue -ne 0) {
+					Write-Host ("$Hostname, $nic_name, $nic_addr - QoS Offload settings not disabled, fixing...")
+					Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*QosOffload' -RegistryValue 0
+				}
+			}
+			Else {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - QoS Offload settings not found")
+			}
+
+			# check Recv Segment Coalescing (IPv4)
+			$nic_rsc4 = $null
+			$nic_rsc4 = Get-NetAdapterAdvancedProperty | Where-Object { $_.Name -eq $nic_name -and $_.RegistryKeyword -eq '*RscIPv4' }
+			If ($nic_rsc4) {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - Recv Segment Coalescing (IPv4) settings found: " + $nic_rsc4.DisplayValue)
+				If ($nic_rsc4.RegistryValue -ne 1) {
+					Write-Host ("$Hostname, $nic_name, $nic_addr - Recv Segment Coalescing (IPv4) settings not enabled, fixing...")
+					Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*RscIPv4' -RegistryValue 1
+				}
+			}
+			Else {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - Recv Segment Coalescing (IPv4) settings not found")
+			}
+
+			# check Recv Segment Coalescing (IPv6)
+			$nic_rsc6 = $null
+			$nic_rsc6 = Get-NetAdapterAdvancedProperty | Where-Object { $_.Name -eq $nic_name -and $_.RegistryKeyword -eq '*RscIPv6' }
+			If ($nic_rsc6) {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - Recv Segment Coalescing (IPv6) settings found: " + $nic_rsc6.DisplayValue)
+				If ($nic_rsc6.RegistryValue -ne 1) {
+					Write-Host ("$Hostname, $nic_name, $nic_addr - Recv Segment Coalescing (IPv6) settings not enabled, fixing...")
+					Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*RscIPv6' -RegistryValue 1
+				}
+			}
+			Else {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - Recv Segment Coalescing (IPv6) settings not found")
+			}
+
+			# check TCP/UDP Checksum Offload (IPv4)
+			$nic_tco4 = $null
+			$nic_tco4 = Get-NetAdapterAdvancedProperty | Where-Object { $_.Name -eq $nic_name -and $_.RegistryKeyword -eq '*TCPUDPChecksumOffloadIPv4' }
+			If ($nic_tco4) {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - TCP/UDP Checksum Offload (IPv4) settings found: " + $nic_tco4.DisplayValue)
+				If ($nic_tco4.RegistryValue -ne 3) {
+					Write-Host ("$Hostname, $nic_name, $nic_addr - TCP/UDP Checksum Offload (IPv4) settings not 'Rx & Tx Enabled', fixing...")
+					Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*TCPUDPChecksumOffloadIPv4' -RegistryValue 3
+				}
+			}
+			Else {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - TCP/UDP Checksum Offload (IPv4) settings not found")
+			}
+
+			# check TCP/UDP Checksum Offload (IPv6)
+			$nic_tco6 = $null
+			$nic_tco6 = Get-NetAdapterAdvancedProperty | Where-Object { $_.Name -eq $nic_name -and $_.RegistryKeyword -eq '*TCPUDPChecksumOffloadIPv6' }
+			If ($nic_tco6) {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - TCP/UDP Checksum Offload (IPv6) settings found: " + $nic_tco6.DisplayValue)
+				If ($nic_tco6.RegistryValue -ne 3) {
+					Write-Host ("$Hostname, $nic_name, $nic_addr - TCP/UDP Checksum Offload (IPv6) settings not 'Rx & Tx Enabled', fixing...")
+					Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*TCPUDPChecksumOffloadIPv6' -RegistryValue 3
+				}
+			}
+			Else {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - TCP/UDP Checksum Offload (IPv6) settings not found")
+			}
+
+
+
+
+
+
+
+
+
+
+
+
+
+			# check VMQ
+			$nic_vmq = $null
+			$nic_vmq = Get-NetAdapterAdvancedProperty | Where-Object { $_.Name -eq $nic_name -and $_.RegistryKeyword -eq '*VMQ' }
+			If ($nic_vmq) {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - Virtual Machine Queues found: " + $nic_vmq.DisplayValue)
+				# check for iWARP
+				If ($nic_vmq.RegistryValue -ne 1) {
+					Write-Host ("$Hostname, $nic_name, $nic_addr - Virtual Machine Queues not enabled, fixing...")
+					Set-NetAdapterAdvancedProperty -Name $nic_name -RegistryKeyword '*VMQ' -RegistryValue 1
+				}
+			}
+			Else {
+				Write-Host ("$Hostname, $nic_name, $nic_addr - Virtual Machine Queues not found")
 			}
 
 			# check RDMA technology
