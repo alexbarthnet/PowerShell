@@ -77,7 +77,9 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 
 	# run remote commands
 	Write-Host "$host_name - running commands..."
-	$log_vswitch += $out_vswitch = Invoke-Command -Session $pss_main -ScriptBlock { Get-VMSwitch | Sort-Object Name | Select-Object Name, BandwidthReservationMode, EmbeddedTeamingEnabled, IOVEnabled, IOVSupport, IOVSupportReasons }
+	$log_vswitch += $out_vswitch = Invoke-Command -Session $pss_main -ScriptBlock { 
+		Get-VMSwitch | Sort-Object Name | Select-Object Name, BandwidthReservationMode, EmbeddedTeamingEnabled, IOVEnabled, IOVSupport, IOVSupportReasons
+	}
 	$log_virtual += $out_virtual = Invoke-Command -Session $pss_main -ScriptBlock {
 		$vnic_out = @()
 		$vnic_client = Get-DnsClient
