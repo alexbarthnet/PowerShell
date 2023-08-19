@@ -77,7 +77,7 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 	Write-Host "$host_name - running commands..."
 	$log_physical += $out_physical = Invoke-Command -Session $pss_main -ScriptBlock {
 		$nic_out = @()
-		$nic_list = Get-NetAdapter -Physical
+		$nic_list = Get-NetAdapter -Physical | Where-Object { $_.PnPDeviceID -notlike 'USB*' } | Sort-Object -Property 'InterfaceAlias'
 		ForEach ($nic in $nic_list) {
 			# get NIC properties
 			$nic_client = $nic | Get-DnsClient
@@ -120,7 +120,7 @@ $host_list | Sort-Object Host -Unique | ForEach-Object {
 				NewName   = $nic_name
 			}
 		}
-		$nic_out | Sort-Object Name
+		$nic_out
 	}
 
 	# save output to host
