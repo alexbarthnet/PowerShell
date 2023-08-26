@@ -2,68 +2,117 @@
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	[Parameter(Position = 0, Mandatory = $True)]
+	[Parameter(Position = 0, Mandatory = $True)][ValidateScript({ $_ -is [Microsoft.ActiveDirectory.Management.ADComputer] -or $_ -is [System.String] })]
 	[object]$Identity,
-	[Parameter(Position = 2)]
-	[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
+	[Parameter(Position = 1)]
+	[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
+	[Parameter(DontShow)]
+	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 )
 
-# create global objects
-$env_comp_name = [System.Environment]::MachineName.ToLowerInvariant()
-
-# remove computer object from AD
-Write-Host ("$env_comp_name,$Identity - checking for VM in AD")
-$vm_ad = Get-ADObject -Server $Server -Filter "Name -eq '$($Identity)' -and ObjectClass -eq 'computer'"
-If ($vm_ad) {
-	Write-Host ("$env_comp_name,$Identity - ...AD object found")
-	Write-Host ("$env_comp_name,$Identity - removing AD object...")
-	$vm_ad | Remove-ADObject -Server $Server -Recursive -Confirm:$false
-	Write-Host ("$env_comp_name,$Identity - ...removed AD object")
+# retrieve computer name from parameters
+If ($Identity -is [Microsoft.ActiveDirectory.Management.ADComputer]) {
+	$ComputerName = $Identity.Name
 }
 Else {
-	Write-Host ("$env_comp_name,$Identity - ...AD object not found")
+	$ComputerName = $Identity
 }
 
-# remove forward DNS records
-Write-Host ("$env_comp_name,$Identity - checking for VM in DNS")
-
-# check DNS records
-$dns_forward_zone = (Get-ADDomain).DnsRoot
-$dns_forward = Resolve-DnsName -Server $Server -Type A -Name ($Identity, $dns_forward_zone -join '.') -ErrorAction SilentlyContinue
-$dns_reverse = Resolve-DnsName -Server $Server -Type PTR -Name $dns_forward.IPAddress  -ErrorAction SilentlyContinue
-
-# get DNS forward record
-If ($dns_forward) {
-	$dns_forward_record = Get-DnsServerResourceRecord -ComputerName $Server -ZoneName $dns_forward_zone -RRType A | Where-Object { $_.HostName -eq $Identity }
-	If ($dns_forward_record) {
-		Write-Host ("$env_comp_name,$Identity - ...DNS A records found")
-		Write-Host ("$env_comp_name,$Identity - removing DNS A records...")
-		$dns_forward_record | Remove-DnsServerResourceRecord -ComputerName $Server -ZoneName $dns_forward_zone -Force
-		Write-Host ("$env_comp_name,$Identity - ...removed DNS A records")
-	}
-	Else {
-		Write-Host ("$env_comp_name,$Identity - ...DNS A records not found")
-	}
+# retrieve computer object from AD
+Write-Host ("$Hostname,$ComputerName - locating computer object in AD")
+Try {
+	$ADComputer = Get-ADComputer -Server $Server -Identity $Identity -ErrorAction Stop
+}
+Catch {
+	Write-Host ("$Hostname,$ComputerName - ...computer object not found")
 }
 
-# get DNS reverse record
-If ($dns_reverse) {
-	$dns_reverse_host = $dns_reverse.Name.Split('.', 2)[0]
-	$dns_reverse_zone = $dns_reverse.Name.Split('.', 2)[1]
-	$dns_reverse_record = Get-DnsServerResourceRecord -ComputerName $Server -ZoneName $dns_reverse_zone -RRType PTR | Where-Object { $_.HostName -eq $dns_reverse_host }
-	If ($dns_reverse_record) {
-		Write-Host ("$env_comp_name,$Identity - ...DNS PTR records found")
-		Write-Host ("$env_comp_name,$Identity - removing DNS PTR records...")
+# remove computer object
+If ($null -ne $ADComputer) {
+	Write-Host ("$Hostname,$ComputerName - ...found computer object")
+	$Name = $ADComputer.DNSHostName
+	Write-Host ("$Hostname,$ComputerName - removing computer object...")
+	$ADObject | Remove-ADComputer -Server $Server -Confirm:$false
+	Write-Host ("$Hostname,$ComputerName - ...removed computer object")
+}
+
+# resolve DNS A records
+Write-Host ("$Hostname,$ComputerName - resolving DNS A records")
+Try {
+	$DnsRecords = Resolve-DnsName -Server $Server -Type A -Name $Name -DnsOnly -QuickTimeout -ErrorAction Stop
+}
+Catch {
+	Write-Host ("$Hostname,$ComputerName - ...DNS A records not found")
+}
+
+# resolve DNS PTR records from DNS A records
+If ($null -ne $DnsRecords) {
+	Write-Host ("$Hostname,$ComputerName - resolving DNS PTR records")
+	# create array for holding DNS pointer records
+	$DnsPointerRecords = @()
+	# process each DNS record
+	ForEach ($DnsRecord in $DnsRecords) {
 		Try {
-			$dns_reverse_record | Remove-DnsServerResourceRecord -ComputerName $Server -ZoneName $dns_reverse_zone -Force
-			Write-Host ("$env_comp_name,$Identity - ...removed DNS PTR records")
+			$DnsPointerRecords += Resolve-DnsName -Server $Server -Type PTR -Name $DnsRecord.IPAddress -DnsOnly -QuickTimeout -ErrorAction Stop
 		}
 		Catch {
-			Write-Host ("$env_comp_name,$Identity - ERROR: could not remove DNS PTR records")
-			$_
+			Write-Host ("$Hostname,$ComputerName - ...DNS PTR record not found for: $($DnsRecord.IPAddress)")
 		}
 	}
-	Else {
-		Write-Host ("$env_comp_name,$Identity - ...DNS PTR records not found")
+}
+
+# remove DNS A record
+If ($null -ne $DnsRecords) {
+	Write-Host ("$Hostname,$ComputerName - removing DNS A records from server: $Server")
+	# process each DNS A record
+	:DnsRecords ForEach ($DnsRecord in $DnsRecords) {
+		# split DNS A record
+		$Name, $ZoneName = $DnsRecord.Name.Split('.', 2)
+		# retrieve DNS A record
+		Try {
+			$DnsServerResourceRecord = Get-DnsServerResourceRecord -ComputerName $Server -ZoneName $ZoneName -Name $Name -RRType A -ErrorAction Stop
+			Write-Host ("$Hostname,$ComputerName - ...DNS A record found: $($DnsRecord.Name)")
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName - ...DNS A record not found on server: $($DnsRecord.Name)")
+			Continue DnsRecords
+		}
+		Write-Host ("$Hostname,$ComputerName - removing DNS A record...")
+		# remove DNS A record
+		Try {
+			$DnsServerResourceRecord | Remove-DnsServerResourceRecord -ComputerName $Server -ZoneName $ZoneName -Force -ErrorAction Stop
+			Write-Host ("$Hostname,$ComputerName - ...removed DNS A record")
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName - ...DNS A record not removed")
+		}
+	}
+}
+
+# remove DNS A record
+If ($null -ne $DnsPointerRecords) {
+	Write-Host ("$Hostname,$ComputerName - removing DNS PTR records from server: $Server")
+	# process each DNS A record
+	:DnsPointerRecords ForEach ($DnsPointerRecord in $DnsPointerRecords) {
+		# split DNS A record
+		$Name, $ZoneName = $DnsPointerRecord.Name.Split('.', 2)
+		# retrieve DNS A record
+		Try {
+			$DnsServerResourceRecord = Get-DnsServerResourceRecord -ComputerName $Server -ZoneName $ZoneName -Name $Name -RRType PTR -ErrorAction Stop
+			Write-Host ("$Hostname,$ComputerName - ...DNS PTR record found: $($DnsPointerRecord.Name)")
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName - ...DNS PTR record not found on server: $($DnsPointerRecord.Name)")
+			Continue DnsPointerRecords
+		}
+		Write-Host ("$Hostname,$ComputerName - removing DNS PTR record...")
+		# remove DNS A record
+		Try {
+			$DnsServerResourceRecord | Remove-DnsServerResourceRecord -ComputerName $Server -ZoneName $ZoneName -Force -ErrorAction Stop
+			Write-Host ("$Hostname,$ComputerName - ...removed DNS PTR record")
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName - ...DNS PTR record not removed")
+		}
 	}
 }
