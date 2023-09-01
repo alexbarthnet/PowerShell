@@ -157,7 +157,12 @@ Begin {
 		}
 
 		# return the cluster name
-		Return $ClusterName
+		If ($ClusterName) {
+			Return $ClusterName.ToLowerInvariant()
+		}
+		Else {
+			Return $null
+		}
 	}
 
 	Function Export-VMToComputer {
@@ -297,7 +302,8 @@ Begin {
 			}
 		}
 		Catch {
-			Throw $_
+			Write-Warning -Message "Path not accessible: $($_.ToString())"
+			Return
 		}
 
 		# declare state
@@ -430,14 +436,14 @@ Begin {
 
 		# export VM
 		Try {
-			$OldVM = Export-VM @ExportVM
+			$ExportedVM = Export-VM @ExportVM
 		}
 		Catch {
 			Write-Warning -Message "VM export failed: $($_.ToString())"
 		}
 
 		# declare state
-		If ($OldVM) {
+		If ($ExportedVM) {
 			Write-Host "$SourceComputerName - ...exported VM"
 		}
 
@@ -481,6 +487,14 @@ Begin {
 
 		# declare state
 		Write-Host "$ComputerName - ...removed '$NTAccount' from Administrators group"
+
+		# return objects
+		If ($ExportedVM) {
+			Return $ExportedVM
+		}
+		Else {
+			Return $null
+		}
 	}
 
 	Function Import-VMOnComputer {
@@ -488,7 +502,10 @@ Begin {
 			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] })]
 			[object]$VM,
 			[Parameter(Mandatory = $true)]
-			[string]$ComputerName
+			[string]$ComputerName,
+			[Parameter(Mandatory = $true)]
+			[string]$Path
+
 		)
 
 		################################################
@@ -496,7 +513,7 @@ Begin {
 		################################################
 
 		$Id = $VM.Id
-		$Name = $VM.Name
+		$Name = $VM.Name.ToLowerInvariant()
 		$Vmcx = "$Name\Virtual Machines\$Id.vmcx"
 
 		################################################
@@ -538,7 +555,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$Hostname,$ComputerName - comparing VM with target..."
+		Write-Host "$ComputerName,$Name - comparing VM with target..."
 
 		# define parameters for Compare-VM
 		$CompareVM = @{
@@ -566,14 +583,14 @@ Begin {
 		}
 
 		# declare state
-		Write-Host "$Hostname,$ComputerName - ...VM compared to target"
+		Write-Host "$ComputerName,$Name - ...VM compared to target"
 
 		################################################
 		# import VM
 		################################################
 
 		# declare state
-		Write-Host "$Hostname,$ComputerName - importing VM..."
+		Write-Host "$ComputerName,$Name - importing VM..."
 
 		# define required parameters for Import-VM
 		$ImportVM = @{
@@ -583,19 +600,19 @@ Begin {
 
 		# import VM on target computer
 		Try {
-			$NewVM = Import-VM @ImportVM
+			$ImportedVM = Import-VM @ImportVM
 		}
 		Catch {
 			Write-Warning -Message "VM import failed: $($_.ToString())"
 		}
 
 		# declare state
-		If ($NewVM) {
-			Write-Host "$Hostname,$ComputerName - ...imported VM"
+		If ($ImportedVM) {
+			Write-Host "$ComputerName,$Name - ...imported VM"
 		}
 
 		# return VM
-		Return $NewVM
+		Return $ImportedVM
 	}
 
 	Function Remove-VMOnComputer {
@@ -647,7 +664,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$Hostname,$ComputerName - removing VM..."
+		Write-Host "$ComputerName,$Name - removing VM..."
 
 		# define parameters for Remove-VM
 		$RemoveVM = @{
@@ -665,19 +682,26 @@ Begin {
 		}
 
 		# declare state
-		Write-Host "$Hostname,$ComputerName - ...VM removed"
+		Write-Host "$ComputerName,$Name - ...VM removed"
 
 		################################################
 		# remove VM files
 		################################################
 
 		# declare state
-		Write-Host "$Hostname,$ComputerName - removing VHDs..."
+		Write-Host "$ComputerName,$Name - removing VHDs..."
 
 		# remove VM hard disk drive files
 		ForEach ($VHDPath in $VHDPaths) {
-			# update argument list
-			$InvokeCommand['ArgumentList']['Path'] = $VHDPath
+			# declare state
+			Write-Host "$ComputerName,$Name - ...removing VHD: $VHDPath"
+
+			# update argument list with parameters for Remove-Item
+			$InvokeCommand['ArgumentList']['RemoveItem'] = @{
+				Path        = $VHDPath
+				Force       = $true
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
 
 			# remove VHD on source computer
 			Try {
@@ -685,14 +709,38 @@ Begin {
 					Param($ArgumentList)
 
 					# define parameters for Remove-Item
-					$RemoveItem = @{
-						Path        = $ArgumentList['Path']
-						Force       = $true
-						ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-					}
+					$RemoveItem = $ArgumentList['RemoveItem']
 
 					# remove VHD
 					Remove-Item @RemoveItem
+
+					# test VHD
+					$TestPath = Test-Path -Path $RemoveItem['Path'] -PathType Leaf
+
+					# if VHD still exists...
+					If ($TestPath) {
+						# declare state
+						Write-Warning 'VHD queued for removal but still present; waiting for up to 30 seconds'
+
+						# initialize counter
+						$Counter = [int32]1
+					}
+
+					# sleep and re-test VHD
+					While ($Counter -lt 7 -and -not $TestPath) {
+						# increment counter
+						$Counter++
+						# sleep
+						Start-Sleep -Seconds 5
+						# test VHD
+						$TestPath = Test-Path -Path $RemoveItem['Path'] -PathType Leaf
+					}
+
+					# if VHD still exists...
+					If ($TestPath) {
+						# declare state
+						Write-Warning 'VHD not removed after 30 seconds'
+					}
 				}
 			}
 			Catch {
@@ -700,7 +748,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$Hostname,$ComputerName - ...removed: $VHDPath"
+			Write-Host "$ComputerName,$Name - ...removed VHD"
 		}
 
 		################################################
@@ -708,7 +756,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$Hostname,$ComputerName - removing VM folders..."
+		Write-Host "$ComputerName,$Name - removing VM folders..."
 
 		# remove VM path folders
 		ForEach ($VMPath in $VMPaths) {
@@ -766,7 +814,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$Hostname,$ComputerName - ...removed: $VMPath"
+			Write-Host "$ComputerName,$Name - ...removed: $VMPath"
 		}
 	}
 
@@ -875,7 +923,7 @@ Begin {
 	}
 
 	# declare state
-	Write-Host "$Hostname - checking path on destination..."
+	Write-Host "$ComputerName - checking path on destination..."
 
 	# get hashtable for InvokeCommand splat
 	Try {
@@ -908,8 +956,8 @@ Begin {
 	}
 
 	# declare state
-	Write-Host "$Hostname - ...path found: $Path"
-	Write-Host "$Hostname - retrieving SMB shares..."
+	Write-Host "$ComputerName - ...path found: $Path"
+	Write-Host "$ComputerName - retrieving SMB shares..."
 
 	# get SMB shares on target computer
 	Try {
@@ -920,8 +968,8 @@ Begin {
 	}
 
 	# declare state
-	Write-Host "$Hostname - ...shares found"
-	Write-Host "$Hostname - building UNC path for export..."
+	Write-Host "$ComputerName - ...shares found"
+	Write-Host "$ComputerName - building UNC path for export..."
 
 	# get first SMB share where path parameter starts with share path and share path not null or empty
 	$SmbShare = $SmbShares | Where-Object { $Path.StartsWith($_.Path, [System.StringComparison]::InvariantCultureIgnoreCase) -and -not [string]::IsNullOrEmpty($_.Path) } | Select-Object -First 1
@@ -935,7 +983,7 @@ Begin {
 	}
 
 	# declare state
-	Write-Host "$Hostname - ...UNC path built: $SharePath"
+	Write-Host "$ComputerName - ...UNC path built: $SharePath"
 }
 
 Process {
@@ -946,7 +994,7 @@ Process {
 	# if input is not a VM object...
 	If ($VM -isnot [Microsoft.HyperV.PowerShell.VirtualMachine]) {
 		# declare state
-		Write-Host "$Hostname - retrieving VM object by name: $VM"
+		Write-Host "$SourceComputerName - retrieving VM object by name: $VM"
 
 		# define required parameters for Get-VM
 		$GetVM = @{
@@ -966,13 +1014,18 @@ Process {
 		Catch {
 			Throw $_
 		}
+
+		# declare state
+		Write-Host "$SourceComputerName - retrieved VM object"
 	}
 
 	# get VM properties
 	$Id = $VM.Id
-	$Name = $VM.Name
+	$Name = $VM.Name.ToLowerInvariant()
+	$SourceComputerName = $VM.ComputerName.ToLowerInvariant()
+
+	# get VM configuration
 	$State = $VM.State
-	$SourceComputerName = $VM.ComputerName
 	$AutomaticStartAction = $VM.AutomaticStartAction
 
 	################################################
@@ -980,7 +1033,7 @@ Process {
 	################################################
 
 	# declare state
-	Write-Host "$Hostname - checking target computer for VM..."
+	Write-Host "$ComputerName,$Name - checking target computer for VM..."
 
 	# define parameters for Get-VM on target computer
 	$GetVM = @{
@@ -1043,20 +1096,18 @@ Process {
 	}
 
 	# declare state
-	Write-Host "$Hostname - ...VM not found via target computer"
+	Write-Host "$ComputerName,$Name - ...VM not found via target computer"
 
 	################################################
 	# export VM
 	################################################
 
 	# export VM to path
-	If ($OldVM) {
-		Try {
-			$OldVM = Export-VMToComputer -VM $VM -ComputerName $ComputerName -Path $Path
-		}
-		Catch {
-			Throw $_
-		}
+	Try {
+		$ExportedVM = Export-VMToComputer -VM $VM -ComputerName $ComputerName -Path $Path
+	}
+	Catch {
+		Throw $_
 	}
 
 	################################################
@@ -1064,9 +1115,9 @@ Process {
 	################################################
 
 	# import VM on target computer
-	If ($OldVM) {
+	If ($ExportedVM) {
 		Try {
-			$NewVM = Import-VMOnComputer -VM $VM -ComputerName $ComputerName
+			$ImportedVM = Import-VMOnComputer -VM $VM -ComputerName $ComputerName
 		}
 		Catch {
 			Throw $_
@@ -1078,10 +1129,10 @@ Process {
 	################################################
 
 	# if VM was imported to target cluster...
-	If ($NewVM -and $NewVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
+	If ($ImportedVM -and $ImportedVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
 		# ...restore imported VM
 		Try {
-			Restore-VMOnComputer -VM $NewVM
+			Restore-VMOnComputer -VM $ImportedVM
 		}
 		Catch {
 			Throw $_
@@ -1103,7 +1154,7 @@ Process {
 	################################################
 
 	# if VM was imported to target cluster...
-	If ($NewVM -and $NewVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
+	If ($ImportedVM -and $ImportedVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
 		# ...remove original VM
 		Try {
 			Remove-VMOnComputer -VM $VM
@@ -1114,10 +1165,10 @@ Process {
 
 	}
 	# if VM exported but import failed...
-	ElseIf ($NewVM -and $NewVM.VirtualMachineType -ne 'RealizedVirtualMachine') {
+	ElseIf ($ImportedVM -and $ImportedVM.VirtualMachineType -ne 'RealizedVirtualMachine') {
 		# ...remove exported VM from target
 		Try {
-			Remove-VMOnComputer -VM $NewVM
+			Remove-VMOnComputer -VM $ImportedVM
 		}
 		Catch {
 			Throw $_
