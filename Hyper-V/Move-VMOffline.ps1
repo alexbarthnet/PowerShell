@@ -1,8 +1,10 @@
+#Requires -Modules "Hyper-V","FailoverClusters"
+
 [CmdletBinding()]
 param (
 	# array of VM objects or VM names
 	[Parameter(Mandatory = $true, ValueFromPipeline = $true)]
-	[object[]]$VM,
+	[object]$VM,
 	# computer name of target computer
 	[Parameter(Mandatory = $true)]
 	[string]$ComputerName,
@@ -51,7 +53,7 @@ Begin {
 		Else {
 			# ...try to create a session
 			Try {
-				$script:PSSessions[$ComputerName] = New-PSSession -ComputerName $ComputerName -Name $ComputerName -Authentication Default
+				$script:PSSessions[$ComputerName] = New-PSSession -ComputerName $ComputerName -Name $ComputerName -Authentication Kerberos
 			}
 			Catch {
 				Return $false
@@ -158,6 +160,400 @@ Begin {
 		Return $ClusterName
 	}
 
+	Function Import-VMOnComputer {
+		Param(
+			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] })]
+			[object]$VM,
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName
+		)
+
+		################################################
+		# define strings
+		################################################
+
+		$Id = $VM.Id
+		$Name = $VM.Name
+		$Vmcx = "$Name\Virtual Machines\$Id.vmcx"
+
+		################################################
+		# check paths on target computer
+		################################################
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# update argument list
+		$InvokeCommand['ArgumentList']['Path'] = $Path
+		$InvokeCommand['ArgumentList']['Vmcx'] = $Vmcx
+
+		# create target path
+		Try {
+			$PathForImport = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+
+				# define parameters for Join-Path
+				$JoinPath = @{
+					Path      = $ArgumentList['Path']
+					ChildPath = $ArgumentList['Vmcx']
+				}
+				# get full path to VMCX file
+				Join-Path @JoinPath
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		################################################
+		# compare VM
+		################################################
+
+		# declare state
+		Write-Host "$Hostname,$ComputerName - comparing VM with target..."
+
+		# define parameters for Compare-VM
+		$CompareVM = @{
+			Path         = $PathForImport
+			ComputerName = $ComputerName
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# compare VM with target computer
+		Try {
+			$CompatibilityReport = Compare-VM @CompareVM
+		}
+		Catch {
+			Throw $_
+		}
+
+		# process each incompatibility
+		ForEach ($Incompatibility in $CompatibilityReport.Incompatibilities) {
+			Write-Warning -Message "Target computer reported an incompatibility: '$($Incompatibility.Message)'"
+		}
+
+		# return
+		If ($CompatibilityReport.Incompatibilities.Count -gt 0) {
+			Return $CompatibilityReport.VM
+		}
+
+		# declare state
+		Write-Host "$Hostname,$ComputerName - ...VM compared to target"
+
+		################################################
+		# import VM
+		################################################
+
+		# declare state
+		Write-Host "$Hostname,$ComputerName - importing VM..."
+
+		# define required parameters for Import-VM
+		$ImportVM = @{
+			CompatibilityReport = $CompatibilityReport
+			ErrorAction         = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# import VM on target computer
+		Try {
+			$NewVM = Import-VM @ImportVM
+		}
+		Catch {
+			Write-Warning -Message "VM import failed: $($_.ToString())"
+		}
+
+		# declare state
+		If ($NewVM) {
+			Write-Host "$Hostname,$ComputerName - ...imported VM"
+		}
+
+		# return VM
+		Return $NewVM
+	}
+
+	Function Remove-VMOnComputer {
+		Param(
+			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] })]
+			[object]$VM,
+			[Parameter()]
+			[string]$ComputerName = $VM.ComputerName.ToLowerInvariant()
+		)
+
+		################################################
+		# prepare session
+		################################################
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		################################################
+		# get VM paths
+		################################################
+
+		# get VM hard disk drive
+		$VHDPaths = Get-VMHardDiskDrive -VM $VM | Select-Object -ExpandProperty Path
+
+		# define VM path list
+		$VMPaths = [System.Collections.Generic.List[string]]::new()
+
+		# define VM path properties
+		$VMPathProperties = 'Path', 'ConfigurationLocation', 'CheckpointFileLocation', 'SmartPagingFilePath', 'SnapshotFileLocation'
+
+		# add VM path properties to VM path list
+		ForEach ($VMPathProperty in $VMPathProperties) {
+			# get value of VM path property
+			$VMPath = $VM | Select-Object -ExpandProperty $VMPathProperty
+			# if VM path property not in VM path list and not null or empty...
+			If ($VMPath -notin $VMPaths -and -not [string]::IsNullOrEmpty($VMPath)) {
+				# ...add to list
+				$VMPaths.Add($VMPath)
+			}
+		}
+
+		################################################
+		# remove VM object
+		################################################
+
+		# declare state
+		Write-Host "$Hostname,$ComputerName - removing VM..."
+
+		# define parameters for Remove-VM
+		$RemoveVM = @{
+			VM          = $VM
+			Force       = $true
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# remove VM on computer
+		Try {
+			Remove-VM @RemoveVM
+		}
+		Catch {
+			Throw $_
+		}
+
+		# declare state
+		Write-Host "$Hostname,$ComputerName - ...VM removed"
+
+		################################################
+		# remove VM files
+		################################################
+
+		# declare state
+		Write-Host "$Hostname,$ComputerName - removing VHDs..."
+
+		# remove VM hard disk drive files
+		ForEach ($VHDPath in $VHDPaths) {
+			# update argument list
+			$InvokeCommand['ArgumentList']['Path'] = $VHDPath
+
+			# remove VHD on source computer
+			Try {
+				Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
+
+					# define parameters for Remove-Item
+					$RemoveItem = @{
+						Path        = $ArgumentList['Path']
+						Force       = $true
+						ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+					}
+
+					# remove VHD
+					Remove-Item @RemoveItem
+				}
+			}
+			Catch {
+				Throw $_
+			}
+
+			# declare state
+			Write-Host "$Hostname,$ComputerName - ...removed: $VHDPath"
+		}
+
+		################################################
+		# remove VM folders
+		################################################
+
+		# declare state
+		Write-Host "$Hostname,$ComputerName - removing VM folders..."
+
+		# remove VM path folders
+		ForEach ($VMPath in $VMPaths) {
+			# update argument list
+			$InvokeCommand['ArgumentList']['Path'] = $VMPath
+
+			# get any files in VM path
+			Try {
+				$ChildItems = Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
+
+					# define parameters for Get-ChildItem
+					$GetChildItem = @{
+						Path        = $ArgumentList['Path']
+						File        = $true
+						Force       = $true
+						Recurse     = $true
+						ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+					}
+
+					# get child items
+					Get-ChildItem @GetChildItem
+				}
+			}
+			Catch {
+				Throw $_
+			}
+
+			# if child items found...
+			If ($null -ne $ChildItems) {
+				# ...warn and return
+				Write-Warning -Message "Path is not empty: '$VMpath' on '$ComputerName'"
+				Return
+			}
+
+			# remove VHD on source computer
+			Try {
+				Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
+
+					# define parameters for Remove-Item
+					$RemoveItem = @{
+						Path        = $ArgumentList['Path']
+						Force       = $true
+						Recurse     = $true
+						ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+					}
+
+					# remove item
+					Remove-Item @RemoveItem
+				}
+			}
+			Catch {
+				Throw $_
+			}
+
+			# declare state
+			Write-Host "$Hostname,$ComputerName - ...removed: $VMPath"
+		}
+	}
+
+	Function Restore-VMOnComputer {
+		Param(
+			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] })]
+			[object]$VM,
+			[Parameter()]
+			[string]$ComputerName = $VM.ComputerName.ToLowerInvariant()
+		)
+
+		################################################
+		# get cluster name from computer name
+		################################################
+
+		# get cluster for target server
+		Try {
+			$ClusterName = Get-ClusterName -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		################################################
+		# add VM to cluster
+		################################################
+
+		# if computer is clustered...
+		If ($ClusterName) {
+			# declare state
+			Write-Host "$Hostname,$ClusterName - adding VM to cluster..."
+
+			# define paramters for Add-ClusterVirtualMachineRole
+			$AddClusterVirtualMachineRole = @{
+				Cluster     = $ClusterName
+				VMId        = $VM.Id
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# add VM to cluster by ID
+			Try {
+				$null = Add-ClusterVirtualMachineRole @AddClusterVirtualMachineRole
+			}
+			Catch {
+				Throw $_
+			}
+
+			# declare state
+			Write-Host "$Hostname,$ClusterName - ...VM clustered"
+		}
+
+		################################################
+		# restore VM start action on computer
+		################################################
+
+		# if computer is not clustered...
+		If ([string]::IsNullOrEmpty($ClusterName)) {
+			# declare state
+			Write-Host "$Hostname,$ComputerName - restoring VM start action configuration..."
+
+			# define parameters for Set-VM
+			$SetVM = @{
+				VM                   = $VM
+				AutomaticStartAction = $AutomaticStartAction
+				ErrorAction          = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# restore automatic start action
+			Try {
+				Set-VM @SetVM
+			}
+			Catch {
+				Throw $_
+			}
+
+			# declare state
+			Write-Host "$Hostname,$ComputerName - ...VM configuration restored"
+		}
+
+		################################################
+		# start VM on computer
+		################################################
+
+		# if VM was running before export...
+		If ($State -eq 'Running' -or $Restart) {
+			# declare state
+			Write-Host "$Hostname,$ComputerName - starting VM..."
+
+			# define parameters for Start-VM
+			$StartVM = @{
+				VM          = $VM
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# start VM on computer
+			Try {
+				Start-VM @StartVM
+			}
+			Catch {
+				Throw $_
+			}
+
+			# declare state
+			Write-Host "$Hostname,$ComputerName - ...VM started"
+		}
+	}
+
+	# declare state
+	Write-Host "$Hostname - checking path on destination..."
+
 	# get hashtable for InvokeCommand splat
 	Try {
 		$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
@@ -166,13 +562,22 @@ Begin {
 		Throw $_
 	}
 
-	# declare state
-	Write-Host "$Hostname - checking path on destination..."
+	# update argument list
+	$InvokeCommand['ArgumentList']['GetItem'] = @{
+		Path        = $Path
+		ErrorAction	= [System.Management.Automation.ActionPreference]::Stop
+	}
 
 	# test path on destination
 	Try {
 		$null = Invoke-Command @InvokeCommand -ScriptBlock {
-			Get-Item -Path $using:Path
+			Param($ArgumentList)
+
+			# define parameters for Get-Item
+			$GetItem = $ArgumentList['GetItem']
+
+			# get path
+			Get-Item @GetItem
 		}
 	}
 	Catch {
@@ -199,7 +604,12 @@ Begin {
 	$SmbShare = $SmbShares | Where-Object { $Path.StartsWith($_.Path, [System.StringComparison]::InvariantCultureIgnoreCase) -and -not [string]::IsNullOrEmpty($_.Path) } | Select-Object -First 1
 
 	# define share path from path parameter and SMB share
-	$SharePath = $Path.Replace($SmbShare.Path, "\\$ComputerName\$($SmbShare.Name)\")
+	Try {
+		$SharePath = $Path.Replace($SmbShare.Path, "\\$ComputerName\$($SmbShare.Name)\")
+	}
+	Catch {
+		Throw $_
+	}
 
 	# declare state
 	Write-Host "$Hostname - ...UNC path built: $SharePath"
@@ -247,7 +657,7 @@ Process {
 	################################################
 
 	# declare state
-	Write-Host "$Hostname - checking destination for VM '$Name' with Id '$Id'"
+	Write-Host "$Hostname - checking target computer for VM..."
 
 	# define parameters for Get-VM on target computer
 	$GetVM = @{
@@ -265,9 +675,10 @@ Process {
 	}
 
 	# if VM found on target server...
-	If ($TargetVM) {
+	If ($TargetVM -and $TargetVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
 		# warn and return
 		Write-Warning 'VM has already been migrated to target server'
+		$TargetVM | Format-List *
 		Return
 	}
 
@@ -308,12 +719,127 @@ Process {
 		Return
 	}
 
+	# declare state
+	Write-Host "$Hostname - ...VM not found via target computer"
+
+	################################################
+	# get source computer identity
+	################################################
+
+	# declare state
+	Write-Host "$Hostname - adding source computer to Administrators group on target computer..."
+
+	# define parameters for Get-CimInstance
+	$GetCimInstance = @{
+		ComputerName = $SourceComputerName
+		ClassName    = 'Win32_ComputerSystem'
+		Property     = 'Name', 'Domain'
+	}
+
+	# get CIM instance of source computer system
+	Try {
+		$ComputerSystem = Get-CimInstance @GetCimInstance
+	}
+	Catch {
+		Throw $_
+	}
+
+	# translate source computer UPN to NT account
+	Try {
+		$NTAccount = [System.Security.Principal.NTAccount]::new("$($ComputerSystem.Name)$@$($ComputerSystem.Domain)").Translate([System.Security.Principal.SecurityIdentifier]).Translate([System.Security.Principal.NTAccount]).Value
+	}
+	Catch {
+		Throw $_
+	}
+
+	################################################
+	# add source to Administrators group on target
+	################################################
+
+	# get hashtable for InvokeCommand splat
+	Try {
+		$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+	}
+	Catch {
+		Throw $_
+	}
+
+	# update argument list
+	$InvokeCommand['ArgumentList']['LocalGroupMember'] = @{
+		Group       = 'Administrators'
+		Member      = $NTAccount
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+	}
+
+	# check target computer administrators group for source computer
+	Try {
+		$null = Invoke-Command @InvokeCommand -ScriptBlock {
+			Param($ArgumentList)
+
+			# define parameters for Get-LocalGroupMember
+			$LocalGroupMember = $ArgumentList['LocalGroupMember']
+
+			Try {
+				# get source computer from target Administrators group
+				Get-LocalGroupMember @LocalGroupMember
+			}
+			Catch {
+				Try {
+					# add source computer to target Administrators group
+					Add-LocalGroupMember @LocalGroupMember
+				}
+				Catch {
+					Throw $_
+				}
+			}
+		}
+	}
+	Catch {
+		Throw $_
+	}
+
+	# declare state
+	Write-Host "$Hostname - ...source computer added"
+
+	################################################
+	# test path from source
+	################################################
+
+	# get hashtable for InvokeCommand splat
+	Try {
+		$InvokeCommand = Get-PSSessionInvoke -ComputerName $SourceComputerName
+	}
+	Catch {
+		Throw $_
+	}
+
+	# update argument list with parameters for Get-Item
+	$InvokeCommand['ArgumentList']['GetItem'] = @{
+		Path        = $SharePath
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+	}
+
+	# test path on source
+	Try {
+		$null = Invoke-Command @InvokeCommand -ScriptBlock {
+			Param($ArgumentList)
+
+			# define parameters for Get-Item
+			$GetItem = $ArgumentList['GetItem']
+
+			# verify share path
+			Get-Item @GetItem
+		}
+	}
+	Catch {
+		Throw $_
+	}
+
 	################################################
 	# remove VM from source cluster
 	################################################
 
 	# declare state
-	Write-Host "$Hostname - ...VM not found on destination"
 	Write-Host "$Hostname - preparing VM for offline migration..."
 
 	# get cluster for source computer
@@ -360,6 +886,9 @@ Process {
 		Catch {
 			Throw $_
 		}
+
+		# declare state
+		Write-Host "$Hostname - ...removed VM from source cluster"
 	}
 
 	################################################
@@ -393,6 +922,9 @@ Process {
 		Catch {
 			Throw $_
 		}
+
+		# declare state
+		Write-Host "$Hostname - ...shut down VM on source computer"
 	}
 
 	# define parameters for Set-VM
@@ -414,79 +946,6 @@ Process {
 	Write-Host "$Hostname - ...VM ready for offline migration"
 
 	################################################
-	# get source computer identity
-	################################################
-
-	# declare state
-	Write-Host "$Hostname - adding source computer to Administrators group on destination computer..."
-
-	# define parameters for Get-CimInstance
-	$GetCimInstance = @{
-		ComputerName = $SourceComputerName
-		ClassName    = 'Win32_ComputerSystem'
-		Property     = 'Name', 'Domain'
-	}
-
-	# get CIM instance of source computer system
-	Try {
-		$ComputerSystem = Get-CimInstance @GetCimInstance
-	}
-	Catch {
-		Throw $_
-	}
-
-	# translate source computer UPN to NT account
-	Try {
-		$NTAccount = [System.Security.Principal.NTAccount]::new("$($ComputerSystem.Name)$@$($ComputerSystem.Domain)").Translate([System.Security.Principal.SecurityIdentifier]).Translate([System.Security.Principal.NTAccount]).Value
-	}
-	Catch {
-		Throw $_
-	}
-
-	################################################
-	# add source to Administrators group on target
-	################################################
-
-	# define parameters for Get-LocalGroupMember and Add-LocalGroupMember
-	$LocalGroupMember = @{
-		Group       = 'Administrators'
-		Member      = $NTAccount
-		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-	}
-
-	# check target computer administrators group for source computer
-	Try {
-		$null = Invoke-Command @InvokeCommand -ScriptBlock {
-			Get-LocalGroupMember @using:LocalGroupMember
-		}
-	}
-	Catch {
-		# create source computer list
-		If ($null -eq $SourceComputerList) {
-			$SourceComputerList = [System.Collections.Generic.List[string]]::new()
-		}
-
-		# if source computer not in list
-		If ($NTAccount -notin $SourceComputerList) {
-			# ... add source computer to list
-			$SourceComputerList.Add($NTAccount)
-		}
-
-		# add source computer to target computer administrators group
-		Try {
-			$null = Invoke-Command @InvokeCommand -ScriptBlock {
-				Add-LocalGroupMember @using:LocalGroupMember
-			}
-		}
-		Catch {
-			Throw $_
-		}
-	}
-
-	# declare state
-	Write-Host "$Hostname - ...source computer added"
-
-	################################################
 	# export VM
 	################################################
 
@@ -497,305 +956,130 @@ Process {
 	$ExportVM = @{
 		VM          = $VM
 		Path        = $SharePath
+		Passthru    = $true
 		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 	}
 
 	# export VM
 	Try {
-		Export-VM @ExportVM
+		$OldVM = Export-VM @ExportVM
+	}
+	Catch {
+		Write-Warning -Message "VM export failed: $($_.ToString())"
+	}
+
+	# declare state
+	If ($OldVM) {
+		Write-Host "$Hostname - ...exported VM"
+	}
+
+	################################################
+	# remove source to Administrators group on target
+	################################################
+
+	# declare state
+	Write-Host "$Hostname - removing source computer from Administrators group on target computer..."
+
+	# get hashtable for InvokeCommand splat
+	Try {
+		$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
 	}
 	Catch {
 		Throw $_
 	}
 
-	# declare state
-	Write-Host "$Hostname - ...exported VM"
+	# update argument list
+	$InvokeCommand['ArgumentList']['LocalGroupMember'] = @{
+		Group       = 'Administrators'
+		Member      = $NTAccount
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+	}
 
-	################################################
-	# define paths on target computer
-	################################################
-
-	# declare state
-	Write-Host "$Hostname - importing VM..."
-
-	# define file on target computer
-	$VmcxPath = "$Name\Virtual Machines\$Id.vmcx"
-
-	# create target path
+	# remove list of source computers from target computer administrators group
 	Try {
-		$PathForImport = Invoke-Command @InvokeCommand -ScriptBlock {
-			Join-Path -Path $using:Path -ChildPath $using:VmcxPath
+		Invoke-Command @InvokeCommand -ScriptBlock {
+			Param($ArgumentList)
+
+			# define parameters for Remove-LocalGroupMember
+			$LocalGroupMember = $ArgumentList['LocalGroupMember']
+
+			# remove source from target Administrators group
+			Remove-LocalGroupMember @LocalGroupMember
 		}
 	}
 	Catch {
 		Throw $_
 	}
+
+	# declare state
+	Write-Host "$Hostname - ...source computer removed"
 
 	################################################
 	# import VM
 	################################################
 
-	# define parameters for Import-VM
-	$ImportVM = @{
-		ComputerName = $ComputerName
-		Path         = $PathForImport
-		Register     = $true
-		ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
-	}
-
 	# import VM on target computer
-	Try {
-		$NewVM = Import-VM @ImportVM
-	}
-	Catch {
-		Throw $_
-	}
-
-	# declare state
-	Write-Host "$Hostname - ...VM imported"
-
-	################################################
-	# add VM to target cluster
-	################################################
-
-	# if target computer is clustered...
-	If ($ClusterName) {
-		# declare state
-		Write-Host "$Hostname - adding VM to cluster..."
-
-		# define paramters for Add-ClusterVirtualMachineRole
-		$AddClusterVirtualMachineRole = @{
-			Cluster     = $ClusterName
-			VMId        = $NewVM.Id
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# add VM to cluster by ID
+	If ($OldVM) {
 		Try {
-			$null = Add-ClusterVirtualMachineRole @AddClusterVirtualMachineRole
+			$NewVM = Import-VMOnComputer -VM $VM -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
+	################################################
+	# restore VM
+	################################################
+
+	# if VM was imported to target cluster...
+	If ($NewVM -and $NewVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
+		# ...restore imported VM
+		Try {
+			Restore-VMOnComputer -VM $NewVM
+		}
+		Catch {
+			Throw $_
+		}
+	}
+	# if VM export or import failed...
+	Else {
+		# ...restore original VM
+		Try {
+			Restore-VMOnComputer -VM $VM
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
+	################################################
+	# remove VM
+	################################################
+
+	# if VM was imported to target cluster...
+	If ($NewVM -and $NewVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
+		# ...remove original VM
+		Try {
+			Remove-VMOnComputer -VM $VM
 		}
 		Catch {
 			Throw $_
 		}
 
-		# declare state
-		Write-Host "$Hostname - ...VM clustered"
 	}
-
-	################################################
-	# restore VM start action on target computer
-	################################################
-
-	# if target computer is not clustered...
-	If ([string]::IsNullOrEmpty($ClusterName)) {
-		# declare state
-		Write-Host "$Hostname - restoring VM start action configuration..."
-
-		# define parameters for Set-VM
-		$SetVM = @{
-			VM                   = $NewVM
-			AutomaticStartAction = $AutomaticStartAction
-			ErrorAction          = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# restore automatic start action
+	# if VM exported but import failed...
+	ElseIf ($NewVM -and $NewVM.VirtualMachineType -ne 'RealizedVirtualMachine') {
+		# ...remove exported VM from target
 		Try {
-			Set-VM @SetVM
+			Remove-VMOnComputer -VM $NewVM
 		}
 		Catch {
 			Throw $_
 		}
-
-		# declare state
-		Write-Host "$Hostname - ...VM configuration restored"
-	}
-
-	################################################
-	# start VM on target computer
-	################################################
-
-	# if VM was running on source computer...
-	If ($State -eq 'running' -or $Restart) {
-		# declare state
-		Write-Host "$Hostname - starting VM..."
-
-		# define parameters for Start-VM
-		$StartVM = @{
-			VM          = $NewVM
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# start VM on target computer
-		Try {
-			Start-VM @StartVM
-		}
-		Catch {
-			Throw $_
-		}
-
-		# declare state
-		Write-Host "$Hostname - ...VM started"
-	}
-
-	################################################
-	# get VM paths on source computer
-	################################################
-
-	# get VM hard disk drive
-	$VHDPaths = Get-VMHardDiskDrive -VM $VM | Select-Object -ExpandProperty Path
-
-	# define VM path list
-	$VMPaths = [System.Collections.Generic.List[string]]::new()
-
-	# define VM path properties
-	$VMPathProperties = 'Path', 'ConfigurationLocation', 'CheckpointFileLocation', 'SmartPagingFilePath', 'SnapshotFileLocation'
-
-	# add VM path properties to VM path list
-	ForEach ($VMPathProperty in $VMPathProperties) {
-		# get value of VM path property
-		$VMPath = $VM | Select-Object -ExpandProperty $VMPathProperty
-		# if VM path property not in VM path list and not null or empty...
-		If ($VMPath -notin $VMPaths -and -not [string]::IsNullOrEmpty($VMPath)) {
-			# ...add to list
-			$VMPaths.Add($VMPath)
-		}
-	}
-
-	################################################
-	# remove VM on source computer
-	################################################
-
-	# declare state
-	Write-Host "$Hostname - removing VM from source..."
-
-	# define parameters for Remove-VM
-	$RemoveVM = @{
-		VM          = $VM
-		Force       = $true
-		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-	}
-
-	# remove VM on local computer
-	Try {
-		Remove-VM @RemoveVM
-	}
-	Catch {
-		Throw $_
-	}
-
-	# declare state
-	Write-Host "$Hostname - ...VM removed from source"
-
-	################################################
-	# remove VM files and paths on source computer
-	################################################
-
-	# declare state
-	Write-Host "$Hostname - removing VHDs from source..."
-
-	# get hashtable for InvokeCommand splat
-	Try {
-		$SourceInvokeCommand = Get-PSSessionInvoke -ComputerName $SourceComputerName
-	}
-	Catch {
-		Throw $_
-	}
-
-	# remove VM hard disk drive files
-	ForEach ($VHDPath in $VHDPaths) {
-		# define parameters for Remove-Item
-		$RemoveItem = @{
-			Path        = $VHDPath
-			Force       = $true
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# remove VHD on source computer
-		Try {
-			Invoke-Command @SourceInvokeCommand -ScriptBlock {
-				Remove-Item @using:RemoveItem
-			}
-		}
-		Catch {
-			Throw $_
-		}
-
-		# declare state
-		Write-Host "$Hostname - ...removed: $VHDPath"
-	}
-
-	# declare state
-	Write-Host "$Hostname - removing VM folders from source..."
-
-	# remove VM path folders
-	ForEach ($VMPath in $VMPaths) {
-		# define parameters for Get-ChildItem
-		$GetChildItem = @{
-			Path        = $VMPath
-			File        = $true
-			Force       = $true
-			Recurse     = $true
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# get any files in VM path
-		Try {
-			$ChildItems = Invoke-Command @SourceInvokeCommand -ScriptBlock {
-				Get-ChildItem @using:GetChildItem
-			}
-		}
-		Catch {
-			Throw $_
-		}
-
-		# if child items found...
-		If ($null -ne $ChildItems) {
-			# ...warn and return
-			Write-Warning -Message "Path is not empty: '$VMpath'"
-			Return
-		}
-
-		# define parameters for Remove-Item
-		$RemoveItem = @{
-			Path        = $VMPath
-			Force       = $true
-			Recurse     = $true
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# remove VHD on source computer
-		Try {
-			Invoke-Command @SourceInvokeCommand -ScriptBlock {
-				Remove-Item @using:RemoveItem
-			}
-		}
-		Catch {
-			Throw $_
-		}
-
-		# declare state
-		Write-Host "$Hostname - ...removed: $VMPath"
 	}
 }
 
 End {
-	# if source computer list exists...
-	If ($null -ne $SourceComputerList) {
-		# define parameters for Remove-LocalGroupMember
-		$LocalGroupMember = @{
-			Group       = 'Administrators'
-			Member      = $SourceComputerList
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
 
-		# remove list of source computers from target computer administrators group
-		Try {
-			Invoke-Command @InvokeCommand -ScriptBlock {
-				Remove-LocalGroupMember @using:LocalGroupMember
-			}
-		}
-		Catch {
-			Throw $_
-		}
-	}
 }
