@@ -285,7 +285,7 @@ Begin {
 
 		# update argument list with parameters for Get-Item
 		$InvokeCommand['ArgumentList']['GetItem'] = @{
-			Path        = $Path
+			Path        = $SharePath
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
 
@@ -302,7 +302,7 @@ Begin {
 			}
 		}
 		Catch {
-			Write-Warning -Message "Path not accessible: $($_.ToString())"
+			Write-Warning -Message "$($_.ToString())"
 			Return
 		}
 
