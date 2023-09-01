@@ -160,6 +160,329 @@ Begin {
 		Return $ClusterName
 	}
 
+	Function Export-VMToComputer {
+		Param(
+			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] })]
+			[object]$VM,
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName,
+			[Parameter(Mandatory = $true)]
+			[string]$Path
+		)
+
+		################################################
+		# define strings
+		################################################
+
+		$Id = $VM.Id
+		$SourceComputerName = $VM.ComputerName
+
+		################################################
+		# get source computer identity
+		################################################
+
+		# declare state
+		Write-Host "$SourceComputerName - retrieving computer identity..."
+
+		# define parameters for Get-CimInstance
+		$GetCimInstance = @{
+			ComputerName = $SourceComputerName
+			ClassName    = 'Win32_ComputerSystem'
+			Property     = 'Name', 'Domain'
+		}
+
+		# get CIM instance of source computer system
+		Try {
+			$ComputerSystem = Get-CimInstance @GetCimInstance
+		}
+		Catch {
+			Throw $_
+		}
+
+		# translate source computer UPN to NT account
+		Try {
+			$NTAccount = [System.Security.Principal.NTAccount]::new("$($ComputerSystem.Name)$@$($ComputerSystem.Domain)").Translate([System.Security.Principal.SecurityIdentifier]).Translate([System.Security.Principal.NTAccount]).Value
+		}
+		Catch {
+			Throw $_
+		}
+
+		# declare state
+		Write-Host "$SourceComputerName - ...retrieved NTAccount for computer"
+
+		################################################
+		# add source to Administrators group on target
+		################################################
+
+		# declare state
+		Write-Host "$ComputerName - adding '$NTAccount' to Administrators group..."
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# update argument list
+		$InvokeCommand['ArgumentList']['LocalGroupMember'] = @{
+			Group       = 'Administrators'
+			Member      = $NTAccount
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# check target computer administrators group for source computer
+		Try {
+			$null = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+
+				# define parameters for Get-LocalGroupMember and Add-LocalGroupMember
+				$LocalGroupMember = $ArgumentList['LocalGroupMember']
+
+				# verify source computer membership
+				Try {
+					# get source computer from target Administrators group
+					Get-LocalGroupMember @LocalGroupMember
+				}
+				Catch {
+					Try {
+						# add source computer to target Administrators group
+						Add-LocalGroupMember @LocalGroupMember
+					}
+					Catch {
+						Throw $_
+					}
+				}
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# declare state
+		Write-Host "$ComputerName - ...added '$NTAccount' to Administrators group"
+
+		################################################
+		# test path from source
+		################################################
+
+		# declare state
+		Write-Host "$SourceComputerName - verifying access to UNC path..."
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $SourceComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# update argument list with parameters for Get-Item
+		$InvokeCommand['ArgumentList']['GetItem'] = @{
+			Path        = $Path
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# test path on source
+		Try {
+			$null = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+
+				# define parameters for Get-Item
+				$GetItem = $ArgumentList['GetItem']
+
+				# verify share path
+				Get-Item @GetItem
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# declare state
+		Write-Host "$SourceComputerName - ...verified access to UNC path"
+
+		################################################
+		# remove VM from source cluster
+		################################################
+
+		# declare state
+		Write-Host "$SourceComputerName - preparing VM for offline migration..."
+
+		# get source computer cluster name
+		Try {
+			$SourceClusterName = Get-ClusterName -ComputerName $SourceComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# if source computer is clustered...
+		If ($SourceClusterName) {
+			# define parameters for Get-ClusterGroup
+			$GetClusterGroup = @{
+				Cluster     = $SourceClusterName
+				VMId        = $Id
+				ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
+			}
+
+			# get cluster group for VM
+			Try {
+				$SourceClusterGroup = Get-ClusterGroup @GetClusterGroup
+			}
+			Catch {
+				Throw $_
+			}
+		}
+
+		# if source computer cluster has cluster group for VM...
+		If ($SourceClusterGroup) {
+			# define parameters for Get-ClusterGroup
+			$RemoveClusterGroup = @{
+				Cluster         = $SourceClusterName
+				VMId            = $Id
+				RemoveResources = $true
+				Force           = $true
+				ErrorAction     = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# remove cluster group for VM
+			Try {
+				Remove-ClusterGroup @RemoveClusterGroup
+			}
+			Catch {
+				Throw $_
+			}
+
+			# declare state
+			Write-Host "$SourceComputerName - ...removed VM from source cluster"
+		}
+
+		################################################
+		# prepare VM for export
+		################################################
+
+		# if VM is running...
+		If ($State -eq 'running') {
+			# check parameters
+			If ($Force) {
+				$WarningAction = [System.Management.Automation.ActionPreference]::Continue
+			}
+			Else {
+				$WarningAction = [System.Management.Automation.ActionPreference]::Inquire
+			}
+
+			# declare shut down for running VM
+			Write-Warning -Message 'VM is currently running and will be shut down for offline migration' -WarningAction $WarningAction
+
+			# define parameters for Stop-VM
+			$StopVM = @{
+				VM          = $VM
+				Force       = $true
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# stop VM before export
+			Try {
+				Stop-VM @StopVM
+			}
+			Catch {
+				Throw $_
+			}
+
+			# declare state
+			Write-Host "$SourceComputerName - ...shut down VM"
+		}
+
+		# define parameters for Set-VM
+		$SetVM = @{
+			VM                   = $VM
+			AutomaticStartAction = [Microsoft.HyperV.PowerShell.StartAction]::Nothing
+			ErrorAction          = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# set VM automatic start action
+		Try {
+			Set-VM @SetVM
+		}
+		Catch {
+			Throw $_
+		}
+
+		# declare state
+		Write-Host "$SourceComputerName - ...VM ready for offline migration"
+
+		################################################
+		# export VM
+		################################################
+
+		# declare state
+		Write-Host "$SourceComputerName - exporting VM..."
+
+		# define parameters for Export-VM
+		$ExportVM = @{
+			VM          = $VM
+			Path        = $Path
+			Passthru    = $true
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# export VM
+		Try {
+			$OldVM = Export-VM @ExportVM
+		}
+		Catch {
+			Write-Warning -Message "VM export failed: $($_.ToString())"
+		}
+
+		# declare state
+		If ($OldVM) {
+			Write-Host "$SourceComputerName - ...exported VM"
+		}
+
+		################################################
+		# remove source to Administrators group on target
+		################################################
+
+		# declare state
+		Write-Host "$ComputerName - removing '$NTAccount' from Administrators group..."
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# update argument list
+		$InvokeCommand['ArgumentList']['LocalGroupMember'] = @{
+			Group       = 'Administrators'
+			Member      = $NTAccount
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# remove list of source computers from target computer administrators group
+		Try {
+			Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+
+				# define parameters for Remove-LocalGroupMember
+				$LocalGroupMember = $ArgumentList['LocalGroupMember']
+
+				# remove source from target Administrators group
+				Remove-LocalGroupMember @LocalGroupMember
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# declare state
+		Write-Host "$ComputerName - ...removed '$NTAccount' from Administrators group"
+	}
+
 	Function Import-VMOnComputer {
 		Param(
 			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] })]
@@ -723,296 +1046,18 @@ Process {
 	Write-Host "$Hostname - ...VM not found via target computer"
 
 	################################################
-	# get source computer identity
-	################################################
-
-	# declare state
-	Write-Host "$Hostname - adding source computer to Administrators group on target computer..."
-
-	# define parameters for Get-CimInstance
-	$GetCimInstance = @{
-		ComputerName = $SourceComputerName
-		ClassName    = 'Win32_ComputerSystem'
-		Property     = 'Name', 'Domain'
-	}
-
-	# get CIM instance of source computer system
-	Try {
-		$ComputerSystem = Get-CimInstance @GetCimInstance
-	}
-	Catch {
-		Throw $_
-	}
-
-	# translate source computer UPN to NT account
-	Try {
-		$NTAccount = [System.Security.Principal.NTAccount]::new("$($ComputerSystem.Name)$@$($ComputerSystem.Domain)").Translate([System.Security.Principal.SecurityIdentifier]).Translate([System.Security.Principal.NTAccount]).Value
-	}
-	Catch {
-		Throw $_
-	}
-
-	################################################
-	# add source to Administrators group on target
-	################################################
-
-	# get hashtable for InvokeCommand splat
-	Try {
-		$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
-	}
-	Catch {
-		Throw $_
-	}
-
-	# update argument list
-	$InvokeCommand['ArgumentList']['LocalGroupMember'] = @{
-		Group       = 'Administrators'
-		Member      = $NTAccount
-		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-	}
-
-	# check target computer administrators group for source computer
-	Try {
-		$null = Invoke-Command @InvokeCommand -ScriptBlock {
-			Param($ArgumentList)
-
-			# define parameters for Get-LocalGroupMember
-			$LocalGroupMember = $ArgumentList['LocalGroupMember']
-
-			Try {
-				# get source computer from target Administrators group
-				Get-LocalGroupMember @LocalGroupMember
-			}
-			Catch {
-				Try {
-					# add source computer to target Administrators group
-					Add-LocalGroupMember @LocalGroupMember
-				}
-				Catch {
-					Throw $_
-				}
-			}
-		}
-	}
-	Catch {
-		Throw $_
-	}
-
-	# declare state
-	Write-Host "$Hostname - ...source computer added"
-
-	################################################
-	# test path from source
-	################################################
-
-	# get hashtable for InvokeCommand splat
-	Try {
-		$InvokeCommand = Get-PSSessionInvoke -ComputerName $SourceComputerName
-	}
-	Catch {
-		Throw $_
-	}
-
-	# update argument list with parameters for Get-Item
-	$InvokeCommand['ArgumentList']['GetItem'] = @{
-		Path        = $SharePath
-		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-	}
-
-	# test path on source
-	Try {
-		$null = Invoke-Command @InvokeCommand -ScriptBlock {
-			Param($ArgumentList)
-
-			# define parameters for Get-Item
-			$GetItem = $ArgumentList['GetItem']
-
-			# verify share path
-			Get-Item @GetItem
-		}
-	}
-	Catch {
-		Throw $_
-	}
-
-	################################################
-	# remove VM from source cluster
-	################################################
-
-	# declare state
-	Write-Host "$Hostname - preparing VM for offline migration..."
-
-	# get cluster for source computer
-	Try {
-		$SourceClusterName = Get-ClusterName -ComputerName $SourceComputerName
-	}
-	Catch {
-		Throw $_
-	}
-
-	# if source computer is clustered...
-	If ($SourceClusterName) {
-		# define parameters for Get-ClusterGroup
-		$GetClusterGroup = @{
-			Cluster     = $SourceClusterName
-			VMId        = $Id
-			ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
-		}
-
-		# get cluster group for VM on source cluster
-		Try {
-			$SourceClusterGroup = Get-ClusterGroup @GetClusterGroup
-		}
-		Catch {
-			Throw $_
-		}
-	}
-
-	# remove VM from source cluster
-	If ($SourceClusterGroup) {
-		# define parameters for Get-ClusterGroup
-		$RemoveClusterGroup = @{
-			Cluster         = $SourceClusterName
-			VMId            = $Id
-			RemoveResources = $true
-			Force           = $true
-			ErrorAction     = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# remove cluster group for VM on source cluster
-		Try {
-			Remove-ClusterGroup @RemoveClusterGroup
-		}
-		Catch {
-			Throw $_
-		}
-
-		# declare state
-		Write-Host "$Hostname - ...removed VM from source cluster"
-	}
-
-	################################################
-	# prepare VM for export
-	################################################
-
-	# if VM is running...
-	If ($State -eq 'running') {
-		# check parameters
-		If ($Force) {
-			$WarningAction = [System.Management.Automation.ActionPreference]::Continue
-		}
-		Else {
-			$WarningAction = [System.Management.Automation.ActionPreference]::Inquire
-		}
-
-		# declare shut down for running VM
-		Write-Warning -Message 'VM is currently running and will be shut down for offline migration' -WarningAction $WarningAction
-
-		# define parameters for Stop-VM
-		$StopVM = @{
-			VM          = $VM
-			Force       = $true
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# stop VM before export
-		Try {
-			Stop-VM @StopVM
-		}
-		Catch {
-			Throw $_
-		}
-
-		# declare state
-		Write-Host "$Hostname - ...shut down VM on source computer"
-	}
-
-	# define parameters for Set-VM
-	$SetVM = @{
-		VM                   = $VM
-		AutomaticStartAction = [Microsoft.HyperV.PowerShell.StartAction]::Nothing
-		ErrorAction          = [System.Management.Automation.ActionPreference]::Stop
-	}
-
-	# set VM automatic start action
-	Try {
-		Set-VM @SetVM
-	}
-	Catch {
-		Throw $_
-	}
-
-	# declare state
-	Write-Host "$Hostname - ...VM ready for offline migration"
-
-	################################################
 	# export VM
 	################################################
 
-	# declare state
-	Write-Host "$Hostname - exporting VM..."
-
-	# define parameters for Export-VM
-	$ExportVM = @{
-		VM          = $VM
-		Path        = $SharePath
-		Passthru    = $true
-		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-	}
-
-	# export VM
-	Try {
-		$OldVM = Export-VM @ExportVM
-	}
-	Catch {
-		Write-Warning -Message "VM export failed: $($_.ToString())"
-	}
-
-	# declare state
+	# export VM to path
 	If ($OldVM) {
-		Write-Host "$Hostname - ...exported VM"
-	}
-
-	################################################
-	# remove source to Administrators group on target
-	################################################
-
-	# declare state
-	Write-Host "$Hostname - removing source computer from Administrators group on target computer..."
-
-	# get hashtable for InvokeCommand splat
-	Try {
-		$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
-	}
-	Catch {
-		Throw $_
-	}
-
-	# update argument list
-	$InvokeCommand['ArgumentList']['LocalGroupMember'] = @{
-		Group       = 'Administrators'
-		Member      = $NTAccount
-		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-	}
-
-	# remove list of source computers from target computer administrators group
-	Try {
-		Invoke-Command @InvokeCommand -ScriptBlock {
-			Param($ArgumentList)
-
-			# define parameters for Remove-LocalGroupMember
-			$LocalGroupMember = $ArgumentList['LocalGroupMember']
-
-			# remove source from target Administrators group
-			Remove-LocalGroupMember @LocalGroupMember
+		Try {
+			$OldVM = Export-VMToComputer -VM $VM -ComputerName $ComputerName -Path $Path
+		}
+		Catch {
+			Throw $_
 		}
 	}
-	Catch {
-		Throw $_
-	}
-
-	# declare state
-	Write-Host "$Hostname - ...source computer removed"
 
 	################################################
 	# import VM
