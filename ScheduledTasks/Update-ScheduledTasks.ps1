@@ -66,12 +66,25 @@ Begin {
 	# if updating...
 	If ($Update) {
 		# append hostname to script path to define transcript path
-		$PathWithHostName = $PSCommandPath.Replace('.ps1', "_$HostName.txt")
+		$PathScriptLog = $PSCommandPath.Replace('.ps1', "_$HostName.txt")
 		# append datetime to transcript path
-		$PathWithLogStart = $PathWithHostName.Replace('.txt', "_$LogStart.txt")
+		$PathScriptLog = $PathScriptLog.Replace('.txt', "_$LogStart.txt")
+		# define ideal log path
+		$PathFolderLog = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'Logs'
+		# if ideal log path found...
+		If (Test-Path -Path $PathFolderLog -PathType Container) {
+			# use modified script path
+			$PathScriptLog = $PathScriptLog.Replace($PSScriptRoot, $PathFolderLog)
+		}
+		# if ideal log path not found...
+		Else {
+			# use original script path and folder
+			$PathScriptLog = $PSCommandPath
+			$PathFolderLog = $PSScriptRoot
+		}
 		# define parameters for Start-Transcript
 		$StartTranscript = @{
-			Path        = $PathWithLogStart
+			Path        = $PathScriptLog
 			Force       = $true
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
@@ -80,14 +93,12 @@ Begin {
 			Start-Transcript @StartTranscript
 		}
 		Catch {
-			# get script directory name
-			$PSScriptDirectory = (Get-Item -Path $PSCommandPath).DirectoryName
 			# get program data path
-			$PathOfProgramData = [System.Environment]::GetFolderPath('CommonApplicationData')
+			$PathOfAppData = [System.Environment]::GetFolderPath('CommonApplicationData')
 			# redirect transcript from script directory to programdata path
-			$PathInProgramData = $PathWithLogStart.Replace($PSScriptDirectory, $PathOfProgramData)
+			$PathInAppData = $PathScriptLog.Replace($PathFolderLog, $PathOfAppData)
 			# update parameters for Start-Transcript
-			$StartTranscript['Path'] = $PathInProgramData
+			$StartTranscript['Path'] = $PathInAppData
 			# start transcript in programdata path
 			Try {
 				Start-Transcript @StartTranscript
@@ -694,7 +705,7 @@ End {
 			}
 		}
 
-		# ...stop transcript
+		# stop transcript
 		Try {
 			Stop-Transcript
 		}
