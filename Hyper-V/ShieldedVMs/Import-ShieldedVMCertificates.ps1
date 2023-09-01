@@ -189,7 +189,7 @@ End {
 		}
 	}
 
-	# ...stop transcript
+	# stop transcript
 	Try {
 		Stop-Transcript
 	}
