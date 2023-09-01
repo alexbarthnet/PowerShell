@@ -697,7 +697,7 @@ End {
 			ForEach ($OldFile in $OldFiles) {
 				Write-Output "Removing old transcript file: $($OldFile.FullName)"
 				Try { 
-					Remove-Item -InputObject $OldFile -Force -ErrorAction Stop
+					Remove-Item -Path $OldFile.FullName -Force -ErrorAction Stop
 				}
 				Catch {
 					$_
