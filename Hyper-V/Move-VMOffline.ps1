@@ -627,6 +627,7 @@ Begin {
 		# define strings
 		################################################
 
+		$Id = $VM.Id.Guid
 		$Name = $VM.Name.ToLowerInvariant()
 		$ComputerName = $VM.ComputerName.ToLowerInvariant()
 
@@ -763,12 +764,32 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName,$Name - removing VM folders..."
+		Write-Host "$ComputerName,$Name - removing VM files..."
 
 		# remove VM path folders
 		ForEach ($VMPath in $VMPaths) {
 			# update argument list
 			$InvokeCommand['ArgumentList']['Path'] = $VMPath
+
+		}
+
+		################################################
+		# remove VM folders
+		################################################
+
+		# declare state
+		Write-Host "$ComputerName,$Name - removing VM folders..."
+
+		# remove VM path folders
+		ForEach ($VMPath in $VMPaths) {
+			# update argument list with parameters for Get-ChildItem
+			$InvokeCommand['ArgumentList']['GetChildItem'] = @{
+				Path        = $VMPath
+				File        = $true
+				Force       = $true
+				Recurse     = $true
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
 
 			# get any files in VM path
 			Try {
@@ -776,13 +797,7 @@ Begin {
 					Param($ArgumentList)
 
 					# define parameters for Get-ChildItem
-					$GetChildItem = @{
-						Path        = $ArgumentList['Path']
-						File        = $true
-						Force       = $true
-						Recurse     = $true
-						ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-					}
+					$GetChildItem = $ArgumentList['GetChildItem']
 
 					# get child items
 					Get-ChildItem @GetChildItem
@@ -793,10 +808,18 @@ Begin {
 			}
 
 			# if child items found...
-			If ($null -ne $ChildItems) {
+			If ($ChildItems | Where-Object { $_.BaseName -ne $Id }) {
 				# ...warn and return
 				Write-Warning -Message "Path is not empty: '$VMpath' on '$ComputerName'"
 				Return
+			}
+
+			# update argument list with parameters for Get-ChildItem
+			$InvokeCommand['ArgumentList']['RemoveItem'] = @{
+				Path        = $VMPath
+				Force       = $true
+				Recurse     = $true
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 			}
 
 			# remove VHD on source computer
@@ -805,12 +828,7 @@ Begin {
 					Param($ArgumentList)
 
 					# define parameters for Remove-Item
-					$RemoveItem = @{
-						Path        = $ArgumentList['Path']
-						Force       = $true
-						Recurse     = $true
-						ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-					}
+					$RemoveItem = $ArgumentList['RemoveItem']
 
 					# remove item
 					Remove-Item @RemoveItem
