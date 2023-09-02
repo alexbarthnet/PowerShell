@@ -180,7 +180,9 @@ Begin {
 		################################################
 
 		$Id = $VM.Id
-		$SourceComputerName = $VM.ComputerName
+		$Name = $VM.Name.ToLowerInvariant()
+		$SourceComputerName = $VM.ComputerName.ToLowerInvariant()
+		$TargetComputerName = $ComputerName.ToLowerInvariant()
 
 		################################################
 		# get source computer identity
@@ -220,11 +222,11 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName - adding '$NTAccount' to Administrators group..."
+		Write-Host "$TargetComputerName - adding '$NTAccount' to Administrators group..."
 
 		# get hashtable for InvokeCommand splat
 		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $TargetComputerName
 		}
 		Catch {
 			Throw $_
@@ -266,7 +268,7 @@ Begin {
 		}
 
 		# declare state
-		Write-Host "$ComputerName - ...added '$NTAccount' to Administrators group"
+		Write-Host "$TargetComputerName - ...added '$NTAccount' to Administrators group"
 
 		################################################
 		# test path from source
@@ -285,7 +287,7 @@ Begin {
 
 		# update argument list with parameters for Get-Item
 		$InvokeCommand['ArgumentList']['GetItem'] = @{
-			Path        = $SharePath
+			Path        = $Path
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
 
@@ -314,7 +316,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$SourceComputerName - preparing VM for offline migration..."
+		Write-Host "$SourceComputerName,$Name - preparing VM for offline migration..."
 
 		# get source computer cluster name
 		Try {
@@ -362,7 +364,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$SourceComputerName - ...removed VM from source cluster"
+			Write-Host "$SourceComputerName,$Name - ...removed VM from source cluster"
 		}
 
 		################################################
@@ -398,7 +400,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$SourceComputerName - ...shut down VM"
+			Write-Host "$SourceComputerName,$Name - ...shut down VM"
 		}
 
 		# define parameters for Set-VM
@@ -417,14 +419,14 @@ Begin {
 		}
 
 		# declare state
-		Write-Host "$SourceComputerName - ...VM ready for offline migration"
+		Write-Host "$SourceComputerName,$Name - ...VM ready for offline migration"
 
 		################################################
 		# export VM
 		################################################
 
 		# declare state
-		Write-Host "$SourceComputerName - exporting VM..."
+		Write-Host "$SourceComputerName,$Name - exporting VM..."
 
 		# define parameters for Export-VM
 		$ExportVM = @{
@@ -444,7 +446,7 @@ Begin {
 
 		# declare state
 		If ($ExportedVM) {
-			Write-Host "$SourceComputerName - ...exported VM"
+			Write-Host "$SourceComputerName,$Name - ...exported VM"
 		}
 
 		################################################
@@ -452,11 +454,11 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName - removing '$NTAccount' from Administrators group..."
+		Write-Host "$TargetComputerName - removing '$NTAccount' from Administrators group..."
 
 		# get hashtable for InvokeCommand splat
 		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $TargetComputerName
 		}
 		Catch {
 			Throw $_
@@ -486,7 +488,7 @@ Begin {
 		}
 
 		# declare state
-		Write-Host "$ComputerName - ...removed '$NTAccount' from Administrators group"
+		Write-Host "$TargetComputerName - ...removed '$NTAccount' from Administrators group"
 
 		# return objects
 		If ($ExportedVM) {
@@ -505,7 +507,6 @@ Begin {
 			[string]$ComputerName,
 			[Parameter(Mandatory = $true)]
 			[string]$Path
-
 		)
 
 		################################################
@@ -515,6 +516,7 @@ Begin {
 		$Id = $VM.Id
 		$Name = $VM.Name.ToLowerInvariant()
 		$Vmcx = "$Name\Virtual Machines\$Id.vmcx"
+		$ComputerName = $ComputerName.ToLowerInvariant()
 
 		################################################
 		# check paths on target computer
@@ -618,10 +620,15 @@ Begin {
 	Function Remove-VMOnComputer {
 		Param(
 			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] })]
-			[object]$VM,
-			[Parameter()]
-			[string]$ComputerName = $VM.ComputerName.ToLowerInvariant()
+			[object]$VM
 		)
+
+		################################################
+		# define strings
+		################################################
+
+		$Name = $VM.Name.ToLowerInvariant()
+		$ComputerName = $VM.ComputerName.ToLowerInvariant()
 
 		################################################
 		# prepare session
@@ -726,8 +733,8 @@ Begin {
 						$Counter = [int32]1
 					}
 
-					# sleep and re-test VHD
-					While ($Counter -lt 7 -and -not $TestPath) {
+					# while VHD still exist and counter lesss than 7...
+					While ($TestPath -and $Counter -lt 7) {
 						# increment counter
 						$Counter++
 						# sleep
@@ -822,9 +829,16 @@ Begin {
 		Param(
 			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] })]
 			[object]$VM,
-			[Parameter()]
-			[string]$ComputerName = $VM.ComputerName.ToLowerInvariant()
+			[Parameter()][ValidateScript({ $_ -in [Microsoft.HyperV.PowerShell.StartAction].GetEnumValues() })]
+			[string]$AutomaticStartAction = [Microsoft.HyperV.PowerShell.StartAction]::StartIfRunning
 		)
+
+		################################################
+		# define strings
+		################################################
+
+		$Name = $VM.Name.ToLowerInvariant()
+		$ComputerName = $VM.ComputerName.ToLowerInvariant()
 
 		################################################
 		# get cluster name from computer name
@@ -845,7 +859,7 @@ Begin {
 		# if computer is clustered...
 		If ($ClusterName) {
 			# declare state
-			Write-Host "$Hostname,$ClusterName - adding VM to cluster..."
+			Write-Host "$ComputerName,$ClusterName - adding VM to cluster..."
 
 			# define paramters for Add-ClusterVirtualMachineRole
 			$AddClusterVirtualMachineRole = @{
@@ -863,7 +877,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$Hostname,$ClusterName - ...VM clustered"
+			Write-Host "$ComputerName,$ClusterName - ...VM clustered"
 		}
 
 		################################################
@@ -873,7 +887,7 @@ Begin {
 		# if computer is not clustered...
 		If ([string]::IsNullOrEmpty($ClusterName)) {
 			# declare state
-			Write-Host "$Hostname,$ComputerName - restoring VM start action configuration..."
+			Write-Host "$ComputerName,$Name - restoring VM start action configuration..."
 
 			# define parameters for Set-VM
 			$SetVM = @{
@@ -891,7 +905,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$Hostname,$ComputerName - ...VM configuration restored"
+			Write-Host "$ComputerName,$Name - ...VM configuration restored"
 		}
 
 		################################################
@@ -901,7 +915,7 @@ Begin {
 		# if VM was running before export...
 		If ($State -eq 'Running' -or $Restart) {
 			# declare state
-			Write-Host "$Hostname,$ComputerName - starting VM..."
+			Write-Host "$ComputerName,$Name - starting VM..."
 
 			# define parameters for Start-VM
 			$StartVM = @{
@@ -918,7 +932,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$Hostname,$ComputerName - ...VM started"
+			Write-Host "$ComputerName,$Name - ...VM started"
 		}
 	}
 
@@ -1104,7 +1118,7 @@ Process {
 
 	# export VM to path
 	Try {
-		$ExportedVM = Export-VMToComputer -VM $VM -ComputerName $ComputerName -Path $Path
+		$ExportedVM = Export-VMToComputer -VM $VM -ComputerName $ComputerName -Path $SharePath
 	}
 	Catch {
 		Throw $_
@@ -1117,7 +1131,7 @@ Process {
 	# import VM on target computer
 	If ($ExportedVM) {
 		Try {
-			$ImportedVM = Import-VMOnComputer -VM $VM -ComputerName $ComputerName
+			$ImportedVM = Import-VMOnComputer -VM $VM -ComputerName $ComputerName -Path $Path
 		}
 		Catch {
 			Throw $_
