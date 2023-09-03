@@ -881,9 +881,9 @@ Begin {
 
 			# define paramters for Add-ClusterVirtualMachineRole
 			$AddClusterVirtualMachineRole = @{
-				Cluster     = $ClusterName
-				VMId        = $VM.Id
-				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				Cluster        = $ClusterName
+				VirtualMachine = $Name
+				ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
 			}
 
 			# add VM to cluster by ID
