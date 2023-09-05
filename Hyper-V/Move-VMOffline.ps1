@@ -11,6 +11,9 @@ param (
 	# path on target computer
 	[Parameter(Mandatory = $true)]
 	[string]$Path,
+	# name of VM switch on target computer
+	[Parameter()]
+	[string]$SwitchName,
 	# computer name of source computer
 	[Parameter()]
 	[string]$SourceComputerName,
@@ -20,6 +23,12 @@ param (
 	# start stopped VM after migration
 	[Parameter()]
 	[switch]$Restart,
+	# skip VM version upgrade
+	[Parameter()]
+	[switch]$SkipVersionUpgade,
+	# string for filtering name of VM switch on target computer
+	[Parameter(DontShow)]
+	[string]$SwitchNameHint = 'compute',
 	# hostname of local computer
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
@@ -544,9 +553,37 @@ Begin {
 					Path      = $ArgumentList['Path']
 					ChildPath = $ArgumentList['Vmcx']
 				}
+
 				# get full path to VMCX file
 				Join-Path @JoinPath
 			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		################################################
+		# get target computer objects
+		################################################
+
+		# define parameters for Get-VMSwitch
+		$GetVMSwitch = @{
+			ComputerName = $ComputerName
+			SwitchType   = [Microsoft.HyperV.PowerShell.VMSwitchType]::External
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# get external VM switches
+		Try {
+			$VMSwitch = Get-VMSwitch @GetVMSwitch 
+		}
+		Catch {
+			Throw $_
+		}
+
+		# get external VM switch names
+		Try {
+			$SwitchNames = $VMSwitch | Select-Object -ExpandProperty Name
 		}
 		Catch {
 			Throw $_
@@ -574,13 +611,133 @@ Begin {
 			Throw $_
 		}
 
+		################################################
+		# address VM incompatibility with target
+		################################################
+
 		# process each incompatibility
 		ForEach ($Incompatibility in $CompatibilityReport.Incompatibilities) {
-			Write-Warning -Message "Target computer reported an incompatibility: '$($Incompatibility.Message)'"
+			switch ($Incompatibility.MessageID) {
+				# target does not have VM switch references in VM configuration
+				33012 {
+					# get VM network adapter from report
+					$VMNetworkAdapter = $Incompatibility.Source
+
+					# get external VM switches
+					If ($null -eq $VMSwitch) {
+						# define parameters for Get-VMSwitch
+						$GetVMSwitch = @{
+							ComputerName = $ComputerName
+							SwitchType   = [Microsoft.HyperV.PowerShell.VMSwitchType]::External
+							ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+						}
+
+						# get external VM switches
+						Try {
+							$VMSwitch = Get-VMSwitch @GetVMSwitch 
+						}
+						Catch {
+							Throw $_
+						}
+
+						# get external VM switch names
+						Try {
+							$SwitchNames = $VMSwitch | Select-Object -ExpandProperty Name
+						}
+						Catch {
+							Throw $_
+						}
+					}
+
+					# if switchname parameter not found in external VM switch names...
+					If ( $SwitchName -notin $SwitchNames ) {
+						# ...clear SwitchName
+						$null = $SwitchName
+					}
+
+					# if switch name not provided or forced to null...
+					If ([string]::IsNullOrEmpty($SwitchName)) {
+						# switch on count of switchnames
+						switch ($SwitchNames.Count) {
+							# no external switches found
+							0 {
+								Write-Warning -Message "No external switches found on target server. VM network adapter '$($VMNetworkAdapter.Name)' will not be connected after import." -WarningAction Inquire
+								$SwitchName = $null
+							}
+							# one external switch found
+							1 {
+								Write-Warning -Message "VM network adapter '$($VMNetworkAdapter.Name)' will be connected to VM switch '$($SwitchNames)'" -WarningAction Continue
+								$SwitchName = $SwitchNames
+							}
+							# multiple external switches found
+							Default {
+								# get external "compute" switches by name
+								$ComputeSwitchNames = $SwitchNames | Where-Object { $_.Contains($SwitchNameHint) }
+								switch ($ComputeSwitchNames.Count) {
+									# no external switches with compute in the name found
+									0 {
+										# sort external switches by name and select first switch
+										$SwitchName = $SwitchNames | Sort-Object | Select-Object -First 1
+										Write-Warning -Message "VM network adapter '$($VMNetworkAdapter.Name)' will be connected to first available external switch: '$($SwitchName)'" -WarningAction Continue
+										$SwitchName = $ComputeSwitchNames
+									}
+									# one external switch found
+									1 {
+										$SwitchName = $ComputeSwitchNames
+										Write-Warning -Message "VM network adapter '$($VMNetworkAdapter.Name)' will be connected to the located external 'compute' switch: '$($SwitchName)'" -WarningAction Continue
+									}
+									Default {
+										# sort external "compute" switches by name and select first switch
+										$SwitchName = $ComputeSwitchNames | Sort-Object | Select-Object -First 1
+										Write-Warning -Message "VM network adapter '$($VMNetworkAdapter.Name)' will be connected to first available external 'compute' switch '$($SwitchName)'" -WarningAction Continue
+									}
+								}
+							}
+						}
+						
+						# if multiple external switches found...
+						If ($SwitchName.Count -gt 1) {
+							# if one switch name contains compute...
+							If (($SwitchName | Where-Object { $_.Contains('compute') }).Count -eq 1) {
+								$SwitchName = $SwitchName.Contains('compute')
+
+							}
+						}
+					}
+
+					# if switch name is null...
+					If ([string]::IsNullOrEmpty($SwitchName)) {
+						# ...disconnect VM network adapter
+						Try {
+							$Incompatibility.Source | Disconnect-VMNetworkAdapter
+						}
+						Catch {
+							Write-Warning -Message 'Could not disconnect VM network adapter to address VM switch incompatibility'
+							Throw $_
+						}
+					}
+					# if switch name is not null...
+					Else {
+						# ...reconnect VM network adapter to new switch
+						Try {
+							$Incompatibility.Source | Disconnect-VMNetworkAdapter -Passthru | Connect-VMNetworkAdapter -SwitchName $SwitchName
+						}
+						Catch {
+							Write-Warning -Message 'Could not reconnect VM network adapter to address VM switch incompatibility'
+							Throw $_
+						}
+					}
+				}
+				# target has an incompatibility with imported VM not addressed above
+				Default {
+					$CannotImport = $true
+					Write-Warning -Message "Target computer reported an unhandled incompatibility: '$($Incompatibility.Message)'"
+				}
+			}
 		}
 
 		# return
-		If ($CompatibilityReport.Incompatibilities.Count -gt 0) {
+		If ($CannotImport) {
 			Return $CompatibilityReport.VM
 		}
 
@@ -611,6 +768,64 @@ Begin {
 		# declare state
 		If ($ImportedVM) {
 			Write-Host "$ComputerName,$Name - ...imported VM"
+		}
+
+		################################################
+		# update VM version
+		################################################
+
+		# if VM version upgrade skip requested...
+		If ($SkipVersionUpgade) {
+			# ...return VM before version upgrade
+			Return $ImportedVM
+		}
+
+		# define parameters for Get-VMHost
+		$GetVMHost = @{
+			ComputerName = $ComputerName
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# get VM host
+		Try {
+			$VMHost = Get-VMHost @GetVMHost
+		}
+		Catch {
+			Throw $_
+		}
+
+		# get VM host highest supported VM version
+		Try {
+			$HighestSupportedVmVersion = $VMHost.SupportedVmVersions | ForEach-Object { [decimal]$_ } | Sort-Object | Select-Object -Last 1
+		}
+		Catch {
+			Throw $_
+		}
+
+		# if VM version is less than highest supported VM version...
+		If ($ImportedVM.Version -lt $HighestSupportedVmVersion) {
+			# declare state
+			Write-Host "$ComputerName,$Name - updating VM version from: $($ImportedVM.Version)"
+
+			# define required parameters for Update-VMVersion
+			$UpdateVMVersion = @{
+				VM          = $ImportedVM
+				Passthru    = $true
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# update VM version
+			Try {
+				$ImportedVM = Update-VMVersion @UpdateVMVersion
+			}
+			Catch {
+				Write-Warning -Message "Failed to update VM version: $($_.ToString())"
+			}
+
+			# declare state
+			If ($ImportedVM.Version -eq $HighestSupportedVmVersion) {
+				Write-Host "$ComputerName,$Name - ...updated VM version: $($ImportedVM.Version)"
+			}
 		}
 
 		# return VM
