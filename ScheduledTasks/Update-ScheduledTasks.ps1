@@ -191,7 +191,7 @@ Begin {
 			# if hashes match...
 			If ($TargetHash -eq $SourceHash) {
 				# report and return
-				Write-Output "Verified existing module: $($TargetModule.BaseName)"
+				Write-Output "Verified module: $($TargetModule.BaseName)"
 				Return
 			}
 			# if hashes do not match...
@@ -213,6 +213,7 @@ Begin {
 		If ($null -eq $TargetModule) {
 			Try {
 				$null = Copy-Item -Path $SourceModule.FullName -Destination $TargetFolder.FullName
+				Write-Output "Installed module: $($TargetModule.BaseName)"
 			}
 			Catch {
 				Write-Output "`nERROR: could not copy module: '$($TargetModule.FullName)'"
