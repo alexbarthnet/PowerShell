@@ -384,20 +384,16 @@ Function Show-CmsCredentialSecret {
 		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData')
 	)
 
+	# define identity for regex
+	If ([string]::IsNullOrEmpty($Identity)) { $Identity = '\w+' }
+
 	# define strings
 	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_').ToLowerInvariant()
 	$cms_date_regex = '[0-9TZ]+'
-	If ([string]::IsNullOrEmpty($Identity)) {
-		$cms_cert_regex = ("CN=$Hostname", '\w+', $cms_date_regex) -join '-'
-		$cms_file_regex = ($Prefix, $Hostname, '\w+', $cms_date_regex) -join '_'
-	}
-	Else {
-		$cms_cert_regex = ("CN=$Hostname", $Identity, $cms_date_regex) -join '-'
-		$cms_file_regex = ($Prefix, $Hostname, $Identity, $cms_date_regex) -join '_'
-	}
+	$cms_name_regex = ($Hostname, $Identity, $cms_date_regex) -join '-'
 
 	# display certificates
-	$cms_cert_current = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_cert_regex }
+	$cms_cert_current = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_name_regex }
 	$cms_cert_current | ForEach-Object {
 		Write-Host "Found CMS certificate: '$($_.Subject)'"
 	}
@@ -409,7 +405,7 @@ Function Show-CmsCredentialSecret {
 	}
 
 	# display credential files
-	$cms_file_current = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $cms_file_regex }
+	$cms_file_current = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $cms_name_regex }
 	$cms_file_current | ForEach-Object {
 		Write-Host "Found CMS credential: '$($_.FullName)'"
 	}
@@ -698,48 +694,60 @@ Function Protect-CmsCredentials {
 			}
 		}
 		Else {
+			# define functions for remote computer
+			$MakeCertFunction = "function New-CmsCredentialCertificate {${function:New-CmsCredentialCertificate}}"
+			$ProtectFunction = "function Protect-CmsCredentialSecret {${function:Protect-CmsCredentialSecret}}"
+			$RemoveFunction = "function Remove-CmsCredentialSecret {${function:Remove-CmsCredentialSecret}}"
 			# protect credentials on remote computer
 			Try {
 				Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
-					# create objects in session
-					$ProtectParameters = $using:ProtectParameters
-					$ModuleFunctions = $using:ModuleFunctions
-					$ModuleAliases = $using:ModuleAliases
-					$CmsComputer = $using:CmsComputer
+					# import functions on remote computer
+					. ([ScriptBlock]::Create($using:MakeCertFunction))
+					. ([ScriptBlock]::Create($using:ProtectFunction))
+					. ([ScriptBlock]::Create($using:RemoveFunction))
 
-					# load functions of local modules in remote session
-					ForEach ($ModuleFunction in $ModuleFunctions.Keys) {
-						Try {
-							. ([ScriptBlock]::Create("function $ModuleFunction {$ModuleFunctions[$ModuleFunction]}"))
-						}
-						Catch {
-							Write-Host "ERROR: could not define function '$ModuleFunction' on '$CmsComputer'"
-							Return
-						}
-					}
+					# call functions on remote computer
+					Protect-CmsCredentialSecret @using:ProtectParameters
 
-					# load aliases of local modules in remote session
-					ForEach ($ModuleAlias in $ModuleAliases.Keys) {
-						Try {
-							New-Alias -Name $ModuleAlias -Value $ModuleAliases[$ModuleAlias]
-						}
-						Catch {
-							Write-Host "ERROR: could not define alias '$ModuleAlias' on '$CmsComputer'"
-							Return
-						}
-					}
+					# # create objects in session
+					# $ProtectParameters = $using:ProtectParameters
+					# $ModuleFunctions = $using:ModuleFunctions
+					# $ModuleAliases = $using:ModuleAliases
+					# $CmsComputer = $using:CmsComputer
 
-					# run commands in remote session
-					Try {
-						Protect-CmsCredentialSecret @using:ProtectParameters
-					}
-					Catch {
-						Write-Error "could not protect credentials on '$CmsComputer'"
-					}
+					# # load functions of local modules in remote session
+					# ForEach ($ModuleFunction in $ModuleFunctions.Keys) {
+					# 	Try {
+					# 		. ([ScriptBlock]::Create("function $ModuleFunction {$ModuleFunctions[$ModuleFunction]}"))
+					# 	}
+					# 	Catch {
+					# 		Write-Host "ERROR: could not define function '$ModuleFunction' on '$CmsComputer'"
+					# 		Return
+					# 	}
+					# }
+
+					# # load aliases of local modules in remote session
+					# ForEach ($ModuleAlias in $ModuleAliases.Keys) {
+					# 	Try {
+					# 		New-Alias -Name $ModuleAlias -Value $ModuleAliases[$ModuleAlias]
+					# 	}
+					# 	Catch {
+					# 		Write-Host "ERROR: could not define alias '$ModuleAlias' on '$CmsComputer'"
+					# 		Return
+					# 	}
+					# }
+
+					# # run commands in remote session
+					# Try {
+					# 	Protect-CmsCredentialSecret @using:ProtectParameters
+					# }
+					# Catch {
+					# 	Write-Error "could not protect credentials on '$CmsComputer': $($_.ToString())"
+					# }
 				}
 			}
 			Catch {
-				Write-Error "could not connect to '$CmsComputer'"
+				Write-Error "could not protect credentials on '$CmsComputer'"
 			}
 		}
 	}
@@ -861,11 +869,14 @@ Function Remove-CmsCredentials {
 			}
 		}
 		Else {
-			# remove credentials on remote computer
+			# define functions for remote computer
 			$RemoveFunction = "function Remove-CmsCredentialSecret {${function:Remove-CmsCredentialSecret}}"
+			# remove credentials on remote computer
 			Try {
 				Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
+					# import functions on remote computer
 					. ([ScriptBlock]::Create($using:RemoveFunction))
+					# call functions on remote computer
 					Remove-CmsCredentialSecret @using:RemoveParameters
 				}
 			}
