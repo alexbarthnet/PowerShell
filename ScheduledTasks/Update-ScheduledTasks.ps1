@@ -45,6 +45,9 @@ Param(
 	# scheduled task parameter - principal
 	[Parameter(ParameterSetName = 'Add')][ValidateSet('Highest', 'Limited')]
 	[string]$RunLevel = 'Highest',
+	# scheduled task parameter - modules
+	[Parameter(ParameterSetName = 'Add')]
+	[string[]]$Modules,
 	# path to JSON configuration file
 	[Parameter(Mandatory = $True)]
 	[string]$Json,
@@ -105,6 +108,115 @@ Begin {
 			}
 			Catch {
 				Throw $_
+			}
+		}
+	}
+
+	Function Install-ModuleFromJson {
+		[CmdletBinding()]
+		Param(
+			[string]$Path
+		)
+
+		# get source module file
+		Try {
+			$SourceModule = Get-Item -Path $Path
+		}
+		Catch {
+			Write-Output "`nERROR: could not find source module file: '$Path'"
+			Return $_
+		}
+
+		# build PowerShell module path
+		Try {
+			$ModulePath = Join-Path -Path ([System.Environment]::GetFolderPath('ProgramFiles')) -ChildPath 'WindowsPowerShell\Modules'
+		}
+		Catch {
+			Write-Output "`nERROR: could not build PowerShell module path"
+			Return $_
+		}
+
+		# build individual module path
+		Try {
+			$TargetPath = Join-Path -Path $ModulePath -ChildPath $SourceModule.BaseName
+		}
+		Catch {
+			Write-Output "`nERROR: could not build individual module path"
+			Return $_
+		}
+
+		# get target module folder
+		Try {
+			$TargetFolder = Get-Item -Path $TargetPath
+		}
+		Catch {
+			# create target module folder
+			Try {
+				$TargetFolder = New-Item -Path $TargetPath -ItemType Directory
+			}
+			Catch {
+				Write-Output "`nERROR: could not create individual module path"
+				Return $_
+			}
+		}
+
+		# get target module path
+		Try {
+			$TargetModule = Get-ChildItem -Path $TargetFolder | Where-Object { $_.BaseName -eq $SourceModule.BaseName -and $_.Extension -eq '.psm1' }
+		}
+		Catch {
+			Write-Output "`nERROR: could not find module folder: '$TargetPath'"
+			Return $_
+		}
+
+		# if target module found...
+		If ($TargetModule) {
+			# get source module hash
+			Try {
+				$SourceHash = Get-FileHash -Path $SourceModule.FullName | Select-Object -ExpandProperty Hash
+			}
+			Catch {
+				Write-Output "`nERROR: could not get hash of source module: '$($SourceModule.FullName)'"
+				Return $_
+			}
+			# get target module hash
+			Try {
+				$TargetHash = Get-FileHash -Path $TargetModule.FullName | Select-Object -ExpandProperty Hash
+			}
+			Catch {
+				Write-Output "`nERROR: could not get hash of target module: '$($TargetModule.FullName)'"
+				Return $_
+			}
+
+			# if hashes match...
+			If ($TargetHash -eq $SourceHash) {
+				# report and return
+				Write-Output "Verified existing module: $($TargetModule.BaseName)"
+				Return
+			}
+			# if hashes do not match...
+			Else {
+				# remove target module
+				Try {
+					$TargetModule | Remove-Item -Force
+				}
+				Catch {
+					Write-Output "`nERROR: could not remove old module: '$($TargetModule.FullName)'"
+					Return $_
+				}
+				# set target module to $null
+				$TargetModule = $null
+			}
+		}
+
+		# if target module not found...
+		If ($null -eq $TargetModule) {
+			Try {
+				$null = Copy-Item -Path $SourceModule.FullName -Destination $TargetFolder.FullName
+			}
+			Catch {
+				Write-Output "`nERROR: could not copy module: '$($TargetModule.FullName)'"
+				Return $_
 			}
 		}
 	}
@@ -451,6 +563,11 @@ Process {
 					$json_hashtable['RunLevel'] = $RunLevel
 				}
 
+				# add Modules if provided
+				If ($null -ne $Modules) {
+					$json_hashtable['Modules'] = $Modules
+				}
+
 				# add current time as FileDateTimeUniversal
 				$json_hashtable['Updated'] = $LogStart
 
@@ -629,6 +746,20 @@ Process {
 						}
 						Catch {
 							Return $_
+						}
+
+						# if Modules defined in JSON...
+						If ($null -ne $JsonDatum.Modules) {
+							# process each module
+							ForEach ($Module in $JsonDatum.Modules) {
+								# install module
+								Try {
+									Install-ModuleFromJson -Path $Module
+								}
+								Catch {
+									Return $_
+								}
+							}
 						}
 					}
 				}
