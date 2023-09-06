@@ -108,7 +108,7 @@ Function New-CmsCredentialCertificate {
 	$cms_date_tostring = $cms_date.ToUniversalTime().ToString('yyyyMMddTHHmmssffffZ')
 
 	# define certificate subject
-	$cms_subject = "CN=$($Hostname, $Identity, $cms_date_tostring -join '-')"
+	$cms_subject = "CN=$($Hostname.ToLowerInvariant(), $Identity.ToLowerInvariant(), $cms_date_tostring -join '-')"
 
 	# define certificate values
 	$SelfSignedCertificate = @{
@@ -185,7 +185,7 @@ Function Protect-CmsCredentialSecret {
 	# define required objects
 	$cms_cert = $null
 	$cms_make = $true
-	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_')
+	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_').ToLowerInvariant()
 
 	# verify cms folder
 	Write-Host "Checking CMS directory: $cms_path"
@@ -312,11 +312,16 @@ Function Remove-CmsCredentialSecret {
 	)
 
 	# define strings
-	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_')
-	$cms_name_regex = '[0-9A-Za-z]+'
+	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_').ToLowerInvariant()
 	$cms_date_regex = '[0-9TZ]+'
-	$cms_cert_regex = ("CN=$Hostname", $cms_name_regex, $cms_date_regex) -join '-'
-	$cms_file_regex = ($Prefix, $Hostname, $cms_name_regex, $cms_date_regex) -join '_'
+	If ([string]::IsNullOrEmpty($Identity)) {
+		$cms_cert_regex = ("CN=$Hostname", '\w+', $cms_date_regex) -join '-'
+		$cms_file_regex = ($Prefix, $Hostname, '\w+', $cms_date_regex) -join '_'
+	}
+	Else {
+		$cms_cert_regex = ("CN=$Hostname", $Identity, $cms_date_regex) -join '-'
+		$cms_file_regex = ($Prefix, $Hostname, $Identity, $cms_date_regex) -join '_'
+	}
 
 	# remove certificates
 	$cms_cert_old = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_cert_regex } | Sort-Object -Property 'NotBefore' | Select-Object -SkipLast $SkipLast
@@ -380,16 +385,15 @@ Function Show-CmsCredentialSecret {
 	)
 
 	# define strings
-	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_')
-	$cms_name_regex = '[0-9A-Za-z]+'
+	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_').ToLowerInvariant()
 	$cms_date_regex = '[0-9TZ]+'
 	If ([string]::IsNullOrEmpty($Identity)) {
 		$cms_cert_regex = ("CN=$Hostname", '\w+', $cms_date_regex) -join '-'
 		$cms_file_regex = ($Prefix, $Hostname, '\w+', $cms_date_regex) -join '_'
 	}
 	Else {
-		$cms_cert_regex = ("CN=$Hostname", $cms_name_regex, $cms_date_regex) -join '-'
-		$cms_file_regex = ($Prefix, $Hostname, $cms_name_regex, $cms_date_regex) -join '_'
+		$cms_cert_regex = ("CN=$Hostname", $Identity, $cms_date_regex) -join '-'
+		$cms_file_regex = ($Prefix, $Hostname, $Identity, $cms_date_regex) -join '_'
 	}
 
 	# display certificates
@@ -698,6 +702,7 @@ Function Protect-CmsCredentials {
 			Try {
 				Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
 					# create objects in session
+					$ProtectParameters = $using:ProtectParameters
 					$ModuleFunctions = $using:ModuleFunctions
 					$ModuleAliases = $using:ModuleAliases
 					$CmsComputer = $using:CmsComputer
@@ -1060,7 +1065,7 @@ Function Unprotect-CmsCredentials {
 	)
 
 	# define required strings
-	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_')
+	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_').ToLowerInvariant()
 
 	# verify cms folder
 	If (Test-Path -Path $cms_path) {
@@ -1563,6 +1568,7 @@ Function Revoke-CmsCredentialAccess {
 
 # define functions to export
 $functions_to_export = @()
+$functions_to_export += 'New-CmsCredentialCertificate'
 $functions_to_export += 'Protect-CmsCredentialSecret'
 $functions_to_export += 'Remove-CmsCredentialSecret'
 $functions_to_export += 'Show-CmsCredentialSecret'
