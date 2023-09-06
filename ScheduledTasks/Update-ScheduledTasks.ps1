@@ -147,7 +147,7 @@ Begin {
 
 		# get target module folder
 		Try {
-			$TargetFolder = Get-Item -Path $TargetPath
+			$TargetFolder = Get-Item -Path $TargetPath -ErrorAction Stop
 		}
 		Catch {
 			# create target module folder
@@ -191,7 +191,7 @@ Begin {
 			# if hashes match...
 			If ($TargetHash -eq $SourceHash) {
 				# report and return
-				Write-Output "Verified module: $($TargetModule.BaseName)"
+				Write-Output "Verified module '$($TargetModule.BaseName)' at '$($TargetModule.FullName)'"
 				Return
 			}
 			# if hashes do not match...
@@ -212,8 +212,8 @@ Begin {
 		# if target module not found...
 		If ($null -eq $TargetModule) {
 			Try {
-				$null = Copy-Item -Path $SourceModule.FullName -Destination $TargetFolder.FullName
-				Write-Output "Installed module: $($TargetModule.BaseName)"
+				$TargetModule = Copy-Item -Path $SourceModule.FullName -Destination $TargetFolder.FullName -PassThru
+				Write-Output "Installed module '$($TargetModule.BaseName)' to '$($TargetModule.FullName)'"
 			}
 			Catch {
 				Write-Output "`nERROR: could not copy module: '$($TargetModule.FullName)'"
