@@ -325,6 +325,12 @@ Function Remove-CmsCredentialSecret {
 		$_ | Remove-Item -Force
 	}
 
+	# test credential files path
+	If (-not (Test-Path -Path $cms_path -PathType Container)) {
+		Write-Host "CMS credential folder not found: '$cms_path'"
+		Return
+	}
+
 	# remove credential files
 	$cms_file_old = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $cms_file_regex } | Sort-Object -Property 'BaseName' | Select-Object -SkipLast $SkipLast
 	$cms_file_old | ForEach-Object {
@@ -390,6 +396,12 @@ Function Show-CmsCredentialSecret {
 	$cms_cert_current = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_cert_regex }
 	$cms_cert_current | ForEach-Object {
 		Write-Host "Found CMS certificate: '$($_.Subject)'"
+	}
+
+	# test credential files path
+	If (-not (Test-Path -Path $cms_path -PathType Container)) {
+		Write-Host "CMS credential folder not found: '$cms_path'"
+		Return
 	}
 
 	# display credential files
@@ -672,7 +684,7 @@ Function Protect-CmsCredentials {
 
 	# protect credentials on each computer
 	ForEach ($CmsComputer in $CmsComputers) {
-		If ($CmsComputer -eq $Hostname -or $CmsComputer.StartsWith("$Hostname.", [System.StringComparer]::InvariantCultureIgnoreCase)) {
+		If ($CmsComputer -eq $Hostname -or $CmsComputer -like "$Hostname.*") {
 			# protect credentials on local computer
 			Try {
 				Protect-CmsCredentialSecret @ProtectParameters
@@ -834,7 +846,7 @@ Function Remove-CmsCredentials {
 
 	# remove credentials on each computer
 	ForEach ($CmsComputer in $CmsComputers) {
-		If ($CmsComputer -eq $Hostname -or $CmsComputer.StartsWith("$Hostname.", [System.StringComparer]::InvariantCultureIgnoreCase)) {
+		If ($CmsComputer -eq $Hostname -or $CmsComputer -like "$Hostname.*") {
 			# remove credentials on local computer
 			Try {
 				Remove-CmsCredentialSecret @RemoveParameters
@@ -965,7 +977,7 @@ Function Show-CmsCredentials {
 
 	# show credentials on each computer
 	ForEach ($CmsComputer in $CmsComputers) {
-		If ($CmsComputer -eq $Hostname -or $CmsComputer.StartsWith("$Hostname.", [System.StringComparer]::InvariantCultureIgnoreCase)) {
+		If ($CmsComputer -eq $Hostname -or $CmsComputer -like "$Hostname.*") {
 			# show credentials on local computer
 			Try {
 				Show-CmsCredentialSecret @ShowParameters
@@ -1194,7 +1206,7 @@ Function Grant-CmsCredentialAccess {
 
 	# grant credential access on each computer
 	ForEach ($CmsComputer in $CmsComputers) {
-		If ($CmsComputer -eq $Hostname -or $CmsComputer.StartsWith("$Hostname.", [System.StringComparer]::InvariantCultureIgnoreCase)) {
+		If ($CmsComputer -eq $Hostname -or $CmsComputer -like "$Hostname.*") {
 			# grant credential access on local computer
 			Try {
 				Update-CmsCredentialAccess @UpdateParameters
@@ -1343,7 +1355,7 @@ Function Reset-CmsCredentialAccess {
 
 	# reset credential access on each computer
 	ForEach ($CmsComputer in $CmsComputers) {
-		If ($CmsComputer -eq $Hostname -or $CmsComputer.StartsWith("$Hostname.", [System.StringComparer]::InvariantCultureIgnoreCase)) {
+		If ($CmsComputer -eq $Hostname -or $CmsComputer -like "$Hostname.*") {
 			# reset credential access on local computer
 			Try {
 				Update-CmsCredentialAccess @UpdateParameters
@@ -1496,9 +1508,9 @@ Function Revoke-CmsCredentialAccess {
 		}
 	}
 
-	# revokoe credential access on each computer
+	# revoke credential access on each computer
 	ForEach ($CmsComputer in $CmsComputers) {
-		If ($CmsComputer -eq $Hostname -or $CmsComputer.StartsWith("$Hostname.", [System.StringComparer]::InvariantCultureIgnoreCase)) {
+		If ($CmsComputer -eq $Hostname -or $CmsComputer -like "$Hostname.*") {
 			# revoke credential access on local computer
 			Try {
 				Update-CmsCredentialAccess @UpdateParameters
