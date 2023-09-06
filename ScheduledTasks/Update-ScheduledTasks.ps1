@@ -120,7 +120,7 @@ Begin {
 
 		# get source module file
 		Try {
-			$SourceModule = Get-Item -Path $Path
+			$SourceModule = Get-Item -Path $Path -ErrorAction Stop
 		}
 		Catch {
 			Write-Output "`nERROR: could not find source module file: '$Path'"
