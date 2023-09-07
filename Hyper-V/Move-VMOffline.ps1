@@ -1169,6 +1169,11 @@ Begin {
 		}
 	}
 
+	# check for Protected Users
+	If ($Hostname -ne $Computername -and ([Security.Principal.WindowsIdentity]::GetCurrent().Groups | Where-Object { $_.Value -match "-525$" })) {
+		Throw [System.UnauthorizedAccessException]::new('Users in the Protected Users group must run this script from the source hypervisor')
+	}
+
 	# declare state
 	Write-Host "$ComputerName - checking path on destination..."
 
