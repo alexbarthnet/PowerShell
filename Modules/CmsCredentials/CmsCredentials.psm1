@@ -169,16 +169,14 @@ Function Protect-CmsCredentialSecret {
 		[Parameter(Position = 1)]
 		[pscredential]$Cred,
 		[Parameter(Position = 2)]
-		[string]$Template,
-		[Parameter(Position = 3)]
 		[bool]$Reset,
-		[Parameter(Position = 4)]
+		[Parameter(Position = 3)]
 		[string]$Prefix = 'cms',
-		[Parameter(Position = 5)]
+		[Parameter(Position = 4)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
-		[Parameter(Position = 6)][ValidateScript({ Test-Path -Path $_ })]
+		[Parameter(Position = 5)][ValidateScript({ Test-Path -Path $_ })]
 		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData'),
-		[Parameter(Position = 7)]
+		[Parameter(Position = 6)]
 		[bool]$Cleanup = $true
 	)
 
@@ -188,8 +186,14 @@ Function Protect-CmsCredentialSecret {
 	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_').ToLowerInvariant()
 
 	# verify cms folder
-	Write-Host "Checking CMS directory: $cms_path"
-	If (!(Test-Path -Path $cms_path)) { New-Item -ItemType Directory -Path $cms_path | Out-Null }
+	If (-not (Test-Path -Path $cms_path -PathType Container)) {
+		Try {
+			$null = New-Item -ItemType Directory -Path $cms_path -Verbose
+		}
+		Catch {
+			Throw $_
+		}
+	}
 
 	# check a matching certificate already exists
 	If (-not $Reset) {
@@ -204,9 +208,6 @@ Function Protect-CmsCredentialSecret {
 		If ($cms_cert) {
 			# skip creating certificate
 			$cms_make = $false
-
-			# declare certificate found
-			Write-Host "CMS certificate found, subject: '$($cms_cert.Subject)'"
 		}
 	}
 
@@ -218,8 +219,6 @@ Function Protect-CmsCredentialSecret {
 		Catch {
 			Return $_
 		}
-		# declare certificate created
-		Write-Host "CMS certificate created, subject: '$($cms_cert.Subject)'"
 	}
 
 	# if a CMS cert exists...
@@ -227,6 +226,16 @@ Function Protect-CmsCredentialSecret {
 		# define required strings
 		$cms_name = $cms_cert.Subject.Replace('CN=', $null)
 		$cms_file = Join-Path -Path $cms_path -ChildPath "$cms_name.txt"
+
+		# verify cms file
+		If (-not (Test-Path -Path $cms_file -PathType Container)) {
+			Try {
+				$null = New-Item -ItemType File -Path $cms_file -Verbose
+			}
+			Catch {
+				Throw $_
+			}
+		}
 
 		# create custom object for export
 		$cms_cred = $null
@@ -237,9 +246,7 @@ Function Protect-CmsCredentialSecret {
 
 		# encrypt credentials to local certificate
 		Try {
-			$cms_cred | ConvertTo-Json | Protect-CmsMessage -To $cms_cert.Thumbprint -OutFile $cms_file
-			$cms_made = $true
-			Write-Host "CMS file created: '$($cms_file)'"
+			$cms_cred | ConvertTo-Json | Protect-CmsMessage -To $cms_cert.Thumbprint -OutFile $cms_file -ErrorAction Stop
 		}
 		Catch {
 			Write-Error 'could not encrypt the CMS file'
@@ -247,8 +254,8 @@ Function Protect-CmsCredentialSecret {
 		}
 
 		# if CMS was made, clean up files and certificates
-		If ($cms_made -and $Cleanup) {
-			Write-Host 'Removing old CMS certificates and credenials...'
+		If ($Cleanup) {
+			Write-Verbose 'Removing old CMS certificates and credenials...'
 			$RemoveCmsCredentialSecret = @{
 				Identity   = $Identity
 				Prefix     = $Prefix
@@ -299,7 +306,7 @@ Function Remove-CmsCredentialSecret {
 
 	[CmdletBinding()]
 	Param (
-		[Parameter(Position = 0)]
+		[Parameter(Position = 0, Mandatory = $true)]
 		[string]$Identity,
 		[Parameter(Position = 1)]
 		[string]$Prefix = 'cms',
@@ -392,23 +399,22 @@ Function Show-CmsCredentialSecret {
 	$cms_date_regex = '[0-9TZ]+'
 	$cms_name_regex = ($Hostname, $Identity, $cms_date_regex) -join '-'
 
-	# display certificates
+	# if credential files path found...
+	If (Test-Path -Path $cms_path -PathType Container) {
+		# retrieve and display credential files
+		$cms_file_current = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $cms_name_regex }
+		$cms_file_current | Sort-Object -Property Name | Format-Table Name, LastWriteTime
+	}
+	# if credential files path not found...
+	Else {
+		# inform user
+		Write-Warning "CMS credential folder not found: '$cms_path'"
+	}
+
+	# retrieve and display certificates
 	$cms_cert_current = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_name_regex }
-	$cms_cert_current | ForEach-Object {
-		Write-Host "Found CMS certificate: '$($_.Subject)'"
-	}
+	$cms_cert_current | Sort-Object -Property Subject | Format-Table Subject, NotBefore
 
-	# test credential files path
-	If (-not (Test-Path -Path $cms_path -PathType Container)) {
-		Write-Host "CMS credential folder not found: '$cms_path'"
-		Return
-	}
-
-	# display credential files
-	$cms_file_current = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $cms_name_regex }
-	$cms_file_current | ForEach-Object {
-		Write-Host "Found CMS credential: '$($_.FullName)'"
-	}
 }
 
 Function Update-CmsCredentialAccess {
