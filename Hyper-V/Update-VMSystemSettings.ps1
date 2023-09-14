@@ -1,5 +1,15 @@
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = 'Value')]
 Param(
+	[Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+	[object]$VM,
+	[Parameter()]
+	[string]$ComputerName,
+	[Parameter(Mandatory = $true, ParameterSetName = 'Value')]
+	[string]$Name,
+	[Parameter(Mandatory = $true, ParameterSetName = 'Value')]
+	[string]$Value,
+	[Parameter(Mandatory = $true, ParameterSetName = 'Hashtable')]
+	[hashtable]$SystemSettings,
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 )
@@ -136,12 +146,133 @@ Begin {
 			Throw $_
 		}
 	}
+
+	Function Set-VMSystemSettings {
+		[CmdletBinding()]
+		Param(
+			# define VM parameters
+			[Parameter(Mandatory = $true)]
+			[object]$VM,
+			[string]$ComputerName = $VM.ComputerName.ToLower(),
+			# define system settings parameters
+			[hashtable]$SystemSettings
+		)
+
+		# get VM from parameters
+		Try {
+			# cast return as type to force terminating error
+			$VM = Get-VMFromParameters -ComputerName $ComputerName -VM $VM
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
+			Throw $_
+		}
+
+		# define CIM instance for VM system settings
+		$GetCimInstanceForVM = @{
+			VM          = $VM
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# retrieve original VM system settings and host management service via CIM
+		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...retrieving CIM instance for VM...")
+			$CimInstanceForVM = Get-CimInstanceForVM @GetCimInstanceForVM
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve CIM instance for VM")
+			Throw $_
+		}
+
+		# define counter for changes
+		$SystemSettingsCounter = [int32]0
+
+		# modify VM system settings
+		ForEach ($SystemSetting in $SystemSettings.Keys) {
+			If ($CimInstanceForVM.$SystemSetting -eq $SystemSettings[$SystemSetting]) {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...found '$SystemSetting' set to '$($SystemSettings[$SystemSetting])'")
+			}
+			Else {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...updating '$SystemSetting' from '$($CimInstanceForVM.$SystemSetting)' to '$($SystemSettings[$SystemSetting])'")
+				$CimInstanceForVM.$SystemSetting = $SystemSettings[$SystemSetting]
+				$SystemSettingsCounter++
+			}
+		}
+
+		# check counter for changes
+		If ($SystemSettingsCounter -eq 0) {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...existing firmware settings match requested settings")
+			Return
+		}
+
+		# serialize and encode VM system settings
+		Try {
+			$CimSerializer = [Microsoft.Management.Infrastructure.Serialization.CimSerializer]::Create()
+			$CimSerialized = $CimSerializer.Serialize($CimInstanceForVM, [Microsoft.Management.Infrastructure.Serialization.InstanceSerializationOptions]::None)
+			$CimEncodedData = [System.Text.Encoding]::Unicode.GetString($CimSerialized)
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not serialize the CIM objects for VM firmware")
+			Throw $_
+		}
+
+		# define CIM instance for VM management service
+		$GetCimInstanceForVMMS = @{
+			ComputerName = $ComputerName
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# retrieve CIM instance for host management service
+		Write-Host ("$Hostname,$ComputerName,$Name - ...retrieving CIM instance for VM management service")
+		Try {
+			$CimInstanceForVMMS = Get-CimInstanceForVMMS @GetCimInstanceForVMMS
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve CIM instance for VM management service")
+			Throw $_
+		}
+
+		# define CIM method for host management service
+		$InvokeCimMethod = @{
+			CimInstance = $CimInstanceForVMMS
+			MethodName  = 'ModifySystemSettings'
+			Arguments   = @{ SystemSettings = $CimEncodedData }
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# invoke CIM method on host management service to update VM system settings with modified values
+		Write-Host ("$Hostname,$ComputerName,$Name - updating firmware settings via CIM...")
+		Try {
+			$CimMethod = Invoke-CimMethod @InvokeCimMethod
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not call method to update firmware settings via CIM")
+			Throw $_
+		}
+
+		# check CIM return value
+		If ($CimMethod.ReturnValue -eq 0) {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...firmware settings updated...")
+		}
+		Else {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: firmware settings not updated, CIM returned: '$($CimMethod.ReturnValue)'")
+		}
+	}
 }
 
 Process {
+	# create hashtable from parameters
+	If ($PSCmdlet.ParameterSetName -eq 'Value') {
+		$SystemSettings = @{
+			$Name = $Value
+		}
+	}
 
-}
-
-End {
-
+	# call primary function
+	Try {
+		Set-VMSystemSettings -VM $VM -SystemSettings $SystemSettings
+	}
+	Catch {
+		Throw $_
+	}
 }
