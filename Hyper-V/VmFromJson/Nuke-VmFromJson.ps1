@@ -11,8 +11,6 @@ Param(
 	[Parameter()]
 	[switch]$PreserveHardDrives,
 	[Parameter()]
-	[switch]$RemoveMultipleDevices,
-	[Parameter()]
 	[switch]$RemoveNetworkObjects,
 	[Parameter()]
 	[switch]$SkipProvisioning,
