@@ -8,6 +8,7 @@ Param(
 	[switch]$UseDefaultPathOnHost,
 	[switch]$SkipProvisioning,
 	[switch]$SkipStart,
+	[switch]$SkipClusterOwner,
 	[switch]$ForceRestart,
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
@@ -1668,9 +1669,8 @@ Begin {
 
 		# if cluster group found...
 		If ($null -ne $ClusterGroup) {
-			# declare and return cluster group
+			# declare found
 			Write-Host ("$Hostname,$ComputerName,$Name - ...VM found in cluster: $ClusterName")
-			Return $ClusterGroup
 		}
 		# if cluster group not found...
 		Else {
@@ -1693,10 +1693,64 @@ Begin {
 				Throw $_
 			}
 
-			# declare and return cluster group
+			# declare state
 			Write-Host ("$Hostname,$ComputerName,$Name - ...added VM to cluster")
+		}
+
+		# if SkipPreferredOwner set...
+		If ($SkipPreferredOwner) {
+			# ...return cluster group
 			Return $ClusterGroup
 		}
+
+		# define parameters for Get-ClusterOwnerNode
+		$GetClusterOwnerNode = @{
+			InputObject = $ClusterGroup
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# get cluster group owner node(s)
+		Try {
+			$ClusterOwnerNode = Get-ClusterOwnerNode @GetClusterOwnerNode
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving owner node(s) for cluster group")
+			Throw $_
+		}
+
+		# check cluster group owner node(s)
+		If (($ClusterOwnerNode.OwnerNodes.Name -join ',') -ne $ComputerName) {
+			# declare state
+			Write-Host ("$Hostname,$ComputerName,$Name - ...setting preferred owner on VM")
+
+			# define paramters for Move-ClusterGroup
+			$SetClusterOwnerNode = @{
+				Owners      = $ComputerName
+				InputObject = $ClusterGroup
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# move cluster group to computer
+			Try {
+				Set-ClusterOwnerNode @SetClusterOwnerNode
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: setting preferred owner on VM")
+				Throw $_
+			}
+
+			# retrieve updated cluster group
+			Try {
+				$ClusterGroup = Get-ClusterGroup @GetClusterGroup
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving updated cluster group for VM")
+				Throw $_
+			}
+		}
+
+		# return cluster group
+		Return $ClusterGroup
 	}
 
 	Function Add-VMNetworkAdapterToDHCP {
@@ -2982,7 +3036,7 @@ Process {
 		# override ComputerName with bound parameters if provided
 		If ($PSBoundParameters['ComputerName']) {
 			$ComputerName = $ComputerName
-			Write-Host ("$Hostname,$ComputerName,$Name - WARNING: overriding ComputerName from JSON: '$($JsonData.$Name.ComputerName)'")
+			Write-Warning ("overriding ComputerName from JSON: '$($JsonData.$Name.ComputerName)'")
 		}
 		Else {
 			$ComputerName = $JsonData.$Name.ComputerName
@@ -2991,7 +3045,7 @@ Process {
 		# override VirtualMachinePath with bound parameters if provided
 		If ($PSBoundParameters['Path']) {
 			$Path = $Path
-			Write-Host ("$Hostname,$ComputerName,$Name - WARNING: overriding Path from JSON: '$($JsonData.$Name.Path)'")
+			Write-Warning ("overriding Path from JSON: '$($JsonData.$Name.Path)'")
 		}
 		Else {
 			$Path = $JsonData.$Name.Path
@@ -3074,26 +3128,27 @@ Process {
 				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 			}
 
+			# declare required parameters
 			Write-Host ("$Hostname,$ComputerName,$Name - defining VM for New-VMFromParams...")
 			Write-Host ("$Hostname,$ComputerName,$Name -   Name: $Name")
 			Write-Host ("$Hostname,$ComputerName,$Name -   Path: $Path")
 
-			# define optional parameters
+			# define and declare optional parameters
 			If ($null -ne $JsonData.$Name.ProcessorCount) {
 				$NewVMFromParams['ProcessorCount'] = $JsonData.$Name.ProcessorCount
 				Write-Host ("$Hostname,$ComputerName,$Name -   ProcessorCount: $($NewVMFromParams['ProcessorCount'])")
 			}
 			If ($null -ne $JsonData.$Name.MemoryStartupBytes) {
 				$NewVMFromParams['MemoryStartupBytes'] = $JsonData.$Name.MemoryStartupBytes
-				Write-Host ("$Hostname,$ComputerName,$Name -   MemoryStartupBytes: $($NewVMFromParams['MemoryStartupBytes'])")
+				Write-Host ("$Hostname,$ComputerName,$Name -   MemoryStartupBytes: $(Format-Bytes -Size $($NewVMFromParams['MemoryStartupBytes']))")
 			}
 			If ($null -ne $JsonData.$Name.MemoryMinimumBytes) {
 				$NewVMFromParams['MemoryMinimumBytes'] = $JsonData.$Name.MemoryMinimumBytes
-				Write-Host ("$Hostname,$ComputerName,$Name -   MemoryMinimumBytes: $($NewVMFromParams['MemoryMinimumBytes'])")
+				Write-Host ("$Hostname,$ComputerName,$Name -   MemoryMinimumBytes: $(Format-Bytes -Size $($NewVMFromParams['MemoryMinimumBytes']))")
 			}
 			If ($null -ne $JsonData.$Name.MemoryMaximumBytes) {
 				$NewVMFromParams['MemoryMaximumBytes'] = $JsonData.$Name.MemoryMaximumBytes
-				Write-Host ("$Hostname,$ComputerName,$Name -   MemoryMaximumBytes: $($NewVMFromParams['MemoryMaximumBytes'])")
+				Write-Host ("$Hostname,$ComputerName,$Name -   MemoryMaximumBytes: $(Format-Bytes -Size $($NewVMFromParams['MemoryMaximumBytes']))")
 			}
 			If ($null -ne $JsonData.$Name.EnableVMTPM) {
 				$NewVMFromParams['EnableVMTPM'] = $JsonData.$Name.EnableVMTPM
