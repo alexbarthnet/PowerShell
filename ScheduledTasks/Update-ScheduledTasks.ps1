@@ -402,7 +402,12 @@ Begin {
 				}
 			}
 			# ...verify task principal components
-			$FixUserId = $Existing.Principal.UserId -ne $Principal.UserId
+			If ($Principal.UserId.Contains('\')) {
+				$FixUserId = $Existing.Principal.UserId -ne ($Principal.UserId.Split('\'))[1]
+			}
+			Else {
+				$FixUserId = $Existing.Principal.UserId -ne $Principal.UserId
+			}
 			If ($null -ne $LogonType) {
 				$FixLogonType = $Existing.Principal.LogonType -ne $Principal.LogonType
 			}
