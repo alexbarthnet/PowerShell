@@ -68,41 +68,50 @@ Param(
 Begin {
 	# if updating...
 	If ($Update) {
-		# append hostname to script path to define transcript path
-		$PathScriptLog = $PSCommandPath.Replace('.ps1', "_$HostName.txt")
-		# append datetime to transcript path
-		$PathScriptLog = $PathScriptLog.Replace('.txt', "_$LogStart.txt")
+		# append hostname and datetime to script path to define transcript path
+		$TranscriptFile = $PSCommandPath.Replace('.ps1', "_$HostName.txt").Replace('.txt', "_$LogStart.txt")
 		# define ideal log path
-		$PathFolderLog = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'Logs'
+		$TranscriptPath = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'Logs'
 		# if ideal log path found...
-		If (Test-Path -Path $PathFolderLog -PathType Container) {
-			# use modified script path
-			$PathScriptLog = $PathScriptLog.Replace($PSScriptRoot, $PathFolderLog)
-		}
-		# if ideal log path not found...
-		Else {
-			# use original script path and folder
-			$PathScriptLog = $PSCommandPath
-			$PathFolderLog = $PSScriptRoot
+		If (Test-Path -Path $TranscriptPath -PathType 'Container') {
+			# update transcript path
+			$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptPath)
 		}
 		# define parameters for Start-Transcript
 		$StartTranscript = @{
-			Path        = $PathScriptLog
+			Path        = $TranscriptFile
 			Force       = $true
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
-		# start transcript in script directory
-		Try {
+		# start transcript
+		Try	{
 			Start-Transcript @StartTranscript
 		}
 		Catch {
 			# get program data path
-			$PathOfAppData = [System.Environment]::GetFolderPath('CommonApplicationData')
-			# redirect transcript from script directory to programdata path
-			$PathInAppData = $PathScriptLog.Replace($PathFolderLog, $PathOfAppData)
+			$TranscriptRoot = [System.Environment]::GetFolderPath('CommonApplicationData')
+			# get basename of script
+			$TranscriptBase = Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty 'BaseName'
+			# define path in program data
+			$TranscriptPath = Join-Path -Path $TranscriptRoot -ChildPath $TranscriptBase
+			# if path in program data not found...
+			If ((Test-Path -Path $TranscriptPath -PathType 'Container') -eq $false) {
+				Try {
+					# create path in program data
+					$null = New-Item -Path $TranscriptPath -ItemType 'Directory' -ErrorAction Stop
+					# redirect transcript file from script directory to path in program data
+					$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptPath)
+				}
+				Catch {
+					# clear errors before starting script
+					$Error.Clear()
+					# redirect transcript file from script directory to root of program data
+					$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptRoot)
+				}
+			}
 			# update parameters for Start-Transcript
-			$StartTranscript['Path'] = $PathInAppData
-			# start transcript in programdata path
+			$StartTranscript['Path'] = $TranscriptFile
+			# start transcript
 			Try {
 				Start-Transcript @StartTranscript
 			}
@@ -677,72 +686,72 @@ Process {
 						If ($null -ne $JsonDatum.TriggerAt) {
 							# ...and TriggerAt is datetime...
 							If ($JsonDatum.TriggerAt -is [datetime]) {
-								# add TriggerAt to hashtable
+								# ...add TriggerAt to hashtable
 								$UpdateScheduledTaskFromJson['TriggerAt'] = [datetime]$JsonDatum.TriggerAt
 							}
 							Else {
 								Write-Output "ERROR: could not cast TriggerAt to [datetime] in task: '$($JsonDatum.TaskName)'"
 								Continue JsonData
 							}
-						}
 
-						# if RandomDelayTime defined in JSON...
-						If ($null -ne $JsonDatum.RandomDelayTime) {
-							# ...and RandomDelayTime is datetime...
-							If ($JsonDatum.RandomDelayTime -is [datetime]) {
-								# ...and RandomDelayTime is after TriggerAt
-								If ($JsonDatum.RandomDelayTime -gt $JsonDatum.TriggerAt) {
-									# compute RandomDelay and add to hashtable
-									$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonDatum.RandomDelayTime - $JsonDatum.TriggerAt)
+							# ...and RandomDelayTime defined in JSON...
+							If ($null -ne $JsonDatum.RandomDelayTime) {
+								# ...and RandomDelayTime is datetime...
+								If ($JsonDatum.RandomDelayTime -is [datetime]) {
+									# ...and RandomDelayTime is greater than (after) TriggerAt
+									If ($JsonDatum.RandomDelayTime -gt $JsonDatum.TriggerAt) {
+										# ...create RandomDelay timespan and add to hashtable
+										$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonDatum.RandomDelayTime - $JsonDatum.TriggerAt)
+									}
+									Else {
+										Write-Output "ERROR: RandomDelayTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
+										Continue JsonData
+									}
 								}
 								Else {
-									Write-Output "ERROR: RandomDelayTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
+									Write-Output "ERROR: could not cast RandomDelayTime to [datetime] in task: '$($JsonDatum.TaskName)'"
 									Continue JsonData
 								}
 							}
-							Else {
-								Write-Output "ERROR: could not cast RandomDelayTime to [datetime] in task: '$($JsonDatum.TaskName)'"
-								Continue JsonData
-							}
-						}
 
-						# if RepetitionIntervalTime defined in JSON...
-						If ($null -ne $JsonDatum.RepetitionIntervalTime) {
-							# ...and RepetitionIntervalTime is datetime...
-							If ($JsonDatum.RepetitionIntervalTime -is [datetime]) {
-								# ...and RepetitionIntervalTime is after TriggerAt
-								If ($JsonDatum.RepetitionIntervalTime -gt $JsonDatum.TriggerAt) {
-									# compute RepetitionInterval and add to hashtable
-									$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonDatum.RepetitionIntervalTime - $JsonDatum.TriggerAt)
+							# ...and RepetitionIntervalTime defined in JSON...
+							If ($null -ne $JsonDatum.RepetitionIntervalTime) {
+								# ...and RepetitionIntervalTime is datetime...
+								If ($JsonDatum.RepetitionIntervalTime -is [datetime]) {
+									# ...and RepetitionIntervalTime is greater than (after) TriggerAt
+									If ($JsonDatum.RepetitionIntervalTime -gt $JsonDatum.TriggerAt) {
+										# ...create RepetitionInterval timespan and add to hashtable
+										$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonDatum.RepetitionIntervalTime - $JsonDatum.TriggerAt)
+									}
+									Else {
+										Write-Output "ERROR: RepetitionIntervalTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
+										Continue JsonData
+									}
 								}
 								Else {
-									Write-Output "ERROR: RepetitionIntervalTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
+									Write-Output "ERROR: could not cast RepetitionIntervalTime to [datetime] in task: '$($JsonDatum.TaskName)'"
 									Continue JsonData
 								}
 							}
-							Else {
-								Write-Output "ERROR: could not cast RepetitionIntervalTime to [datetime] in task: '$($JsonDatum.TaskName)'"
-								Continue JsonData
-							}
-						}
 
-						# if ExecutionTimeLimitTime defined in JSON...
-						If ($null -ne $JsonDatum.ExecutionTimeLimitTime) {
-							# ...and ExecutionTimeLimitTime is datetime...
-							If ($JsonDatum.ExecutionTimeLimitTime -is [datetime]) {
-								# ...and ExecutionTimeLimitTime is after TriggerAt
-								If ($JsonDatum.ExecutionTimeLimitTime -gt $JsonDatum.TriggerAt) {
-									# compute ExecutionTimeLimit and add to hashtable
-									$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonDatum.ExecutionTimeLimitTime - $JsonDatum.TriggerAt)
+							# ...and ExecutionTimeLimitTime defined in JSON...
+							If ($null -ne $JsonDatum.ExecutionTimeLimitTime) {
+								# ...and ExecutionTimeLimitTime is datetime...
+								If ($JsonDatum.ExecutionTimeLimitTime -is [datetime]) {
+									# ...and ExecutionTimeLimitTime is greater than (after) TriggerAt
+									If ($JsonDatum.ExecutionTimeLimitTime -gt $JsonDatum.TriggerAt) {
+										# ...create ExecutionTimeLimit timespan and add to hashtable
+										$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonDatum.ExecutionTimeLimitTime - $JsonDatum.TriggerAt)
+									}
+									Else {
+										Write-Output "ERROR: ExecutionTimeLimitTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
+										Continue JsonData
+									}
 								}
 								Else {
-									Write-Output "ERROR: ExecutionTimeLimitTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
+									Write-Output "ERROR: could not cast ExecutionTimeLimitTime to [datetime] in task: '$($JsonDatum.TaskName)'"
 									Continue JsonData
 								}
-							}
-							Else {
-								Write-Output "ERROR: could not cast ExecutionTimeLimitTime to [datetime] in task: '$($JsonDatum.TaskName)'"
-								Continue JsonData
 							}
 						}
 
@@ -755,16 +764,13 @@ Process {
 						}
 
 						# if Modules defined in JSON...
-						If ($null -ne $JsonDatum.Modules) {
-							# process each module
-							ForEach ($Module in $JsonDatum.Modules) {
-								# install module
-								Try {
-									Install-ModuleFromJson -Path $Module
-								}
-								Catch {
-									Return $_
-								}
+						ForEach ($Module in $JsonDatum.Modules) {
+							# install module
+							Try {
+								Install-ModuleFromJson -Path $Module
+							}
+							Catch {
+								Return $_
 							}
 						}
 					}
