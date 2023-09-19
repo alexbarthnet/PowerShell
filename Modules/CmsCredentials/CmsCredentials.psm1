@@ -121,8 +121,17 @@ Function New-CmsCredentialCertificate {
 		NotAfter        = $cms_date_100years
 	}
 
-	# create self-signed certificate
-	New-SelfSignedCertificate @SelfSignedCertificate
+	# check operating system
+	switch ([System.Environment]::OSVersion.Platform) {
+		'Win32NT' {
+			# create self-signed certificate
+			New-SelfSignedCertificate @SelfSignedCertificate
+		}
+		Default {
+			# declare 
+			Write-Warning 'CmsCredentials cannot create self-signed certificates on non-Windows platforms'
+		}
+	}
 }
 
 Function Protect-CmsCredentialSecret {
@@ -255,7 +264,7 @@ Function Protect-CmsCredentialSecret {
 
 		# if CMS was made, clean up files and certificates
 		If ($Cleanup) {
-			Write-Verbose 'Removing old CMS certificates and credenials...'
+			Write-Verbose 'Removing old CMS certificates and credentials...'
 			$RemoveCmsCredentialSecret = @{
 				Identity   = $Identity
 				Prefix     = $Prefix
@@ -321,33 +330,26 @@ Function Remove-CmsCredentialSecret {
 	# define strings
 	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_').ToLowerInvariant()
 	$cms_date_regex = '[0-9TZ]+'
-	If ([string]::IsNullOrEmpty($Identity)) {
-		$cms_cert_regex = ("CN=$Hostname", '\w+', $cms_date_regex) -join '-'
-		$cms_file_regex = ($Prefix, $Hostname, '\w+', $cms_date_regex) -join '_'
+	$cms_name_regex = ($Hostname, $Identity, $cms_date_regex) -join '-'
+
+	# if credential files path found...
+	If (Test-Path -Path $cms_path -PathType Container) {
+		# retrieve and remove credential files
+		$cms_file_old = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $cms_name_regex }
+		$cms_file_old | Sort-Object -Property 'BaseName' | Select-Object -SkipLast $SkipLast | ForEach-Object {
+			Remove-Item -Path $_.PSPath -Force -Verbose
+		}
 	}
+	# if credential files path not found...
 	Else {
-		$cms_cert_regex = ("CN=$Hostname", $Identity, $cms_date_regex) -join '-'
-		$cms_file_regex = ($Prefix, $Hostname, $Identity, $cms_date_regex) -join '_'
+		# inform user
+		Write-Warning "CMS credential folder not found: '$cms_path'"
 	}
 
-	# remove certificates
-	$cms_cert_old = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_cert_regex } | Sort-Object -Property 'NotBefore' | Select-Object -SkipLast $SkipLast
-	$cms_cert_old | ForEach-Object {
-		Write-Host "Removing CMS certificate: '$($_.Subject)'"
-		$_ | Remove-Item -Force
-	}
-
-	# test credential files path
-	If (-not (Test-Path -Path $cms_path -PathType Container)) {
-		Write-Host "CMS credential folder not found: '$cms_path'"
-		Return
-	}
-
-	# remove credential files
-	$cms_file_old = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $cms_file_regex } | Sort-Object -Property 'BaseName' | Select-Object -SkipLast $SkipLast
-	$cms_file_old | ForEach-Object {
-		Write-Host "Removing CMS credential: '$($_.FullName)'"
-		$_ | Remove-Item -Force
+	# retrieve and remove certificates
+	$cms_cert_old = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_name_regex }
+	$cms_cert_old | Sort-Object -Property 'NotBefore' | Select-Object -SkipLast $SkipLast | ForEach-Object {
+		Remove-Item -Path $_.PSPath -Force -Verbose
 	}
 }
 
@@ -403,7 +405,7 @@ Function Show-CmsCredentialSecret {
 	If (Test-Path -Path $cms_path -PathType Container) {
 		# retrieve and display credential files
 		$cms_file_current = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $cms_name_regex }
-		$cms_file_current | Sort-Object -Property Name | Format-Table Name, LastWriteTime
+		$cms_file_current | Sort-Object -Property 'BaseName' | Format-Table Name, LastWriteTime
 	}
 	# if credential files path not found...
 	Else {
@@ -413,8 +415,7 @@ Function Show-CmsCredentialSecret {
 
 	# retrieve and display certificates
 	$cms_cert_current = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_name_regex }
-	$cms_cert_current | Sort-Object -Property Subject | Format-Table Subject, NotBefore
-
+	$cms_cert_current | Sort-Object -Property 'Subject' | Format-Table Subject, NotBefore
 }
 
 Function Update-CmsCredentialAccess {
@@ -454,7 +455,9 @@ Function Update-CmsCredentialAccess {
 		[Parameter(Position = 2)]
 		[string[]]$Principals,
 		[Parameter(Position = 3)]
-		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
+		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
+		[Parameter(Position = 3)][ValidateScript({ Test-Path -Path $_ })]
+		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData')
 	)
 
 	# create regex to match expected CMS certificate name of machinename followed by the Identity name then either a simple date or a FileDateTimeUniversal
@@ -503,63 +506,84 @@ Function Update-CmsCredentialAccess {
 	}
 
 	# check local machine store for existing certificate
-	$cms_cert = $null
-	$cms_cert = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_regx } | Sort-Object 'NotBefore' | Select-Object -Last 1
-	If ($cms_cert) {
-		# declare certificate subject
-		Write-Host "CMS certificate found, subject: '$($cms_cert.Subject)'"
-		# retrieve private key
-		$cms_key = Join-Path -Path 'C:\ProgramData\Microsoft\Crypto\RSA\MachineKeys' -ChildPath $cms_cert.PrivateKey.CspKeyContainerInfo.UniqueKeyContainerName
-		# retrieve private key permissions
-		$cms_acl = Get-Acl -Path $cms_key
-		# process SIDs
-		switch ($Mode) {
-			'Grant' {
-				# create ACE then add to ACL
-				ForEach ($cms_sid in $cms_sids) {
-					$cms_ace = New-Object System.Security.AccessControl.FileSystemAccessRule @($cms_sid, 'Read', 'Allow')
-					$cms_acl.AddAccessRule($cms_ace)
-				}
-				# declare actions
-				Write-Host "Granting read access to $($cms_sids.Count) principals..."
+	$cms_cert = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_regx -and $_.HasPrivateKey } | Sort-Object 'NotBefore' | Select-Object -Last 1
+
+	# if CMS certificate not found...
+	If ($null -eq $cms_cert) {
+		Write-Warning "CMS certificate not found: '$($cms_cert.Subject)'"
+		Return
+	}
+
+	# if certificate has PrivateKey property...
+	If ($cms_cert.PrivateKey) {
+		# ...get path to legacy private keys
+		$Path = Join-Path -Path $ParentPath -ChildPath 'Microsoft\Crypto\RSA\MachineKeys'
+	}
+	# if certificate missing PrivateKey property...
+	Else {
+		# ...get path to modern private keys
+		$Path = Join-Path -Path $ParentPath -ChildPath 'Microsoft\Crypto\Keys'
+	}
+
+	# retrieve private key file name
+	Try {
+		$ChildPath = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($cms_cert).Key.UniqueName
+	}
+	Catch {
+		Write-Warning 'Could not retrieve private key file name'
+		Return
+	}
+
+	# retrieve private key
+	$cms_key = Join-Path -Path $Path -ChildPath $ChildPath
+
+	# retrieve private key permissions
+	$cms_acl = Get-Acl -Path $cms_key
+
+	# process SIDs
+	switch ($Mode) {
+		'Grant' {
+			# create ACE then add to ACL
+			ForEach ($cms_sid in $cms_sids) {
+				$cms_ace = New-Object System.Security.AccessControl.FileSystemAccessRule @($cms_sid, 'Read', 'Allow')
+				$cms_acl.AddAccessRule($cms_ace)
 			}
-			'Revoke' {
-				# find ACEs with provided SIDs then remove from ACL
-				ForEach ($cms_sid in $cms_sids) {
-					$cms_ace = $cms_acl.Access | Where-Object { $_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]) -match $cms_sid }
-					$cms_ace | ForEach-Object { $cms_acl.RemoveAccessRule($_) } | Out-Null
-				}
-				# declare actions
-				Write-Host "Revoking read access for $($cms_sids.Count) principals..."
-			}
-			'Reset' {
-				# remove all ACEs from ACL
-				$cms_acl.Access | ForEach-Object { $cms_acl.RemoveAccessRule($_) } | Out-Null
-				# create ACEs then add to ACL
-				ForEach ($cms_sid in $cms_sids) {
-					$cms_ace = New-Object System.Security.AccessControl.FileSystemAccessRule @($cms_sid, 'FullControl', 'Allow')
-					$cms_acl.AddAccessRule($cms_ace)
-				}
-				# declare actions
-				Write-Host "Removing previous access and granting full control to: 'NT AUTHORITY\SYSTEM', 'BUILTIN\Administrators'"
-			}
+			# declare actions
+			Write-Host "Granting read access to $($cms_sids.Count) principals..."
 		}
-		# update ACL on private key
-		Try {
-			If ($PSCmdlet.ShouldProcess($cms_cert.Subject, "$cms_mode access to CMS certificate")) {
-				# update ACL on private key
-				Set-Acl -Path $cms_key -AclObject $cms_acl
-				# declare actions
-				Write-Host "CMS certificate permissions updated: '$($cms_cert.Subject)'"
+		'Revoke' {
+			# find ACEs with provided SIDs then remove from ACL
+			ForEach ($cms_sid in $cms_sids) {
+				$cms_ace = $cms_acl.Access | Where-Object { $_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]) -match $cms_sid }
+				$cms_ace | ForEach-Object { $cms_acl.RemoveAccessRule($_) } | Out-Null
 			}
+			# declare actions
+			Write-Host "Revoking read access for $($cms_sids.Count) principals..."
 		}
-		Catch {
-			Return $_
+		'Reset' {
+			# remove all ACEs from ACL
+			$cms_acl.Access | ForEach-Object { $cms_acl.RemoveAccessRule($_) } | Out-Null
+			# create ACEs then add to ACL
+			ForEach ($cms_sid in $cms_sids) {
+				$cms_ace = New-Object System.Security.AccessControl.FileSystemAccessRule @($cms_sid, 'FullControl', 'Allow')
+				$cms_acl.AddAccessRule($cms_ace)
+			}
+			# declare actions
+			Write-Host "Removing previous access and granting full control to: 'NT AUTHORITY\SYSTEM', 'BUILTIN\Administrators'"
 		}
 	}
-	Else {
-		Write-Output "CMS certificate not found: '$($cms_cert.Subject)'"
-		Return
+
+	# update ACL on private key
+	Try {
+		If ($PSCmdlet.ShouldProcess($cms_cert.Subject, "$cms_mode access to CMS certificate")) {
+			# update ACL on private key
+			Set-Acl -Path $cms_key -AclObject $cms_acl
+			# declare actions
+			Write-Host "CMS certificate permissions updated: '$($cms_cert.Subject)'"
+		}
+	}
+	Catch {
+		Return $_
 	}
 }
 
