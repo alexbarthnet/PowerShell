@@ -438,9 +438,6 @@ Function Get-CertificatePrivateKeyPath {
 	.PARAMETER Thumbprint
 	Specifies the thumbprint of an X.509 certificate.
 
-	.PARAMETER MachineKeysPath
-	Specifies the path to machine keys on the system.
-
 	.PARAMETER CertStoreLocation
 	Specifices the path to the certificate store to search for a certificate by thumbprint when the Thumbprint parameter is specified.
 
@@ -450,6 +447,12 @@ Function Get-CertificatePrivateKeyPath {
 	.OUTPUTS
 	System.String. A string representing the path to the private key for the input.
 
+	.NOTES
+	The path to a private key is defined by the cryptographic service provider (CSP).
+
+	.LINK
+	https://learn.microsoft.com/en-us/windows/win32/seccng/key-storage-and-retrieval#key-directories-and-files
+
 	#>
 	[CmdletBinding(DefaultParameterSetName = 'Certificate')]
 	Param(
@@ -458,8 +461,6 @@ Function Get-CertificatePrivateKeyPath {
 		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'Thumbprint')]
 		[string]$Thumbprint,
 		[Parameter(Position = 1, DontShow)]
-		[string]$MachineKeysPath = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'Microsoft\Crypto\RSA\MachineKeys'),
-		[Parameter(Position = 2, DontShow)]
 		[string]$CertStoreLocation = 'Cert:\LocalMachine\My'
 	)
 
@@ -469,27 +470,81 @@ Function Get-CertificatePrivateKeyPath {
 			$Certificate = Get-Item -Path (Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint)
 		}
 		Catch {
-			Write-Verbose -Message "Certificate with thumbprint '$Thumbprint' was not found in the machine key store"
+			Write-Warning -Message "Certificate with thumbprint '$Thumbprint' was not found in the machine key store"
 			Return $null
 		}
 	}
 
-	# if certificate has private key...
-	If ($Certificate.HasPrivateKey) {
-		# if certificate is machine key...
-		If ($Certificate.PrivateKey.CspKeyContainerInfo.MachineKeyStore) {
-			# retrieve path for private key
-			$Path = Join-Path -Path $MachineKeysPath -ChildPath $Certificate.PrivateKey.CspKeyContainerInfo.UniqueKeyContainerName
-			Write-Verbose -Message "Certificate '$($Certificate.Thumbprint)' private key: $Path"
-			Return $Path
-		}
-		Else {
-			Write-Verbose -Message "Certificate '$($Certificate.Thumbprint)' is not in the machine key store"
-			Return $null
-		}
+	# if certificate has public and private keys...
+	If ($Certificate.PublicKey -and $Certificate.HasPrivateKey) {
+		# retrieve certificate algorithm from public key
+		$Algorithm = $Certificate.PublicKey.Oid.FriendlyName
 	}
 	Else {
-		Write-Verbose -Message "Certificate '$($Certificate.Thumbprint)' does not have a private key"
+		Write-Warning -Message "Certificate '$($Certificate.Thumbprint)' does not have a private key"
+		Return $null
+	}
+
+	# retrieve private key using algorithm-specific method
+	Try {
+		switch ($Algorithm) {
+			'DSA' {
+				$PrivateKey = [System.Security.Cryptography.X509Certificates.DSACertificateExtensions]::GetDSAPrivateKey($Certificate)
+			}
+			'ECDsa' {
+				$PrivateKey = [System.Security.Cryptography.X509Certificates.ECDsaCertificateExtensions]::GetECDsaPrivateKey($Certificate)
+			}
+			'RSA' {
+				$PrivateKey = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($Certificate)
+			}
+			Default {
+				$PrivateKey = $null
+			}
+		}
+	}
+	Catch {
+		Write-Warning -Message "Error retrieving $Algorithm private key for certificate '$($Certificate.Thumbprint)'"
+		Return $null
+	}
+
+	# if private key was retrieved...
+	If ($PrivateKey) {
+		# retrieve private key unique name
+		$UniqueName = $PrivateKey.Key.UniqueName
+	}
+	Else {
+		Write-Verbose -Message "Could not retrieve $Algorithm private key for certificate '$($Certificate.Thumbprint)'"
+		Return $null
+	}
+
+	# if certificate is machine key...
+	If ($PrivateKey.IsMachineKey) {
+		# ...get machine key container
+		$Path = Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -Path 'Microsoft\Crypto'
+	}
+	# if certificate is not machine key...
+	Else {
+		# ...get user key container
+		$Path = Join-Path -Path ([System.Environment]::GetFolderPath('ApplicationData')) -Path 'Microsoft\Crypto'
+	}
+
+	# search key container for private key file
+	Try {
+		$PrivateKeyPath = Get-ChildItem -Path $Path -Recurse -Filter $UniqueName | Select-Object -First 1
+	}
+	Catch {
+		Write-Warning -Message "Error searching for private key in container '$Path'"
+		Return $null
+	}
+
+	# if private key file found...
+	If ($PrivateKeyPath) {
+		# report and return
+		Write-Verbose -Message "Certificate '$($Certificate.Thumbprint)' private key: $PrivateKeyPath"
+		Return $PrivateKeyPath
+	}
+	Else {
+		Write-Verbose -Message "Could not find private key file for certificate '$($Certificate.Thumbprint)'"
 		Return $null
 	}
 }
