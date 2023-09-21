@@ -1,3 +1,54 @@
+<#
+.SYNOPSIS
+Adds or removes Scheduled Tasks based upon values in a JSON configuration file.
+
+.DESCRIPTION
+Adds or removes Scheduled Tasks based upon values in a JSON configuration file.
+
+.PARAMETER Json
+The path to a JSON file containing the configuration for this script.
+
+.PARAMETER Run
+Switch parameter to process all entries from the JSON configuration file. Cannot be combined with the Clear, Remove, or Add parameters.
+
+.PARAMETER Clear
+Switch parameter to clear all entries from the JSON configuration file. Cannot be combined with the Run, Remove, or Add parameters.
+
+.PARAMETER Remove
+Switch parameter to remove an entry from the JSON configuration file. Cannot be combined with the Run, Clear, or Add parameters.
+
+.PARAMETER Add
+Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Run, Clear, or Remove parameters.
+
+.PARAMETER Path
+The path of containing files and empty folders that will be removed if older than the computed datetime. Required when the Add or Remove parameters are specified.
+
+.PARAMETER OlderThanUnits
+The number of datetime units to create the computed datetime. Required when the Add parameter is specified.
+
+.PARAMETER OlderThanType
+The type of datetime units to create the computed datetime. Required when the Add parameter is specified. Valid values are 'Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', and 'Years'
+
+.INPUTS
+None.
+
+.OUTPUTS
+None. The script reports the actions taken and does not provide any actionable output.
+
+.EXAMPLE
+.\Update-ScheduledTasks.ps1 -Json C:\Content\config.json -Add -Path 'C:\Content\test' -OlderThanUnits 30 -OlderThanType 'Days'
+
+.EXAMPLE
+.\Update-ScheduledTasks.ps1 -Json C:\Content\config.json -Remove -Path 'C:\Content\test'
+
+.EXAMPLE
+.\Update-ScheduledTasks.ps1 -Json C:\Content\config.json -Clear
+
+.EXAMPLE
+.\Update-ScheduledTasks.ps1 -Json C:\Content\config.json -Run
+#>
+
+
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
 	[Parameter(Mandatory = $True, ParameterSetName = 'Update')]
@@ -208,6 +259,7 @@ Begin {
 				# remove target module
 				Try {
 					$TargetModule | Remove-Item -Force
+					Write-Output "Removed module '$($TargetModule.FullName)'"
 				}
 				Catch {
 					Write-Output "`nERROR: could not remove old module: '$($TargetModule.FullName)'"
@@ -530,7 +582,7 @@ Process {
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
-				$_
+				Return $_
 			}
 		}
 		# add entry to configuration file
@@ -603,6 +655,7 @@ Process {
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
+				Return $_
 			}
 		}
 		# update scheduled tasks defined in configuration file 
