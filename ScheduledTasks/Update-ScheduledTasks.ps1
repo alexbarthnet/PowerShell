@@ -20,14 +20,41 @@ Switch parameter to remove an entry from the JSON configuration file. Cannot be 
 .PARAMETER Add
 Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Run, Clear, or Remove parameters.
 
-.PARAMETER Path
-The path of containing files and empty folders that will be removed if older than the computed datetime. Required when the Add or Remove parameters are specified.
+.PARAMETER TaskName
+The name of the scheduled task. Required when the Add or Remove parameters are specified.
 
-.PARAMETER OlderThanUnits
-The number of datetime units to create the computed datetime. Required when the Add parameter is specified.
+.PARAMETER TaskPath
+The path of a folder for the scheduled task. The script does not support the root path of '\' or any path starting with '\Microsoft' to prevent issues with existing tasks. Required when the Add or Remove parameters are specified.
 
-.PARAMETER OlderThanType
-The type of datetime units to create the computed datetime. Required when the Add parameter is specified. Valid values are 'Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', and 'Years'
+.PARAMETER Execute
+The path of an executable that will be run by the scheduled task. Required when the Add parameter is specified.
+
+.PARAMETER Argument
+The string containing one or more arguments for the executable that will be run by the scheduled task. Required when the Add parameter is specified.
+
+.PARAMETER TriggerAt
+The datetime when the scheduled task will first run. The value can be any valid datetime.
+
+.PARAMETER RandomDelay
+The timespan between when the scheduled task is scheduled to run and when it will start. The default value is 5 minutes. The value can be any valid timespan.
+
+.PARAMETER RepetitionInterval
+The timespan between when the scheduled task is scheduled to run and when it will run next. The default value is 1 hour. The value can be any valid timespan.
+
+.PARAMETER ExecutionTimeLimit
+The timespan between when the scheduled task starts and when it will be stopped. The default value is 5 minutes. The value can be any valid timespan.
+
+.PARAMETER UserId
+The user account for the scheduled task. The default value is 'SYSTEM'.
+
+.PARAMETER LogonType
+The logon type for the scheduled task. The default value is 'ServiceAccount'. The permitted values are 'ServiceAccount' and 'Password'. The value of password is only supported when the UserId is a Group-Managed Service Account.
+
+.PARAMETER RunLevel
+The run level for the scheduled task. The default value is 'Highest'. The permitted values are 'Highest' and 'Limited'.
+
+.PARAMETER Modules
+A string or array of string representing the modules required by a PowerShell scheduled task.
 
 .INPUTS
 None.
