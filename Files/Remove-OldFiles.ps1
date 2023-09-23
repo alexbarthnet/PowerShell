@@ -48,7 +48,6 @@ None. The script reports the actions taken and does not provide any actionable o
 .\Remove-OldFiles.ps1 -Json C:\Content\config.json -Run
 #>
 
-
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
 	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Run')]
