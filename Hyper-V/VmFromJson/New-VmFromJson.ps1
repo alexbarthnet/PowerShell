@@ -8,7 +8,7 @@ Param(
 	[switch]$UseDefaultPathOnHost,
 	[switch]$SkipProvisioning,
 	[switch]$SkipStart,
-	[switch]$SkipClusterOwner,
+	[switch]$SkipClustering,
 	[switch]$ForceRestart,
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
@@ -3434,7 +3434,11 @@ Process {
 			If ($JsonData.$Name.DoNotCluster) {
 				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping clustering, DoNotCluster was set")
 			}
-			# if DoNotCluster is not set...
+			# if SkipClustering is set...
+			ElseIf ($SkipClustering) {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping clustering, SkipClustering was set")
+			}
+			# if DoNotCluster and SkipClustering are not set...
 			Else {
 				# define required parameters for Add-VMToClusterName
 				$AddVMToClusterName = @{
@@ -3478,102 +3482,102 @@ Process {
 					}
 					# if cluster priority matches...
 					Else {
-						# declare and continue
+						# declare
 						Write-Host ("$Hostname,$ComputerName,$Name - ...found priority already set to: $ClusterPriority")
 					}
-				}
-
-				# if cluster group is not online and SkipStart set...
-				If ($ClusterGroup.State -eq 'Offline' -and $SkipStart) {
-					Write-Host ("$Hostname,$ComputerName,$Name - ...skipping Start, SkipStart was set...")
-				}
-				# if cluster group is not online and SkipStart not set...
-				ElseIf ($ClusterGroup.State -eq 'Offline') {
-					# declare and begin
-					Write-Host ("$Hostname,$ComputerName,$Name - VM cluster group is offline, starting VM on cluster...")
-
-					# define paramters for Start-ClusterGroup
-					$StartClusterGroup = @{
-						Cluster        = $ClusterName
-						Name           = $ClusterGroup.Name
-						ChooseBestNode = $True
-						ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
-					}
-
-					# start cluster group
-					Try {
-						$ClusterGroup = Start-ClusterGroup @StartClusterGroup
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: starting VM on cluster")
-						Throw $_
-					}
-
-					# declare and continue
-					Write-Host ("$Hostname,$ComputerName,$Name - ...started VM on cluster")
-					Continue
-				}
-				# if cluster group is online set...
-				ElseIf ($ClusterGroup.State -eq 'Online' -and $ForceRestart) {
-					# ..and ForceRestart is set...
-					If ($ForceRestart) {
-						# declare and begin
-						Write-Host ("$Hostname,$ComputerName,$Name - VM cluster group is not offline but ForceRestart set, restarting VM on cluster...")
-
-						# define paramters for Stop-ClusterGroup
-						$StopClusterGroup = @{
-							Cluster     = $ClusterName
-							Name        = $ClusterGroup.Name
-							ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-						}
-
-						# stop cluster group
-						Try {
-							$ClusterGroup = Stop-ClusterGroup @StopClusterGroup
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: stopping VM on cluster")
-							Throw $_
-						}
-
-						# define paramters for Start-ClusterGroup
-						$StartClusterGroup = @{
-							Cluster        = $ClusterName
-							Name           = $ClusterGroup.Name
-							ChooseBestNode = $True
-						}
-
-						# start cluster group
-						Try {
-							$ClusterGroup = Start-ClusterGroup @StartClusterGroup
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: starting VM on cluster")
-							Throw $_
-						}
-
-						# declare and continue
-						Write-Host ("$Hostname,$ComputerName,$Name - ...restarted VM on cluster")
-						Continue
-					}
-					# ...and ForceRestart not set...
-					Else {
-						# declare and continue
-						Write-Host ("$Hostname,$ComputerName,$Name - ...found VM running on cluster")
-						Continue
-					}
-				}
-				# if cluster group is not in an expected state...
-				Else {
-					# declare and continue
-					Write-Host ("$Hostname,$ComputerName,$Name - ...found VM cluster group in unexpected state: $($ClusterGroup.State)")
-					Continue
 				}
 			}
 		}
 
-		# if VM is not on a cluster or DoNotCluster set...
-		If ($null -ne $VM -and ([string]::IsNullOrEmpty($ClusterName) -or $JsonData.$Name.DoNotCluster -eq $true)) {
+		# if VM is on a cluster...
+		If ($null -ne $VM -and $null -ne $ClusterGroup) {
+			# if cluster group is not online and SkipStart set...
+			If ($ClusterGroup.State -eq 'Offline' -and $SkipStart) {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping Start, SkipStart was set...")
+			}
+			# if cluster group is not online and SkipStart not set...
+			ElseIf ($ClusterGroup.State -eq 'Offline') {
+				# declare and begin
+				Write-Host ("$Hostname,$ComputerName,$Name - VM cluster group is offline, starting VM on cluster...")
+
+				# define paramters for Start-ClusterGroup
+				$StartClusterGroup = @{
+					Cluster        = $ClusterName
+					Name           = $ClusterGroup.Name
+					ChooseBestNode = $True
+					ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# start cluster group
+				Try {
+					$ClusterGroup = Start-ClusterGroup @StartClusterGroup
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: starting VM on cluster")
+					Throw $_
+				}
+
+				# declare and continue
+				Write-Host ("$Hostname,$ComputerName,$Name - ...started VM on cluster")
+				Continue
+			}
+			# if cluster group is online and ForceRestart set...
+			ElseIf ($ClusterGroup.State -eq 'Online' -and $ForceRestart) {
+				# declare and begin
+				Write-Host ("$Hostname,$ComputerName,$Name - VM cluster group is not offline but ForceRestart set, restarting VM on cluster...")
+
+				# define paramters for Stop-ClusterGroup
+				$StopClusterGroup = @{
+					Cluster     = $ClusterName
+					Name        = $ClusterGroup.Name
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# stop cluster group
+				Try {
+					$ClusterGroup = Stop-ClusterGroup @StopClusterGroup
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: stopping VM on cluster")
+					Throw $_
+				}
+
+				# define paramters for Start-ClusterGroup
+				$StartClusterGroup = @{
+					Cluster        = $ClusterName
+					Name           = $ClusterGroup.Name
+					ChooseBestNode = $True
+				}
+
+				# start cluster group
+				Try {
+					$ClusterGroup = Start-ClusterGroup @StartClusterGroup
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: starting VM on cluster")
+					Throw $_
+				}
+
+				# declare and continue
+				Write-Host ("$Hostname,$ComputerName,$Name - ...restarted VM on cluster")
+				Continue
+			}
+			# if cluster group is online and ForceRestart not set...
+			ElseIf ($ClusterGroup.State -eq 'Online') {
+				# declare and continue
+				Write-Host ("$Hostname,$ComputerName,$Name - ...found VM running on cluster")
+				Continue
+			}
+			# if cluster group is not in an expected state...
+			Else {
+				# declare and continue
+				Write-Host ("$Hostname,$ComputerName,$Name - ...found VM cluster group in unexpected state: $($ClusterGroup.State)")
+				Continue
+			}
+		}
+
+		# if VM is not on a cluster...
+		If ($null -ne $VM -and $null -eq $ClusterGroup) {
 			# if VM is not online and SkipStart set...
 			If ($VM.State -eq 'Off' -and $SkipStart) {
 				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping Start, SkipStart was set...")
@@ -3596,31 +3600,29 @@ Process {
 				Write-Host ("$Hostname,$ComputerName,$Name - ...started VM on host")
 				Continue
 			}
-			# if VM is online and...
+			# if VM is online and ForceRestart set...
 			ElseIf ($VM.State -eq 'Running' -and $ForceRestart) {
-				# ...and ForceRestart set...
-				If ($ForceRestart) {
-					# ...restart VM
-					Write-Host ("$Hostname,$ComputerName,$Name - restarting VM on host...")
+				# ...restart VM
+				Write-Host ("$Hostname,$ComputerName,$Name - restarting VM on host...")
 
-					# restart VM
-					Try {
-						Restart-VM -VM $VM -Force
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: restarting VM")
-						Throw $_
-					}
+				# restart VM
+				Try {
+					Restart-VM -VM $VM -Force
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: restarting VM")
+					Throw $_
+				}
 
-					# declare and continue
-					Write-Host ("$Hostname,$ComputerName,$Name - ...restarted VM on host")
-					Continue
-				}
-				Else {
-					# declare and continue
-					Write-Host ("$Hostname,$ComputerName,$Name - ...found VM running on host")
-					Continue
-				}
+				# declare and continue
+				Write-Host ("$Hostname,$ComputerName,$Name - ...restarted VM on host")
+				Continue
+			}
+			# if VM is online and ForceRestart not set...
+			ElseIf ($VM.State -eq 'Running') {
+				# declare and continue
+				Write-Host ("$Hostname,$ComputerName,$Name - ...found VM running on host")
+				Continue
 			}
 			# if VM is not in an expected state...
 			Else {
