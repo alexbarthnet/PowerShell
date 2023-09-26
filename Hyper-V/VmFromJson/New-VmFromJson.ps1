@@ -2101,7 +2101,13 @@ Begin {
 		)
 
 		# check parameters
-		If (($null -eq $VlanId -or $VlanId -eq 0) -and ($VlanMode -eq 'Access' -or $VlanMode -eq 'Trunk')) {
+		If ($VlanId -eq 0 -and $VlanMode -eq 'Access') {
+			Write-Warning -Message "VlanMode is '$VlanMode' but VlanId is 0; VMNetworkAdapter '$($VMNetworkAdapter.Name)' will be untagged" -WarningAction Inquire
+		}
+		ElseIf ($null -eq $VlanId -and $VlanMode -eq 'Access') {
+			Write-Warning -Message "VlanMode is '$VlanMode' but VlanId is null; VMNetworkAdapter '$($VMNetworkAdapter.Name)' will be untagged" -WarningAction Inquire
+		}
+		ElseIf ($null -eq $VlanId -and $VlanMode -eq 'Trunk') {
 			Write-Warning -Message "VlanMode is '$VlanMode' but VlanId is null; VMNetworkAdapter '$($VMNetworkAdapter.Name)' will be untagged" -WarningAction Inquire
 		}
 		ElseIf ($null -eq $VlanIdList -and $VlanMode -eq 'Trunk') {
