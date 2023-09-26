@@ -75,7 +75,6 @@ None. The script reports the actions taken and does not provide any actionable o
 .\Update-ScheduledTasks.ps1 -Json C:\Content\config.json -Run
 #>
 
-
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
 	[Parameter(Mandatory = $True, ParameterSetName = 'Update')]
