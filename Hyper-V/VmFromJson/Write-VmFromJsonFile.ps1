@@ -149,20 +149,20 @@ Param(
 	# OS Deployment - SCCM - maintenance window collection
 	[Parameter(Position = 8, ParameterSetName = 'AddOSD')]
 	[string]$MaintenanceCollection,
-	# VM - enable the virtual TPM for the VM (warning: virtual TPM locked to host without additional work)
-	[Parameter(ParameterSetName = 'Add')]
-	[switch]$EnableVMTPM,
 	# VM - startup priority value for clustered VMs, 0 = no auto start, 1000 = low, 2000 = medium, 3000 = high
-	[Parameter(ParameterSetName = 'Add')]
+	[Parameter(Position = 20, ParameterSetName = 'Add')]
 	[ValidateSet(0, 1000, 2000, 3000)]
 	[uint32]$ClusterPriority,
-	# VM - do not add VM to cluster if created a hypervisor joined to a cluster
-	[Parameter(ParameterSetName = 'Add')]
-	[switch]$DoNotCluster,
-	# VM - define VM generation 
-	[Parameter(ParameterSetName = 'Add')]
+	# VM - define VM generation; 1 = generation 1 VM, 2 = generation 2 VM
+	[Parameter(Position = 21, ParameterSetName = 'Add')]
 	[ValidateSet(1, 2)]
 	[uint16]$Generation,
+	# VM - enable the virtual TPM for the VM (warning: virtual TPM locked to host without additional work)
+	[Parameter(Position = 22, ParameterSetName = 'Add')]
+	[switch]$EnableVMTPM,
+	# VM - do not add VM to cluster if created a hypervisor joined to a cluster
+	[Parameter(Position = 23, ParameterSetName = 'Add')]
+	[switch]$DoNotCluster,
 	# VM - preserve existing parameters when editing a VM
 	[Parameter(ParameterSetName = 'Add')]
 	[switch]$PreserveVMParameters,
