@@ -2100,19 +2100,53 @@ Begin {
 			[string]$VlanIdList
 		)
 
-		# check parameters
-		If ($VlanId -eq 0 -and $VlanMode -eq 'Access') {
-			Write-Warning -Message "VlanMode is '$VlanMode' but VlanId is 0; VMNetworkAdapter '$($VMNetworkAdapter.Name)' will be untagged" -WarningAction Inquire
+		# if VLAN mode is Access...
+		If ($VlanMode -eq 'Access') {
+			# ...but the VLAN ID is 0...
+			If ($VlanId -eq 0) {
+				Write-Warning -Message "VlanMode is '$VlanMode' but VlanId is 0; VMNetworkAdapter '$($VMNetworkAdapter.Name)' will be untagged" -WarningAction Inquire
+				$VlanMode = 'Untagged'
+			}
+			# ...but the VLAN ID is null...
+			ElseIf ($null -eq $VlanId) {
+				Write-Warning -Message "VlanMode is '$VlanMode' but VlanId is null; VMNetworkAdapter '$($VMNetworkAdapter.Name)' will be untagged" -WarningAction Inquire
+				$VlanMode = 'Untagged'
+			}
 		}
-		ElseIf ($null -eq $VlanId -and $VlanMode -eq 'Access') {
-			Write-Warning -Message "VlanMode is '$VlanMode' but VlanId is null; VMNetworkAdapter '$($VMNetworkAdapter.Name)' will be untagged" -WarningAction Inquire
+
+		# if VLAN mode is Trunk...
+		If ($VlanMode -eq 'Trunk') { 
+			# ...but VlanId and VlanIdList are null
+			If ($null -eq $VlanId -and $null -eq $VlanIdList) {
+				Write-Warning -Message "VlanMode is '$VlanMode' but VlanId and VlanIdList are null; VMNetworkAdapter '$($VMNetworkAdapter.Name)' will be untagged" -WarningAction Inquire
+				$VlanMode = 'Untagged'
+			}
+			# ...but VlanId is null
+			ElseIf ($null -eq $VlanId) {
+				Write-Warning -Message "VlanMode is '$VlanMode' but VlanId is null; VMNetworkAdapter '$($VMNetworkAdapter.Name)' will use VlanId '0' for VlanId" -WarningAction Inquire
+				$VlanId = 0
+			}
+			# ...but VlanIdList is null
+			ElseIf ($null -eq $VlanIdList) {
+				Write-Warning -Message "VlanMode is '$VlanMode' but VlanIdList is null; VMNetworkAdapter '$($VMNetworkAdapter.Name)' will use VlanId '$VlanId' for VlanId" -WarningAction Inquire
+				$VlanIdList = [string]$VlanId
+			}
 		}
-		ElseIf ($null -eq $VlanId -and $VlanMode -eq 'Trunk') {
-			Write-Warning -Message "VlanMode is '$VlanMode' but VlanId is null; VMNetworkAdapter '$($VMNetworkAdapter.Name)' will be untagged" -WarningAction Inquire
+
+		# if VLAN mode is Access...
+		If ($VlanMode -eq 'Isolation') {
+			# ...but the VLAN ID is 0...
+			If ($VlanId -eq 0) {
+				Write-Warning -Message "VlanMode is '$VlanMode' but VlanId is 0; VMNetworkAdapter '$($VMNetworkAdapter.Name)' will be untagged" -WarningAction Inquire
+				$VlanMode = 'Untagged'
+			}
+			# ...but the VLAN ID is null...
+			ElseIf ($null -eq $VlanId) {
+				Write-Warning -Message "VlanMode is '$VlanMode' but VlanId is null; VMNetworkAdapter '$($VMNetworkAdapter.Name)' will be untagged" -WarningAction Inquire
+				$VlanMode = 'Untagged'
+			}
 		}
-		ElseIf ($null -eq $VlanIdList -and $VlanMode -eq 'Trunk') {
-			Write-Warning -Message "VlanMode is '$VlanMode' but VlanIdList is null; VMNetworkAdapter '$($VMNetworkAdapter.Name)' will be untagged" -WarningAction Inquire
-		}
+
 
 		# get VLAN for network adapter
 		Try {
@@ -2124,7 +2158,7 @@ Begin {
 		}
 
 		# if VLAN is null or mode is Isolation...
-		If (($null -eq $VlanId -or $VlanId -eq 0) -or ($null -eq $VlanIdList -and $VlanMode -eq 'Trunk') -or $VlanMode -eq 'Untagged' -or $VlanMode -eq 'Isolation') {
+		If ($VlanMode -eq 'Untagged' -or $VlanMode -eq 'Isolation') {
 			# ...and VLAN mode not untagged...
 			If ($VMNetworkAdapterVlan.OperationMode -ne 'Untagged') {
 				# define string for Write-Host
@@ -2139,8 +2173,7 @@ Begin {
 			}
 		}
 		# if VLAN list is not null and mode is Trunk...
-		ElseIf ($null -ne $VlanIdList -and $VlanMode -eq 'Trunk') {
-			# ...and VLAN 
+		ElseIf ($VlanMode -eq 'Trunk') {
 			# ...and VLAN mode is not access or not VLAN list is not requested VLANs...
 			If ($VMNetworkAdapterVlan.OperationMode -ne 'Trunk' -or $VMNetworkAdapterVlan.NativeVlanId -ne $VlanId -or $VMNetworkAdapter.AllowedVlanIdListString -ne $VlanIdList) {
 				# define string for Write-Host
