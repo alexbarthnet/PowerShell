@@ -97,7 +97,7 @@ $csv_imported | Where-Object {$_.Host -eq $hostname_vm} | ForEach-Object {
         Write-Host ("$hostname_vm, $nic_name, $nic_addr - Jumbo Packet found: " + $nic_size.DisplayValue)
         If ($nic_size.DisplayValue -ne "9014") {
             Write-Host ("$hostname_vm, $nic_name, $nic_addr - Jumbo Packet not set to '9014', fixing...")
-            Set-NetAdapterAdvancedProperty -Name $nic_name -DisplayName 'Jumbo Packet' -DisplayValue '9014'    
+            Set-NetAdapterAdvancedProperty -Name $nic_name -DisplayName 'Jumbo Packet' -DisplayValue '9014'
         } Else {
             Write-Host ("$hostname_vm, $nic_name, $nic_addr - Jumbo Packet set to '9014'")
         }
