@@ -10,65 +10,94 @@ Function Copy-PathFromPSDirect {
 	)
 
 	# check for VM on local system
-	$vm_check = $null
-	$vm_check = Get-VM | Where-Object { $_.Name -eq $VMName }
-	If ($vm_check) {
-		# retrieve VM credentials
-		$Credential = $null
+	Try {
+		$null = Get-VM -VMName $VMName -ErrorAction Stop
+	}
+	Catch {
+		Write-Output "Could not locate VM: '$VMName'"
+		Return
+	}
+
+	# retrieve VM credentials
+	Try {
 		$Credential = Unprotect-CmsCredentials -Identity $VMName
-		If ($Credential) {
-			# connect to VM
-			$vm_direct = $null
-			$vm_direct = New-PSSession -VMName $VMName -Credential $Credential
-			If ($vm_direct) {
-				# verify Path
-				If (Invoke-Command -Session $vm_direct -ScriptBlock { Test-Path -Path $using:Path }) {
-					# retrieve files from Path
-					$file_list = @()
-					$file_list += Invoke-Command -Session $vm_direct -ScriptBlock { Get-ChildItem -Path $using:Path }
-					If ($file_list) {
-						# verify Destination
-						$destination_check = $null
-						$destination_check = Test-Path -Path $Destination -PathType Container
-						If ($destination_check) {
-							# determine if Destination should be cleared before writing files
-							If ($Purge) {
-								Get-ChildItem -Path $Destination -Recurse -Force | Remove-Item -Force -Verbose
-							}
-							# copy files from VM to Destination
-							Try {
-								ForEach ($file in $file_list.FullName) {
-									Copy-Item -FromSession $vm_direct -Path $file -Destination $Destination -Force -Verbose
-								}
-							}
-							Catch {
-								Write-Output "Could not copy files to destination folder '$Destination' on host"
-							}
-						}
-						Else {
-							Write-Output "Could not locate destination folder '$Destination' on host"
-						}
-					}
-					Else {
-						Write-Output "Could not retrieve files in '$Path' on VM"
-					}
-				}
-				Else {
-					Write-Output "Could not find '$Path' on VM"
-				}
-				# disconnect from VM
-				$vm_direct | Remove-PSSession
-			}
-			Else {
-				Write-Output "Could not create PowerShell Direct session for VM: '$VMName'"
-			}
+	}
+	Catch {
+		Write-Output "Could not unprotect credentials for VM: '$VMName'"
+		Return
+	}
+
+	# verify VM credentials
+	If (!$Credential) {
+		Write-Output "Could not locate credentials for VM: '$VMName'"
+		Return
+	}
+
+	# create PSDirect session
+	Try {
+		$Session = New-PSSession -VMName $VMName -Credential $Credential -ErrorAction Stop
+	}
+	Catch {
+		Write-Output "Could not create PowerShell Direct session for VM: '$VMName'"
+		Return
+	}
+
+	# test path on VM
+	Try {
+		$TestPath = Invoke-Command -Session $Session -ScriptBlock { Test-Path -Path $using:Path } -ErrorAction Stop
+	}
+	Catch {
+		Write-Output "Could test path '$Path' on VM: '$VMName'"
+		Return
+	}
+
+	# verify path on VM
+	If (!$TestPath) {
+		Write-Output "Could not find '$Path' on VM: '$VMName'"
+		Return
+	}
+
+	# test destination on host
+	If (!(Test-Path -Path $Destination -PathType Container )) {
+		Write-Output "Could not find '$Destination' on host"
+		Return
+	}
+
+	# retrieve files from path on VM
+	Try {
+		$Items = Invoke-Command -Session $Session -ScriptBlock { Get-ChildItem -Path $using:Path -ErrorAction Stop }
+	}
+	Catch {
+		Write-Output "Could not retrieve files in '$Path' on VM: '$VMName'"
+		Return
+	}
+
+	# remove files in destination on host before copying files from path on VM
+	If ($Purge -and $Items) {
+		Try {
+			Get-ChildItem -Path $Destination -Recurse -Force -ErrorAction Stop | Remove-Item -Force -Verbose -ErrorAction Stop
 		}
-		Else {
-			Write-Output "Could not locate credentials for VM: '$VMName'"
+		Catch {
+			Write-Output "Could not clear destination folder '$Destination' on host before file copy"
 		}
 	}
-	Else {
-		Write-Output "Could not locate VM: '$VMName'"
+
+	# copy files from path on VM to destination on host
+	Try {
+		ForEach ($Item in $Items.FullName) {
+			Copy-Item -FromSession $Session -Path $Item -Destination $Destination -Force -Verbose -ErrorAction Stop
+		}
+	}
+	Catch {
+		Write-Output "Could not copy files to destination folder '$Destination' on host"
+	}
+
+	# disconnect from VM
+	Try {
+		Remove-PSSession -Session $Session -ErrorAction Stop
+	}
+	Catch {
+		Write-Output "Could not remove PowerShell Direct session for VM: '$VMName'"
 	}
 }
 
@@ -82,65 +111,94 @@ Function Copy-PathToPSDirect {
 	)
 
 	# check for VM on local system
-	$vm_check = $null
-	$vm_check = Get-VM | Where-Object { $_.Name -eq $VMName }
-	If ($vm_check) {
-		# retrieve VM credentials
-		$Credential = $null
+	Try {
+		$null = Get-VM -VMName $VMName -ErrorAction Stop
+	}
+	Catch {
+		Write-Output "Could not locate VM: '$VMName'"
+		Return
+	}
+
+	# retrieve VM credentials
+	Try {
 		$Credential = Unprotect-CmsCredentials -Identity $VMName
-		If ($Credential) {
-			# connect to VM
-			$vm_direct = $null
-			$vm_direct = New-PSSession -VMName $VMName -Credential $Credential
-			If ($vm_direct) {
-				# verify Path
-				If (Test-Path -Path $Path) {
-					# retrieve files from path
-					$file_list = @()
-					$file_list += Get-ChildItem -Path $Path
-					If ($file_list) {
-						# verify destination on VM
-						$destination_check = $null
-						$destination_check = Invoke-Command -Session $vm_direct -ScriptBlock { Test-Path -Path $using:Destination -PathType Container }
-						If ($destination_check) {
-							# determine if Destination should be cleared before writing files
-							If ($Purge) {
-								Invoke-Command -Session $vm_direct -ScriptBlock { Get-ChildItem -Path $using:Destination -Recurse -Force | Remove-Item -Force -Verbose }
-							}
-							# copy files from VM to Destination
-							Try {
-								ForEach ($file in $file_list.FullName) {
-									Copy-Item -ToSession $vm_direct -Path $file -Destination $Destination -Force -Verbose
-								}
-							}
-							Catch {
-								Write-Output "Could not copy files to destination folder '$Destination' on VM"
-							}
-						}
-						Else {
-							Write-Output "Could not locate destination folder '$Destination' on VM"
-						}
-					}
-					Else {
-						Write-Output "Could not retrieve files in '$Path' on host"
-					}
-				}
-				Else {
-					Write-Output "Could not find '$Path' on host"
-				}
-				# disconnect from VM
-				$vm_direct | Remove-PSSession
-			}
-			Else {
-				Write-Output "Could not create PowerShell Direct session for VM: '$VMName'"
-			}
+	}
+	Catch {
+		Write-Output "Could not unprotect credentials for VM: '$VMName'"
+		Return
+	}
+
+	# verify VM credentials
+	If (!$Credential) {
+		Write-Output "Could not locate credentials for VM: '$VMName'"
+		Return
+	}
+
+	# create PSDirect session
+	Try {
+		$Session = New-PSSession -VMName $VMName -Credential $Credential -ErrorAction Stop
+	}
+	Catch {
+		Write-Output "Could not create PowerShell Direct session for VM: '$VMName'"
+		Return
+	}
+
+	# test path on host
+	If (!(Test-Path -Path $Path)) {
+		Write-Output "Could not find '$Path' on host"
+		Return
+	}
+
+	# test destination on VM
+	Try {
+		$TestDestination = Invoke-Command -Session $Session -ScriptBlock { Test-Path -Path $using:Destination -PathType Container } -ErrorAction Stop
+	}
+	Catch {
+		Write-Output "Could test path '$Destination' on VM: '$VMName'"
+		Return
+	}
+
+	# verify path on VM
+	If (!$TestDestination) {
+		Write-Output "Could not find '$Destination' on VM: '$VMName'"
+		Return
+	}
+
+	# retrieve files from path on host
+	Try {
+		$Items = Get-ChildItem -Path $Path -ErrorAction Stop
+	}
+	Catch {
+		Write-Output "Could not retrieve files in '$Path' on host"
+		Return
+	}
+
+	# remove files in destination on VM before copying files from path on host
+	If ($Purge -and $Items) {
+		Try {
+			Invoke-Command -Session $Session -ScriptBlock { Get-ChildItem -Path $using:Destination -Recurse -Force -ErrorAction Stop | Remove-Item -Force -Verbose -ErrorAction Stop }
 		}
-		Else {
-			Write-Output "Could not locate credentials for VM: '$VMName'"
+		Catch {
+			Write-Output "Could not clear destination folder '$Destination' on VM before file copy"
 		}
 	}
-	Else {
-		Write-Output "Could not locate VM: '$VMName'"
+
+	# copy files from path on host to destination on VM
+	Try {
+		ForEach ($Item in $Items.FullName) {
+			Copy-Item -ToSession $Session -Path $Item -Destination $Destination -Force -Verbose -ErrorAction Stop
+		}
+	}
+	Catch {
+		Write-Output "Could not copy files to destination folder '$Destination' on VM: '$VMName'"
+	}
+
+	# disconnect from VM
+	Try {
+		Remove-PSSession -Session $Session -ErrorAction Stop
+	}
+	Catch {
+		Write-Output "Could not remove PowerShell Direct session for VM: '$VMName'"
 	}
 }
 
@@ -325,7 +383,7 @@ Function Export-FilesWithPSDirect {
 						Write-Warning -Message "Will overwrite existing entry for '$VMName' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
 						$JsonData = $JsonData | Where-Object { $_.VMName -ne $VMName }
 					}
-				
+
 					# add datum to data
 					$JsonData += $JsonEntry
 					$JsonData | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
@@ -393,7 +451,7 @@ Function Export-FilesWithPSDirect {
 				# remove old logs
 				ForEach ($OldFile in $OldFiles) {
 					Write-Output "Removing old transcript file: $($OldFile.FullName)"
-					Try { 
+					Try {
 						Remove-Item -Path $OldFile.FullName -Force -ErrorAction Stop
 					}
 					Catch {
@@ -401,7 +459,7 @@ Function Export-FilesWithPSDirect {
 					}
 				}
 			}
-	
+
 			# stop transcript
 			Try {
 				Stop-Transcript
@@ -596,7 +654,7 @@ Function Import-FilesWithPSDirect {
 						Write-Warning -Message "Will overwrite existing entry for '$VMName' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
 						$JsonData = $JsonData | Where-Object { $_.VMName -ne $VMName }
 					}
-				
+
 					# add datum to data
 					$JsonData += $JsonEntry
 					$JsonData | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
@@ -664,7 +722,7 @@ Function Import-FilesWithPSDirect {
 				# remove old logs
 				ForEach ($OldFile in $OldFiles) {
 					Write-Output "Removing old transcript file: $($OldFile.FullName)"
-					Try { 
+					Try {
 						Remove-Item -Path $OldFile.FullName -Force -ErrorAction Stop
 					}
 					Catch {
@@ -672,7 +730,7 @@ Function Import-FilesWithPSDirect {
 					}
 				}
 			}
-	
+
 			# stop transcript
 			Try {
 				Stop-Transcript
