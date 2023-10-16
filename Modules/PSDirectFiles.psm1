@@ -244,8 +244,10 @@ Function Export-FilesWithPSDirect {
 	Begin {
 		# if running...
 		If ($Run) {
+			# get extension of command path
+			$TranscriptTail = (Get-Item -Path $PSCommandPath).Extension
 			# append hostname and datetime to script path to define transcript path
-			$TranscriptFile = $PSCommandPath.Replace('.ps1', "_$HostName.txt").Replace('.txt', "_$LogStart.txt")
+			$TranscriptFile = $PSCommandPath.Replace($TranscriptTail, "_$HostName`_$LogStart.txt")
 			# define ideal log path
 			$TranscriptPath = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'Logs'
 			# if ideal log path found...
@@ -513,8 +515,10 @@ Function Import-FilesWithPSDirect {
 	Begin {
 		# if running...
 		If ($Run) {
+			# get extension of command path
+			$TranscriptTail = (Get-Item -Path $PSCommandPath).Extension
 			# append hostname and datetime to script path to define transcript path
-			$TranscriptFile = $PSCommandPath.Replace('.ps1', "_$HostName.txt").Replace('.txt', "_$LogStart.txt")
+			$TranscriptFile = $PSCommandPath.Replace($TranscriptTail, "_$HostName`_$LogStart.txt")
 			# define ideal log path
 			$TranscriptPath = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'Logs'
 			# if ideal log path found...
