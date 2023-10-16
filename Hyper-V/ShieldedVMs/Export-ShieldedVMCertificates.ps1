@@ -36,41 +36,50 @@ Param(
 )
 
 Begin {
-	# append hostname to script path to define transcript path
-	$PathScriptLog = $PSCommandPath.Replace('.ps1', "_$HostName.txt")
-	# append datetime to transcript path
-	$PathScriptLog = $PathScriptLog.Replace('.txt', "_$LogStart.txt")
+	# append hostname and datetime to script path to define transcript path
+	$TranscriptFile = $PSCommandPath.Replace('.ps1', "_$HostName.txt").Replace('.txt', "_$LogStart.txt")
 	# define ideal log path
-	$PathFolderLog = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'Logs'
+	$TranscriptPath = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'Logs'
 	# if ideal log path found...
-	If (Test-Path -Path $PathFolderLog -PathType Container) {
-		# use modified script path
-		$PathScriptLog = $PathScriptLog.Replace($PSScriptRoot, $PathFolderLog)
-	}
-	# if ideal log path not found...
-	Else {
-		# use original script path and folder
-		$PathScriptLog = $PSCommandPath
-		$PathFolderLog = $PSScriptRoot
+	If (Test-Path -Path $TranscriptPath -PathType 'Container') {
+		# update transcript path
+		$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptPath)
 	}
 	# define parameters for Start-Transcript
 	$StartTranscript = @{
-		Path        = $PathScriptLog
+		Path        = $TranscriptFile
 		Force       = $true
 		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 	}
-	# start transcript in script directory
-	Try {
+	# start transcript
+	Try	{
 		Start-Transcript @StartTranscript
 	}
 	Catch {
 		# get program data path
-		$PathOfAppData = [System.Environment]::GetFolderPath('CommonApplicationData')
-		# redirect transcript from script directory to programdata path
-		$PathInAppData = $PathScriptLog.Replace($PathFolderLog, $PathOfAppData)
+		$TranscriptRoot = [System.Environment]::GetFolderPath('CommonApplicationData')
+		# get basename of script
+		$TranscriptBase = Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty 'BaseName'
+		# define path in program data
+		$TranscriptPath = Join-Path -Path $TranscriptRoot -ChildPath $TranscriptBase
+		# if path in program data not found...
+		If ((Test-Path -Path $TranscriptPath -PathType 'Container') -eq $false) {
+			Try {
+				# create path in program data
+				$null = New-Item -Path $TranscriptPath -ItemType 'Directory' -ErrorAction Stop
+				# redirect transcript file from script directory to path in program data
+				$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptPath)
+			}
+			Catch {
+				# clear errors before starting script
+				$Error.Clear()
+				# redirect transcript file from script directory to root of program data
+				$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptRoot)
+			}
+		}
 		# update parameters for Start-Transcript
-		$StartTranscript['Path'] = $PathInAppData
-		# start transcript in programdata path
+		$StartTranscript['Path'] = $TranscriptFile
+		# start transcript
 		Try {
 			Start-Transcript @StartTranscript
 		}
@@ -155,7 +164,7 @@ Begin {
 				$X509Certificate2 = New-Object -TypeName 'System.Security.Cryptography.X509Certificates.X509Certificate2'
 			}
 			Catch {
-				Write-Error -Message "could not create X.509 certificate object"
+				Write-Error -Message 'could not create X.509 certificate object'
 			}
 
 			# ...import .cer file into object
