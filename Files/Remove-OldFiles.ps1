@@ -67,6 +67,15 @@ Param(
 	[string]$OlderThanType,
 	[Parameter()]
 	[string]$Json,
+	# log file max age
+	[Parameter(DontShow)]
+	[double]$LogDays = 7,
+	# log file min count
+	[Parameter(DontShow)]
+	[uint16]$LogCount = 7,
+	# log start time
+	[Parameter(DontShow)]
+	[string]$LogStart = (Get-Date -Format FileDateTimeUniversal),
 	# local hostname
 	[Parameter(DontShow)]
 	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
