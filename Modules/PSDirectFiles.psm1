@@ -1,5 +1,101 @@
 #Requires -Modules CmsCredentials
 
+Function Start-TranscriptWithHostAndDate {
+	# get basename from command path
+	$PSCommandBase = Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty BaseName
+	# append hostname and datetime to basename of command path to define transcript base
+	$TranscriptBase = "$PSCommandBase`_$HostName`_$LogStart`.txt"
+	# define ideal log path
+	$TranscriptPath = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'Logs'
+	# if ideal log path found...
+	If (Test-Path -Path $TranscriptPath -PathType 'Container') {
+		# ...log to ideal location
+		$TranscriptFile = Join-Path -Path $TranscriptPath -ChildPath $TranscriptBase
+	}
+	# if ideal log path not found...
+	Else {
+		# ...log to script root
+		$TranscriptFile = Join-Path -Path $PSScriptRoot -ChildPath $TranscriptBase
+	}
+	# define parameters for Start-Transcript
+	$script:StartTranscript = @{
+		Path        = $TranscriptFile
+		Force       = $true
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+	}
+	# start transcript
+	Try	{
+		Start-Transcript @script:StartTranscript
+	}
+	Catch {
+		# get program data path
+		$TranscriptRoot = [System.Environment]::GetFolderPath('CommonApplicationData')
+		# define path in program data
+		$TranscriptPath = Join-Path -Path $TranscriptRoot -ChildPath $PSCommandBase
+		# if path in program data not found...
+		If ((Test-Path -Path $TranscriptPath -PathType 'Container') -eq $false) {
+			Try {
+				# create path in program data
+				$null = New-Item -Path $TranscriptPath -ItemType 'Directory' -ErrorAction Stop
+				# redirect transcript file from script directory to path in program data
+				$script:StartTranscript['Path'] = Join-Path -Path $TranscriptPath -ChildPath $TranscriptBase
+			}
+			Catch {
+				# clear errors before starting script
+				$Error.Clear()
+				# redirect transcript file from script directory to root of program data
+				$script:StartTranscript['Path'] = Join-Path -Path $TranscriptRoot -ChildPath $TranscriptBase
+			}
+		}
+		# start transcript
+		Try {
+			Start-Transcript @script:StartTranscript
+		}
+		Catch {
+			Throw $_
+		}
+	}
+}
+
+Function Stop-TranscriptWithHostAndDate {
+	# get transcript path
+	$PathForTranscript = Split-Path -Path $script:StartTranscript['Path'] -Parent
+	# get transcript name
+	$NameForTranscript = (Split-Path -Path $script:StartTranscript['Path'] -Leaf).Replace("_$LogStart.txt", $null)
+	# get transcript files
+	$TranscriptFiles = Get-ChildItem -Path $PathForTranscript | Where-Object { $_.BaseName.StartsWith($NameForTranscript, [System.StringComparison]::InvariantCultureIgnoreCase) -and $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) }
+	# get transcript files newer than cleanup date
+	$NewFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-$LogDays) }
+	# if count of transcript files count is less than cleanup threshold...
+	If ($LogCount -lt $NewFiles.Count ) {
+		# declare and continue
+		Write-Output "Skipping transcript file cleanup; count of transcript files ($($NewFiles.Count)) is below cleanup threshold ($LogCount)"
+	}
+	# if count of transcript files is not less than cleanup threshold...
+	Else {
+		# get log files older than cleanup date
+		$OldFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) } | Sort-Object -Property FullName
+		# remove old logs
+		ForEach ($OldFile in $OldFiles) {
+			Write-Output "Removing old transcript file: $($OldFile.FullName)"
+			Try {
+				Remove-Item -Path $OldFile.FullName -Force -ErrorAction Stop
+			}
+			Catch {
+				$_
+			}
+		}
+	}
+
+	# stop transcript
+	Try {
+		Stop-Transcript
+	}
+	Catch {
+		Throw $_
+	}
+}
+
 Function Copy-PathFromPSDirect {
 	[CmdletBinding()]
 	param (
@@ -244,58 +340,11 @@ Function Export-FilesWithPSDirect {
 	Begin {
 		# if running...
 		If ($Run) {
-			# get extension of command path
-			$TranscriptTail = (Get-Item -Path $PSCommandPath).Extension
-			# append hostname and datetime to script path to define transcript path
-			$TranscriptFile = $PSCommandPath.Replace($TranscriptTail, "_$HostName`_$LogStart.txt")
-			# define ideal log path
-			$TranscriptPath = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'Logs'
-			# if ideal log path found...
-			If (Test-Path -Path $TranscriptPath -PathType 'Container') {
-				# update transcript path
-				$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptPath)
-			}
-			# define parameters for Start-Transcript
-			$StartTranscript = @{
-				Path        = $TranscriptFile
-				Force       = $true
-				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-			}
-			# start transcript
-			Try	{
-				Start-Transcript @StartTranscript
+			Try {
+				Start-TranscriptWithHostAndDate
 			}
 			Catch {
-				# get program data path
-				$TranscriptRoot = [System.Environment]::GetFolderPath('CommonApplicationData')
-				# get basename of script
-				$TranscriptBase = Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty 'BaseName'
-				# define path in program data
-				$TranscriptPath = Join-Path -Path $TranscriptRoot -ChildPath $TranscriptBase
-				# if path in program data not found...
-				If ((Test-Path -Path $TranscriptPath -PathType 'Container') -eq $false) {
-					Try {
-						# create path in program data
-						$null = New-Item -Path $TranscriptPath -ItemType 'Directory' -ErrorAction Stop
-						# redirect transcript file from script directory to path in program data
-						$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptPath)
-					}
-					Catch {
-						# clear errors before starting script
-						$Error.Clear()
-						# redirect transcript file from script directory to root of program data
-						$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptRoot)
-					}
-				}
-				# update parameters for Start-Transcript
-				$StartTranscript['Path'] = $TranscriptFile
-				# start transcript
-				Try {
-					Start-Transcript @StartTranscript
-				}
-				Catch {
-					Throw $_
-				}
+				Throw $_
 			}
 		}
 	}
@@ -398,29 +447,25 @@ Function Export-FilesWithPSDirect {
 			}
 			# run through entries in configuration file
 			$Run {
-				Try {
-					# define transcript file from script path and start transcript
-					Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.txt') -Force
-
-					# check entry count in configuration file
-					If ($JsonData.Count -eq 0) {
-						Write-Output "`nERROR: no entries found in configuration file: '$Json'"
-						Return
-					}
-
-					# process configuration file
-					ForEach ($json_datum in $JsonData) {
-						If ([string]::IsNullOrEmpty($json_datum.VMName) -or [string]::IsNullOrEmpty($json_datum.Path) -or [string]::IsNullOrEmpty($json_datum.Destination)) {
-							Write-Output "`nERROR: invalid entry found in configuration file: '$Json'"
-						}
-						Else {
-							Copy-PathFromPSDirect -VMName $json_datum.VMName -Path $json_datum.Path -Destination $json_datum.Destination -Purge:$json_datum.Purge
-						}
-					}
+				# check entry count in configuration file
+				If ($JsonData.Count -eq 0) {
+					Write-Output "`nERROR: no entries found in configuration file: '$Json'"
+					Return
 				}
-				Finally {
-					Write-Output ([string]::Empty)
-					Stop-Transcript
+
+				# process configuration file
+				ForEach ($JsonEntry in $JsonData) {
+					If ([string]::IsNullOrEmpty($JsonEntry.VMName) -or [string]::IsNullOrEmpty($JsonEntry.Path) -or [string]::IsNullOrEmpty($JsonEntry.Destination)) {
+						Write-Output "`nERROR: invalid entry found in configuration file: '$Json'"
+					}
+					Else {
+						Try {
+							Copy-PathFromPSDirect -VMName $JsonEntry.VMName -Path $JsonEntry.Path -Destination $JsonEntry.Destination -Purge:$JsonEntry.Purge
+						}
+						Catch {
+							Return $_
+						}
+					}
 				}
 			}
 			Default {
@@ -433,38 +478,8 @@ Function Export-FilesWithPSDirect {
 	End {
 		# if running...
 		If ($Run) {
-			# get transcript path
-			$PathForTranscript = Split-Path -Path $StartTranscript['Path'] -Parent
-			# get transcript name
-			$NameForTranscript = (Split-Path -Path $StartTranscript['Path'] -Leaf).Replace("_$LogStart.txt", $null)
-			# get transcript files
-			$TranscriptFiles = Get-ChildItem -Path $PathForTranscript | Where-Object { $_.BaseName.StartsWith($NameForTranscript, [System.StringComparison]::InvariantCultureIgnoreCase) -and $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) }
-			# get transcript files newer than cleanup date
-			$NewFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-$LogDays) }
-			# if count of transcript files count is less than cleanup threshold...
-			If ($LogCount -lt $NewFiles.Count ) {
-				# declare and continue
-				Write-Output "Skipping transcript file cleanup; count of transcript files ($($NewFiles.Count)) is below cleanup threshold ($LogCount)"
-			}
-			# if count of transcript files is not less than cleanup threshold...
-			Else {
-				# get log files older than cleanup date
-				$OldFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) } | Sort-Object -Property FullName
-				# remove old logs
-				ForEach ($OldFile in $OldFiles) {
-					Write-Output "Removing old transcript file: $($OldFile.FullName)"
-					Try {
-						Remove-Item -Path $OldFile.FullName -Force -ErrorAction Stop
-					}
-					Catch {
-						$_
-					}
-				}
-			}
-
-			# stop transcript
 			Try {
-				Stop-Transcript
+				Stop-TranscriptWithHostAndDate
 			}
 			Catch {
 				Throw $_
@@ -515,58 +530,11 @@ Function Import-FilesWithPSDirect {
 	Begin {
 		# if running...
 		If ($Run) {
-			# get extension of command path
-			$TranscriptTail = (Get-Item -Path $PSCommandPath).Extension
-			# append hostname and datetime to script path to define transcript path
-			$TranscriptFile = $PSCommandPath.Replace($TranscriptTail, "_$HostName`_$LogStart.txt")
-			# define ideal log path
-			$TranscriptPath = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'Logs'
-			# if ideal log path found...
-			If (Test-Path -Path $TranscriptPath -PathType 'Container') {
-				# update transcript path
-				$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptPath)
-			}
-			# define parameters for Start-Transcript
-			$StartTranscript = @{
-				Path        = $TranscriptFile
-				Force       = $true
-				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-			}
-			# start transcript
-			Try	{
-				Start-Transcript @StartTranscript
+			Try {
+				Start-TranscriptWithHostAndDate
 			}
 			Catch {
-				# get program data path
-				$TranscriptRoot = [System.Environment]::GetFolderPath('CommonApplicationData')
-				# get basename of script
-				$TranscriptBase = Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty 'BaseName'
-				# define path in program data
-				$TranscriptPath = Join-Path -Path $TranscriptRoot -ChildPath $TranscriptBase
-				# if path in program data not found...
-				If ((Test-Path -Path $TranscriptPath -PathType 'Container') -eq $false) {
-					Try {
-						# create path in program data
-						$null = New-Item -Path $TranscriptPath -ItemType 'Directory' -ErrorAction Stop
-						# redirect transcript file from script directory to path in program data
-						$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptPath)
-					}
-					Catch {
-						# clear errors before starting script
-						$Error.Clear()
-						# redirect transcript file from script directory to root of program data
-						$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptRoot)
-					}
-				}
-				# update parameters for Start-Transcript
-				$StartTranscript['Path'] = $TranscriptFile
-				# start transcript
-				Try {
-					Start-Transcript @StartTranscript
-				}
-				Catch {
-					Throw $_
-				}
+				Throw $_
 			}
 		}
 	}
@@ -671,29 +639,28 @@ Function Import-FilesWithPSDirect {
 			}
 			# run through entries in configuration file
 			$Run {
-				Try {
-					# define transcript file from script path and start transcript
-					Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.txt') -Force
+				# define transcript file from script path and start transcript
+				Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.txt') -Force
 
-					# check entry count in configuration file
-					If ($JsonData.Count -eq 0) {
-						Write-Output "`nERROR: no entries found in configuration file: '$Json'"
-						Return
-					}
-
-					# process configuration file
-					ForEach ($json_datum in $JsonData) {
-						If ([string]::IsNullOrEmpty($json_datum.VMName) -or [string]::IsNullOrEmpty($json_datum.Path) -or [string]::IsNullOrEmpty($json_datum.Destination)) {
-							Write-Output "`nERROR: invalid entry found in configuration file: '$Json'"
-						}
-						Else {
-							Copy-PathToPSDirect -VMName $json_datum.VMName -Path $json_datum.Path -Destination $json_datum.Destination -Purge:$json_datum.Purge
-						}
-					}
+				# check entry count in configuration file
+				If ($JsonData.Count -eq 0) {
+					Write-Output "`nERROR: no entries found in configuration file: '$Json'"
+					Return
 				}
-				Finally {
-					Write-Output ([string]::Empty)
-					Stop-Transcript
+
+				# process configuration file
+				ForEach ($JsonEntry in $JsonData) {
+					If ([string]::IsNullOrEmpty($JsonEntry.VMName) -or [string]::IsNullOrEmpty($JsonEntry.Path) -or [string]::IsNullOrEmpty($JsonEntry.Destination)) {
+						Write-Output "`nERROR: invalid entry found in configuration file: '$Json'"
+					}
+					Else {
+						Try {
+							Copy-PathToPSDirect -VMName $JsonEntry.VMName -Path $JsonEntry.Path -Destination $JsonEntry.Destination -Purge:$JsonEntry.Purge
+						}
+						Catch {
+							Return $_
+						}
+					}
 				}
 			}
 			Default {
@@ -706,38 +673,8 @@ Function Import-FilesWithPSDirect {
 	End {
 		# if running...
 		If ($Run) {
-			# get transcript path
-			$PathForTranscript = Split-Path -Path $StartTranscript['Path'] -Parent
-			# get transcript name
-			$NameForTranscript = (Split-Path -Path $StartTranscript['Path'] -Leaf).Replace("_$LogStart.txt", $null)
-			# get transcript files
-			$TranscriptFiles = Get-ChildItem -Path $PathForTranscript | Where-Object { $_.BaseName.StartsWith($NameForTranscript, [System.StringComparison]::InvariantCultureIgnoreCase) -and $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) }
-			# get transcript files newer than cleanup date
-			$NewFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-$LogDays) }
-			# if count of transcript files count is less than cleanup threshold...
-			If ($LogCount -lt $NewFiles.Count ) {
-				# declare and continue
-				Write-Output "Skipping transcript file cleanup; count of transcript files ($($NewFiles.Count)) is below cleanup threshold ($LogCount)"
-			}
-			# if count of transcript files is not less than cleanup threshold...
-			Else {
-				# get log files older than cleanup date
-				$OldFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) } | Sort-Object -Property FullName
-				# remove old logs
-				ForEach ($OldFile in $OldFiles) {
-					Write-Output "Removing old transcript file: $($OldFile.FullName)"
-					Try {
-						Remove-Item -Path $OldFile.FullName -Force -ErrorAction Stop
-					}
-					Catch {
-						$_
-					}
-				}
-			}
-
-			# stop transcript
 			Try {
-				Stop-Transcript
+				Stop-TranscriptWithHostAndDate
 			}
 			Catch {
 				Throw $_
