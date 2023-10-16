@@ -1,27 +1,27 @@
 <#
 .SYNOPSIS
-Removes files and empty folders based upon values in a JSON configuration file.
+Removes files and empty directories based upon values in a JSON configuration file.
 
 .DESCRIPTION
-Removes files and empty folders based upon values in a JSON configuration file.
+Removes files and empty directories based upon values in a JSON configuration file.
 
 .PARAMETER Json
 The path to a JSON file containing the configuration for this script.
 
+.PARAMETER Clear
+Switch parameter to clear all entries from the JSON configuration file. Cannot be combined with the Remove, Add, or Run parameters.
+
+.PARAMETER Remove
+Switch parameter to remove an entry from the JSON configuration file. Cannot be combined with the Clear, Add, or Run parameters.
+
+.PARAMETER Add
+Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Clear, Remove, or Run parameters.
+
 .PARAMETER Run
 Switch parameter to process all entries from the JSON configuration file. Cannot be combined with the Clear, Remove, or Add parameters.
 
-.PARAMETER Clear
-Switch parameter to clear all entries from the JSON configuration file. Cannot be combined with the Run, Remove, or Add parameters.
-
-.PARAMETER Remove
-Switch parameter to remove an entry from the JSON configuration file. Cannot be combined with the Run, Clear, or Add parameters.
-
-.PARAMETER Add
-Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Run, Clear, or Remove parameters.
-
 .PARAMETER Path
-The path of containing files and empty folders that will be removed if older than the computed datetime. Required when the Add or Remove parameters are specified.
+The path containing files and empty directories that will be removed if older than the computed datetime. Required when the Add or Remove parameters are specified.
 
 .PARAMETER OlderThanUnits
 The number of datetime units to create the computed datetime. Required when the Add parameter is specified.
@@ -48,18 +48,16 @@ None. The script reports the actions taken and does not provide any actionable o
 .\Remove-OldFiles.ps1 -Json C:\Content\config.json -Run
 #>
 
-[CmdletBinding(DefaultParameterSetName = 'Default')]
+[CmdletBinding(SupportsShouldProcess,DefaultParameterSetName = 'Default')]
 Param(
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Run')]
-	[switch]$Run,
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Test')]
-	[switch]$Test,
 	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Clear')]
 	[switch]$Clear,
 	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Remove')]
 	[switch]$Remove,
 	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Add')]
 	[switch]$Add,
+	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Run')]
+	[switch]$Run,
 	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Remove')][ValidatePattern('^[^\*]+$')]
 	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Path,
@@ -75,55 +73,58 @@ Param(
 )
 
 Begin {
-	# append hostname and datetime to script path to define transcript path
-	$TranscriptFile = $PSCommandPath.Replace('.ps1', "_$HostName.txt").Replace('.txt', "_$LogStart.txt")
-	# define ideal log path
-	$TranscriptPath = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'Logs'
-	# if ideal log path found...
-	If (Test-Path -Path $TranscriptPath -PathType 'Container') {
-		# update transcript path
-		$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptPath)
-	}
-	# define parameters for Start-Transcript
-	$StartTranscript = @{
-		Path        = $TranscriptFile
-		Force       = $true
-		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-	}
-	# start transcript
-	Try	{
-		Start-Transcript @StartTranscript
-	}
-	Catch {
-		# get program data path
-		$TranscriptRoot = [System.Environment]::GetFolderPath('CommonApplicationData')
-		# get basename of script
-		$TranscriptBase = Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty 'BaseName'
-		# define path in program data
-		$TranscriptPath = Join-Path -Path $TranscriptRoot -ChildPath $TranscriptBase
-		# if path in program data not found...
-		If ((Test-Path -Path $TranscriptPath -PathType 'Container') -eq $false) {
-			Try {
-				# create path in program data
-				$null = New-Item -Path $TranscriptPath -ItemType 'Directory' -ErrorAction Stop
-				# redirect transcript file from script directory to path in program data
-				$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptPath)
-			}
-			Catch {
-				# clear errors before starting script
-				$Error.Clear()
-				# redirect transcript file from script directory to root of program data
-				$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptRoot)
-			}
+	# if running...
+	If ($Run) {
+		# append hostname and datetime to script path to define transcript path
+		$TranscriptFile = $PSCommandPath.Replace('.ps1', "_$HostName.txt").Replace('.txt', "_$LogStart.txt")
+		# define ideal log path
+		$TranscriptPath = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'Logs'
+		# if ideal log path found...
+		If (Test-Path -Path $TranscriptPath -PathType 'Container') {
+			# update transcript path
+			$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptPath)
 		}
-		# update parameters for Start-Transcript
-		$StartTranscript['Path'] = $TranscriptFile
+		# define parameters for Start-Transcript
+		$StartTranscript = @{
+			Path        = $TranscriptFile
+			Force       = $true
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
 		# start transcript
-		Try {
+		Try	{
 			Start-Transcript @StartTranscript
 		}
 		Catch {
-			Throw $_
+			# get program data path
+			$TranscriptRoot = [System.Environment]::GetFolderPath('CommonApplicationData')
+			# get basename of script
+			$TranscriptBase = Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty 'BaseName'
+			# define path in program data
+			$TranscriptPath = Join-Path -Path $TranscriptRoot -ChildPath $TranscriptBase
+			# if path in program data not found...
+			If ((Test-Path -Path $TranscriptPath -PathType 'Container') -eq $false) {
+				Try {
+					# create path in program data
+					$null = New-Item -Path $TranscriptPath -ItemType 'Directory' -ErrorAction Stop
+					# redirect transcript file from script directory to path in program data
+					$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptPath)
+				}
+				Catch {
+					# clear errors before starting script
+					$Error.Clear()
+					# redirect transcript file from script directory to root of program data
+					$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptRoot)
+				}
+			}
+			# update parameters for Start-Transcript
+			$StartTranscript['Path'] = $TranscriptFile
+			# start transcript
+			Try {
+				Start-Transcript @StartTranscript
+			}
+			Catch {
+				Throw $_
+			}
 		}
 	}
 
@@ -146,7 +147,7 @@ Begin {
 	}
 
 	Function Remove-ItemsFromPathBeforeDate {
-		[CmdletBinding()]
+		[CmdletBinding(SupportsShouldProcess)]
 		Param(
 			[Parameter(Mandatory = $true, Position = 0)]
 			[string]$Path,
@@ -154,12 +155,12 @@ Begin {
 			[datetime]$Date
 		)
 
-		# declare start
-		If (Test-Path -Path $Path -PathType Container) {
-			Write-Output "retrieving files written before '$Date' from '$Path'"
+		# verify path
+		Try {
+			$null = Get-Item -Path $Path -ErrorAction Stop
 		}
-		Else {
-			Write-Warning "Could not locate folder, skipping path: '$Path'"
+		Catch {
+			Write-Warning "Could not locate path: '$Path'"
 			Return
 		}
 
@@ -167,54 +168,60 @@ Begin {
 		$Files = [System.Collections.Generic.List[System.Object]]::new()
 
 		# retrieve old files first
+		Write-Output "Retrieving files written before '$Date' from '$Path'"
 		Get-ChildItem -Path $Path -Recurse -Force -Attributes '!Directory' | Where-Object { $_.LastWriteTime -lt $Date } | ForEach-Object {
 			$Files.Add($_.FullName)
 		}
 
 		# remove old files first
-		Write-Output "removing files written before '$Date' from '$Path'"
+		Write-Output "Removing files written before '$Date' from '$Path'"
 		ForEach ($File in $Files) {
-			If ($Run) {
+			If ($PSCmdlet.ShouldProcess($File, 'Remove File')) {
 				Try {
-					Remove-Item -Path $File.FullName -Force -Verbose -ErrorAction Stop	
+					Remove-Item -Path $File -Force -Verbose -ErrorAction Stop	
 				}
 				Catch {
 					Write-Warning "Could not perform `"Remove File`" on target `"$File`": $($_.ToString())"
 				}
 			}
-			Else {
-				Write-Output "TESTING - would remove file: '$File'"
-			}
 		}
 
-		# define list for old folders
-		$Folders = [System.Collections.Generic.List[System.Object]]::new()
+		# define list for old directories
+		$Directories = [System.Collections.Generic.List[System.Object]]::new()
 
-		# retrieve old folders
-		Write-Output "retrieving folders written before '$Date' from '$Path'"
+		# retrieve old directories
+		Write-Output "Retrieving directories written before '$Date' from '$Path'"
 		Get-ChildItem -Path $Path -Recurse -Force -Attributes 'Directory' | Where-Object { $_.LastWriteTime -lt $Date } | Sort-Object -Property FullName -Descending | ForEach-Object {
-			$Folders.Add($_.FullName)
+			$Directories.Add($_.FullName)
 		}
 
-		# remove old folders last
-		Write-Output "removing folders written before '$Date' from '$Path'"
-		ForEach ($Folder in $Folders) {
-			Write-Output "checking folder: '$Folder'"
-			If ($null -ne (Get-ChildItem -Path $Folder -Recurse -Force)) {
-				Write-Warning "Will not perform `"Remove Directory`" while child items exist in target `"$Folder`""
-				Continue
-			}
+		# define list for excluded directories
+		$DirectoriesToExclude = [System.Collections.Generic.List[System.Object]]::new()
 
-			If ($Run) {
+		# checking directories
+		Write-Output "Checking directories for child objects in '$Path'"
+		ForEach ($Directory in $Directories) {
+			If ($null -ne (Get-ChildItem -Path $Directory -Recurse -Force -Attributes '!Directory')) {
+				Write-Warning "Will not perform `"Remove Directory`" on target `"$Directory`": has children that are not directories"
+				$DirectoriesToExclude.Add($Directory)
+			}
+		}
+
+		# remove directories to exclude from old directories
+		ForEach ($Directory in $DirectoriesToExclude) {
+			$Directories.Remove($Directory)
+		}
+
+		# remove old directories last
+		Write-Output "Removing directories written before '$Date' from '$Path'"
+		ForEach ($Directory in $Directories) {
+			If ($PSCmdlet.ShouldProcess($Directory, 'Remove Directory')) {
 				Try {
-					Remove-Item -Path $Folder -Force -Verbose -ErrorAction Stop	
+					Remove-Item -Path $Directory -Force -Verbose -ErrorAction Stop	
 				}
 				Catch {
-					Write-Warning "Could not perform `"Remove Directory`" on target `"$Folder`": $($_.ToString())"
+					Write-Warning "Could not perform `"Remove Directory`" on target `"$Directory`": $($_.ToString())"
 				}
-			}
-			Else {
-				Write-Output "TESTING - would remove directory: '$Folder'"
 			}
 		}
 	}
@@ -321,14 +328,15 @@ Process {
 				Return $_
 			}
 		}
-		{ $Run -or $Test } {
+		# run through entries in configuration file
+		$Run {
 			# check entry count in configuration file
 			If ($JsonData.Count -eq 0) {
 				Write-Host "ERROR: no entries found in configuration file: $Json"
 				Return
 			}
 
-			# process configuration file
+			# process entries in configuration file
 			ForEach ($JsonDatum in $JsonData) {
 				switch ($true) {
 					([string]::IsNullOrEmpty($JsonDatum.Path)) {
@@ -344,6 +352,7 @@ Process {
 						Continue
 					}
 					Default {
+						# get previous date from input
 						Try {
 							$Date = Get-PreviousDate -OlderThanUnits ($JsonDatum.OlderThanUnits) -OlderThanType ($JsonDatum.OlderThanType)
 						}
@@ -352,8 +361,16 @@ Process {
 							Continue
 						}
 						
+						# define parameters for Remove-ItemsFromPathBeforeDate
+						$RemoveItemsFromPathBeforeDate = @{
+							Path   = $JsonDatum.Path
+							Date   = $Date
+							WhatIf = $WhatIf.ToBool()
+						}
+
+						# remove items from path before date
 						Try {
-							Remove-ItemsFromPathBeforeDate -Path $JsonDatum.Path -Date $Date
+							Remove-ItemsFromPathBeforeDate @RemoveItemsFromPathBeforeDate
 						}
 						Catch {
 							Write-Host 'ERROR: could not remove items'
@@ -371,8 +388,8 @@ Process {
 }
 
 End {
-	# if running or testing...
-	If ($Run -or $Test) {
+	# if running...
+	If ($Run) {
 		# get transcript path
 		$PathForTranscript = Split-Path -Path $StartTranscript['Path'] -Parent
 		# get transcript name
