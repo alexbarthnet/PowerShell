@@ -8,17 +8,17 @@ Adds or removes Scheduled Tasks based upon values in a JSON configuration file.
 .PARAMETER Json
 The path to a JSON file containing the configuration for this script.
 
-.PARAMETER Run
-Switch parameter to process all entries from the JSON configuration file. Cannot be combined with the Clear, Remove, or Add parameters.
-
 .PARAMETER Clear
-Switch parameter to clear all entries from the JSON configuration file. Cannot be combined with the Run, Remove, or Add parameters.
+Switch parameter to clear all entries from the JSON configuration file. Cannot be combined with the Remove, Add, or Run parameters.
 
 .PARAMETER Remove
-Switch parameter to remove an entry from the JSON configuration file. Cannot be combined with the Run, Clear, or Add parameters.
+Switch parameter to remove an entry from the JSON configuration file. Cannot be combined with the Clear, Add, or Run parameters.
 
 .PARAMETER Add
-Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Run, Clear, or Remove parameters.
+Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Clear, Remove, or Run parameters.
+
+.PARAMETER Run
+Switch parameter to process all entries from the JSON configuration file. Cannot be combined with the Clear, Remove, or Add parameters.
 
 .PARAMETER TaskName
 The name of the scheduled task. Required when the Add or Remove parameters are specified.
@@ -77,16 +77,15 @@ None. The script reports the actions taken and does not provide any actionable o
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	[Parameter(Mandatory = $True, ParameterSetName = 'Update')]
-	[switch]$Update,
-	[Parameter(ParameterSetName = 'Update')]
-	[switch]$RemoveOldTasks,
+	# script parameters - mode
 	[Parameter(Mandatory = $True, ParameterSetName = 'Clear')]
 	[switch]$Clear,
 	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
 	[switch]$Remove,
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[switch]$Add,
+	[Parameter(Mandatory = $True, ParameterSetName = 'Run')]
+	[switch]$Run,
 	# scheduled task parameter - register
 	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
@@ -125,6 +124,9 @@ Param(
 	# scheduled task parameter - modules
 	[Parameter(ParameterSetName = 'Add')]
 	[string[]]$Modules,
+	# switch to remove old tasks during run
+	[Parameter(ParameterSetName = 'Run')]
+	[switch]$RemoveOldTasks,
 	# path to JSON configuration file
 	[Parameter(Mandatory = $True)]
 	[string]$Json,
@@ -143,8 +145,8 @@ Param(
 )
 
 Begin {
-	# if updating...
-	If ($Update) {
+	# if running...
+	If ($Run) {
 		# append hostname and datetime to script path to define transcript path
 		$TranscriptFile = $PSCommandPath.Replace('.ps1', "_$HostName.txt").Replace('.txt', "_$LogStart.txt")
 		# define ideal log path
@@ -668,9 +670,9 @@ Process {
 				$JsonDatum = [pscustomobject]$json_hashtable
 
 				# remove existing entry with same name
-				If ($JsonData.TaskName -contains $TaskName) {
-					Write-Warning -Message "Will overwrite existing entry for '$TaskName' configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
-					$JsonData = $JsonData | Where-Object { $_.TaskName -ne $TaskName }
+				If ($JsonData | Where-Object { $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath}) {
+					Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
+					$JsonData = $JsonData | Where-Object { -not ($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath) }
 				}
 
 				# add datum to data
@@ -684,8 +686,8 @@ Process {
 				Return $_
 			}
 		}
-		# update scheduled tasks defined in configuration file 
-		$Update {
+		# run through entries in configuration file
+		$Run {
 			# declare start
 			Write-Host "`nUpdating scheduled tasks from '$Json'"
 
@@ -745,7 +747,7 @@ Process {
 						}
 
 						# define hashtable for function
-						$UpdateScheduledTaskFromJson = @{
+						$RunScheduledTaskFromJson = @{
 							TaskName  = [string]$JsonDatum.TaskName
 							TaskPath  = [string]$JsonDatum.TaskPath
 							Execute   = [string]$JsonDatum.Execute
@@ -758,7 +760,7 @@ Process {
 						# if RunLevel defind in JSON...
 						If ($null -ne $JsonDatum.RunLevel -and $JsonDatum.RunLevel -is [string]) {
 							# add RunLevel to hashtable
-							$UpdateScheduledTaskFromJson['RunLevel'] = [string]$RunLevel
+							$RunScheduledTaskFromJson['RunLevel'] = [string]$RunLevel
 						}
 
 						# if TriggerAt defined in JSON...
@@ -766,7 +768,7 @@ Process {
 							# ...and TriggerAt is datetime...
 							If ($JsonDatum.TriggerAt -is [datetime]) {
 								# ...add TriggerAt to hashtable
-								$UpdateScheduledTaskFromJson['TriggerAt'] = [datetime]$JsonDatum.TriggerAt
+								$RunScheduledTaskFromJson['TriggerAt'] = [datetime]$JsonDatum.TriggerAt
 							}
 							Else {
 								Write-Output "ERROR: could not cast TriggerAt to [datetime] in task: '$($JsonDatum.TaskName)'"
@@ -780,7 +782,7 @@ Process {
 									# ...and RandomDelayTime is greater than (after) TriggerAt
 									If ($JsonDatum.RandomDelayTime -gt $JsonDatum.TriggerAt) {
 										# ...create RandomDelay timespan and add to hashtable
-										$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonDatum.RandomDelayTime - $JsonDatum.TriggerAt)
+										$RunScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonDatum.RandomDelayTime - $JsonDatum.TriggerAt)
 									}
 									Else {
 										Write-Output "ERROR: RandomDelayTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
@@ -800,7 +802,7 @@ Process {
 									# ...and RepetitionIntervalTime is greater than (after) TriggerAt
 									If ($JsonDatum.RepetitionIntervalTime -gt $JsonDatum.TriggerAt) {
 										# ...create RepetitionInterval timespan and add to hashtable
-										$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonDatum.RepetitionIntervalTime - $JsonDatum.TriggerAt)
+										$RunScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonDatum.RepetitionIntervalTime - $JsonDatum.TriggerAt)
 									}
 									Else {
 										Write-Output "ERROR: RepetitionIntervalTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
@@ -820,7 +822,7 @@ Process {
 									# ...and ExecutionTimeLimitTime is greater than (after) TriggerAt
 									If ($JsonDatum.ExecutionTimeLimitTime -gt $JsonDatum.TriggerAt) {
 										# ...create ExecutionTimeLimit timespan and add to hashtable
-										$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonDatum.ExecutionTimeLimitTime - $JsonDatum.TriggerAt)
+										$RunScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonDatum.ExecutionTimeLimitTime - $JsonDatum.TriggerAt)
 									}
 									Else {
 										Write-Output "ERROR: ExecutionTimeLimitTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
@@ -896,8 +898,8 @@ Process {
 }
 
 End {
-	# if updating...
-	If ($Update) {
+	# if running...
+	If ($Run) {
 		# get transcript path
 		$PathForTranscript = Split-Path -Path $StartTranscript['Path'] -Parent
 		# get transcript name
