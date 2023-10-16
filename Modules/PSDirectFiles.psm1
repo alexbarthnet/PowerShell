@@ -147,14 +147,14 @@ Function Copy-PathToPSDirect {
 Function Export-FilesWithPSDirect {
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param(
-		[Parameter(Mandatory = $True, ParameterSetName = 'Run')]
-		[switch]$Run,
 		[Parameter(Mandatory = $True, ParameterSetName = 'Clear')]
 		[switch]$Clear,
 		[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
 		[switch]$Remove,
 		[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 		[switch]$Add,
+		[Parameter(Mandatory = $True, ParameterSetName = 'Run')]
+		[switch]$Run,
 		[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
 		[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 		[ValidatePattern('^[^\*]+$')]
@@ -168,7 +168,19 @@ Function Export-FilesWithPSDirect {
 		[Parameter(ParameterSetName = 'Add')]
 		[switch]$Purge,
 		[Parameter()]
-		[string]$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
+		[string]$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json'),
+		# log file max age
+		[Parameter(DontShow)]
+		[double]$LogDays = 7,
+		# log file min count
+		[Parameter(DontShow)]
+		[uint16]$LogCount = 7,
+		# log start time
+		[Parameter(DontShow)]
+		[string]$LogStart = (Get-Date -Format FileDateTimeUniversal),
+		# local hostname
+		[Parameter(DontShow)]
+		[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
 	)
 
 	Begin {
@@ -404,14 +416,14 @@ Function Export-FilesWithPSDirect {
 Function Import-FilesWithPSDirect {
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param(
-		[Parameter(Mandatory = $True, ParameterSetName = 'Run')]
-		[switch]$Run,
 		[Parameter(Mandatory = $True, ParameterSetName = 'Clear')]
 		[switch]$Clear,
 		[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
 		[switch]$Remove,
 		[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 		[switch]$Add,
+		[Parameter(Mandatory = $True, ParameterSetName = 'Run')]
+		[switch]$Run,
 		[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
 		[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 		[ValidatePattern('^[^\*]+$')]
@@ -425,7 +437,19 @@ Function Import-FilesWithPSDirect {
 		[Parameter(ParameterSetName = 'Add')]
 		[switch]$Purge,
 		[Parameter()]
-		[string]$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
+		[string]$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json'),
+		# log file max age
+		[Parameter(DontShow)]
+		[double]$LogDays = 7,
+		# log file min count
+		[Parameter(DontShow)]
+		[uint16]$LogCount = 7,
+		# log start time
+		[Parameter(DontShow)]
+		[string]$LogStart = (Get-Date -Format FileDateTimeUniversal),
+		# local hostname
+		[Parameter(DontShow)]
+		[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
 	)
 
 	Begin {
