@@ -1,6 +1,11 @@
 #Requires -Modules CmsCredentials
 
 Function Start-TranscriptWithHostAndDate {
+	Param(
+		[switch]$RelativePath,
+		[switch]$AbsolutePath
+	)
+
 	# get basename from command path
 	$PSCommandBase = Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty BaseName
 	# append hostname and datetime to basename of command path to define transcript base
@@ -62,14 +67,17 @@ Function Stop-TranscriptWithHostAndDate {
 	$PathForTranscript = Split-Path -Path $script:StartTranscript['Path'] -Parent
 	# get transcript name
 	$NameForTranscript = (Split-Path -Path $script:StartTranscript['Path'] -Leaf).Replace("_$LogStart.txt", $null)
+	# declare transcript cleanup
+	Write-Verbose -Message "Removing old transcript files named '$NameForTranscript' from '$PathForTranscript'" -Verbose
 	# get transcript files
 	$TranscriptFiles = Get-ChildItem -Path $PathForTranscript | Where-Object { $_.BaseName.StartsWith($NameForTranscript, [System.StringComparison]::InvariantCultureIgnoreCase) -and $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) }
 	# get transcript files newer than cleanup date
 	$NewFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-$LogDays) }
+	
 	# if count of transcript files count is less than cleanup threshold...
 	If ($LogCount -lt $NewFiles.Count ) {
 		# declare and continue
-		Write-Output "Skipping transcript file cleanup; count of transcript files ($($NewFiles.Count)) is below cleanup threshold ($LogCount)"
+		Write-Verbose -Message "Skipping transcript file cleanup; count of transcript files ($($NewFiles.Count)) is below cleanup threshold ($LogCount)" -Verbose
 	}
 	# if count of transcript files is not less than cleanup threshold...
 	Else {
@@ -77,9 +85,8 @@ Function Stop-TranscriptWithHostAndDate {
 		$OldFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) } | Sort-Object -Property FullName
 		# remove old logs
 		ForEach ($OldFile in $OldFiles) {
-			Write-Output "Removing old transcript file: $($OldFile.FullName)"
 			Try {
-				Remove-Item -Path $OldFile.FullName -Force -ErrorAction Stop
+				Remove-Item -Path $OldFile.FullName -Force -Verbose -ErrorAction Stop
 			}
 			Catch {
 				$_
