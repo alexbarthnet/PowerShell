@@ -4,6 +4,7 @@ Param(
 	[Parameter(ValueFromPipeline = $True)]
 	[string[]]$VMName,
 	[string]$ComputerName,
+	[string]$SnapshotName,
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 )
@@ -351,10 +352,6 @@ Begin {
 			}
 		}
 	}
-
-	Function Stop-VMOnComputerName {
-
-	}
 }
 
 Process {
@@ -367,8 +364,8 @@ Process {
 		Throw $_
 	}
 
-	# create hashtable for VM state
-	$VMsToCheckpoint = [ordered]@{}
+	# create hashtable for VM objects found
+	$VMObjects = [ordered]@{}
 
 	# process each VMName for shutdown
 	:VMName ForEach ($Name in $VMName) {
@@ -437,7 +434,7 @@ Process {
 			}
 
 			# add VM to state hashtable
-			$VMsToCheckpoint[$Name] = $VM
+			$VMObjects[$Name] = $VM
 		}
 
 		# if VM is on a different computer...
@@ -466,15 +463,16 @@ Process {
 	}
 
 	# check VM for cluster
-	:VMNameCheck ForEach ($Name in $VMState.Keys) {
+	:VMCluster ForEach ($Name in $VMState.Keys) {
 		# get VM from hashtable
-		$VM = $VMsToCheckpoint[$Name]
+		$VM = $VMObjects[$Name]
 		$ComputerName = $VM.ComputerName
 
 		# turn off the VM if running
 		If ($VM.State -eq 'Off') {
+			# declare then move to next object
 			Write-Host ("$Hostname,$ComputerName,$Name - VM is powered off, skipping cluster check")
-			Continue VMNameCheck
+			Continue VMCluster
 		}
 
 		# define parameters for Get-ClusterName
@@ -495,8 +493,9 @@ Process {
 			
 		# if VM clustername not defined...
 		If ([string]::IsNullOrEmpty($VMClusterName)) {
-			# declare and continue
+			# declare then move to next object
 			Write-Host ("$Hostname,$ComputerName,$Name - ...VM is not clustered")
+			Continue VMCluster
 		}
 		Else {
 			# declare and continue
@@ -546,9 +545,9 @@ Process {
 	}
 
 	# stop each VM found
-	ForEach ($Name in $VMsToCheckpoint.Keys) {
+	ForEach ($Name in $VMObjects.Keys) {
 		# get VM from hashtable
-		$VM = $VMsToCheckpoint[$Name]
+		$VM = $VMObjects[$Name]
 		$ComputerName = $VM.ComputerName
 
 		# turn off the VM if running
@@ -581,9 +580,9 @@ Process {
 	}
 
 	# restore each VM found
-	ForEach ($Name in $VMsToCheckpoint.Keys) {
+	ForEach ($Name in $VMObjects.Keys) {
 		# get VM from hashtable
-		$VM = $VMsToCheckpoint[$Name]
+		$VM = $VMObjects[$Name]
 		$ComputerName = $VM.ComputerName
 
 		# define parameters for Get-VMSnapshot
@@ -595,7 +594,7 @@ Process {
 		# get VM snapshots
 		Try {
 			Write-Host ("$Hostname,$ComputerName,$Name - retrieving checkpoint for VM...")
-			$VMSnapshot = Get-VMSnapshot @GetVMSnapshot
+			$VMSnapshots = Get-VMSnapshot @GetVMSnapshot
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving checkpoint VM")
@@ -604,10 +603,23 @@ Process {
 
 		# check VM snapshots
 		If ($null -ne $VMSnapshot) {
-			# select latest snapshot
-			$VMSnapshot = $VMSnapshot | Sort-Object -Property CreationTime | Select-Object -Last 1
+			# if SnapshotName parameter was provided...
+			If ($PSBoundParameters.ContainsKey('SnapshotName')) {
+				# retrieve latest snapshot with matching name
+				$VMSnapshot = $VMSnapshots | Where-Object { $_.Name -eq $SnapshotName } | Sort-Object -Property CreationTime | Select-Object -Last 1
+				# if snapshot with machine name not found...
+				If ($null -eq $VMSnapshot) {
+					# warn before continuing
+					Write-Warning "WARNING: requested snapshot name '$SnapshotName' not found. The latest snapshot will be applied if you continue" -WarningAction Inquire
+				}
+			}
 
-			# define parameters for Checkpoint-VM
+			# retrieve latest snapshot if not SnapshotName not provided or not found
+			If ($null -eq $VMSnapshot) {
+				$VMSnapshots = $VMSnapshots | Sort-Object -Property CreationTime | Select-Object -Last 1
+			}
+
+			# define parameters for Restore-VMSnapshot
 			$RestoreVMSnapshot = @{
 				VMSnapshot  = $VMSnapshot
 				Confirm     = $false
@@ -630,9 +642,9 @@ Process {
 	}
 
 	# restart each VM found
-	ForEach ($Name in $VMsToCheckpoint.Keys) {
+	ForEach ($Name in $VMObjects.Keys) {
 		# get VM from hashtable
-		$VM = $VMsToCheckpoint[$Name]
+		$VM = $VMObjects[$Name]
 		$ComputerName = $VM.ComputerName
 
 		# define parameters for Start-VM

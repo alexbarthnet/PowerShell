@@ -4,6 +4,7 @@ Param(
 	[Parameter(ValueFromPipeline = $True)]
 	[string[]]$VMName,
 	[string]$ComputerName,
+	[string]$SnapshotName,
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 )
@@ -235,7 +236,6 @@ Begin {
 
 		# stop cluster
 		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving cluster node names from computer name")
 			Invoke-Command @InvokeCommand -ScriptBlock {
 				$StopCluster = @{
 					Force       = $true
@@ -351,10 +351,6 @@ Begin {
 			}
 		}
 	}
-
-	Function Stop-VMOnComputerName {
-
-	}
 }
 
 Process {
@@ -367,8 +363,8 @@ Process {
 		Throw $_
 	}
 
-	# create hashtable for VM state
-	$VMsToCheckpoint = [ordered]@{}
+	# create hashtable for VM objects found
+	$VMObjects = [ordered]@{}
 
 	# process each VMName for shutdown
 	:VMName ForEach ($Name in $VMName) {
@@ -437,7 +433,7 @@ Process {
 			}
 
 			# add VM to state hashtable
-			$VMsToCheckpoint[$Name] = $VM
+			$VMObjects[$Name] = $VM
 		}
 
 		# if VM is on a different computer...
@@ -466,13 +462,14 @@ Process {
 	}
 
 	# check VM for cluster
-	:VMCluster ForEach ($Name in $VMsToCheckpoint.Keys) {
+	:VMCluster ForEach ($Name in $VMObjects.Keys) {
 		# get VM from hashtable
-		$VM = $VMsToCheckpoint[$Name]
+		$VM = $VMObjects[$Name]
 		$ComputerName = $VM.ComputerName
 
 		# turn off the VM if running
 		If ($VM.State -eq 'Off') {
+			# declare then move to next object
 			Write-Host ("$Hostname,$ComputerName,$Name - VM is powered off, skipping cluster check")
 			Continue VMCluster
 		}
@@ -495,8 +492,9 @@ Process {
 			
 		# if VM clustername not defined...
 		If ([string]::IsNullOrEmpty($VMClusterName)) {
-			# declare and continue
+			# declare then move to next object
 			Write-Host ("$Hostname,$ComputerName,$Name - ...VM is not clustered")
+			Continue VMCluster
 		}
 		Else {
 			# declare and continue
@@ -546,9 +544,9 @@ Process {
 	}
 
 	# stop each VM found
-	ForEach ($Name in $VMsToCheckpoint.Keys) {
+	ForEach ($Name in $VMObjects.Keys) {
 		# get VM from hashtable
-		$VM = $VMsToCheckpoint[$Name]
+		$VM = $VMObjects[$Name]
 		$ComputerName = $VM.ComputerName
 
 		# turn off the VM if running
@@ -581,15 +579,20 @@ Process {
 	}
 
 	# checkpoint each VM found
-	ForEach ($Name in $VMsToCheckpoint.Keys) {
+	ForEach ($Name in $VMObjects.Keys) {
 		# get VM from hashtable
-		$VM = $VMsToCheckpoint[$Name]
+		$VM = $VMObjects[$Name]
 		$ComputerName = $VM.ComputerName
 
-		# define parameters for Checkpoint-VM
+		# define required parameters for Checkpoint-VM
 		$CheckpointVM = @{
 			VM          = $VM
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# define optional parameters for Checkpoint-VM
+		If ($PSBoundParameters.ContainsKey('SnapshotName')) {
+			$CheckpointVM['SnapshotName'] = $SnapshotName
 		}
 
 		# checkpoint VM
@@ -607,9 +610,9 @@ Process {
 	}
 
 	# restart each VM found
-	ForEach ($Name in $VMsToCheckpoint.Keys) {
+	ForEach ($Name in $VMObjects.Keys) {
 		# get VM from hashtable
-		$VM = $VMsToCheckpoint[$Name]
+		$VM = $VMObjects[$Name]
 		$ComputerName = $VM.ComputerName
 
 		# define parameters for Start-VM
