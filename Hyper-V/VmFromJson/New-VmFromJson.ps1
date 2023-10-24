@@ -671,13 +671,13 @@ Begin {
 			Throw $_
 		}
 
-		# define CIM instance for VM system settings
+		# define parameters for Get-CimInstanceForVM
 		$GetCimInstanceForVM = @{
 			VM          = $VM
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
 
-		# retrieve original VM system settings and host management service via CIM
+		# retrieve CIM instance for VM
 		Try {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...retrieving CIM instance for VM...")
 			$CimInstanceForVM = Get-CimInstanceForVM @GetCimInstanceForVM
@@ -687,7 +687,7 @@ Begin {
 			Throw $_
 		}
 
-		# retrive BIOS GUID from CIM data
+		# retrive BIOS GUID from CIM instance
 		If ([string]::IsNullOrEmpty($CimInstanceForVM.BIOSGUID)) {
 			Write-Host ("$Hostname,$ComputerName,$Name - WARNING: BIOS GUID for VM is empty; skipping SCCM provisioning...")
 			Return
@@ -697,9 +697,15 @@ Begin {
 			$BIOSGUID = $CimInstanceForVM.BIOSGUID
 		}
 
+		# define parameters for Get-CMModulePath
+		$GetCMModulePath = @{
+			ComputerName = $DeploymentServer
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+		}
+
 		# get CM module path
 		Try {
-			$CMModulePath = Get-CMModulePath -ComputerName $DeploymentServer -ErrorAction Stop
+			$CMModulePath = Get-CMModulePath @GetCMModulePath
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve path to CM PowerShell module")
@@ -712,9 +718,15 @@ Begin {
 			Return
 		}
 
+		# define parameters for Get-CMSiteCode
+		$GetCMSiteCode = @{
+			ComputerName = $DeploymentServer
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+		}
+
 		# get CM site code
 		Try {
-			$CMSiteCode = Get-CMSiteCode -ComputerName $DeploymentServer -ErrorAction Stop
+			$CMSiteCode = Get-CMSiteCode @GetCMSiteCode
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve CM site code")
@@ -1945,7 +1957,9 @@ Begin {
 			# define VMNetworkAdapter parameters
 			[Parameter(Mandatory = $true)]
 			[string]$NetworkAdapterName,
-			[string]$SwitchName
+			[string]$SwitchName,
+			[string]$MacAddressSpoofing,
+			[string]$AllowTeaming
 		)
 
 		# get VM from parameters
@@ -1964,7 +1978,7 @@ Begin {
 			ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
 		}
 
-		# retrieve existing NICs with requested values
+		# retrieve existing adapters with requested values
 		Try {
 			$VMNetworkAdapter = Get-VMNetworkAdapter @GetVMNetworkAdapter
 		}
@@ -1973,83 +1987,20 @@ Begin {
 			Throw $_
 		}
 
-		# if single NIC found with requested values...
-		If ($VMNetworkAdapter -is [Microsoft.HyperV.PowerShell.VMNetworkAdapter]) {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...found VMNetworkAdapter: '$NetworkAdapterName'")
-			# if device naming is not enabled...
-			If ($VMNetworkAdapter.DeviceNaming -ne 'On') {
-				# ...enable device naming
-				$SetVMNetworkAdapter = @{
-					VMNetworkAdapter = $VMNetworkAdapter
-					DeviceNaming     = 'On'
-					Passthru         = $true
-					ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
-				}
-				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - ...enabling DeviceNaming on VMNetworkAdapter: '$NetworkAdapterName'")
-					$VMNetworkAdapter = Set-VMNetworkAdapter @SetVMNetworkAdapter
-				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not set device naming on VMNetworkAdapter for VM")
-					Throw $_
-				}
-			}
-			# if switch should be empty...
-			If ($null -eq $SwitchName) {
-				# ...and switch is not empty...
-				If ($null -ne $VMNetworkAdapter.SwitchName) {
-					# ...disconnect switch
-					$DisconnectVMNetworkAdapter = @{
-						VMNetworkAdapter = $VMNetworkAdapter
-						Passthru         = $true
-						ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
-					}
-					Try {
-						Write-Host ("$Hostname,$ComputerName,$Name - ...disconnecting VMNetworkAdapter '$NetworkAdapterName' from switch '$($VMNetworkAdapter.SwitchName)'")
-						$VMNetworkAdapter = Disconnect-VMNetworkAdapter @DisconnectVMNetworkAdapter
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not disconnect VMNetworkAdapter from switch")
-						Throw $_
-					}
-				}
-			}
-			# if switch name is empty...
-			Else {
-				# ...but switch name is not adapter switch...
-				If ($VMNetworkAdapter.SwitchName -ne $SwitchName) {
-					# ...connect adapter to correct switch
-					$ConnectVMNetworkAdapter = @{
-						VMNetworkAdapter = $VMNetworkAdapter
-						SwitchName       = $SwitchName
-						Passthru         = $true
-						ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
-					}
-					Try {
-						Write-Host ("$Hostname,$ComputerName,$Name - ...connecting VMNetworkAdapter '$NetworkAdapterName' to switch '$SwitchName'")
-						$VMNetworkAdapter = Connect-VMNetworkAdapter @ConnectVMNetworkAdapter
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not connect VMNetworkAdapter to switch")
-						Throw $_
-					}
-				}
-			}
-			# return
-			Return $VMNetworkAdapter
-		}
-
-		# if multiple NICs found with requested values...
+		# if multiple adapters found by name...
 		If ($VMNetworkAdapter -is [array]) {
+			# declare and remove adapters
 			Write-Host ("$Hostname,$ComputerName,$Name - ...found multiple VMNetworkAdapters with name: '$NetworkAdapterName'")
-			# processs each VMNetwork adapter and...
+
+			# processs each array entry and...
 			ForEach ($NetworkAdapter in $VMNetworkAdapter) {
 				# define parameters for Remove-VMNetworkAdapter
 				$RemoveVMNetworkAdapter = @{
 					VMNetworkAdapter = $NetworkAdapter
 					ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
 				}
-				# ...remove VMNetworkAdapter with matching name
+
+				# remove VMNetworkAdapter with matching name
 				Try {
 					Write-Host ("$Hostname,$ComputerName,$Name - ...removing VMNetworkAdapter with ID: '$($NetworkAdapter.Id.Split('\')[-1])'")
 					Remove-VMNetworkAdapter @RemoveVMNetworkAdapter
@@ -2059,30 +2010,145 @@ Begin {
 					Throw $_
 				}
 			}
+
+			# clear adapter
+			$null = $VMNetworkAdapter
 		}
 
-		# define required parameters for Add-VMNetworkAdapter
-		$AddVMNetworkAdapter = @{
-			VM           = $VM
-			Name         = $NetworkAdapterName
-			DeviceNaming = 'On'
-			Passthru     = $true
-			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+		# if single adapter found by name...
+		If ($VMNetworkAdapter -is [Microsoft.HyperV.PowerShell.VMNetworkAdapter]) {
+			# declare and begin verifying adapter settings
+			Write-Host ("$Hostname,$ComputerName,$Name - ...found VMNetworkAdapter: '$NetworkAdapterName'")
+
+			# if device naming is not enabled...
+			If ($VMNetworkAdapter.DeviceNaming -ne 'On') {
+				# define parameters for Set-VMNetworkAdapter
+				$SetVMNetworkAdapter = @{
+					VMNetworkAdapter = $VMNetworkAdapter
+					DeviceNaming     = 'On'
+					Passthru         = $true
+					ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# enable device naming on adapter
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - ...enabling DeviceNaming on VMNetworkAdapter: '$NetworkAdapterName'")
+					$VMNetworkAdapter = Set-VMNetworkAdapter @SetVMNetworkAdapter
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not set device naming on VMNetworkAdapter for VM")
+					Throw $_
+				}
+			}
+
+			# if SwitchName defined and not correct...
+			If ($PSBoundParameters.ContainsKey('SwitchName') -and $VMNetworkAdapter.SwitchName -ne $SwitchName) {
+				# define parameters for Connect-VMNetworkAdapter
+				$ConnectVMNetworkAdapter = @{
+					VMNetworkAdapter = $VMNetworkAdapter
+					SwitchName       = $SwitchName
+					Passthru         = $true
+					ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# connect adapter to correct switch
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - ...connecting VMNetworkAdapter '$NetworkAdapterName' to switch '$SwitchName'")
+					$VMNetworkAdapter = Connect-VMNetworkAdapter @ConnectVMNetworkAdapter
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not connect VMNetworkAdapter to switch")
+					Throw $_
+				}
+			}
+
+			# if SwitchName not defined and has a value...
+			If ($PSBoundParameters.ContainsKey('SwitchName') -eq $false -and $null -ne $VMNetworkAdapter.SwitchName) {
+				# define parameters for Disconnect-VMNetworkAdapter
+				$DisconnectVMNetworkAdapter = @{
+					VMNetworkAdapter = $VMNetworkAdapter
+					Passthru         = $true
+					ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# disconnect adapter from switch
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - ...disconnecting VMNetworkAdapter '$NetworkAdapterName' from switch '$($VMNetworkAdapter.SwitchName)'")
+					$VMNetworkAdapter = Disconnect-VMNetworkAdapter @DisconnectVMNetworkAdapter
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not disconnect VMNetworkAdapter from switch")
+					Throw $_
+				}
+			}
+		}
+		# if single adapter not found by name...
+		Else {
+			# define required parameters for Add-VMNetworkAdapter
+			$AddVMNetworkAdapter = @{
+				VM           = $VM
+				Name         = $NetworkAdapterName
+				DeviceNaming = 'On'
+				Passthru     = $true
+				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# define optional parameters for Add-VMNetworkAdapter
+			If ($PSBoundParameters['SwitchName']) {
+				$AddVMNetworkAdapter['SwitchName'] = $SwitchName
+			}
+
+			# add network adapter to VM
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...adding VMNetworkAdapter: '$NetworkAdapterName'")
+				$VMNetworkAdapter = Add-VMNetworkAdapter @AddVMNetworkAdapter
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VMNetworkAdapter to VM")
+				Throw $_
+			}
 		}
 
-		# define optional parameters for Add-VMNetworkAdapter
-		If ($PSBoundParameters['SwitchName']) {
-			$AddVMNetworkAdapter['SwitchName'] = $SwitchName
+		# if MacAddressSpoofing defined and not correct...
+		If ($PSBoundParameters.ContainsKey('MacAddressSpoofing') -and $VMNetworkAdapter.MacAddressSpoofing -ne $MacAddressSpoofing) {
+			# define required parameters for Set-VMNetworkAdapter
+			$SetVMNetworkAdapter = @{
+				VMNetworkAdapter   = $VMNetworkAdapter
+				MacAddressSpoofing = $MacAddressSpoofing
+				Passthru           = $true
+				ErrorAction        = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# update adapter with MacAddressSpoofing setting
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...setting MacAddressSpoofing to '$MacAddressSpoofing' on VMNetworkAdapter: '$NetworkAdapterName'")
+				$VMNetworkAdapter = Set-VMNetworkAdapter @SetVMNetworkAdapter
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not set MacAddressSpoofing on VMNetworkAdapter for VM")
+				Throw $_
+			}
 		}
 
-		# add network adapter to VM
-		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...adding VMNetworkAdapter: '$NetworkAdapterName'")
-			$VMNetworkAdapter = Add-VMNetworkAdapter @AddVMNetworkAdapter
-		}
-		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VMNetworkAdapter to VM")
-			Throw $_
+		# if AllowTeaming defined and not correct...
+		If ($PSBoundParameters.ContainsKey('AllowTeaming') -and $VMNetworkAdapter.AllowTeaming -ne $AllowTeaming) {
+			# define parameters for Set-VMNetworkAdapter
+			$SetVMNetworkAdapter = @{
+				VMNetworkAdapter = $VMNetworkAdapter
+				AllowTeaming     = $AllowTeaming
+				Passthru         = $true
+				ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# update adapter with AllowTeaming setting
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...setting AllowTeaming to '$AllowTeaming' on VMNetworkAdapter: '$NetworkAdapterName'")
+				$VMNetworkAdapter = Set-VMNetworkAdapter @SetVMNetworkAdapter
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not set AllowTeaming on VMNetworkAdapter for VM")
+				Throw $_
+			}
 		}
 
 		# return network adapter
@@ -2115,7 +2181,7 @@ Begin {
 		}
 
 		# if VLAN mode is Trunk...
-		If ($VlanMode -eq 'Trunk') { 
+		If ($VlanMode -eq 'Trunk') {
 			# ...but VlanId and VlanIdList are null
 			If ($null -eq $VlanId -and $null -eq $VlanIdList) {
 				Write-Warning -Message "VlanMode is '$VlanMode' but VlanId and VlanIdList are null; VMNetworkAdapter '$($VMNetworkAdapter.Name)' will be untagged" -WarningAction Inquire
@@ -2937,7 +3003,7 @@ Begin {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove initial VMNetworkAdapter")
 			Throw $_
 		}
-		
+
 
 		# define parameters for integration services
 		$EnableVMIntegrationService = @{
@@ -3294,25 +3360,32 @@ Process {
 		# if VM has network adapters...
 		If ($null -ne $VM -and $null -ne $JsonData.$Name.VMNetworkAdapters) {
 			# create VM network adapter
-			ForEach ($VMNetworkAdapter in $JsonData.$Name.VMNetworkAdapters) {
+			ForEach ($VMNetworkAdapterEntry in $JsonData.$Name.VMNetworkAdapters) {
 				# define required parameters for VMNetworkAdapter
 				$AddVMNetworkAdapterToVM = @{
 					ComputerName       = $ComputerName
 					VM                 = $VM
-					NetworkAdapterName = $VMNetworkAdapter.NetworkAdapterName
+					NetworkAdapterName = $VMNetworkAdapterEntry.NetworkAdapterName
 				}
 
 				# report state
-				Write-Host ("$Hostname,$ComputerName,$Name - checking VMNetworkAdapter with Name: '$($VMNetworkAdapter.NetworkAdapterName)'")
+				Write-Host ("$Hostname,$ComputerName,$Name - checking VMNetworkAdapter with Name: '$($VMNetworkAdapterEntry.NetworkAdapterName)'")
 
 				# define optional parameters for VMNetworkAdapter
-				If ($null -ne $VMNetworkAdapter.SwitchName) {
-					$AddVMNetworkAdapterToVM['SwitchName'] = $VMNetworkAdapter.SwitchName
+				If ($null -ne $VMNetworkAdapterEntry.SwitchName) {
+					$AddVMNetworkAdapterToVM['SwitchName'] = $VMNetworkAdapterEntry.SwitchName
 				}
+				If ($null -ne $VMNetworkAdapterEntry.MacAddressSpoofing) {
+					$AddVMNetworkAdapterToVM['MacAddressSpoofing'] = $VMNetworkAdapterEntry.MacAddressSpoofing
+				}
+				If ($null -ne $VMNetworkAdapterEntry.AllowTeaming) {
+					$AddVMNetworkAdapterToVM['AllowTeaming'] = $VMNetworkAdapterEntry.AllowTeaming
+				}
+
 
 				# add VMNetworkAdapter to VM and get VMNetworkAdapter
 				Try {
-					$VMNetworkAdapterObject = Add-VMNetworkAdapterToVM @AddVMNetworkAdapterToVM
+					$VMNetworkAdapter = Add-VMNetworkAdapterToVM @AddVMNetworkAdapterToVM
 				}
 				Catch {
 					Throw $_
@@ -3320,23 +3393,23 @@ Process {
 
 				# define required parameters for VLAN
 				$SetVMNetworkAdapterVlanId = @{
-					VMNetworkAdapter = $VMNetworkAdapterObject
+					VMNetworkAdapter = $VMNetworkAdapter
 				}
 
 				# define optional parameters for VLAN
-				If ($null -ne $VMNetworkAdapter.VlanMode) {
-					$SetVMNetworkAdapterVlanId['VlanMode'] = $VMNetworkAdapter.VlanMode
+				If ($null -ne $VMNetworkAdapterEntry.VlanMode) {
+					$SetVMNetworkAdapterVlanId['VlanMode'] = $VMNetworkAdapterEntry.VlanMode
 				}
-				If ($null -ne $VMNetworkAdapter.VlanId) {
-					$SetVMNetworkAdapterVlanId['VlanId'] = $VMNetworkAdapter.VlanId
+				If ($null -ne $VMNetworkAdapterEntry.VlanId) {
+					$SetVMNetworkAdapterVlanId['VlanId'] = $VMNetworkAdapterEntry.VlanId
 				}
-				If ($null -ne $VMNetworkAdapter.VlanIdList) {
-					$SetVMNetworkAdapterVlanId['VlanIdList'] = $VMNetworkAdapter.VlanIdList
+				If ($null -ne $VMNetworkAdapterEntry.VlanIdList) {
+					$SetVMNetworkAdapterVlanId['VlanIdList'] = $VMNetworkAdapterEntry.VlanIdList
 				}
 
 				# set VLAN on VMNetworkAdapter and get updated VMNetworkAdapter
 				Try {
-					$VMNetworkAdapterObject = Set-VMNetworkAdapterVlanId @SetVMNetworkAdapterVlanId
+					$VMNetworkAdapter = Set-VMNetworkAdapterVlanId @SetVMNetworkAdapterVlanId
 				}
 				Catch {
 					Throw $_
@@ -3344,35 +3417,35 @@ Process {
 
 				# define required parameters for MAC address
 				$SetVMNetworkAdapterMacAddress = @{
-					VMNetworkAdapter = $VMNetworkAdapterObject
+					VMNetworkAdapter = $VMNetworkAdapter
 				}
 
 				# define optional parameters for MAC address
-				If ($null -ne $VMNetworkAdapter.IPAddress) {
-					$SetVMNetworkAdapterMacAddress['IPAddress'] = $VMNetworkAdapter.IPAddress
+				If ($null -ne $VMNetworkAdapterEntry.IPAddress) {
+					$SetVMNetworkAdapterMacAddress['IPAddress'] = $VMNetworkAdapterEntry.IPAddress
 				}
-				If ($null -ne $VMNetworkAdapter.MacAddress) {
-					$SetVMNetworkAdapterMacAddress['MacAddress'] = $VMNetworkAdapter.MacAddress
+				If ($null -ne $VMNetworkAdapterEntry.MacAddress) {
+					$SetVMNetworkAdapterMacAddress['MacAddress'] = $VMNetworkAdapterEntry.MacAddress
 				}
-				If ($null -ne $VMNetworkAdapter.MacAddressPrefix) {
-					$SetVMNetworkAdapterMacAddress['MacAddressPrefix'] = $VMNetworkAdapter.MacAddressPrefix
+				If ($null -ne $VMNetworkAdapterEntry.MacAddressPrefix) {
+					$SetVMNetworkAdapterMacAddress['MacAddressPrefix'] = $VMNetworkAdapterEntry.MacAddressPrefix
 				}
 
 				# set MAC address on VMNetworkAdapter and get updated VMNetworkAdapter
 				Try {
-					$VMNetworkAdapterObject = Set-VMNetworkAdapterMacAddress @SetVMNetworkAdapterMacAddress
+					$VMNetworkAdapter = Set-VMNetworkAdapterMacAddress @SetVMNetworkAdapterMacAddress
 				}
 				Catch {
 					Throw $_
 				}
 
 				# add VM IP address and MAC address to DHCP server
-				If ($null -ne $VMNetworkAdapter.DhcpServer -and $null -ne $VMNetworkAdapter.DhcpScope -and $null -ne $VMNetworkAdapter.IPAddress) {
+				If ($null -ne $VMNetworkAdapterEntry.DhcpServer -and $null -ne $VMNetworkAdapterEntry.DhcpScope -and $null -ne $VMNetworkAdapterEntry.IPAddress) {
 					$AddVMNetworkAdapterToDHCP = @{
-						ComputerName = $VMNetworkAdapter.DhcpServer
-						ScopeId      = $VMNetworkAdapter.DhcpScope
-						IPAddress    = $VMNetworkAdapter.IPAddress
-						MacAddress   = $VMNetworkAdapterObject.MacAddress
+						ComputerName = $VMNetworkAdapterEntry.DhcpServer
+						ScopeId      = $VMNetworkAdapterEntry.DhcpScope
+						IPAddress    = $VMNetworkAdapterEntry.IPAddress
+						MacAddress   = $VMNetworkAdapter.MacAddress
 					}
 					Try {
 						Add-VMNetworkAdapterToDHCP @AddVMNetworkAdapterToDHCP

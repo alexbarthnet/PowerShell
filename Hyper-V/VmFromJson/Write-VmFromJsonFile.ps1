@@ -131,10 +131,22 @@ Param(
 	[Parameter(Position = 12, ParameterSetName = 'AddVMNetworkAdapter')]
 	[ValidateScript({ ($_.Length -eq 4) -and ($_ -match '^[0-9A-F]+$') })]
 	[string]$MacAddressPrefix,
+	# VM - allow default network adapter to change MAC address on outgoing packets
+	# VMNetworkAdapter - allow network adapter to change MAC address on outgoing packets
+	[Parameter(Position = 20, ParameterSetName = 'Add')]
+	[Parameter(Position = 13, ParameterSetName = 'AddVMNetworkAdapter')]
+	[ValidateSet("On","Off")]
+	[string]$MacAddressSpoofing,
+	# VM - allow default network adapter to be teamed with other network adapters on the same virtual switch
+	# VMNetworkAdapter - allow network adapter to be teamed with other network adapters on the same virtual switch
+	[Parameter(Position = 21, ParameterSetName = 'Add')]
+	[Parameter(Position = 14, ParameterSetName = 'AddVMNetworkAdapter')]
+	[ValidateSet("On","Off")]
+	[string]$AllowTeaming,
 	# OS Deployment - multiple - server name for WDS or SCCM
 	[Parameter(Position = 4, ParameterSetName = 'AddOSD')]
 	[string]$DeploymentServer,
-	# OS Deployment - multiple - path to...
+	# OS Deployment - based upon Deployment Method
 	#  ISO	: literal path to ISO file on hypervisor
 	#  WDS	: relative path to unattend XML file on WDS server
 	#  SCCM	: distinguished name of OU where VM will be created
@@ -150,7 +162,7 @@ Param(
 	[Parameter(Position = 8, ParameterSetName = 'AddOSD')]
 	[string]$MaintenanceCollection,
 	# VM - startup priority value for clustered VMs, 0 = no auto start, 1000 = low, 2000 = medium, 3000 = high
-	[Parameter(Position = 20, ParameterSetName = 'Add')]
+	[Parameter(Position = 22, ParameterSetName = 'Add')]
 	[ValidateSet(0, 1000, 2000, 3000)]
 	[uint32]$ClusterPriority,
 	# VM - define VM generation; 1 = generation 1 VM, 2 = generation 2 VM
@@ -355,7 +367,7 @@ Begin {
 		# process each parameter in parameter set
 		ForEach ($Parameter in $Parameters) {
 			# if optional parameter is defined...
-			If ($BoundParameters[$Parameter]) {
+			If ($BoundParameters.ContainsKey($Parameter)) {
 				# ...and is a switch paramter
 				If ($BoundParameters[$Parameter] -is [System.Management.Automation.SwitchParameter]) {
 					# ...add to provided dictionary after converting to boolean
@@ -698,7 +710,7 @@ Process {
 				# if preserve parameters requested...
 				If ($PreserveVMParameters) {
 					# warn and inquire about replacing
-					Write-Warning -Message "found root key '$JsonKey' and PreserveVMParameters was set; continue to replace the object." -WarningAction Inquire
+					Write-Warning -Message "found root key '$JsonKey' and PreserveVMParameters was set; continue to update the object." -WarningAction Inquire
 					# define hashtable for properties on existing VM object
 					$ExistingKeyValuePairs = @{}
 					# populate hashtable with properties from existing VM object
