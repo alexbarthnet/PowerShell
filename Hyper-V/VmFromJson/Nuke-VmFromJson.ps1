@@ -1817,6 +1817,69 @@ Process {
 			}
 		}
 
+		# get VM snapshots...
+		If ($null -ne $VM) {
+			# get parent snapshots
+			Try {
+				$VMSnapshots = Get-VMSnapshot -VM $VM | Where-Object { !$ParentalCheckpointName }
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM snapshots")
+				Throw $_
+			}
+		}
+
+		# if VM has snapshots...
+		If ($null -ne $VM -and $null -ne $VMSnapshots) {
+			# process snapshots
+			ForEach ($VMSnapshot in $VMSnapshots) {
+				# remove snapshot and child snapshots
+				Try {
+					Remove-VMSnapshot -VMSnapshot $VMSnapshot -IncludeAllChildSnapshots
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove VM snapshots")
+					Throw $_
+				}
+			}
+
+			# define values for while loop and reporting
+			$While = @{
+				Action     = 'disks to merge after snapshot removal' # action being waited for
+				Expression = '$VM.SecondaryStatus' # expression that evaluates true while action is in progress and false when action is complete
+				Multiplier = [int32]0 # counter for current loop
+				WaitTime   = [int32]0 # counter for total seconds in while loop
+				Seconds    = [int32]5 # sleep time for each pass of while loop; multiplied by loop counter to gradually add time to each loop
+				Limit      = [int32]8 # maximum passes to complete; default limit of 8 with 5 seconds allows 180 seconds for the action to complete
+			}
+
+			# wait for VM to return to normal operation
+			Write-Host ("$Hostname,$ComputerName,$Name - waiting for $($While.Action)...")
+			While ((Invoke-Expression -Command $While.Expression) -and $While.Multiplier -lt $While.Limit) {
+				# increment multiplier
+				$While.Multiplier++
+
+				# record total time
+				$While.WaitTime += ($While.Seconds * $While.Multiplier)
+
+				# declare updated wait time then sleep
+				Write-Host ("$Hostname,$ComputerName,$Name - ...waiting an additional '$($While.Seconds * $While.Multiplier)' seconds")
+				Start-Sleep -Seconds ($While.Seconds * $While.Multiplier)
+			}
+
+			# if VM still has a secondary status found...
+			If ($VM.SecondaryStatus) {
+				# ...declare wait time and return
+				Write-Host ("$Hostname,$ComputerName,$Name - WARNING: waited '$($While.WaitTime)' for $($While.Action)")
+				Write-Host ("$Hostname,$ComputerName,$Name - ...check Hyper-V before continuing")
+				Return $null
+			}
+			Else {
+				# ...declare wait time and continue
+				Write-Host ("$Hostname,$ComputerName,$Name - ...waited '$($While.WaitTime)' seconds for $($While.Action)")
+			}
+		}
+
 		# get VM storage paths
 		If ($null -ne $VM -and -not $PreserveHardDrives) {
 			# define lists
