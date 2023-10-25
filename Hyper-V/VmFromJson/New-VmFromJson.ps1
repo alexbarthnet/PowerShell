@@ -1430,7 +1430,7 @@ Begin {
 
 				# define parameters for Remove-WdsClient
 				$RemoveWdsClient = @{
-					DeviceId    = $Name
+					DeviceName  = $Name
 					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 				}
 
