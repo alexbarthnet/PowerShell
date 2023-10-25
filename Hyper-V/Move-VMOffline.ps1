@@ -23,9 +23,9 @@ param (
 	# start stopped VM after migration
 	[Parameter()]
 	[switch]$Restart,
-	# skip VM version upgrade
+	# upgrade VM version after import
 	[Parameter()]
-	[switch]$SkipVersionUpgade,
+	[switch]$UpdateVmVersion,
 	# string for filtering name of VM switch on target computer
 	[Parameter(DontShow)]
 	[string]$SwitchNameHint = 'compute',
@@ -575,7 +575,7 @@ Begin {
 
 		# get external VM switches
 		Try {
-			$VMSwitch = Get-VMSwitch @GetVMSwitch 
+			$VMSwitch = Get-VMSwitch @GetVMSwitch
 		}
 		Catch {
 			Throw $_
@@ -621,32 +621,12 @@ Begin {
 				# target does not have VM switch references in VM configuration
 				33012 {
 					# get VM network adapter from report
-					$VMNetworkAdapter = $Incompatibility.Source
-
-					# get external VM switches
-					If ($null -eq $VMSwitch) {
-						# define parameters for Get-VMSwitch
-						$GetVMSwitch = @{
-							ComputerName = $ComputerName
-							SwitchType   = [Microsoft.HyperV.PowerShell.VMSwitchType]::External
-							ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
-						}
-
-						# get external VM switches
-						Try {
-							$VMSwitch = Get-VMSwitch @GetVMSwitch 
-						}
-						Catch {
-							Throw $_
-						}
-
-						# get external VM switch names
-						Try {
-							$SwitchNames = $VMSwitch | Select-Object -ExpandProperty Name
-						}
-						Catch {
-							Throw $_
-						}
+					Try {
+						$VMNetworkAdapterName = $Incompatibility.Source.Name
+					}
+					Catch {
+						Write-Warning -Message 'Could not retrieve VM network adapter name from incompatibility object'
+						Throw $_
 					}
 
 					# if switchname parameter not found in external VM switch names...
@@ -661,12 +641,12 @@ Begin {
 						switch ($SwitchNames.Count) {
 							# no external switches found
 							0 {
-								Write-Warning -Message "No external switches found on target server. VM network adapter '$($VMNetworkAdapter.Name)' will not be connected after import." -WarningAction Inquire
+								Write-Warning -Message "No external switches found on target server. VM network adapter '$VMNetworkAdapterName' will not be connected after import." -WarningAction Inquire
 								$SwitchName = $null
 							}
 							# one external switch found
 							1 {
-								Write-Warning -Message "VM network adapter '$($VMNetworkAdapter.Name)' will be connected to VM switch '$($SwitchNames)'" -WarningAction Continue
+								Write-Warning -Message "VM network adapter '$VMNetworkAdapterName' will be connected to VM switch '$SwitchNames'" -WarningAction Continue
 								$SwitchName = $SwitchNames
 							}
 							# multiple external switches found
@@ -678,29 +658,20 @@ Begin {
 									0 {
 										# sort external switches by name and select first switch
 										$SwitchName = $SwitchNames | Sort-Object | Select-Object -First 1
-										Write-Warning -Message "VM network adapter '$($VMNetworkAdapter.Name)' will be connected to first available external switch: '$($SwitchName)'" -WarningAction Continue
+										Write-Warning -Message "VM network adapter '$VMNetworkAdapterName' will be connected to first available external switch: '$SwitchNames'" -WarningAction Continue
 										$SwitchName = $ComputeSwitchNames
 									}
 									# one external switch found
 									1 {
 										$SwitchName = $ComputeSwitchNames
-										Write-Warning -Message "VM network adapter '$($VMNetworkAdapter.Name)' will be connected to the located external 'compute' switch: '$($SwitchName)'" -WarningAction Continue
+										Write-Warning -Message "VM network adapter '$VMNetworkAdapterName' will be connected to the located external 'compute' switch: '$SwitchNames'" -WarningAction Continue
 									}
 									Default {
 										# sort external "compute" switches by name and select first switch
 										$SwitchName = $ComputeSwitchNames | Sort-Object | Select-Object -First 1
-										Write-Warning -Message "VM network adapter '$($VMNetworkAdapter.Name)' will be connected to first available external 'compute' switch '$($SwitchName)'" -WarningAction Continue
+										Write-Warning -Message "VM network adapter '$VMNetworkAdapterName' will be connected to first available external 'compute' switch '$SwitchNames'" -WarningAction Continue
 									}
 								}
-							}
-						}
-						
-						# if multiple external switches found...
-						If ($SwitchName.Count -gt 1) {
-							# if one switch name contains compute...
-							If (($SwitchName | Where-Object { $_.Contains('compute') }).Count -eq 1) {
-								$SwitchName = $SwitchName.Contains('compute')
-
 							}
 						}
 					}
@@ -720,7 +691,8 @@ Begin {
 					Else {
 						# ...reconnect VM network adapter to new switch
 						Try {
-							$Incompatibility.Source | Disconnect-VMNetworkAdapter -Passthru | Connect-VMNetworkAdapter -SwitchName $SwitchName
+							$Incompatibility.Source | Connect-VMNetworkAdapter -SwitchName $SwitchName
+							# $Incompatibility.Source | Disconnect-VMNetworkAdapter -Passthru | Connect-VMNetworkAdapter -SwitchName $SwitchName
 						}
 						Catch {
 							Write-Warning -Message 'Could not reconnect VM network adapter to address VM switch incompatibility'
@@ -775,7 +747,7 @@ Begin {
 		################################################
 
 		# if VM version upgrade skip requested...
-		If ($SkipVersionUpgade) {
+		If (!$UpdateVmVersion) {
 			# ...return VM before version upgrade
 			Return $ImportedVM
 		}
@@ -1169,11 +1141,6 @@ Begin {
 		}
 	}
 
-	# check for Protected Users
-	If ($Hostname -ne $Computername -and ([Security.Principal.WindowsIdentity]::GetCurrent().Groups | Where-Object { $_.Value -match "-525$" })) {
-		Throw [System.UnauthorizedAccessException]::new('Users in the Protected Users group must run this script from the source hypervisor')
-	}
-
 	# declare state
 	Write-Host "$ComputerName - checking path on destination..."
 
@@ -1275,6 +1242,11 @@ Process {
 	$Id = $VM.Id
 	$Name = $VM.Name.ToLowerInvariant()
 	$SourceComputerName = $VM.ComputerName.ToLowerInvariant()
+
+	# check for Protected Users
+	If ($Hostname -ne $SourceComputerName -and ([Security.Principal.WindowsIdentity]::GetCurrent().Groups | Where-Object { $_.Value -match '-525$' })) {
+		Throw [System.UnauthorizedAccessException]::new('Users in the Protected Users group must run this script from the source hypervisor')
+	}
 
 	# get VM configuration
 	$State = $VM.State
@@ -1380,7 +1352,7 @@ Process {
 	# restore VM
 	################################################
 
-	# if VM was imported to target cluster...
+	# if VM was imported to target...
 	If ($ImportedVM -and $ImportedVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
 		# ...restore imported VM
 		Try {
@@ -1405,7 +1377,7 @@ Process {
 	# remove VM
 	################################################
 
-	# if VM was imported to target cluster...
+	# if VM was imported to target...
 	If ($ImportedVM -and $ImportedVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
 		# ...remove original VM
 		Try {
