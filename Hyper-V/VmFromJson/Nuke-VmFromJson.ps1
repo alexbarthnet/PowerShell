@@ -2006,6 +2006,9 @@ Process {
 				$VHDPath = Split-Path -Path $Path -Parent
 				$VMPaths.Add($VHDPath)
 			}
+
+			# clear VHD paths
+			$null = $VHDPaths
 		}
 
 		# remove files and folders from VM paths
@@ -2053,6 +2056,9 @@ Process {
 					Throw $_
 				}
 			}
+
+			# clear VM paths
+			$null = $VMPaths
 		}
 
 		# remove network objects
