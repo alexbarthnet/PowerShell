@@ -562,7 +562,7 @@ Process {
 			# define parameters for Stop-VM
 			$StopVM = @{
 				VM          = $VM
-				TurnOff     = $true
+				Force       = $true
 				Confirm     = $false
 				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 			}
