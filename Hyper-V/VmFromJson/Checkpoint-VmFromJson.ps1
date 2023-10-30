@@ -5,6 +5,7 @@ Param(
 	[string[]]$VMName,
 	[string]$ComputerName,
 	[string]$SnapshotName,
+	[switch]$SkipClusterCheck,
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 )
@@ -467,7 +468,14 @@ Process {
 		$VM = $VMObjects[$Name]
 		$ComputerName = $VM.ComputerName
 
-		# turn off the VM if running
+		# if SkipClusterCheck set...
+		If ($SkipClusterCheck) {
+			# declare then move to next object
+			Write-Host ("$Hostname,$ComputerName,$Name - SkipClusterCheck set, skipping cluster check")
+			Continue VMCluster
+		}
+
+		# if VM is already off...
 		If ($VM.State -eq 'Off') {
 			# declare then move to next object
 			Write-Host ("$Hostname,$ComputerName,$Name - VM is powered off, skipping cluster check")
