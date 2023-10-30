@@ -1385,7 +1385,7 @@ Begin {
 			# retrieve existing WDS clients
 			Try {
 				Write-Host ("$Hostname,$ComputerName,$Name - checking for matching WDS devices...")
-				$WdsClient = Get-WdsClient @GetWdsClient
+				$WdsClients = Get-WdsClient @GetWdsClient
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve existing WDS devices")
@@ -1396,51 +1396,36 @@ Begin {
 			$DeviceID = $ArgumentList['DeviceID']
 
 			# filter WDS clients
-			$WdsClient = $WdsClient | Where-Object { $_.DeviceId -eq "{$DeviceId}" -or $_.DeviceName -eq $Name }
+			$WdsClients = $WdsClients | Where-Object { $_.DeviceId -eq "{$DeviceId}" -or $_.DeviceName -eq $Name }
 
 			# if no WDS clients found...
-			If ($null -eq $WdsClient) {
+			If ($null -eq $WdsClients) {
 				# ...declare and continue
 				Write-Host ("$Hostname,$ComputerName,$Name - ...no matching WDS device found")
 			}
-			# if WDS clients found with matching DeviceId...
-			ElseIf ($null -ne ($WdsClient | Where-Object { $_.DeviceId -eq "{$DeviceId}" })) {
-				# ...remove existing WDS clients by DeviceId
-				Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing WDS devices with matching DeviceID")
+			# if WDS clients found with matching DeviceId or DeviceName...
+			Else {
+				# process WDS clients
+				ForEach ($WdsClient in $WdsClients) {
+					# declare device found
+					Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing WDS device: ")
+					Write-Host ("$Hostname,$ComputerName,$Name - ... - DeviceName : $($WdsClient.DeviceName)")
+					Write-Host ("$Hostname,$ComputerName,$Name - ... - DeviceId   : $($WdsClient.DeviceId)")
 
-				# define parameters for Remove-WdsClient
-				$RemoveWdsClient = @{
-					DeviceId    = $DeviceId
-					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-				}
+					# define parameters for Remove-WdsClient
+					$RemoveWdsClient = @{
+						DeviceId    = $WdsClient.DeviceId
+						ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+					}
 
-				# remove WDS clients with matching DeviceId
-				Try {
-					Remove-WdsClient @RemoveWdsClient
-				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove existing WDS devices with matching DeviceID")
-					Throw $_
-				}
-			}
-			# if WDS clients found with matching DeviceName...
-			ElseIf ($null -ne ($WdsClient | Where-Object { $_.DeviceName -eq $Name })) {
-				# ...remove existing WDS clients by DeviceName
-				Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing WDS devices with matching DeviceName")
-
-				# define parameters for Remove-WdsClient
-				$RemoveWdsClient = @{
-					DeviceName  = $Name
-					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-				}
-
-				# remove WDS clients with matching DeviceName
-				Try {
-					Remove-WdsClient @RemoveWdsClient
-				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove existing WDS devices with matching DeviceName")
-					Throw $_
+					# remove matching WDS client by DeviceId
+					Try {
+						Remove-WdsClient @RemoveWdsClient
+					}
+					Catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove existing WDS device")
+						Throw $_
+					}
 				}
 			}
 
