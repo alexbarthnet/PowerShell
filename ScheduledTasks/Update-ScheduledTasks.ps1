@@ -252,7 +252,7 @@ Begin {
 	
 		# stop transcript
 		Try {
-			Stop-Transcript
+			$null = Stop-Transcript
 		}
 		Catch {
 			Throw $_
