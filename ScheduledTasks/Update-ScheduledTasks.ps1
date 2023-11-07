@@ -130,73 +130,135 @@ Param(
 	# path to JSON configuration file
 	[Parameter(Mandatory = $True)]
 	[string]$Json,
-	# log file max age
-	[Parameter(DontShow)]
-	[double]$LogDays = 7,
-	# log file min count
-	[Parameter(DontShow)]
-	[uint16]$LogCount = 7,
-	# log start time
-	[Parameter(DontShow)]
-	[string]$LogStart = (Get-Date -Format FileDateTimeUniversal),
+	# path for transcript files
+	[Parameter()]
+	[string]$TranscriptName,
+	# path for transcript files
+	[Parameter()]
+	[string]$TranscriptPath,
 	# local hostname
 	[Parameter(DontShow)]
 	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
 )
 
 Begin {
-	# if running...
-	If ($Run) {
-		# append hostname and datetime to script path to define transcript path
-		$TranscriptFile = $PSCommandPath.Replace('.ps1', "_$HostName.txt").Replace('.txt', "_$LogStart.txt")
-		# define ideal log path
-		$TranscriptPath = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'Logs'
-		# if ideal log path found...
-		If (Test-Path -Path $TranscriptPath -PathType 'Container') {
-			# update transcript path
-			$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptPath)
-		}
+	Function Start-TranscriptWithHostAndDate {
+		Param(
+			#name for transcript file
+			[Parameter()]
+			[string]$TranscriptName,
+			# path for transcript file
+			[Parameter()]
+			[string]$TranscriptPath,
+			# log start time
+			[Parameter(DontShow)]
+			[string]$LogStart = (Get-Date -Format FileDateTimeUniversal),
+			# local hostname
+			[Parameter(DontShow)]
+			[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
+		)
+	
 		# define parameters for Start-Transcript
 		$StartTranscript = @{
-			Path        = $TranscriptFile
 			Force       = $true
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
+	
+		# append hostname and datetime to basename of command path to define transcript base
+		$TranscriptBase = "$TranscriptName`_$HostName`_$LogStart`.txt"
+		# update parameters with full path to transcript file
+		$StartTranscript['Path'] = Join-Path -Path $TranscriptPath -ChildPath $TranscriptBase
 		# start transcript
 		Try	{
-			Start-Transcript @StartTranscript
+			$null = Start-Transcript @StartTranscript
 		}
 		Catch {
 			# get program data path
 			$TranscriptRoot = [System.Environment]::GetFolderPath('CommonApplicationData')
-			# get basename of script
-			$TranscriptBase = Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty 'BaseName'
 			# define path in program data
-			$TranscriptPath = Join-Path -Path $TranscriptRoot -ChildPath $TranscriptBase
+			$TranscriptPath = Join-Path -Path $TranscriptRoot -ChildPath $TranscriptName
 			# if path in program data not found...
 			If ((Test-Path -Path $TranscriptPath -PathType 'Container') -eq $false) {
 				Try {
 					# create path in program data
 					$null = New-Item -Path $TranscriptPath -ItemType 'Directory' -ErrorAction Stop
 					# redirect transcript file from script directory to path in program data
-					$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptPath)
+					$StartTranscript['Path'] = Join-Path -Path $TranscriptPath -ChildPath $TranscriptBase
 				}
 				Catch {
 					# clear errors before starting script
 					$Error.Clear()
 					# redirect transcript file from script directory to root of program data
-					$TranscriptFile = $TranscriptFile.Replace($PSScriptRoot, $TranscriptRoot)
+					$StartTranscript['Path'] = Join-Path -Path $TranscriptRoot -ChildPath $TranscriptBase
 				}
 			}
-			# update parameters for Start-Transcript
-			$StartTranscript['Path'] = $TranscriptFile
 			# start transcript
 			Try {
-				Start-Transcript @StartTranscript
+				$null = Start-Transcript @StartTranscript
 			}
 			Catch {
 				Throw $_
 			}
+		}
+	
+		# return path to transcript file
+		Return $StartTranscript['Path']
+	}
+	
+	Function Stop-TranscriptWithHostAndDate {
+		Param(
+			#name for transcript file
+			[Parameter()]
+			[string]$TranscriptName,
+			# path for transcript file
+			[Parameter()]
+			[string]$TranscriptPath,
+			# log file max age
+			[Parameter(DontShow)]
+			[double]$LogDays = 7,
+			# log file min count
+			[Parameter(DontShow)]
+			[uint16]$LogCount = 7,
+			# local hostname
+			[Parameter(DontShow)]
+			[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
+		)
+	
+		# build transcript base from name and hostname
+		$TranscriptBase = $TranscriptName, $HostName -join '_'
+		# declare transcript cleanup
+		Write-Verbose -Message "Removing old transcript files named '$TranscriptBase' from '$TranscriptPath'" -Verbose
+		# get transcript files
+		$TranscriptFiles = Get-ChildItem -Path $TranscriptPath | Where-Object { $_.BaseName.StartsWith($TranscriptBase, [System.StringComparison]::InvariantCultureIgnoreCase) -and $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) }
+		# get transcript files newer than cleanup date
+		$NewFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-$LogDays) }
+	
+		# if count of transcript files count is less than cleanup threshold...
+		If ($LogCount -lt $NewFiles.Count ) {
+			# declare and continue
+			Write-Verbose -Message "Skipping transcript file cleanup; count of transcript files ($($NewFiles.Count)) is below cleanup threshold ($LogCount)" -Verbose
+		}
+		# if count of transcript files is not less than cleanup threshold...
+		Else {
+			# get log files older than cleanup date
+			$OldFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) } | Sort-Object -Property FullName
+			# remove old logs
+			ForEach ($OldFile in $OldFiles) {
+				Try {
+					Remove-Item -Path $OldFile.FullName -Force -Verbose -ErrorAction Stop
+				}
+				Catch {
+					$_
+				}
+			}
+		}
+	
+		# stop transcript
+		Try {
+			Stop-Transcript
+		}
+		Catch {
+			Throw $_
 		}
 	}
 
@@ -542,6 +604,20 @@ Begin {
 			Return
 		}
 	}
+
+	# if running...
+	If ($Run) {
+		# define parameters
+		If (!$PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptName = $MyInvocation.MyCommand -replace '\.ps[m|d]?1$' }
+		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptPath = $PSScriptRoot }
+		# call transcript function
+		Try {
+			Start-TranscriptWithHostAndDate -TranscriptPath $TranscriptPath -TranscriptName $TranscriptName
+		}
+		Catch {
+			Throw $_
+		}
+	}
 }
 
 Process {
@@ -664,13 +740,13 @@ Process {
 				}
 
 				# add current time as FileDateTimeUniversal
-				$json_hashtable['Updated'] = $LogStart
+				$json_hashtable['Updated'] = (Get-Date -Format FileDateTimeUniversal)
 
 				# create custom object from hashtable
 				$JsonDatum = [pscustomobject]$json_hashtable
 
 				# remove existing entry with same name
-				If ($JsonData | Where-Object { $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath}) {
+				If ($JsonData | Where-Object { $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath }) {
 					Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
 					$JsonData = $JsonData | Where-Object { -not ($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath) }
 				}
@@ -747,7 +823,7 @@ Process {
 						}
 
 						# define hashtable for function
-						$RunScheduledTaskFromJson = @{
+						$UpdateScheduledTaskFromJson = @{
 							TaskName  = [string]$JsonDatum.TaskName
 							TaskPath  = [string]$JsonDatum.TaskPath
 							Execute   = [string]$JsonDatum.Execute
@@ -760,7 +836,7 @@ Process {
 						# if RunLevel defind in JSON...
 						If ($null -ne $JsonDatum.RunLevel -and $JsonDatum.RunLevel -is [string]) {
 							# add RunLevel to hashtable
-							$RunScheduledTaskFromJson['RunLevel'] = [string]$RunLevel
+							$UpdateScheduledTaskFromJson['RunLevel'] = [string]$RunLevel
 						}
 
 						# if TriggerAt defined in JSON...
@@ -768,7 +844,7 @@ Process {
 							# ...and TriggerAt is datetime...
 							If ($JsonDatum.TriggerAt -is [datetime]) {
 								# ...add TriggerAt to hashtable
-								$RunScheduledTaskFromJson['TriggerAt'] = [datetime]$JsonDatum.TriggerAt
+								$UpdateScheduledTaskFromJson['TriggerAt'] = [datetime]$JsonDatum.TriggerAt
 							}
 							Else {
 								Write-Output "ERROR: could not cast TriggerAt to [datetime] in task: '$($JsonDatum.TaskName)'"
@@ -782,7 +858,7 @@ Process {
 									# ...and RandomDelayTime is greater than (after) TriggerAt
 									If ($JsonDatum.RandomDelayTime -gt $JsonDatum.TriggerAt) {
 										# ...create RandomDelay timespan and add to hashtable
-										$RunScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonDatum.RandomDelayTime - $JsonDatum.TriggerAt)
+										$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonDatum.RandomDelayTime - $JsonDatum.TriggerAt)
 									}
 									Else {
 										Write-Output "ERROR: RandomDelayTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
@@ -802,7 +878,7 @@ Process {
 									# ...and RepetitionIntervalTime is greater than (after) TriggerAt
 									If ($JsonDatum.RepetitionIntervalTime -gt $JsonDatum.TriggerAt) {
 										# ...create RepetitionInterval timespan and add to hashtable
-										$RunScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonDatum.RepetitionIntervalTime - $JsonDatum.TriggerAt)
+										$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonDatum.RepetitionIntervalTime - $JsonDatum.TriggerAt)
 									}
 									Else {
 										Write-Output "ERROR: RepetitionIntervalTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
@@ -822,7 +898,7 @@ Process {
 									# ...and ExecutionTimeLimitTime is greater than (after) TriggerAt
 									If ($JsonDatum.ExecutionTimeLimitTime -gt $JsonDatum.TriggerAt) {
 										# ...create ExecutionTimeLimit timespan and add to hashtable
-										$RunScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonDatum.ExecutionTimeLimitTime - $JsonDatum.TriggerAt)
+										$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonDatum.ExecutionTimeLimitTime - $JsonDatum.TriggerAt)
 									}
 									Else {
 										Write-Output "ERROR: ExecutionTimeLimitTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
@@ -900,38 +976,8 @@ Process {
 End {
 	# if running...
 	If ($Run) {
-		# get transcript path
-		$PathForTranscript = Split-Path -Path $StartTranscript['Path'] -Parent
-		# get transcript name
-		$NameForTranscript = (Split-Path -Path $StartTranscript['Path'] -Leaf).Replace("_$LogStart.txt", $null)
-		# get transcript files
-		$TranscriptFiles = Get-ChildItem -Path $PathForTranscript | Where-Object { $_.BaseName.StartsWith($NameForTranscript, [System.StringComparison]::InvariantCultureIgnoreCase) -and $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) }
-		# get transcript files newer than cleanup date
-		$NewFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-$LogDays) }
-		# if count of transcript files count is less than cleanup threshold...
-		If ($LogCount -lt $NewFiles.Count ) {
-			# declare and continue
-			Write-Output "Skipping transcript file cleanup; count of transcript files ($($NewFiles.Count)) is below cleanup threshold ($LogCount)"
-		}
-		# if count of transcript files is not less than cleanup threshold...
-		Else {
-			# get log files older than cleanup date
-			$OldFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) } | Sort-Object -Property FullName
-			# remove old logs
-			ForEach ($OldFile in $OldFiles) {
-				Write-Output "Removing old transcript file: $($OldFile.FullName)"
-				Try { 
-					Remove-Item -Path $OldFile.FullName -Force -ErrorAction Stop
-				}
-				Catch {
-					$_
-				}
-			}
-		}
-
-		# stop transcript
 		Try {
-			Stop-Transcript
+			Stop-TranscriptWithHostAndDate -TranscriptPath $TranscriptPath -TranscriptName $TranscriptName
 		}
 		Catch {
 			Throw $_
