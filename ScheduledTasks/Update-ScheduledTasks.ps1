@@ -200,9 +200,6 @@ Begin {
 				Throw $_
 			}
 		}
-	
-		# return path to transcript file
-		Return $StartTranscript['Path']
 	}
 	
 	Function Stop-TranscriptWithHostAndDate {
