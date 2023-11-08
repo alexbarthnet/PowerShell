@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-Adds or removes Scheduled Tasks based upon values in a JSON configuration file.
+Adds or removes Scheduled Tasks defined by entries in a JSON configuration file.
 
 .DESCRIPTION
-Adds or removes Scheduled Tasks based upon values in a JSON configuration file.
+Adds or removes Scheduled Tasks defined by entries in a JSON configuration file.
 
 .PARAMETER Json
 The path to a JSON file containing the configuration for this script.
@@ -24,37 +24,48 @@ Switch parameter to process all entries from the JSON configuration file. Cannot
 The name of the scheduled task. Required when the Add or Remove parameters are specified.
 
 .PARAMETER TaskPath
-The path of a folder for the scheduled task. The script does not support the root path of '\' or any path starting with '\Microsoft' to prevent issues with existing tasks. Required when the Add or Remove parameters are specified.
+The path of a folder for the scheduled task. Required when the Add or Remove parameters are specified. The following restrictions apply:
+ - The task path '\' is permitted only when paired with the 'Update-ScheduledTasks' task name. 
+ - Any task path starting with '\Microsoft' is not permitted to avoid conflicts with built-in scheduled tasks.
 
 .PARAMETER Execute
-The path of an executable that will be run by the scheduled task. Required when the Add parameter is specified.
+The path to the executable that will be run by the scheduled task. Required when the Add parameter is specified.
 
 .PARAMETER Argument
-The string containing one or more arguments for the executable that will be run by the scheduled task. Required when the Add parameter is specified.
+The string containing one or more arguments for the executable that will be run by the scheduled task.
 
 .PARAMETER TriggerAt
 The datetime when the scheduled task will first run. The value can be any valid datetime.
 
 .PARAMETER RandomDelay
-The timespan between when the scheduled task is scheduled to run and when it will start. The default value is 5 minutes. The value can be any valid timespan.
+The timespan between when the scheduled task is scheduled to run and when it will start. The value can be any valid timespan. The default value is 5 minutes.
 
 .PARAMETER RepetitionInterval
-The timespan between when the scheduled task is scheduled to run and when it will run next. The default value is 1 hour. The value can be any valid timespan.
+The timespan between when the scheduled task is scheduled to run and when it will run next. The value can be any valid timespan. The default value is 1 hour.
 
 .PARAMETER ExecutionTimeLimit
-The timespan between when the scheduled task starts and when it will be stopped. The default value is 5 minutes. The value can be any valid timespan.
+The timespan between when the scheduled task starts and when it will be stopped. The value can be any valid timespan. The default value is 5 minutes.
 
 .PARAMETER UserId
-The user account for the scheduled task. The default value is 'SYSTEM'.
+The user account for the scheduled task. The value can be any valid Windows account name. The default value is 'SYSTEM'.
 
 .PARAMETER LogonType
-The logon type for the scheduled task. The default value is 'ServiceAccount'. The permitted values are 'ServiceAccount' and 'Password'. The value of password is only supported when the UserId is a Group-Managed Service Account.
+The logon type for the scheduled task. The accepted values are 'ServiceAccount' and 'Password'. The default value is 'ServiceAccount'. The 'Password' value is only supported when the UserId is a Group-Managed Service Account.
 
 .PARAMETER RunLevel
-The run level for the scheduled task. The default value is 'Highest'. The permitted values are 'Highest' and 'Limited'.
+The run level for the scheduled task. The accepted values are 'Highest' and 'Limited'. The default value is 'Highest'.
 
 .PARAMETER Modules
-A string or array of string representing the modules required by a PowerShell scheduled task.
+String or array of string representing the name or path to PowerShell modules required the scheduled task. Modules are installed to the AllUsers location.
+
+.PARAMETER RemoveOldTasks
+Switch parameter to remove any scheduled task that is not defined in the JSON file and located in a task path defined on any entry in the JSON configuration file.
+
+.PARAMETER TranscriptName
+The prefix applied to transcript files created by this script. The default file name transcript file name is an underscore-separated list of basename of the script file, the hostname of the system, the current datetime in FileDateTimeUniversal format.
+
+.PARAMETER TranscriptPath
+The path to an existing folder for saving PowerShell transcript files.
 
 .INPUTS
 None.
@@ -77,6 +88,9 @@ None. The script reports the actions taken and does not provide any actionable o
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
+	# path to JSON configuration file
+	[Parameter(Mandatory = $True, Position = 0)]
+	[string]$Json,
 	# script parameters - mode
 	[Parameter(Mandatory = $True, ParameterSetName = 'Clear')]
 	[switch]$Clear,
@@ -86,6 +100,8 @@ Param(
 	[switch]$Add,
 	[Parameter(Mandatory = $True, ParameterSetName = 'Run')]
 	[switch]$Run,
+	[Parameter(Mandatory = $True, ParameterSetName = 'Update')]
+	[switch]$Update,
 	# scheduled task parameter - register
 	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
@@ -98,7 +114,7 @@ Param(
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[string]$Execute,
 	# scheduled task parameter - action
-	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
+	[Parameter(Mandatory = $True)]
 	[string]$Argument,
 	# scheduled task parameter - trigger
 	[Parameter(ParameterSetName = 'Add')]
@@ -127,14 +143,13 @@ Param(
 	# switch to remove old tasks during run
 	[Parameter(ParameterSetName = 'Run')]
 	[switch]$RemoveOldTasks,
-	# path to JSON configuration file
-	[Parameter(Mandatory = $True)]
-	[string]$Json,
 	# path for transcript files
-	[Parameter()]
+	[Parameter(ParameterSetName = 'Run')]
+	[Parameter(ParameterSetName = 'Update')]
 	[string]$TranscriptName,
 	# path for transcript files
-	[Parameter()]
+	[Parameter(ParameterSetName = 'Run')][ValidateScript({ Test-Path -Path $_ -PathType Container })]
+	[Parameter(ParameterSetName = 'Update')][ValidateScript({ Test-Path -Path $_ -PathType Container })]
 	[string]$TranscriptPath,
 	# local hostname
 	[Parameter(DontShow)]
@@ -146,20 +161,33 @@ Begin {
 		Param(
 			# name for transcript file
 			[Parameter()]
-			[string]$TranscriptName = (Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty 'BaseName'),
+			[string]$TranscriptName,
 			# path for transcript file
 			[Parameter()]
-			[string]$TranscriptPath = ([System.Environment]::GetFolderPath('CommonApplicationData')),
+			[string]$TranscriptPath,
 			# log start time
 			[Parameter(DontShow)]
-			[string]$LogStart = (Get-Date -Format FileDateTimeUniversal),
+			[string]$TranscriptTime = ([datetime]::Now.ToString('yyyyMMddHHmmss')),
 			# local hostname
 			[Parameter(DontShow)]
-			[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
+			[string]$TranscriptHost = ([System.Environment]::MachineName)
 		)
-	
-		# build transcript file name from transcript name, hostname, current datetime
-		$TranscriptFile = "$TranscriptName`_$HostName`_$LogStart`.txt"
+
+		# verify transcript name
+		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
+			$TranscriptName = (Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty 'BaseName')
+		}
+
+		# verify transcript path
+		If (!$PSBoundParameters.ContainsKey('TranscriptPath') -or !(Test-Path -Path $TranscriptPath -PathType Container)) {
+			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData')
+		}
+
+		# build transcript basename from transcript name and hostname
+		$TranscriptBase = "PowerShell_transcript.$TranscriptHost.$TranscriptName"
+
+		# build transcript file name with transcript basename and current datetime
+		$TranscriptFile = "$TranscriptBase.$TranscriptTime.txt"
 
 		# define parameters for Start-Transcript
 		$StartTranscript = @{
@@ -181,42 +209,55 @@ Begin {
 		Param(
 			# name for transcript file
 			[Parameter()]
-			[string]$TranscriptName = (Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty 'BaseName'),
+			[string]$TranscriptName,
 			# path for transcript file
 			[Parameter()]
-			[string]$TranscriptPath = ([System.Environment]::GetFolderPath('CommonApplicationData')),
-			# log file max age
+			[string]$TranscriptPath,
+			# minimum number of transcript files for removal
 			[Parameter(DontShow)]
-			[double]$LogDays = 7,
-			# log file min count
+			[uint16]$TranscriptCount = 7,
+			# minimum age of transcript files for removal
 			[Parameter(DontShow)]
-			[uint16]$LogCount = 7,
+			[double]$TranscriptDays = 7,
+			# datetime for transcript files for removal
+			[Parameter(DontShow)]
+			[datetime]$TranscriptDate = ([datetime]::Now.AddDays(-$TranscriptDays)),
 			# local hostname
 			[Parameter(DontShow)]
-			[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
+			[string]$TranscriptHost = ([System.Environment]::MachineName)
 		)
-	
+
+		# verify transcript name
+		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
+			$TranscriptName = (Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty 'BaseName')
+		}
+
+		# verify transcript path
+		If (!$PSBoundParameters.ContainsKey('TranscriptPath') -or !(Test-Path -Path $TranscriptPath -PathType Container)) {
+			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData')
+		}
+
 		# build transcript basename from transcript name and hostname
-		$TranscriptBase = $TranscriptName, $HostName -join '_'
+		$TranscriptBase = "PowerShell_transcript.$TranscriptHost.$TranscriptName"
 
 		# declare transcript cleanup
-		Write-Verbose -Message "Removing old transcript files named '$TranscriptBase' from '$TranscriptPath'" -Verbose
+		Write-Verbose -Message "Removing any transcripts named '$TranscriptBase' from '$TranscriptPath' that are older than '$TranscriptDays' days" -Verbose
 
 		# get transcript files
-		$TranscriptFiles = Get-ChildItem -Path $TranscriptPath | Where-Object { $_.BaseName.StartsWith($TranscriptBase, [System.StringComparison]::InvariantCultureIgnoreCase) -and $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) }
+		$TranscriptFiles = Get-ChildItem -Path $TranscriptPath | Where-Object { $_.BaseName.StartsWith($TranscriptBase, [System.StringComparison]::InvariantCultureIgnoreCase) -and $_.LastWriteTime -lt $TranscriptDate }
 
 		# get transcript files newer than cleanup date
-		$NewFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-$LogDays) }
+		$NewFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -gt $TranscriptDate }
 	
 		# if count of transcript files count is less than cleanup threshold...
-		If ($LogCount -lt $NewFiles.Count ) {
+		If ($TranscriptCount -lt $NewFiles.Count ) {
 			# declare and continue
-			Write-Verbose -Message "Skipping transcript file cleanup; count of transcript files ($($NewFiles.Count)) after cleanup would be below cleanup threshold ($LogCount)" -Verbose
+			Write-Verbose -Message "Skipping transcript removal; count of transcripts ($($NewFiles.Count)) would be below minimum transcript count ($TranscriptCount)" -Verbose
 		}
 		# if count of transcript files is not less than cleanup threshold...
 		Else {
 			# get log files older than cleanup date
-			$OldFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) } | Sort-Object -Property FullName
+			$OldFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -lt $TranscriptDate } | Sort-Object -Property FullName
 			# remove old logs
 			ForEach ($OldFile in $OldFiles) {
 				Try {
@@ -581,7 +622,7 @@ Begin {
 	}
 
 	# if running...
-	If ($Run) {
+	If ($Run -or $Update) {
 		# define parameters
 		If (!$PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptName = $MyInvocation.MyCommand -replace '\.ps[m|d]?1$' }
 		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData') }
@@ -738,7 +779,7 @@ Process {
 			}
 		}
 		# run through entries in configuration file
-		$Run {
+		{$Run -or $Update} {
 			# declare start
 			Write-Host "`nUpdating scheduled tasks from '$Json'"
 
@@ -950,7 +991,7 @@ Process {
 
 End {
 	# if running...
-	If ($Run) {
+	If ($Run -or $Update) {
 		Try {
 			Stop-TranscriptWithHostAndDate -TranscriptPath $TranscriptPath -TranscriptName $TranscriptName
 		}
