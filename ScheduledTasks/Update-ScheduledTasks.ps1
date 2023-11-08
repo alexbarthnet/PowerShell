@@ -114,7 +114,7 @@ Param(
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[string]$Execute,
 	# scheduled task parameter - action
-	[Parameter(Mandatory = $True)]
+	[Parameter(ParameterSetName = 'Add')]
 	[string]$Argument,
 	# scheduled task parameter - trigger
 	[Parameter(ParameterSetName = 'Add')]
