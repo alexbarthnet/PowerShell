@@ -144,12 +144,12 @@ Param(
 Begin {
 	Function Start-TranscriptWithHostAndDate {
 		Param(
-			#name for transcript file
+			# name for transcript file
 			[Parameter()]
-			[string]$TranscriptName,
+			[string]$TranscriptName = (Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty 'BaseName'),
 			# path for transcript file
 			[Parameter()]
-			[string]$TranscriptPath,
+			[string]$TranscriptPath = ([System.Environment]::GetFolderPath('CommonApplicationData')),
 			# log start time
 			[Parameter(DontShow)]
 			[string]$LogStart = (Get-Date -Format FileDateTimeUniversal),
@@ -158,58 +158,33 @@ Begin {
 			[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
 		)
 	
+		# build transcript file name from transcript name, hostname, current datetime
+		$TranscriptFile = "$TranscriptName`_$HostName`_$LogStart`.txt"
+
 		# define parameters for Start-Transcript
 		$StartTranscript = @{
+			Path        = Join-Path -Path $TranscriptPath -ChildPath $TranscriptFile
 			Force       = $true
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
 	
-		# append hostname and datetime to basename of command path to define transcript base
-		$TranscriptBase = "$TranscriptName`_$HostName`_$LogStart`.txt"
-		# update parameters with full path to transcript file
-		$StartTranscript['Path'] = Join-Path -Path $TranscriptPath -ChildPath $TranscriptBase
 		# start transcript
 		Try	{
 			$null = Start-Transcript @StartTranscript
 		}
 		Catch {
-			# get program data path
-			$TranscriptRoot = [System.Environment]::GetFolderPath('CommonApplicationData')
-			# define path in program data
-			$TranscriptPath = Join-Path -Path $TranscriptRoot -ChildPath $TranscriptName
-			# if path in program data not found...
-			If ((Test-Path -Path $TranscriptPath -PathType 'Container') -eq $false) {
-				Try {
-					# create path in program data
-					$null = New-Item -Path $TranscriptPath -ItemType 'Directory' -ErrorAction Stop
-					# redirect transcript file from script directory to path in program data
-					$StartTranscript['Path'] = Join-Path -Path $TranscriptPath -ChildPath $TranscriptBase
-				}
-				Catch {
-					# clear errors before starting script
-					$Error.Clear()
-					# redirect transcript file from script directory to root of program data
-					$StartTranscript['Path'] = Join-Path -Path $TranscriptRoot -ChildPath $TranscriptBase
-				}
-			}
-			# start transcript
-			Try {
-				$null = Start-Transcript @StartTranscript
-			}
-			Catch {
-				Throw $_
-			}
+			Throw $_
 		}
 	}
 	
 	Function Stop-TranscriptWithHostAndDate {
 		Param(
-			#name for transcript file
+			# name for transcript file
 			[Parameter()]
-			[string]$TranscriptName,
+			[string]$TranscriptName = (Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty 'BaseName'),
 			# path for transcript file
 			[Parameter()]
-			[string]$TranscriptPath,
+			[string]$TranscriptPath = ([System.Environment]::GetFolderPath('CommonApplicationData')),
 			# log file max age
 			[Parameter(DontShow)]
 			[double]$LogDays = 7,
@@ -221,19 +196,22 @@ Begin {
 			[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
 		)
 	
-		# build transcript base from name and hostname
+		# build transcript basename from transcript name and hostname
 		$TranscriptBase = $TranscriptName, $HostName -join '_'
+
 		# declare transcript cleanup
 		Write-Verbose -Message "Removing old transcript files named '$TranscriptBase' from '$TranscriptPath'" -Verbose
+
 		# get transcript files
 		$TranscriptFiles = Get-ChildItem -Path $TranscriptPath | Where-Object { $_.BaseName.StartsWith($TranscriptBase, [System.StringComparison]::InvariantCultureIgnoreCase) -and $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) }
+
 		# get transcript files newer than cleanup date
 		$NewFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-$LogDays) }
 	
 		# if count of transcript files count is less than cleanup threshold...
 		If ($LogCount -lt $NewFiles.Count ) {
 			# declare and continue
-			Write-Verbose -Message "Skipping transcript file cleanup; count of transcript files ($($NewFiles.Count)) is below cleanup threshold ($LogCount)" -Verbose
+			Write-Verbose -Message "Skipping transcript file cleanup; count of transcript files ($($NewFiles.Count)) after cleanup would be below cleanup threshold ($LogCount)" -Verbose
 		}
 		# if count of transcript files is not less than cleanup threshold...
 		Else {
@@ -606,7 +584,7 @@ Begin {
 	If ($Run) {
 		# define parameters
 		If (!$PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptName = $MyInvocation.MyCommand -replace '\.ps[m|d]?1$' }
-		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptPath = $PSScriptRoot }
+		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData') }
 		# call transcript function
 		Try {
 			Start-TranscriptWithHostAndDate -TranscriptPath $TranscriptPath -TranscriptName $TranscriptName
@@ -694,8 +672,8 @@ Process {
 					$TaskPath = $TaskPath.Insert(0, '\')
 				}
 
-				# validate input
-				If (-not (Test-ScheduledTaskPath -TaskPath $TaskPath)) {
+				# validate task path when task name not 'Update-ScheduledTasks'
+				If ($TaskName -ne 'Update-ScheduledTasks' -and -not (Test-ScheduledTaskPath -TaskPath $TaskPath)) {
 					Write-Output "`nERROR: the path defined is not permitted: '$TaskPath'"
 					Return
 				}
