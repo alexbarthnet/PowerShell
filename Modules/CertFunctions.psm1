@@ -518,7 +518,7 @@ Function Get-CertificatePrivateKeyPath {
 	}
 
 	# if certificate is machine key...
-	If ($PrivateKey.IsMachineKey) {
+	If ($PrivateKey.Key.IsMachineKey) {
 		# ...get machine key container
 		$Path = Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -Path 'Microsoft\Crypto'
 	}
@@ -806,6 +806,7 @@ $functions_to_export += 'ConvertTo-X509Certificate'
 $functions_to_export += 'Get-CertificateChain'
 $functions_to_export += 'Get-CertificateFromAD'
 $functions_to_export += 'Get-CertificateFromUri'
+$functions_to_export += 'Get-CertificatePrivateKeyPath'
 $functions_to_export += 'Grant-CertificatePermissions'
 $functions_to_export += 'Revoke-CertificatePermissions'
 $functions_to_export += 'Test-Thumbprint'
