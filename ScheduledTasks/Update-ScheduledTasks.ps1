@@ -25,7 +25,7 @@ The name of the scheduled task. Required when the Add or Remove parameters are s
 
 .PARAMETER TaskPath
 The path of a folder for the scheduled task. Required when the Add or Remove parameters are specified. The following restrictions apply:
- - The task path '\' is permitted only when paired with the 'Update-ScheduledTasks' task name. 
+ - The task path '\' is permitted only when paired with the 'Update-ScheduledTasks' task name.
  - Any task path starting with '\Microsoft' is not permitted to avoid conflicts with built-in scheduled tasks.
 
 .PARAMETER Execute
@@ -195,7 +195,7 @@ Begin {
 			Force       = $true
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
-	
+
 		# start transcript
 		Try	{
 			$null = Start-Transcript @StartTranscript
@@ -204,7 +204,7 @@ Begin {
 			Throw $_
 		}
 	}
-	
+
 	Function Stop-TranscriptWithHostAndDate {
 		Param(
 			# name for transcript file
@@ -248,7 +248,7 @@ Begin {
 
 		# get transcript files newer than cleanup date
 		$NewFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -gt $TranscriptDate }
-	
+
 		# if count of transcript files count is less than cleanup threshold...
 		If ($TranscriptCount -lt $NewFiles.Count ) {
 			# declare and continue
@@ -268,7 +268,7 @@ Begin {
 				}
 			}
 		}
-	
+
 		# stop transcript
 		Try {
 			$null = Stop-Transcript
@@ -442,25 +442,31 @@ Begin {
 			Argument = $Argument
 		}
 
+		# create params for New-ScheduledTaskSettingsSet
+		$ScheduledTaskSettingsSetParams = @{
+			AllowStartIfOnBatteries    = $true
+			DontStopIfGoingOnBatteries = $true
+		}
+
 		# create params for New-ScheduledTaskTrigger
 		$ScheduledTaskTriggerParams = @{
 			Once = $true
 			At   = $TriggerAt
 		}
 
+		# add execution time limit if configured
+		If ($null -ne $ExecutionTimeLimit -and $ExecutionTimeLimit -ne 0) {
+			$ScheduledTaskSettingsSetParams['ExecutionTimeLimit'] = $ExecutionTimeLimit
+		}
+
 		# add random delay if configured
-		If ($null -ne $RandomDelay) {
+		If ($null -ne $RandomDelay -and $RandomDelay -ne 0) {
 			$ScheduledTaskTriggerParams['RandomDelay'] = $RandomDelay
 		}
 
 		# add repetition interval if configured
-		If ($null -ne $RepetitionInterval) {
+		If ($null -ne $RepetitionInterval -and $RepetitionInterval -ne 0) {
 			$ScheduledTaskTriggerParams['RepetitionInterval'] = $RepetitionInterval
-		}
-
-		# create params for New-ScheduledTaskSettingsSet
-		$ScheduledTaskSettingsSetParams = @{
-			ExecutionTimeLimit = $ExecutionTimeLimit
 		}
 
 		# create params for New-ScheduledTaskTrigger
@@ -510,9 +516,19 @@ Begin {
 			Return $_
 		}
 
+		# verify task path starts with \
+		If (!$TaskPath.StartsWith('\')) {
+			$TaskPath = "\$TaskPath"
+		}
+
+		# verify task path ends with \
+		If (!$TaskPath.EndsWith('\')) {
+			$TaskPath = "$TaskPath\"
+		}
+
 		# get scheduled task
 		Try {
-			$Existing = Get-ScheduledTask | Where-Object { $_.URI -eq "$TaskPath\$TaskName" }
+			$Existing = Get-ScheduledTask | Where-Object { $_.TaskPath -eq $TaskPath -and $_.TaskName -eq $TaskName }
 		}
 		Catch {
 			Write-Output "`nERROR: could not retrieve scheduled tasks with filter for task '$TaskName' at path '$TaskPath'"
@@ -524,6 +540,7 @@ Begin {
 			# ...verify task action components
 			$FixExecute = $Existing.Actions[0].Execute -ne $Action.Execute
 			$FixArguments = $Existing.Actions[0].Arguments -ne $Action.Arguments
+
 			# ...verify task action
 			If ($FixExecute -or $FixArguments) {
 				Try {
@@ -535,14 +552,16 @@ Begin {
 					Return $_
 				}
 			}
+
 			# ...verify task trigger components
 			$FixStartBoundary = [datetime]$Existing.Triggers[0].StartBoundary -ne [datetime]$Trigger.StartBoundary
-			If ($null -ne $RandomDelay) {
+			If ($null -ne $RandomDelay -or $RandomDelay -ne 0) {
 				$FixRandomDelay = $Existing.Triggers[0].RandomDelay -ne $Trigger.RandomDelay
 			}
-			If ($null -ne $RepetitionInterval) {
+			If ($null -ne $RepetitionInterval -or $RepetitionInterval -ne 0) {
 				$FixRepetitionInterval = $Existing.Triggers[0].Repetition.Interval -ne $Trigger.Repetition.Interval
 			}
+
 			# ...verify task trigger
 			If ($FixStartBoundary -or $FixRandomDelay -or $FixRepetitionInterval) {
 				Try {
@@ -556,9 +575,14 @@ Begin {
 			}
 			# ...verify task settings components
 			$FixEnabled = $Existing.Settings.Enabled -ne $Settings.Enabled
-			$FixExecutionTimeLimit = $Existing.Settings.ExecutionTimeLimit -ne $Settings.ExecutionTimeLimit
+			$FixStartOnBattery = $Existing.Settings.DisallowStartIfOnBatteries -ne $Settings.DisallowStartIfOnBatteries
+			$FixStopIfOnBattery = $Existing.Settings.StopIfGoingOnBatteries -ne $Settings.StopIfGoingOnBatteries
+			If ($null -ne $ExecutionTimeLimit -or $ExecutionTimeLimit -ne 0) {
+				$FixExecutionTimeLimit = $Existing.Settings.ExecutionTimeLimit -ne $Settings.ExecutionTimeLimit
+			}
+
 			# ...verify task settings
-			If ($FixEnabled -or $FixExecutionTimeLimit) {
+			If ($FixEnabled -or $FixStartOnBattery -or $FixStopIfOnBattery -or $FixExecutionTimeLimit) {
 				Try {
 					Write-Output "Updating settings for existing scheduled task '$TaskName' at path '$TaskPath'"
 					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Settings $Settings
@@ -568,6 +592,7 @@ Begin {
 					Return $_
 				}
 			}
+
 			# ...verify task principal components
 			If ($Principal.UserId.Contains('\')) {
 				$FixUserId = $Existing.Principal.UserId -ne ($Principal.UserId.Split('\'))[1]
@@ -581,6 +606,7 @@ Begin {
 			If ($null -ne $RunLevel) {
 				$FixRunLevel = $Existing.Principal.RunLevel -ne $Principal.RunLevel
 			}
+
 			# ...verify task principal
 			If ($FixUserId -or $FixLogonType -or $FixRunLevel) {
 				Try {
@@ -592,7 +618,8 @@ Begin {
 					Return $_
 				}
 			}
-			# ...then return and move to next task
+
+			# report then return
 			Write-Output "Verified existing scheduled task '$TaskName' at path '$TaskPath'"
 			Return
 		}
@@ -708,15 +735,20 @@ Process {
 		# add entry to configuration file
 		$Add {
 			Try {
-				# verify task path
-				If ($TaskPath.Substring(0, 1) -ne '\') {
-					$TaskPath = $TaskPath.Insert(0, '\')
-				}
-
 				# validate task path when task name not 'Update-ScheduledTasks'
 				If ($TaskName -ne 'Update-ScheduledTasks' -and -not (Test-ScheduledTaskPath -TaskPath $TaskPath)) {
 					Write-Output "`nERROR: the path defined is not permitted: '$TaskPath'"
 					Return
+				}
+
+				# verify task path starts with \
+				If (!$TaskPath.StartsWith('\')) {
+					$TaskPath = "\$TaskPath"
+				}
+
+				# verify task path ends with \
+				If (!$TaskPath.EndsWith('\')) {
+					$TaskPath = "$TaskPath\"
 				}
 
 				# create hashtable for custom object
@@ -767,11 +799,13 @@ Process {
 					$JsonData = $JsonData | Where-Object { -not ($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath) }
 				}
 
-				# add datum to data
+				# add entry to data
 				$JsonData += $JsonDatum
-				$JsonData | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
+
+				# export JSON data
+				$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 				Write-Output "`nAdded '$TaskName' to configuration file: '$Json'"
-				$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+				$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
@@ -779,7 +813,7 @@ Process {
 			}
 		}
 		# run through entries in configuration file
-		{$Run -or $Update} {
+		{ $Run -or $Update } {
 			# declare start
 			Write-Host "`nUpdating scheduled tasks from '$Json'"
 
@@ -824,18 +858,21 @@ Process {
 						Write-Output "`nERROR: invalid entry (datetime for trigger) in configuration file: $Json"; Continue JsonData
 					}
 					Default {
-						# check tasks hashtable for path
-						If ($ExpectedTasks.ContainsKey($JsonDatum.TaskPath) -eq $false -or $ExpectedTasks[$JsonDatum.TaskPath] -isnot [System.Collections.Generic.List[string]]) {
-							$ExpectedTasks[$JsonDatum.TaskPath] = [System.Collections.Generic.List[string]]::new()
-						}
+						# if valid task path provided...
+						If (Test-ScheduledTaskPath -TaskPath $JsonDatum.TaskPath) {
+							# check expected tasks hashtable for task path
+							If (!$ExpectedTasks.ContainsKey($JsonDatum.TaskPath) -or $ExpectedTasks[$JsonDatum.TaskPath] -isnot [System.Collections.Generic.List[string]]) {
+								$ExpectedTasks[$JsonDatum.TaskPath] = [System.Collections.Generic.List[string]]::new()
+							}
 
-						# add task to tasks hashtable
-						Try {
-							$ExpectedTasks[$JsonDatum.TaskPath].Add($JsonDatum.TaskName)
-						}
-						Catch {
-							Write-Output "ERROR: adding task to hashtable: '$($JsonDatum.TaskName)'"
-							Continue JsonData
+							# update expected tasks hashtable with task name
+							Try {
+								$ExpectedTasks[$JsonDatum.TaskPath].Add($JsonDatum.TaskName)
+							}
+							Catch {
+								Write-Output "ERROR: adding task to hashtable: '$($JsonDatum.TaskName)'"
+								Continue JsonData
+							}
 						}
 
 						# define hashtable for function
@@ -872,7 +909,7 @@ Process {
 								# ...and RandomDelayTime is datetime...
 								If ($JsonDatum.RandomDelayTime -is [datetime]) {
 									# ...and RandomDelayTime is greater than (after) TriggerAt
-									If ($JsonDatum.RandomDelayTime -gt $JsonDatum.TriggerAt) {
+									If ($JsonDatum.RandomDelayTime -ge $JsonDatum.TriggerAt) {
 										# ...create RandomDelay timespan and add to hashtable
 										$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonDatum.RandomDelayTime - $JsonDatum.TriggerAt)
 									}
@@ -892,7 +929,7 @@ Process {
 								# ...and RepetitionIntervalTime is datetime...
 								If ($JsonDatum.RepetitionIntervalTime -is [datetime]) {
 									# ...and RepetitionIntervalTime is greater than (after) TriggerAt
-									If ($JsonDatum.RepetitionIntervalTime -gt $JsonDatum.TriggerAt) {
+									If ($JsonDatum.RepetitionIntervalTime -ge $JsonDatum.TriggerAt) {
 										# ...create RepetitionInterval timespan and add to hashtable
 										$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonDatum.RepetitionIntervalTime - $JsonDatum.TriggerAt)
 									}
@@ -912,7 +949,7 @@ Process {
 								# ...and ExecutionTimeLimitTime is datetime...
 								If ($JsonDatum.ExecutionTimeLimitTime -is [datetime]) {
 									# ...and ExecutionTimeLimitTime is greater than (after) TriggerAt
-									If ($JsonDatum.ExecutionTimeLimitTime -gt $JsonDatum.TriggerAt) {
+									If ($JsonDatum.ExecutionTimeLimitTime -ge $JsonDatum.TriggerAt) {
 										# ...create ExecutionTimeLimit timespan and add to hashtable
 										$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonDatum.ExecutionTimeLimitTime - $JsonDatum.TriggerAt)
 									}
@@ -954,7 +991,7 @@ Process {
 			ForEach ($TaskPath in $ExpectedTasks.Keys) {
 				# check if any bad path values have been snuck in
 				If (-not (Test-ScheduledTaskPath -TaskPath $TaskPath)) {
-					Write-Output "`nERROR: the path defined is not permitted: '$TaskPath'"
+					Write-Output "`nERROR: the path defined is not permitted: '$TaskPath' for '$($ExpectedTasks[$TaskPath])'"
 					Return
 				}
 

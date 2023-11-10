@@ -465,7 +465,7 @@ Function Get-CertificatePrivateKeyPath {
 	)
 
 	# if thumbprint provided...
-	If ($PSCmdlet.ParameterSetName = 'Thumbprint') {
+	If ($PSCmdlet.ParameterSetName -eq 'Thumbprint') {
 		Try {
 			$Certificate = Get-Item -Path (Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint)
 		}
@@ -591,7 +591,7 @@ Function Grant-CertificatePermissions {
 	)
 
 	# retrieve certificate with thumbprint
-	If ($PSCmdlet.ParameterSetName = 'Thumbprint') {
+	If ($PSCmdlet.ParameterSetName -eq 'Thumbprint') {
 		Try {
 			$Certificate = Get-Item -Path (Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint)
 		}
@@ -699,7 +699,7 @@ Function Revoke-CertificatePermissions {
 	)
 
 	# retrieve certificate with thumbprint
-	If ($PSCmdlet.ParameterSetName = 'Thumbprint') {
+	If ($PSCmdlet.ParameterSetName -eq 'Thumbprint') {
 		Try {
 			$Certificate = Get-Item -Path (Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint)
 		}
