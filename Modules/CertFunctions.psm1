@@ -520,12 +520,12 @@ Function Get-CertificatePrivateKeyPath {
 	# if certificate is machine key...
 	If ($PrivateKey.Key.IsMachineKey) {
 		# ...get machine key container
-		$Path = Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -Path 'Microsoft\Crypto'
+		$Path = Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'Microsoft\Crypto'
 	}
 	# if certificate is not machine key...
 	Else {
 		# ...get user key container
-		$Path = Join-Path -Path ([System.Environment]::GetFolderPath('ApplicationData')) -Path 'Microsoft\Crypto'
+		$Path = Join-Path -Path ([System.Environment]::GetFolderPath('ApplicationData')) -ChildPath 'Microsoft\Crypto'
 	}
 
 	# search key container for private key file
