@@ -530,7 +530,7 @@ Function Get-CertificatePrivateKeyPath {
 
 	# search key container for private key file
 	Try {
-		$PrivateKeyPath = Get-ChildItem -Path $Path -Recurse -Filter $UniqueName | Select-Object -First 1
+		$PrivateKeyPath = Get-ChildItem -Path $Path -Recurse -Filter $UniqueName | Select-Object -First 1 -ExpandProperty FullName
 	}
 	Catch {
 		Write-Warning -Message "Error searching for private key in container '$Path'"
