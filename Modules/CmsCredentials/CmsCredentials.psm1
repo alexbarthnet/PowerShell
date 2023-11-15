@@ -99,38 +99,60 @@ Function New-CmsCredentialCertificate {
 		[Parameter(Position = 0, Mandatory = $true)]
 		[string]$Identity,
 		[Parameter(Position = 1)]
+		[switch]$Exportable,
+		[Parameter(Position = 1)]
+		[datetime]$NotBefore = [datetime]::Now,
+		[Parameter(Position = 2)]
+		[datetime]$NotAfter = $NotBefore.AddYears(100),
+		[Parameter(Position = 1)]
+		[datetime]$CertStoreLocation = 'Cert:\LocalMachine\CmsCredentials',
+		[Parameter(Position = 3)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
 	# define datetimes
-	$cms_date = [datetime]::Now
-	$cms_date_100years = $cms_date.AddYears(100)
-	$cms_date_tostring = $cms_date.ToUniversalTime().ToString('yyyyMMddTHHmmssffffZ')
+	$NotBeforeString = $NotBefore.ToUniversalTime().ToString('yyyyMMddTHHmmssffffZ')
 
-	# define certificate subject
-	$cms_subject = "CN=$($Hostname.ToLowerInvariant(), $Identity.ToLowerInvariant(), $cms_date_tostring -join '-')"
+	# if certificate should be exportable...
+	If ($Exportable) {
+		$Subject = "CN=$Identity", $NotBeforeString -join '_'
+		$KeyExportPolicy = 'ExportableEncrypted'
+	}
+	Else {
+		$Subject = "CN=$Identity", $Hostname, $NotBeforeString -join '_'
+		$KeyExportPolicy = 'NonExportable'
+	}
 
 	# define certificate values
 	$SelfSignedCertificate = @{
-		Subject         = $cms_subject
-		Type            = 'DocumentEncryptionCert'
-		KeyExportPolicy = 'NonExportable'
-		HashAlgorithm   = 'SHA512'
-		KeyLength       = 4096
-		NotBefore       = $cms_date
-		NotAfter        = $cms_date_100years
+		Subject           = $Subject
+		Type              = 'DocumentEncryptionCert'
+		HashAlgorithm     = 'SHA512'
+		KeyLength         = 4096
+		NotBefore         = $NotBefore
+		NotAfter          = $NotAfter
+		KeyExportPolicy   = $KeyExportPolicy
+		CertStoreLocation = $CertStoreLocation
 	}
 
 	# check operating system
 	switch ([System.Environment]::OSVersion.Platform) {
 		'Win32NT' {
 			# create self-signed certificate
-			New-SelfSignedCertificate @SelfSignedCertificate
+			$Certificate = New-SelfSignedCertificate @SelfSignedCertificate
 		}
 		Default {
 			# declare 
 			Write-Warning 'CmsCredentials cannot create self-signed certificates on non-Windows platforms'
 		}
+	}
+
+	# move certificate to certificate store
+	Try {
+		Move-Item -Path $Certificate.PSPath -Destination $CertStoreLocation -ErrorAction Stop
+	}
+	Catch {
+		Throw $_
 	}
 }
 

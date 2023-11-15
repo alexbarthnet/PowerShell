@@ -32,6 +32,8 @@ Function Add-ZenossCloudDevice {
 
 	#>
 
+	# DRAFT FUNCTION; NOT COMPLETE
+
 	[CmdletBinding()]
 	param (
 		[Parameter(Position = 0, Mandatory = $true)]
