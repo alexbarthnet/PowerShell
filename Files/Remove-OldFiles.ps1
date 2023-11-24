@@ -50,14 +50,14 @@ None. The script reports the actions taken and does not provide any actionable o
 
 [CmdletBinding(SupportsShouldProcess,DefaultParameterSetName = 'Default')]
 Param(
+	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Show')]
+	[switch]$Show,
 	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Clear')]
 	[switch]$Clear,
 	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Remove')]
 	[switch]$Remove,
 	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Add')]
 	[switch]$Add,
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Run')]
-	[switch]$Run,
 	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Remove')][ValidatePattern('^[^\*]+$')]
 	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Path,
@@ -303,7 +303,7 @@ Begin {
 	}
 
 	# if running...
-	If ($Run -or $Update) {
+	If ($PSCmdlet.ParameterSetName -eq 'Default') {
 		# define hashtable for transcript functions
 		$TranscriptWithHostAndDate = @{}
 		# define parameters for transcript functions
@@ -356,6 +356,11 @@ Process {
 
 	# evaluate parameters
 	switch ($true) {
+		# show configuration file
+		$Show {
+			Write-Output "`nDisplaying '$Json'"
+			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+		}
 		# clear configuration file
 		$Clear {
 			If (Test-Path -Path $Json) {
@@ -421,7 +426,7 @@ Process {
 			}
 		}
 		# run through entries in configuration file
-		$Run {
+		Default {
 			# check entry count in configuration file
 			If ($JsonData.Count -eq 0) {
 				Write-Host "ERROR: no entries found in configuration file: $Json"
@@ -472,16 +477,12 @@ Process {
 				}
 			}
 		}
-		Default {
-			Write-Output "`nDisplaying '$Json'"
-			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
-		}
 	}
 }
 
 End {
 	# if running...
-	If ($Run -or $Update) {
+	If ($PSCmdlet.ParameterSetName -eq 'Default') {
 		# stop transcript with parameters
 		Try {
 			Stop-TranscriptWithHostAndDate @TranscriptWithHostAndDate
