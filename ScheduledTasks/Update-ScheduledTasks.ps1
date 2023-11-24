@@ -650,12 +650,14 @@ Begin {
 
 	# if running...
 	If ($Run -or $Update) {
-		# define parameters
-		If (!$PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptName = $MyInvocation.MyCommand -replace '\.ps[m|d]?1$' }
-		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData') }
-		# call transcript function
+		# define hashtable for transcript functions
+		$TranscriptWithHostAndDate = @{}
+		# define parameters for transcript functions
+		If ($PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptWithHostAndDate['TranscriptName'] = $TranscriptName }
+		If ($PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptWithHostAndDate['TranscriptPath'] = $TranscriptPath }
+		# start transcript with parameters
 		Try {
-			Start-TranscriptWithHostAndDate -TranscriptPath $TranscriptPath -TranscriptName $TranscriptName
+			Start-TranscriptWithHostAndDate @TranscriptWithHostAndDate
 		}
 		Catch {
 			Throw $_
@@ -1029,8 +1031,9 @@ Process {
 End {
 	# if running...
 	If ($Run -or $Update) {
+		# stop transcript with parameters
 		Try {
-			Stop-TranscriptWithHostAndDate -TranscriptPath $TranscriptPath -TranscriptName $TranscriptName
+			Stop-TranscriptWithHostAndDate @TranscriptWithHostAndDate
 		}
 		Catch {
 			Throw $_
