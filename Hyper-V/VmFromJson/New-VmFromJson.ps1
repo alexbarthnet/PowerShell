@@ -814,7 +814,7 @@ Begin {
 
 				# wait until device is visible in SCCM
 				Write-Host ("$Hostname,$ComputerName,$Name - waiting for device to be visible in SCCM...")
-				While ($null -eq $Device -or $Multiplier -ge $Limit) {
+				While ($null -eq $Device -and $Multiplier -lt $Limit) {
 					# increment multiplier
 					$Multiplier++
 
