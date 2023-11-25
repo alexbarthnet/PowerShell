@@ -704,15 +704,13 @@ Process {
 	switch ($true) {
 		# clear configuration file
 		$Clear {
-			If (Test-Path -Path $Json) {
-				Try {
-					[string]::Empty | Set-Content -Path $Json
-					Write-Output "`nCleared configuration file: '$Json'"
-				}
-				Catch {
-					Write-Output "`nERROR: could not clear configuration file: '$Json'"
-					Return $_
-				}
+			Try {
+				[string]::Empty | Set-Content -Path $Json
+				Write-Output "`nCleared configuration file: '$Json'"
+			}
+			Catch {
+				Write-Output "`nERROR: could not clear configuration file: '$Json'"
+				Return $_
 			}
 		}
 		# remove entry from configuration file
