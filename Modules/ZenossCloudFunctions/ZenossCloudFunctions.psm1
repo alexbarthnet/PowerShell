@@ -4,19 +4,19 @@
 Function Add-ZenossCloudDevice {
 	<#
 	.SYNOPSIS
-	Add device to Zenoss Cloud.
+	Add a device to Zenoss Cloud.
 
 	.DESCRIPTION
-	Add device to Zenoss Cloud by making a REST call to Zenoss Cloud using an API key.
+	Add a device to Zenoss Cloud via the REST interface.
 
 	.PARAMETER Uri
 	Specifies the URI for a specific Zenoss Cloud instance.
 
 	.PARAMETER Key
-	Specifies the API key.
+	Specifies an API key for the specific Zenoss Cloud instance.
 
-	.PARAMETER Device
-	Specifies the device name.
+	.PARAMETER Name
+	Specifies the name of a device in Zenoss Cloud.
 
 	.PARAMETER State
 	Specifies the state for the device
@@ -34,40 +34,53 @@ Function Add-ZenossCloudDevice {
 
 	# DRAFT FUNCTION; NOT COMPLETE
 
-	[CmdletBinding()]
+	[CmdletBinding(DefaultParameterSetName = 'Uri')]
 	param (
-		[Parameter(Position = 0, Mandatory = $true)]
+		[Parameter(Mandatory = $true, ParameterSetName = 'Credential')]
+		[pscredential]$Credential,
+		[Parameter(Mandatory = $true, ParameterSetName = 'Uri')]
 		[string]$Uri,
-		[Parameter(Position = 1, Mandatory = $true)]
+		[Parameter(Mandatory = $true, ParameterSetName = 'Uri')]
 		[string]$Key,
-		[Parameter(Position = 2, Mandatory = $true)]
-		[string]$Device,
-		[Parameter(Position = 3, Mandatory = $true)]
+		[Parameter(Mandatory = $true)]
+		[string]$Name,
+		[Parameter(Mandatory = $true)]
 		[string]$State
 	)
 
 	# WIP function, return immediately
 	Return
 
+	# if credential provided...
+	If ($PSCmdlet.ParameterSetName -eq 'Credential') {
+		# retrieve Uri and Key from Username and Password
+		Try {
+			$Uri, $Key = $Cred.GetNetworkCredential().UserName, $Cred.GetNetworkCredential().Password
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
 	# get zenoss cloud production states
-	$zenoss_states = Get-ZenossCloudProductionStates -Uri $Uri -Key $Key
+	$ZenossProductionStates = Get-ZenossCloudProductionStates -Uri $Uri -Key $Key
 
 	# check zenoss cloud production state
-	$zenoss_state = $null
-	$zenoss_state = ($zenoss_states.result.data | Where-Object { $_.Name -eq $State }).Value
-	If ($null -eq $zenoss_state) {
+	$ZenossProductionState = $null
+	$ZenossProductionState = ($ZenossProductionStates.result.data | Where-Object { $_.Name -eq $State }).Value
+	If ($null -eq $ZenossProductionState) {
 		Return "ERROR: ProductionState '$State' not found in Zenoss Cloud"
 	}
 
 	# retrieve device uid
-	$zenoss_device = $null
-	$zenoss_device = Get-ZenossCloudDevice -Uri $Uri -Key $Key -Device $Device
-	If ($null -eq $zenoss_device.uid) {
+	$ZenossCloudDevice = $null
+	$ZenossCloudDevice = Get-ZenossCloudDevice -Uri $Uri -Key $Key -Device $Device
+	If ($null -eq $ZenossCloudDevice.uid) {
 		Return "ERROR: Device '$Device' not found in Zenoss Cloud"
 	}
 
 	# create hashtable for HTML headers
-	$zenoss_head = @{
+	$Headers = @{
 		'z-api-key'    = $Key
 		'Content-Type' = 'application/json'
 	}
@@ -106,8 +119,8 @@ Function Add-ZenossCloudDevice {
 
 	# create array for zenoss body entry
 	$zenoss_data = [array][PSCustomObject]@{
-		deviceName = $Device
-		prodState  = $zenoss_state
+		deviceName = $Name
+		prodState  = $ZenossProductionState
 		hashcheck  = 'no'
 	}
 
@@ -120,10 +133,10 @@ Function Add-ZenossCloudDevice {
 	}
 
 	# create device-specific URI
-	$uri_device = $Uri.Replace('/zport/dmd', $zenoss_device.uid)
+	$uri_device = $Uri.Replace('/zport/dmd', $ZenossCloudDevice.uid)
 
 	# invoke rest method
-	Invoke-RestMethod -Method 'Post' -Uri $uri_device -Headers $zenoss_head -Body ($zenoss_body | ConvertTo-Json)
+	Invoke-RestMethod -Method 'Post' -Uri $uri_device -Headers $Headers -Body ($zenoss_body | ConvertTo-Json)
 }
 
 Function Get-ZenossCloudDevices {
@@ -132,13 +145,16 @@ Function Get-ZenossCloudDevices {
 	Retrieve devices from Zenoss Cloud.
 
 	.DESCRIPTION
-	Retrieve devices from Zenoss Cloud by making a REST call to Zenoss Cloud using an API key.
+	Retrieve devices from Zenoss Cloud via the REST interface.
+
+	.PARAMETER Credential
+	Specifies a PSCredential object where the Username is the URI for a specific Zenoss Cloud instance and the Password is the API key.
 
 	.PARAMETER Uri
 	Specifies the URI for a specific Zenoss Cloud instance.
 
 	.PARAMETER Key
-	Specifies the API key.
+	Specifies an API key for the specific Zenoss Cloud instance.
 
 	.PARAMETER Reset
 	Specifies that a fresh copy of the devices should be retrieved.
@@ -157,52 +173,69 @@ Function Get-ZenossCloudDevices {
 
 	#>
 
-	[CmdletBinding()]
+	[CmdletBinding(DefaultParameterSetName = 'Uri')]
 	param (
-		[Parameter(Position = 0, Mandatory = $true)]
+		[Parameter(Mandatory = $true, ParameterSetName = 'Credential')]
+		[pscredential]$Credential,
+		[Parameter(Mandatory = $true, ParameterSetName = 'Uri')]
 		[string]$Uri,
-		[Parameter(Position = 1, Mandatory = $true)]
+		[Parameter(Mandatory = $true, ParameterSetName = 'Uri')]
 		[string]$Key,
-		[Parameter(Position = 2)]
+		[Parameter()]
 		[switch]$Reset
 	)
 
-	# check for zenoss devices object
-	If ($null -eq $zenoss_devices) {
-		New-Variable -Name 'zenoss_devices' -Scope 'Global' -Force
+	# if credential provided...
+	If ($PSCmdlet.ParameterSetName -eq 'Credential') {
+		# retrieve Uri and Key from Username and Password
+		Try {
+			$Uri, $Key = $Cred.GetNetworkCredential().UserName, $Cred.GetNetworkCredential().Password
+		}
+		Catch {
+			Throw $_
+		}
 	}
 
-	# check for devices array in zenoss devices object
-	If ($zenoss_devices.result.devices -is [array] -and $zenoss_devices.result.devices.Count -gt 0 -and -not $Reset) {
-		# return array of devices
-		Return $zenoss_devices
+	# if device collection exists and reset not requested...
+	If ($null -ne $global:ZenossCloudDevices -and -not $PSBoundParameters.ContainsKey('Reset')) {
+		# ...return device collection
+		Return $global:ZenossCloudDevices
 	}
 	Else {
-		# create hashtable for header
-		$zenoss_head = @{
-			'z-api-key'    = $Key
-			'Content-Type' = 'application/json'
-		}
-
-		# create for body data
-		$zenoss_data = [array][PSCustomObject]@{
-			limit = 300
-		}
-
-		# create hashtable for headers and body
-		$zenoss_body = @{
-			'action' = 'DeviceRouter'
-			'method' = 'getDevices'
-			'data'   = $zenoss_data
-			'tid'    = 1
-		}
-
-		# invoke rest method to retrieve devices
-		$zenoss_devices = Invoke-RestMethod -Method 'Post' -Uri $Uri -Headers $zenoss_head -Body ($zenoss_body | ConvertTo-Json -Compress)
-
-		# return array of devices
-		Return $zenoss_devices
+		# ...create or reset global devices collection
+		New-Variable -Name 'ZenossCloudDevices' -Scope 'Global' -Force
 	}
+
+	# create hashtable for headers
+	$HeadersHashtable = @{
+		'z-api-key'    = $Key
+		'Content-Type' = 'application/json'
+	}
+
+	# create hashtable for body data
+	$Data = @{
+		limit = 300
+	}
+
+	# create hashtable for body
+	$BodyHashtable = @{
+		'action' = 'DeviceRouter'
+		'method' = 'getDevices'
+		'data'   = $Data
+		'tid'    = 1
+	}
+
+	# create headers from hashtable
+	$Headers = $HeadersHashtable | ConvertTo-Json -Compress
+
+	# create body from hashtable
+	$Body = $BodyHashtable | ConvertTo-Json -Compress
+
+	# invoke rest method to retrieve devices
+	$global:ZenossCloudDevices = Invoke-RestMethod -Method 'Post' -Uri $Uri -Headers $Headers -Body $Body
+
+	# return array of devices
+	Return $global:ZenossCloudDevices
 }
 
 Function Get-ZenossCloudDevice {
@@ -211,16 +244,22 @@ Function Get-ZenossCloudDevice {
 	Retrieve a device from Zenoss Cloud.
 
 	.DESCRIPTION
-	Retrieve a device from Zenoss Cloud by making a REST call to Zenoss Cloud using an API key.
+	Retrieve a device from Zenoss Cloud via the REST interface.
+
+	.PARAMETER Credential
+	Specifies a PSCredential object where the Username is the URI for a specific Zenoss Cloud instance and the Password is the API key.
 
 	.PARAMETER Uri
 	Specifies the URI for a specific Zenoss Cloud instance.
 
 	.PARAMETER Key
-	Specifies the API key.
+	Specifies an API key for the specific Zenoss Cloud instance.
 
-	.PARAMETER Device
-	Specifies the device name.
+	.PARAMETER Name
+	Specifies the name of a device in Zenoss Cloud.
+
+	.PARAMETER Reset
+	Specifies that a fresh copy of the device should be retrieved.
 
 	.INPUTS
 	None.
@@ -233,27 +272,55 @@ Function Get-ZenossCloudDevice {
 
 	#>
 
-	[CmdletBinding()]
+	[CmdletBinding(DefaultParameterSetName = 'Uri')]
 	param (
-		[Parameter(Position = 0, Mandatory = $true)]
+		[Parameter(Mandatory = $true, ParameterSetName = 'Credential')]
+		[pscredential]$Credential,
+		[Parameter(Mandatory = $true, ParameterSetName = 'Uri')]
 		[string]$Uri,
-		[Parameter(Position = 1, Mandatory = $true)]
+		[Parameter(Mandatory = $true, ParameterSetName = 'Uri')]
 		[string]$Key,
-		[Parameter(Position = 2, Mandatory = $true)]
-		[string]$Device
+		[Parameter(Mandatory = $true)]
+		[string]$Name,
+		[Parameter()]
+		[switch]$Reset
 	)
 
-	# get zenoss cloud device collection
-	$zenoss_devices = Get-ZenossCloudDevices -Uri $Uri -Key $Key
+	# if credential provided...
+	If ($PSCmdlet.ParameterSetName -eq 'Credential') {
+		# retrieve Uri and Key from Username and Password
+		Try {
+			$Uri, $Key = $Cred.GetNetworkCredential().UserName, $Cred.GetNetworkCredential().Password
+		}
+		Catch {
+			Throw $_
+		}
+	}
 
-	# retrieve device uid
-	$zenoss_device = $null
-	$zenoss_device = $zenoss_devices.result.devices | Where-Object { $_.Name -eq $Device }
-	If ($null -eq $zenoss_device) {
-		Return "ERROR: Device '$Device' not found in Zenoss Cloud"
+	# if device collection not found or reset requested...
+	If ($null -eq $global:ZenossCloudDevices -or $PSBoundParameters.ContainsKey('Reset')) {
+		# retrieve device collection
+		Try {
+			$ZenossCloudDevices = Get-ZenossCloudDevices -Uri $Uri -Key $Key -Reset
+		}
+		Catch {
+
+		}
+	}
+
+	# retrieve device from device collection
+	$ZenossCloudDevice = $global:ZenossCloudDevices.result.devices | Where-Object { $_.Name -eq $Name }
+
+	# if device not found...
+	If ($null -eq $ZenossCloudDevice) {
+		# warn and return null
+		Write-Warning -Message "Device '$Device' not found in Zenoss Cloud"
+		Return $null
 	}
 	Else {
-		Return $zenoss_device
+		# report and return object
+		Write-Verbose -Message "Device '$Device' found in Zenoss Cloud"
+		Return $ZenossCloudDevice
 	}
 }
 
@@ -263,13 +330,16 @@ Function Get-ZenossCloudProductionStates {
 	Retrieves available device states from Zenoss Cloud.
 
 	.DESCRIPTION
-	Retrieves available device states from Zenoss Cloud by making a REST call to Zenoss Cloud using an API key.
+	Retrieves available device states from Zenoss Cloud via the REST interface.
+
+	.PARAMETER Credential
+	Specifies a PSCredential object where the Username is the URI for a specific Zenoss Cloud instance and the Password is the API key.
 
 	.PARAMETER Uri
 	Specifies the URI for a specific Zenoss Cloud instance.
 
 	.PARAMETER Key
-	Specifies the API key.
+	Specifies an API key for the specific Zenoss Cloud instance.
 
 	.PARAMETER Reset
 	Specifies that a fresh copy of the device states should be retrieved.
@@ -288,45 +358,64 @@ Function Get-ZenossCloudProductionStates {
 
 	#>
 
-	[CmdletBinding()]
+	[CmdletBinding(DefaultParameterSetName = 'Uri')]
 	param (
-		[Parameter(Position = 0, Mandatory = $true)]
+		[Parameter(Mandatory = $true, ParameterSetName = 'Credential')]
+		[pscredential]$Credential,
+		[Parameter(Mandatory = $true, ParameterSetName = 'Uri')]
 		[string]$Uri,
-		[Parameter(Position = 1, Mandatory = $true)]
+		[Parameter(Mandatory = $true, ParameterSetName = 'Uri')]
 		[string]$Key,
-		[Parameter(Position = 2)]
+		[Parameter()]
 		[switch]$Reset
 	)
 
+	# if credential provided...
+	If ($PSCmdlet.ParameterSetName -eq 'Credential') {
+		# retrieve Uri and Key from Username and Password
+		Try {
+			$Uri, $Key = $Cred.GetNetworkCredential().UserName, $Cred.GetNetworkCredential().Password
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
 	# check for zenoss devices object
-	If ($null -eq $zenoss_states) {
-		New-Variable -Name 'zenoss_states' -Scope 'Global' -Force
+	If ($null -eq $ZenossProductionStates) {
+		New-Variable -Name 'ZenossProductionStates' -Scope 'Global' -Force
 	}
 
 	# check for data array in zenoss states object
-	If ($zenoss_states.result.data -is [array] -and $zenoss_states.result.data.Count -gt 0 -and -not $Reset) {
+	If ($ZenossProductionStates.result.data -is [array] -and $ZenossProductionStates.result.data.Count -gt 0 -and -not $Reset) {
 		# return production states
-		Return $zenoss_states
+		Return $ZenossProductionStates
 	}
 	Else {
-		# create hashtable for HTML headers
-		$zenoss_head = @{
+		# create hashtable for headers
+		$HeadersHashtable = @{
 			'z-api-key'    = $Key
 			'Content-Type' = 'application/json'
 		}
 
-		# create hashtable for HTML body
-		$zenoss_body = @{
+		# create hashtable for body
+		$BodyHashtable = @{
 			'action' = 'DeviceRouter'
 			'method' = 'getProductionStates'
 			'tid'    = 1
 		}
 
+		# create headers from hashtable
+		$Headers = $HeadersHashtable | ConvertTo-Json -Compress
+
+		# create body from hashtable
+		$Body = $BodyHashtable | ConvertTo-Json -Compress
+
 		# invoke rest method to retrieve production states
-		$zenoss_states = Invoke-RestMethod -Method 'Post' -Uri $Uri -Headers $zenoss_head -Body ($zenoss_body | ConvertTo-Json)
+		$ZenossProductionStates = Invoke-RestMethod -Method 'Post' -Uri $Uri -Headers $Headers -Body $Body
 
 		# return production states
-		Return $zenoss_states
+		Return $ZenossProductionStates
 	}
 }
 
@@ -336,19 +425,22 @@ Function Set-ZenossCloudProductionState {
 	Sets the state of a device in Zenoss Cloud.
 
 	.DESCRIPTION
-	Sets the state of a device in Zenoss Cloud by making a REST call to Zenoss Cloud using an API key.
+	Sets the state of a device in Zenoss Cloud via the REST interface.
+
+	.PARAMETER Credential
+	Specifies a PSCredential object where the Username is the URI for a specific Zenoss Cloud instance and the Password is the API key.
 
 	.PARAMETER Uri
 	Specifies the URI for a specific Zenoss Cloud instance.
 
 	.PARAMETER Key
-	Specifies the API key.
+	Specifies an API key for the specific Zenoss Cloud instance.
 
-	.PARAMETER Device
-	Specifies the device name.
+	.PARAMETER Name
+	Specifies the name of a device in Zenoss Cloud.
 
 	.PARAMETER State
-	Specifies the state for the device
+	Specifies the requested state for the device in Zenoss Cloud.
 
 	.INPUTS
 	None.
@@ -361,61 +453,80 @@ Function Set-ZenossCloudProductionState {
 
 	#>
 
-	[CmdletBinding()]
+	[CmdletBinding(DefaultParameterSetName = 'Uri')]
 	param (
-		[Parameter(Position = 0, Mandatory = $true)]
+		[Parameter(Mandatory = $true, ParameterSetName = 'Credential')]
+		[pscredential]$Credential,
+		[Parameter(Mandatory = $true, ParameterSetName = 'Uri')]
 		[string]$Uri,
-		[Parameter(Position = 1, Mandatory = $true)]
+		[Parameter(Mandatory = $true, ParameterSetName = 'Uri')]
 		[string]$Key,
-		[Parameter(Position = 2, Mandatory = $true)]
+		[Parameter(Mandatory = $true)]
 		[string]$Device,
-		[Parameter(Position = 3, Mandatory = $true)]
+		[Parameter(Mandatory = $true)]
 		[string]$State
 	)
 
+	# if credential provided...
+	If ($PSCmdlet.ParameterSetName -eq 'Credential') {
+		# retrieve Uri and Key from Username and Password
+		Try {
+			$Uri, $Key = $Cred.GetNetworkCredential().UserName, $Cred.GetNetworkCredential().Password
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
 	# get zenoss cloud production states
-	$zenoss_states = Get-ZenossCloudProductionStates -Uri $Uri -Key $Key
+	$ZenossProductionStates = Get-ZenossCloudProductionStates -Uri $Uri -Key $Key
 
 	# check zenoss cloud production state
-	$zenoss_state = $null
-	$zenoss_state = ($zenoss_states.result.data | Where-Object { $_.Name -eq $State }).Value
-	If ($null -eq $zenoss_state) {
+	$ZenossProductionState = $null
+	$ZenossProductionState = ($ZenossProductionStates.result.data | Where-Object { $_.Name -eq $State }).Value
+	If ($null -eq $ZenossProductionState) {
 		Return "ERROR: ProductionState '$State' not found in Zenoss Cloud"
 	}
 
 	# retrieve device uid
-	$zenoss_device = $null
-	$zenoss_device = Get-ZenossCloudDevice -Uri $Uri -Key $Key -Device $Device
-	If ($null -eq $zenoss_device.uid) {
+	$ZenossCloudDevice = $null
+	$ZenossCloudDevice = Get-ZenossCloudDevice -Uri $Uri -Key $Key -Device $Device
+	If ($null -eq $ZenossCloudDevice.uid) {
 		Return "ERROR: Device '$Device' not found in Zenoss Cloud"
 	}
 
-	# create hashtable for HTML headers
-	$zenoss_head = @{
+	# create hashtable for headers
+	$HeadersHashtable = @{
 		'z-api-key'    = $Key
 		'Content-Type' = 'application/json'
 	}
 
-	# create array for zenoss body entry
-	$zenoss_data = [array][PSCustomObject]@{
-		uids      = $zenoss_device.uid
-		prodState = $zenoss_state
+	# create hashtable for body data
+	$Data = @{
+		uids      = $ZenossCloudDevice.uid
+		prodState = $ZenossProductionState
 		hashcheck = 'no'
 	}
 
-	# create hashtable for HTML body
-	$zenoss_body = @{
+	# create hashtable for body
+	$BodyHashtable = @{
 		'action' = 'DeviceRouter'
 		'method' = 'setProductionState'
-		'data'   = $zenoss_data
+		'data'   = $Data
 		'tid'    = 1
 	}
 
+	# create headers from hashtable
+	$Headers = $HeadersHashtable | ConvertTo-Json -Compress
+
+	# create body from hashtable
+	$Body = $BodyHashtable | ConvertTo-Json -Compress
+
 	# create device-specific URI
-	$uri_device = $Uri.Replace('/zport/dmd', $zenoss_device.uid)
+	$DeviceUri = $Uri.Replace('/zport/dmd', $ZenossCloudDevice.uid)
 
 	# invoke rest method
-	Invoke-RestMethod -Method 'Post' -Uri $uri_device -Headers $zenoss_head -Body ($zenoss_body | ConvertTo-Json)
+	Invoke-RestMethod -Method 'Post' -Uri $DeviceUri -Headers $Headers -Body $Body
 }
 
 Function Invoke-ZenossCloudDeviceRemodel {
@@ -424,16 +535,19 @@ Function Invoke-ZenossCloudDeviceRemodel {
 	Remodels a device in Zenoss Cloud.
 
 	.DESCRIPTION
-	Remodels a device in Zenoss Cloud by making a REST call to Zenoss Cloud using an API key.
+	Remodels a device in Zenoss Cloud via the REST interface.
+
+	.PARAMETER Credential
+	Specifies a PSCredential object where the Username is the URI for a specific Zenoss Cloud instance and the Password is the API key.
 
 	.PARAMETER Uri
 	Specifies the URI for a specific Zenoss Cloud instance.
 
 	.PARAMETER Key
-	Specifies the API key for accessing Zenoss Cloud.
+	Specifies an API key for the specific Zenoss Cloud instance.
 
-	.PARAMETER Device
-	Specifies the device name in Zenoss Cloud.
+	.PARAMETER Name
+	Specifies the name of a device in Zenoss Cloud.
 
 	.INPUTS
 	None.
@@ -446,47 +560,66 @@ Function Invoke-ZenossCloudDeviceRemodel {
 
 	#>
 
-	[CmdletBinding()]
+	[CmdletBinding(DefaultParameterSetName = 'Uri')]
 	param (
-		[Parameter(Position = 0, Mandatory = $true)]
+		[Parameter(Mandatory = $true, ParameterSetName = 'Credential')]
+		[pscredential]$Credential,
+		[Parameter(Mandatory = $true, ParameterSetName = 'Uri')]
 		[string]$Uri,
-		[Parameter(Position = 1, Mandatory = $true)]
+		[Parameter(Mandatory = $true, ParameterSetName = 'Uri')]
 		[string]$Key,
-		[Parameter(Position = 2, Mandatory = $true)]
-		[string]$Hostname
+		[Parameter(Mandatory = $true)]
+		[string]$Name
 	)
 
+	# if credential provided...
+	If ($PSCmdlet.ParameterSetName -eq 'Credential') {
+		# retrieve Uri and Key from Username and Password
+		Try {
+			$Uri, $Key = $Cred.GetNetworkCredential().UserName, $Cred.GetNetworkCredential().Password
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
 	# retrieve device uid
-	$zenoss_device = $null
-	$zenoss_device = Get-ZenossCloudDevice -Uri $Uri -Key $Key -Hostname $Hostname
-	If ($null -eq $zenoss_device.uid) {
-		Return "ERROR: Device '$Hostname' not found in Zenoss Cloud"
+	$ZenossCloudDevice = $null
+	$ZenossCloudDevice = Get-ZenossCloudDevice -Uri $Uri -Key $Key -Name $Name
+	If ($null -eq $ZenossCloudDevice.uid) {
+		Return "ERROR: Device '$Name' not found in Zenoss Cloud"
 	}
 
 	# create hashtable for HTML headers
-	$zenoss_head = @{
+	$HeadersHashtable = @{
 		'z-api-key'    = $Key
 		'Content-Type' = 'application/json'
 	}
 
-	# create array for zenoss body entry
-	$zenoss_data = [array][PSCustomObject]@{
-		deviceUid = $zenoss_device.uid
+	# create hashtable for body data
+	$BodyData = [array][PSCustomObject]@{
+		deviceUid = $ZenossCloudDevice.uid
 	}
 
-	# create hashtable for HTML body
-	$zenoss_body = @{
+	# create hashtable for body
+	$BodyHashtable = @{
 		'action' = 'DeviceRouter'
 		'method' = 'remodel'
-		'data'   = $zenoss_data
+		'data'   = $BodyData
 		'tid'    = 1
 	}
 
 	# create device-specific URI
-	$uri_device = $Uri.Replace('/zport/dmd', $zenoss_device.uid)
+	$DeviceUri = $Uri.Replace('/zport/dmd', $ZenossCloudDevice.uid)
+
+	# create headers from hashtable
+	$Headers = $HeadersHashtable | ConvertTo-Json -Compress
+
+	# create body from hashtable
+	$Body = $BodyHashtable | ConvertTo-Json -Compress
 
 	# invoke rest method
-	Invoke-RestMethod -Method 'Post' -Uri $uri_device -Headers $zenoss_head -Body ($zenoss_body | ConvertTo-Json)
+	Invoke-RestMethod -Method 'Post' -Uri $DeviceUri -Headers $Headers -Body $Body
 }
 
 # define functions to export
