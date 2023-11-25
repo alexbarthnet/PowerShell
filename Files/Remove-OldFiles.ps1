@@ -3,22 +3,22 @@
 Removes files and empty directories based upon values in a JSON configuration file.
 
 .DESCRIPTION
-Removes files and empty directories based upon values in a JSON configuration file.
+Removes files and empty directories based upon values in a JSON configuration file. Files and empty directories are removed from the define path when the last write time is older than the computed datetime from the defined values.
 
 .PARAMETER Json
 The path to a JSON file containing the configuration for this script.
 
+.PARAMETER Show
+Switch parameter to show all entries from the JSON configuration file. Cannot be combined with the Clear, Remove, or Add parameters.
+
 .PARAMETER Clear
-Switch parameter to clear all entries from the JSON configuration file. Cannot be combined with the Remove, Add, or Run parameters.
+Switch parameter to clear all entries from the JSON configuration file. Cannot be combined with the Show, Remove, or Add parameters.
 
 .PARAMETER Remove
-Switch parameter to remove an entry from the JSON configuration file. Cannot be combined with the Clear, Add, or Run parameters.
+Switch parameter to remove an entry from the JSON configuration file. Cannot be combined with the Show, Clear, or Add parameters.
 
 .PARAMETER Add
-Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Clear, Remove, or Run parameters.
-
-.PARAMETER Run
-Switch parameter to process all entries from the JSON configuration file. Cannot be combined with the Clear, Remove, or Add parameters.
+Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Show, Clear, or Remove parameters.
 
 .PARAMETER Path
 The path containing files and empty directories that will be removed if older than the computed datetime. Required when the Add or Remove parameters are specified.
@@ -36,16 +36,19 @@ None.
 None. The script reports the actions taken and does not provide any actionable output.
 
 .EXAMPLE
-.\Remove-OldFiles.ps1 -Json C:\Content\config.json -Add -Path 'C:\Content\test' -OlderThanUnits 30 -OlderThanType 'Days'
+.\Remove-OldFiles.ps1 -Json C:\Content\config.json
 
 .EXAMPLE
-.\Remove-OldFiles.ps1 -Json C:\Content\config.json -Remove -Path 'C:\Content\test'
+.\Remove-OldFiles.ps1 -Json C:\Content\config.json -Show
 
 .EXAMPLE
 .\Remove-OldFiles.ps1 -Json C:\Content\config.json -Clear
 
 .EXAMPLE
-.\Remove-OldFiles.ps1 -Json C:\Content\config.json -Run
+.\Remove-OldFiles.ps1 -Json C:\Content\config.json -Remove -Path 'C:\Content\test'
+
+.EXAMPLE
+.\Remove-OldFiles.ps1 -Json C:\Content\config.json -Add -Path 'C:\Content\test' -OlderThanUnits 30 -OlderThanType 'Days'
 #>
 
 [CmdletBinding(SupportsShouldProcess,DefaultParameterSetName = 'Default')]
@@ -67,15 +70,6 @@ Param(
 	[string]$OlderThanType,
 	[Parameter()]
 	[string]$Json,
-	# log file max age
-	[Parameter(DontShow)]
-	[double]$LogDays = 7,
-	# log file min count
-	[Parameter(DontShow)]
-	[uint16]$LogCount = 7,
-	# log start time
-	[Parameter(DontShow)]
-	[string]$LogStart = (Get-Date -Format FileDateTimeUniversal),
 	# local hostname
 	[Parameter(DontShow)]
 	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
@@ -403,7 +397,7 @@ Process {
 				}
 
 				# add current time as FileDateTimeUniversal
-				$json_hashtable['Updated'] = $LogStart
+				$json_hashtable['Updated'] = Get-Date -Format FileDateTimeUniversal
 
 				# create custom object from hashtable
 				$JsonDatum = [pscustomobject]$json_hashtable
