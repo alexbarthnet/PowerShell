@@ -163,82 +163,149 @@ Begin {
 			Write-Host "ERROR: certificate not found with hash: '$Hash'"
 		}
 	}
+
+	Function Export-PfxCertificateWithSubject {
+		[CmdletBinding()]
+		Param(
+			[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ })]
+			[object]$Path,
+			[Parameter(Position = 1, Mandatory = $true)][ValidatePattern('^[^\*]+$')]
+			[string]$Subject,
+			[Parameter(Position = 2)][AllowEmptyCollection()]
+			[string[]]$Principals
+		)
+
+		# create empty objects
+		$cert_pfx_files = @()
+
+		# retrieve PKCS12 files matching $Subject
+		If ($Subject -eq '_default') {
+			$cert_pfx_files += Get-ChildItem -Path $Path | Where-Object { $_.Extension -match '(\.pfx|\.p12)' } | Sort-Object BaseName
+		}
+		Else {
+			$cert_pfx_files += Get-ChildItem -Path $Path | Where-Object { $_.Extension -match '(\.pfx|\.p12)' } | Sort-Object BaseName | Where-Object { $_.BaseName -match "^$Subject" } | Select-Object -Last 1
+		}
+
+		# check file count
+		If ($cert_pfx_files.Count -eq 0) {
+			Write-Host "`nERROR: no certificates found with subject: $Subject"
+		}
+		Else {
+			ForEach ($cert_pfx_file in $cert_pfx_files) {
+				Write-Host "`nFound PFX file: '$($cert_pfx_file.FullName)'"
+				Import-PfxCertificateFromFile -FilePath $cert_pfx_file.FullName -Principals $Principals -Validate
+			}
+		}
+	}
 }
 
 Process {
-	# verify JSON file
-	If (-not (Test-Path -Path $Json)) {
+	# if JSON file found...
+	If (Test-Path -Path $Json) {
+		# ...create JSON data object as array of PSCustomObjects from JSON file content
+		Try {
+			$JsonData = [array](Get-Content -Path $Json | ConvertFrom-Json)
+		}
+		Catch {
+			Write-Output "`nERROR: could not read configuration file: '$Json'"
+			Return $_
+		}
+	}
+	# if JSON file was not found...
+	Else {
+		# ...and Add set...
 		If ($Add) {
+			# ...try to create the JSON file
 			Try {
-				$null = New-Item -ItemType 'File' -Path $Json
+				$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
 			}
 			Catch {
-				Write-Output "`nERROR: could not create configuration file:"
-				Write-Output "$Json`n"
-				Return
+				Write-Output "`nERROR: could not create configuration file: '$Json'"
+				Return $_
 			}
+			# ...create JSON data object as empty array
+			$JsonData = @()
 		}
+		# ...and Add not set...
 		Else {
-			Write-Output "`nERROR: could not find configuration file:"
-			Write-Output "$Json`n"
+			# ...report and return
+			Write-Output "`nERROR: could not find configuration file: '$Json'"
 			Return
 		}
 	}
 
-	# import JSON data
-	$json_data = [array](Get-Content -Path $Json | ConvertFrom-Json)
-	
 	# evaluate parameters
 	switch ($true) {
+		# show configuration file
+		$Show {
+
+		}
+		# clear configuration file
 		$Clear {
-			# remove configuration file
 			If (Test-Path -Path $Json) {
 				Try {
-					Remove-Item -Path $Json -Force
+					[string]::Empty | Set-Content -Path $Json
 					Write-Output "`nCleared configuration file: '$Json'"
 				}
 				Catch {
 					Write-Output "`nERROR: could not clear configuration file: '$Json'"
+					Return $_
 				}
 			}
 		}
+		# remove entry from configuration file
 		$Remove {
-			# remove matching entries from object
 			Try {
-				$json_data = $json_data | Where-Object {
-					$_.Subject -ne $Subject
-				}
-				If ($null -eq $json_data) {
+				$JsonData = $JsonData | Where-Object { $_.Subject -ne $Subject }
+				If ($null -eq $JsonData) {
 					[string]::Empty | Set-Content -Path $Json
 					Write-Output "`nRemoved '$Subject' from configuration file: '$Json'"
 				}
 				Else {
-					$json_data | ConvertTo-Json | Set-Content -Path $Json
+					$JsonData | ConvertTo-Json | Set-Content -Path $Json
 					Write-Output "`nRemoved '$Subject' from configuration file: '$Json'"
 				}
-				$json_data | Select-Object Subject, Path, Principals, Updated
+				$JsonData | Format-List	
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
+				Return $_
 			}
 		}
+		# add entry to configuration file
 		$Add {
-			# create custom object from parameters then add to object
 			Try {
-				$json_data += [pscustomobject]@{
+				# create hashtable for custom object
+				$JsonParameters = [ordered]@{
 					Subject    = [string]$Subject
 					Path       = [string]$Path
 					Principals = [string[]]$Principals
-					Updated    = (Get-Date -Format FileDateTimeUniversal)
 				}
-				$json_data | ConvertTo-Json | Set-Content -Path $Json
+
+				# add current time as FileDateTimeUniversal
+				$JsonParameters['Updated'] = Get-Date -Format FileDateTimeUniversal
+
+				# create custom object from hashtable
+				$JsonDatum = [pscustomobject]$JsonParameters
+
+				# remove existing entry with same name
+				If ($JsonData.Subject -contains $Subject) {
+					Write-Warning -Message "Will overwrite existing entry for '$Subject' configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
+					$JsonData = $JsonData | Where-Object { $_.Subject -ne $Subject }
+				}
+
+				# add datum to data
+				$JsonData += $JsonDatum
+				$JsonData | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 				Write-Output "`nAdded '$Subject' to configuration file: '$Json'"
-				$json_data | Select-Object Subject, Path, Principals, Updated
+				$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
+				Return $_
 			}
 		}
+		# process input against configuration file
 		{ $null -ne $Result } {
 			# retrieve $Result values
 			$cert_name = $Result.ManagedItem.Name
@@ -258,7 +325,7 @@ Process {
 			Write-Host " - thumbprint : $cert_hash"
 
 			# if configuration file is empty...
-			If ($json_data.Count -eq 0) {
+			If ($JsonData.Count -eq 0) {
 				# ...announce error and return
 				Write-Output "ERROR: no entries found in input file: $Json"
 				Return
@@ -266,13 +333,13 @@ Process {
 			# if configuration file is not empty...
 			Else {
 				# ...retrieve entry with matching subject if any
-				$Defined = $json_data | Where-Object { $_.Subject -eq $cert_name -and -not [string]::IsNullOrEmpty($_.Path) -and -not [string]::IsNullOrEmpty($_.Principals) } | Select-Object -First 1
+				$Defined = $JsonData | Where-Object { $_.Subject -eq $cert_name -and -not [string]::IsNullOrEmpty($_.Path) -and -not [string]::IsNullOrEmpty($_.Principals) } | Select-Object -First 1
 			}
 
 			# if defined entry not found in configuration file...
 			If ($null -eq $Defined) {
 				# ...check for default entry in configuration file
-				$Defined = $json_data | Where-Object { $_.Subject -eq '_default' -and -not [string]::IsNullOrEmpty($_.Path) -and -not [string]::IsNullOrEmpty($_.Principals) } | Select-Object -First 1
+				$Defined = $JsonData | Where-Object { $_.Subject -eq '_default' -and -not [string]::IsNullOrEmpty($_.Path) -and -not [string]::IsNullOrEmpty($_.Principals) } | Select-Object -First 1
 			}
 
 			# if default entry not found in configuration file...
@@ -282,14 +349,25 @@ Process {
 				Return
 			}
 
-			# announce $Result values
+			# announce $Defined values
 			Write-Host "`nFound matching configuration entry:"
 			Write-Host " - subject    : $($Defined.Subject)"
 			Write-Host " - path       : $($Defined.Path)"
 			Write-Host " - principals : $($Defined.Principals)"
 
+			# if cert_date is datetimeoffset...
+			If ($cert_date -is [System.DateTimeOffset]) {
+				# ...convert to datetime
+				Try {
+					$cert_date = $cert_date.DateTime
+				}
+				Catch {
+					Throw $_
+				}
+			}
+
 			# define params for Export-PfxCertificateToPrincipals
-			$ExporPfxCertificateToPrincipalsParams = @{
+			$ExportPfxCertificateToPrincipals = @{
 				Name       = $cert_name
 				Date       = $cert_date
 				Hash       = $cert_hash
@@ -299,7 +377,7 @@ Process {
 
 			# export pfx certificate to principals
 			Try {
-				Export-PfxCertificateToPrincipals @ExporPfxCertificateToPrincipalsParams
+				Export-PfxCertificateToPrincipals @ExportPfxCertificateToPrincipals
 			}
 			Catch {
 				Write-Output 'ERROR: unable to export PFX certificate'
@@ -307,8 +385,27 @@ Process {
 			}
 		}
 		Default {
-			Write-Output "`nDisplaying '$Json'`n"
-			$json_data | Select-Object Subject, Path, Principals, Updated
+			# declare start
+			Write-Host "`nExporting certificates per '$Json'"
+
+			# check entry count in configuration file
+			If ($JsonData.Count -eq 0) {
+				Write-Host "ERROR: no entries found in configuration file: $Json"
+				Return
+			}
+
+			# process configuration file
+			ForEach ($json_datum in $JsonData) {
+				If ([string]::IsNullOrEmpty($json_datum.Subject) -or [string]::IsNullOrEmpty($json_datum.Storage)) {
+					Write-Host "ERROR: invalid entry found in configuration file: $Json"
+				}
+				Else {
+					Write-Host " - subject    : '$($json_datum.Subject)'"
+					Write-Host " - storage    : '$($json_datum.Storage)'"
+					Write-Host " - principals : '$($json_datum.Principals)'"
+					Export-PfxCertificateWithSubject -Subject $json_datum.Subject -Path $json_datum.Storage -Principals $json_datum.Principals
+				}
+			}
 		}
 	}
 }

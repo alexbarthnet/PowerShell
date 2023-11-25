@@ -15,8 +15,18 @@ Param(
 	[string]$Storage,
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[string[]]$Principals,
-	[Parameter()]
+	# path to JSON configuration file
+	[Parameter(Mandatory = $True)]
 	[string]$Json,
+	# log file max age
+	[Parameter(DontShow)]
+	[double]$LogDays = 7,
+	# log file min count
+	[Parameter(DontShow)]
+	[uint16]$LogCount = 7,
+	# log start time
+	[Parameter(DontShow)]
+	[string]$LogStart = (Get-Date -Format FileDateTimeUniversal),
 	# local hostname
 	[Parameter(DontShow)]
 	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
@@ -388,92 +398,119 @@ Begin {
 }
 
 Process {
-	# verify JSON file
-	If (-not (Test-Path -Path $Json)) {
+	# if JSON file found...
+	If (Test-Path -Path $Json) {
+		# ...create JSON data object as array of PSCustomObjects from JSON file content
+		Try {
+			$JsonData = [array](Get-Content -Path $Json | ConvertFrom-Json)
+		}
+		Catch {
+			Write-Output "`nERROR: could not read configuration file: '$Json'"
+			Return $_
+		}
+	}
+	# if JSON file was not found...
+	Else {
+		# ...and Add set...
 		If ($Add) {
+			# ...try to create the JSON file
 			Try {
-				$null = New-Item -ItemType 'File' -Path $Json
+				$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
 			}
 			Catch {
-				Write-Output "`nERROR: could not create configuration file:"
-				Write-Output "$Json`n"
-				Return
+				Write-Output "`nERROR: could not create configuration file: '$Json'"
+				Return $_
 			}
+			# ...create JSON data object as empty array
+			$JsonData = @()
 		}
+		# ...and Add not set...
 		Else {
-			Write-Output "`nERROR: could not find configuration file:"
-			Write-Output "$Json`n"
+			# ...report and return
+			Write-Output "`nERROR: could not find configuration file: '$Json'"
 			Return
 		}
 	}
 
-	# import JSON data
-	$json_data = @()
-	$json_data += Get-Content -Path $Json | ConvertFrom-Json
-
 	# evaluate parameters
 	switch ($true) {
+		# clear configuration file
 		$Clear {
-			# remove configuration file
 			If (Test-Path -Path $Json) {
 				Try {
-					Remove-Item -Path $Json -Force
+					[string]::Empty | Set-Content -Path $Json
 					Write-Output "`nCleared configuration file: '$Json'"
 				}
 				Catch {
 					Write-Output "`nERROR: could not clear configuration file: '$Json'"
+					Return $_
 				}
 			}
 		}
+		# remove entry from configuration file
 		$Remove {
-			# remove matching entries from object
 			Try {
-				$json_data = $json_data | Where-Object {
-					$_.Subject -ne $Subject
-				}
-				If ($null -eq $json_data) {
+				$JsonData = $JsonData | Where-Object { $_.Subject -ne $Subject }
+				If ($null -eq $JsonData) {
 					[string]::Empty | Set-Content -Path $Json
 					Write-Output "`nRemoved '$Subject' from configuration file: '$Json'"
 				}
 				Else {
-					$json_data | ConvertTo-Json | Set-Content -Path $Json
+					$JsonData | ConvertTo-Json | Set-Content -Path $Json
 					Write-Output "`nRemoved '$Subject' from configuration file: '$Json'"
 				}
-				$json_data | Select-Object Subject, Storage, Principals, Updated
+				$JsonData | Format-List
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
+				Return $_
 			}
 		}
+		# add entry to configuration file
 		$Add {
-			# create custom object from parameters then add to object
 			Try {
-				$json_data += [pscustomobject]@{
+				# create hashtable for custom object
+				$JsonParameters = [ordered]@{
 					Subject    = [string]$Subject
 					Storage    = [string]$Storage
 					Principals = [string[]]$Principals
-					Updated    = (Get-Date -Format FileDateTimeUniversal)
 				}
-				$json_data | ConvertTo-Json | Set-Content -Path $Json
+
+				# add current time as FileDateTimeUniversal
+				$JsonParameters['Updated'] = Get-Date -Format FileDateTimeUniversal
+
+				# create custom object from hashtable
+				$JsonDatum = [pscustomobject]$JsonParameters
+
+				# remove existing entry with same name
+				If ($JsonData.Subject -contains $Subject) {
+					Write-Warning -Message "Will overwrite existing entry for '$Subject' configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
+					$JsonData = $JsonData | Where-Object { $_.Subject -ne $Subject }
+				}
+
+				# add datum to data
+				$JsonData += $JsonDatum
+				$JsonData | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 				Write-Output "`nAdded '$Subject' to configuration file: '$Json'"
-				$json_data | Select-Object Subject, Storage, Principals, Updated
+				$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
+				Return $_
 			}
 		}
 		$Import {
 			# declare start
-			Write-Host "`nImporting certificates from '$Json'"
+			Write-Host "`nImporting certificates per '$Json'"
 
 			# check entry count in configuration file
-			If ($json_data.Count -eq 0) {
+			If ($JsonData.Count -eq 0) {
 				Write-Host "ERROR: no entries found in configuration file: $Json"
 				Return
 			}
 
 			# process configuration file
-			ForEach ($json_datum in $json_data) {
+			ForEach ($json_datum in $JsonData) {
 				If ([string]::IsNullOrEmpty($json_datum.Subject) -or [string]::IsNullOrEmpty($json_datum.Storage)) {
 					Write-Host "ERROR: invalid entry found in configuration file: $Json"
 				}
@@ -487,7 +524,7 @@ Process {
 		}
 		Default {
 			Write-Output "Displaying '$Json'"
-			$json_data | Select-Object Subject, Storage, Principals, Updated | Format-Table
+			$JsonData | Select-Object Subject, Storage, Principals, Updated | Format-Table
 		}
 	}
 }
