@@ -143,8 +143,7 @@ Function Invoke-LdapQuery {
 	}
 	Catch {
 		Write-Host 'ERROR: failure during bind'
-		Write-Host $_
-		# Exit
+		Return $_
 	}
 
 	# define paging configuration
