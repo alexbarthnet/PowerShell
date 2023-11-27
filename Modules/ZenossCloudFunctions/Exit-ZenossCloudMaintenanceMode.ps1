@@ -1,21 +1,18 @@
 #requires -Modules ZenossCloudFunctions,CmsCredentials
 [CmdletBinding()]
 param (
-	# switch to skip transcript logging
+	# string for CmsCredential identity
 	[Parameter(Position = 0)]
-	[switch]$SkipTranscript,
-	# string for production state in Zenoss Cloud
-	[Parameter(Position = 1)]
-	[string]$State = 'Production',
-	# string for identity of CmsCredential
-	[Parameter(Position = 2)]
 	[string]$Identity = 'Zenoss',
 	# path for transcript files
-	[Parameter(Position = 3)]
+	[Parameter(Position = 1)]
 	[string]$TranscriptName,
 	# path for transcript files
-	[Parameter(Position = 4)][ValidateScript({ Test-Path -Path $_ -PathType Container })]
+	[Parameter(Position = 2)][ValidateScript({ Test-Path -Path $_ -PathType Container })]
 	[string]$TranscriptPath,
+	# switch to skip transcript logging
+	[Parameter(Position = 3)]
+	[switch]$SkipTranscript,
 	# local hostname
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -176,7 +173,7 @@ Process {
 	$SetZenossCloudProductionState = @{
 		Credential  = $Credential
 		Device      = $Dnshostname
-		State       = $State
+		State       = 'Production'
 		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 	}
 
