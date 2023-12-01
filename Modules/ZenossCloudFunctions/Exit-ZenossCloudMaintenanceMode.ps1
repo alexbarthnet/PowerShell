@@ -4,15 +4,15 @@ param (
 	# string for CmsCredential identity
 	[Parameter(Position = 0)]
 	[string]$Identity = 'Zenoss',
-	# path for transcript files
-	[Parameter(Position = 1)]
-	[string]$TranscriptName,
-	# path for transcript files
-	[Parameter(Position = 2)][ValidateScript({ Test-Path -Path $_ -PathType Container })]
-	[string]$TranscriptPath,
 	# switch to skip transcript logging
-	[Parameter(Position = 3)]
+	[Parameter(DontShow)]
 	[switch]$SkipTranscript,
+	# name in transcript files
+	[Parameter(DontShow)]
+	[string]$TranscriptName,
+	# path to transcript files
+	[Parameter(DontShow)]
+	[string]$TranscriptPath,
 	# local hostname
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
