@@ -95,12 +95,6 @@ public static class Advapi32
 		IntPtr ReturnLength
 	);
 }
-
-public static class Kernel32
-{
-	[DllImport("kernel32.dll")]
-	public static extern uint GetLastError();
-}
 '@
 
 # TODO: add Start-Job
@@ -138,7 +132,7 @@ $TokenHandle = [IntPtr]::Zero
 
 # open process token
 # reference: https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
-Write-Debug "Calling OpenProcessToken for process handle: $Handle"
+Write-Verbose "Calling OpenProcessToken for process handle: $Handle"
 Try {
 	$CallResult = [Advapi32]::OpenProcessToken($ProcessHandle, $DesiredAccess, [ref]$TokenHandle)
 }
@@ -148,12 +142,12 @@ Catch {
 
 # report results
 If ($CallResult) {
-	Write-Debug "Token handle: $TokenHandle"
+	Write-Verbose "Token handle: $TokenHandle"
 }
 Else {
-	$LastError = [Kernel32]::GetLastError()
-	Write-Debug "GetLastError returned: $LastError"
-	Return
+	Write-Warning "OpenProcessToken returned error"
+	$LastWin32Error = [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+	Throw $LastWin32Error
 }
 
 # define arguments for LookupPrivilegeValue
@@ -162,7 +156,7 @@ $Luid = $null
 
 # lookup privilege LUID
 # reference: https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-lookupprivilegevaluew
-Write-Debug "Calling LookupPrivilegeValue for privilege: $Privilege"
+Write-Verbose "Calling LookupPrivilegeValue for privilege: $Privilege"
 Try {
 	$CallResult = [Advapi32]::LookupPrivilegeValue($SystemName, $Privilege, [ref]$Luid)
 }
@@ -172,12 +166,12 @@ Catch {
 
 # report results
 If ($CallResult) {
-	Write-Debug "LUID for '$Privilege' privilege: $Luid"
+	Write-Verbose "LUID for '$Privilege' privilege: $Luid"
 }
 Else {
-	$LastError = [Kernel32]::GetLastError()
-	Write-Debug "GetLastError returned: $LastError"
-	Return
+	Write-Warning "LookupPrivilegeValue returned error"
+	$LastWin32Error = [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+	Throw $LastWin32Error
 }
 
 # create TokenPrivileges container
@@ -204,7 +198,7 @@ $ReturnLength = [IntPtr]::Zero
 
 # adjust token privileges
 # reference: https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-adjusttokenprivileges
-Write-Debug "Calling AdjustTokenPrivileges for token handle: $TokenHandle"
+Write-Verbose "Calling AdjustTokenPrivileges for token handle: $TokenHandle"
 Try {
 	$CallResult = [Advapi32]::AdjustTokenPrivileges($TokenHandle, $DisableAllPrivileges, [ref]$TokenPrivileges, $BufferLength, $PreviousState, $ReturnLength)
 }
@@ -214,12 +208,12 @@ Catch {
 
 # report results
 If ($CallResult) {
-	Write-Debug "Updated privileges for token handle: $TokenHandle"
+	Write-Verbose "Updated privileges for token handle: $TokenHandle"
 }
 Else {
-	$LastError = [Kernel32]::GetLastError()
-	Write-Debug "GetLastError returned: $LastError"
-	Return
+	Write-Warning "AdjustTokenPrivileges returned error"
+	$LastWin32Error = [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+	Throw $LastWin32Error
 }
 
 #0 - OK.
