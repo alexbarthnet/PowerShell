@@ -39,14 +39,41 @@ https://github.com/gtworek/PSBits/blob/master/Misc/EnableSeRestorePrivilege.ps1
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param (
 	[Parameter(Position = 0, Mandatory = $true)][ValidateSet(
-		'SeAssignPrimaryTokenPrivilege', 'SeAuditPrivilege', 'SeBackupPrivilege', 'SeChangeNotifyPrivilege', 'SeCreateGlobalPrivilege',
-		'SeCreatePagefilePrivilege', 'SeCreatePermanentPrivilege', 'SeCreateSymbolicLinkPrivilege', 'SeCreateTokenPrivilege',
-		'SeDebugPrivilege', 'SeEnableDelegationPrivilege', 'SeImpersonatePrivilege', 'SeIncreaseBasePriorityPrivilege',
-		'SeIncreaseQuotaPrivilege', 'SeIncreaseWorkingSetPrivilege', 'SeLoadDriverPrivilege', 'SeLockMemoryPrivilege',
-		'SeMachineAccountPrivilege', 'SeManageVolumePrivilege', 'SeProfileSingleProcessPrivilege', 'SeRelabelPrivilege',
-		'SeRemoteShutdownPrivilege', 'SeRestorePrivilege', 'SeSecurityPrivilege', 'SeShutdownPrivilege', 'SeSyncAgentPrivilege',
-		'SeSystemEnvironmentPrivilege', 'SeSystemProfilePrivilege', 'SeSystemtimePrivilege', 'SeTakeOwnershipPrivilege',
-		'SeTcbPrivilege', 'SeTimeZonePrivilege', 'SeTrustedCredManAccessPrivilege', 'SeUndockPrivilege', 'SeUnsolicitedInputPrivilege'
+		'SeAssignPrimaryTokenPrivilege',
+		'SeAuditPrivilege',
+		'SeBackupPrivilege',
+		'SeChangeNotifyPrivilege',
+		'SeCreateGlobalPrivilege',
+		'SeCreatePagefilePrivilege',
+		'SeCreatePermanentPrivilege',
+		'SeCreateSymbolicLinkPrivilege',
+		'SeCreateTokenPrivilege',
+		'SeDebugPrivilege',
+		'SeEnableDelegationPrivilege',
+		'SeImpersonatePrivilege',
+		'SeIncreaseBasePriorityPrivilege',
+		'SeIncreaseQuotaPrivilege',
+		'SeIncreaseWorkingSetPrivilege',
+		'SeLoadDriverPrivilege',
+		'SeLockMemoryPrivilege',
+		'SeMachineAccountPrivilege',
+		'SeManageVolumePrivilege',
+		'SeProfileSingleProcessPrivilege',
+		'SeRelabelPrivilege',
+		'SeRemoteShutdownPrivilege',
+		'SeRestorePrivilege',
+		'SeSecurityPrivilege',
+		'SeShutdownPrivilege',
+		'SeSyncAgentPrivilege',
+		'SeSystemEnvironmentPrivilege',
+		'SeSystemProfilePrivilege',
+		'SeSystemtimePrivilege',
+		'SeTakeOwnershipPrivilege',
+		'SeTcbPrivilege',
+		'SeTimeZonePrivilege',
+		'SeTrustedCredManAccessPrivilege',
+		'SeUndockPrivilege',
+		'SeUnsolicitedInputPrivilege'
 	)]
 	[string]$Privilege,
 	[Parameter(Position = 1)]
@@ -105,7 +132,7 @@ public static class Advapi32
 # 		ProcessId = $ProcessId
 # 		Disable   = $Disable
 # 	}
-#	# utilize job to avoid loading type defintions directly into session
+#	# utilize PowerShell job to avoid loading type defintions directly into session
 # 	Start-Job -InputObject $InputObject -ScriptBlock {
 # 		# Add-Type -TypeDefinition $TypeDefinition -ErrorAction Stop
 # 		# rest of script
@@ -215,7 +242,3 @@ Else {
 	$LastWin32Error = [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
 	Throw $LastWin32Error
 }
-
-#0 - OK.
-#6 - one of previous steps failed. Observe the output for handles equal to 0 or just re-run entire script.
-#1300 - privilege not held
