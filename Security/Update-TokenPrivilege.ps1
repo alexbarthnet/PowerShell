@@ -1,15 +1,15 @@
 <#
 .SYNOPSIS
-Retrieves a credential protected by CMS.
+Updates the privileges on an existing process.
 
 .DESCRIPTION
-Retrieves a credential encrypted by a CMS certificate. The calling user must have read access to the private key of the certificate that protects the credential.
+Updates the privileges on an existing process. The privilege must already be assigned to the process.
 
 .PARAMETER Privilege
-Specifies the privilege to grant to the process. Must be a valid security privilege.
+Specifies the privilege to enable on the process. Must be a valid security privilege.
 
 .PARAMETER ProcessId
-Specifies the process ID to grant the privilege. The default value is the current process ID.
+Specifies the process ID to enable the privilege. The default value is the current process ID.
 
 .PARAMETER Switch
 Switch parameter to disable the privilege.
