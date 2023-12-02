@@ -124,121 +124,113 @@ public static class Advapi32
 }
 '@
 
-# TODO: add Start-Job
-# ForEach ($UniquePrivilege in $Privilege) {
-# 	# define parameters 
-# 	$InputObject = @{
-# 		Privilege = $UniquePrivilege
-# 		ProcessId = $ProcessId
-# 		Disable   = $Disable
-# 	}
-#	# utilize PowerShell job to avoid loading type defintions directly into session
-# 	Start-Job -InputObject $InputObject -ScriptBlock {
-# 		# Add-Type -TypeDefinition $TypeDefinition -ErrorAction Stop
-# 		# rest of script
-# 	} | Receive-Job -Wait -AutoRemoveJob
-# }
+# start job to update process token avoid loading type defintions directly into session
+$Job = Start-Job -ScriptBlock {
+	# define objects
+	$TypeDefinition = $using:TypeDefinition
+	$Privilege = $using:Privilege
+	$ProcessId = $using:ProcessId
+	$Disable = $using:Disable
 
-# add type
-Try {
-	$null = [advapi32]
-}
-Catch {
+	# add type
 	Try {
 		Add-Type -TypeDefinition $TypeDefinition -ErrorAction Stop
 	}
 	Catch {
 		Throw $_
 	}
+
+	# define arguments for OpenProcessToken
+	# reference: https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
+	$ProcessHandle = Get-Process -Id $ProcessId | Select-Object -ExpandProperty Handle
+	$DesiredAccess = 0x28 # TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY
+	$TokenHandle = [IntPtr]::Zero
+
+	# open process token
+	Write-Verbose "Calling OpenProcessToken for process handle: $ProcessHandle"
+	Try {
+		$CallResult = [Advapi32]::OpenProcessToken($ProcessHandle, $DesiredAccess, [ref]$TokenHandle)
+	}
+	Catch {
+		Throw $_
+	}
+
+	# report results
+	If ($CallResult) {
+		Write-Verbose "Token handle: $TokenHandle"
+	}
+	Else {
+		Write-Warning 'OpenProcessToken returned error'
+		$LastWin32Error = [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+		Throw $LastWin32Error
+	}
+
+	# define arguments for LookupPrivilegeValue
+	# reference: https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-lookupprivilegevaluew
+	$SystemName = $null
+	$Luid = $null
+
+	# lookup privilege LUID
+	Write-Verbose "Calling LookupPrivilegeValue for privilege: $Privilege"
+	Try {
+		$CallResult = [Advapi32]::LookupPrivilegeValue($SystemName, $Privilege, [ref]$Luid)
+	}
+	Catch {
+		Throw $_
+	}
+
+	# report results
+	If ($CallResult) {
+		Write-Verbose "LUID for '$Privilege' privilege: $Luid"
+	}
+	Else {
+		Write-Warning 'LookupPrivilegeValue returned error'
+		$LastWin32Error = [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+		Throw $LastWin32Error
+	}
+
+	# create TokenPrivileges container
+	# reference: https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-token_privileges
+	$TokenPrivileges = [TokenPrivileges]::new()
+	$TokenPrivileges.PrivilegeCount = 1
+	$TokenPrivileges.Luid = $Luid
+
+	# if Disable is set...
+	If ($Disable) {
+		# ...set privilege will be disabled
+		$TokenPrivileges.Attributes = 0x00000000 # SE_PRIVILEGE_DISABLED
+	}
+	Else {
+		# ...set privilege will be enabled
+		$TokenPrivileges.Attributes = 0x00000002 # SE_PRIVILEGE_ENABLED
+	}
+
+	# define arguments for AdjustTokenPrivileges
+	$DisableAllPrivileges = $false
+	$BufferLength = 0
+	$PreviousState = [IntPtr]::Zero
+	$ReturnLength = [IntPtr]::Zero
+
+	# adjust token privileges
+	# reference: https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-adjusttokenprivileges
+	Write-Verbose "Calling AdjustTokenPrivileges for token handle: $TokenHandle"
+	Try {
+		$CallResult = [Advapi32]::AdjustTokenPrivileges($TokenHandle, $DisableAllPrivileges, [ref]$TokenPrivileges, $BufferLength, $PreviousState, $ReturnLength)
+	}
+	Catch {
+		Throw $_
+	}
+
+	# report results
+	If ($CallResult) {
+		Write-Verbose "Updated privileges for token handle: $TokenHandle"
+	}
+	Else {
+		Write-Warning 'AdjustTokenPrivileges returned error'
+		$LastWin32Error = [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+		Throw $LastWin32Error
+	}
 }
 
-# define arguments for OpenProcessToken
-$ProcessHandle = Get-Process -Id $ProcessId | Select-Object -ExpandProperty Handle
-$DesiredAccess = 0x28 # TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY
-$TokenHandle = [IntPtr]::Zero
-
-# open process token
-# reference: https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
-Write-Verbose "Calling OpenProcessToken for process handle: $Handle"
-Try {
-	$CallResult = [Advapi32]::OpenProcessToken($ProcessHandle, $DesiredAccess, [ref]$TokenHandle)
-}
-Catch {
-	Throw $_
-}
-
-# report results
-If ($CallResult) {
-	Write-Verbose "Token handle: $TokenHandle"
-}
-Else {
-	Write-Warning "OpenProcessToken returned error"
-	$LastWin32Error = [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
-	Throw $LastWin32Error
-}
-
-# define arguments for LookupPrivilegeValue
-$SystemName = $null
-$Luid = $null
-
-# lookup privilege LUID
-# reference: https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-lookupprivilegevaluew
-Write-Verbose "Calling LookupPrivilegeValue for privilege: $Privilege"
-Try {
-	$CallResult = [Advapi32]::LookupPrivilegeValue($SystemName, $Privilege, [ref]$Luid)
-}
-Catch {
-	Throw $_
-}
-
-# report results
-If ($CallResult) {
-	Write-Verbose "LUID for '$Privilege' privilege: $Luid"
-}
-Else {
-	Write-Warning "LookupPrivilegeValue returned error"
-	$LastWin32Error = [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
-	Throw $LastWin32Error
-}
-
-# create TokenPrivileges container
-# reference: https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-token_privileges
-$TokenPrivileges = [TokenPrivileges]::new()
-$TokenPrivileges.PrivilegeCount = 1
-$TokenPrivileges.Luid = $Luid
-
-# if Disable is set...
-If ($Disable) {
-	# ...set privilege will be disabled
-	$TokenPrivileges.Attributes = 0x00000000 # SE_PRIVILEGE_DISABLED
-}
-Else {
-	# ...set privilege will be enabled
-	$TokenPrivileges.Attributes = 0x00000002 # SE_PRIVILEGE_ENABLED
-}
-
-# define arguments for AdjustTokenPrivileges
-$DisableAllPrivileges = $false
-$BufferLength = 0
-$PreviousState = [IntPtr]::Zero
-$ReturnLength = [IntPtr]::Zero
-
-# adjust token privileges
-# reference: https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-adjusttokenprivileges
-Write-Verbose "Calling AdjustTokenPrivileges for token handle: $TokenHandle"
-Try {
-	$CallResult = [Advapi32]::AdjustTokenPrivileges($TokenHandle, $DisableAllPrivileges, [ref]$TokenPrivileges, $BufferLength, $PreviousState, $ReturnLength)
-}
-Catch {
-	Throw $_
-}
-
-# report results
-If ($CallResult) {
-	Write-Verbose "Updated privileges for token handle: $TokenHandle"
-}
-Else {
-	Write-Warning "AdjustTokenPrivileges returned error"
-	$LastWin32Error = [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
-	Throw $LastWin32Error
-}
+# receive and remove job
+$Job | Receive-Job -Wait -AutoRemoveJob
