@@ -8,6 +8,9 @@ Adds or removes Scheduled Tasks defined by entries in a JSON configuration file.
 .PARAMETER Json
 The path to a JSON file containing the configuration for this script.
 
+.PARAMETER Show
+Switch parameter to show all entries from the JSON configuration file. Cannot be combined with the Clear, Remove, or Add parameters.
+
 .PARAMETER Clear
 Switch parameter to clear all entries from the JSON configuration file. Cannot be combined with the Remove, Add, or Run parameters.
 
@@ -16,9 +19,6 @@ Switch parameter to remove an entry from the JSON configuration file. Cannot be 
 
 .PARAMETER Add
 Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Clear, Remove, or Run parameters.
-
-.PARAMETER Run
-Switch parameter to process all entries from the JSON configuration file. Cannot be combined with the Clear, Remove, or Add parameters.
 
 .PARAMETER TaskName
 The name of the scheduled task. Required when the Add or Remove parameters are specified.
@@ -62,7 +62,7 @@ String or array of string representing the name or path to PowerShell modules re
 Switch parameter to remove any scheduled task that is not defined in the JSON file and located in a task path defined on any entry in the JSON configuration file.
 
 .PARAMETER TranscriptName
-The prefix applied to transcript files created by this script. The default file name transcript file name is an underscore-separated list of basename of the script file, the hostname of the system, the current datetime in FileDateTimeUniversal format.
+The string to substitute for the random component of the default PowerShell transcript file name.
 
 .PARAMETER TranscriptPath
 The path to an existing folder for saving PowerShell transcript files.
@@ -74,16 +74,22 @@ None.
 None. The script reports the actions taken and does not provide any actionable output.
 
 .EXAMPLE
-.\Update-ScheduledTasks.ps1 -Json C:\Content\config.json -Add -Path 'C:\Content\test' -OlderThanUnits 30 -OlderThanType 'Days'
+.\Update-ScheduledTasks.ps1 -Json C:\Content\config.json
 
 .EXAMPLE
-.\Update-ScheduledTasks.ps1 -Json C:\Content\config.json -Remove -Path 'C:\Content\test'
+.\Update-ScheduledTasks.ps1 -Json C:\Content\config.json -Show
 
 .EXAMPLE
 .\Update-ScheduledTasks.ps1 -Json C:\Content\config.json -Clear
 
 .EXAMPLE
-.\Update-ScheduledTasks.ps1 -Json C:\Content\config.json -Run
+.\Update-ScheduledTasks.ps1 -Json C:\Content\config.json -Remove -TaskName 'Test-Task' -TaskPath '\TEST'
+
+.EXAMPLE
+.\Update-ScheduledTasks.ps1 -Json C:\Content\config.json -Add -TaskName 'Test-Task' -TaskPath '\TEST' -Execute 'C:\path\to\some.exe'
+
+.EXAMPLE
+.\Update-ScheduledTasks.ps1 -Json C:\Content\config.json
 #>
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
@@ -92,15 +98,17 @@ Param(
 	[Parameter(Mandatory = $True, Position = 0)]
 	[string]$Json,
 	# script parameters - mode
+	[Parameter(Mandatory = $True, ParameterSetName = 'Show')]
+	[switch]$Show,
 	[Parameter(Mandatory = $True, ParameterSetName = 'Clear')]
 	[switch]$Clear,
 	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
 	[switch]$Remove,
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[switch]$Add,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Run')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'Default')]
 	[switch]$Run,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Update')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'Default')]
 	[switch]$Update,
 	# scheduled task parameter - register
 	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
@@ -141,15 +149,16 @@ Param(
 	[Parameter(ParameterSetName = 'Add')]
 	[string[]]$Modules,
 	# switch to remove old tasks during run
-	[Parameter(ParameterSetName = 'Run')]
+	[Parameter(ParameterSetName = 'Default')]
 	[switch]$RemoveOldTasks,
-	# path for transcript files
-	[Parameter(ParameterSetName = 'Run')]
-	[Parameter(ParameterSetName = 'Update')]
+	# switch to skip transcript logging
+	[Parameter(DontShow)]
+	[switch]$SkipTranscript,
+	# name in transcript files
+	[Parameter(DontShow)]
 	[string]$TranscriptName,
-	# path for transcript files
-	[Parameter(ParameterSetName = 'Run')][ValidateScript({ Test-Path -Path $_ -PathType Container })]
-	[Parameter(ParameterSetName = 'Update')][ValidateScript({ Test-Path -Path $_ -PathType Container })]
+	# path to transcript files
+	[Parameter(DontShow)]
 	[string]$TranscriptPath,
 	# local hostname
 	[Parameter(DontShow)]
@@ -649,7 +658,7 @@ Begin {
 	}
 
 	# if running...
-	If ($Run -or $Update) {
+	If ($PSCmdlet.ParameterSetName -eq 'Default') {
 		# define hashtable for transcript functions
 		$TranscriptWithHostAndDate = @{}
 		# define parameters for transcript functions
@@ -702,6 +711,11 @@ Process {
 
 	# evaluate parameters
 	switch ($true) {
+		# show configuration file
+		$Show {
+			Write-Output "`nDisplaying '$Json'"
+			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+		}
 		# clear configuration file
 		$Clear {
 			Try {
@@ -813,7 +827,7 @@ Process {
 			}
 		}
 		# run through entries in configuration file
-		{ $Run -or $Update } {
+		Default {
 			# declare start
 			Write-Host "`nUpdating scheduled tasks from '$Json'"
 
@@ -833,29 +847,29 @@ Process {
 			}
 
 			# process configuration file
-			:JsonData ForEach ($JsonDatum in $JsonData) {
+			:JsonDatum ForEach ($JsonDatum in $JsonData) {
 				# validate values in JSON file
 				Switch ($true) {
 					([string]::IsNullOrEmpty($JsonDatum.TaskName)) {
-						Write-Output "`nERROR: invalid entry (task name) in configuration file: $Json"; Continue JsonData
+						Write-Output "`nERROR: invalid entry (task name) in configuration file: $Json"; Continue JsonDatum
 					}
 					([string]::IsNullOrEmpty($JsonDatum.TaskPath)) {
-						Write-Output "`nERROR: invalid entry (task path) in configuration file: $Json"; Continue JsonData
+						Write-Output "`nERROR: invalid entry (task path) in configuration file: $Json"; Continue JsonDatum
 					}
 					([string]::IsNullOrEmpty($JsonDatum.Execute)) {
-						Write-Output "`nERROR: invalid entry (execute) in configuration file: $Json"; Continue JsonData
+						Write-Output "`nERROR: invalid entry (execute) in configuration file: $Json"; Continue JsonDatum
 					}
 					([string]::IsNullOrEmpty($JsonDatum.Argument)) {
-						Write-Output "`nERROR: invalid entry (argument) in configuration file: $Json"; Continue JsonData
+						Write-Output "`nERROR: invalid entry (argument) in configuration file: $Json"; Continue JsonDatum
 					}
 					([string]::IsNullOrEmpty($JsonDatum.UserId)) {
-						Write-Output "`nERROR: invalid entry (userid) in configuration file: $Json"; Continue JsonData
+						Write-Output "`nERROR: invalid entry (userid) in configuration file: $Json"; Continue JsonDatum
 					}
 					([string]::IsNullOrEmpty($JsonDatum.LogonType)) {
-						Write-Output "`nERROR: invalid entry (logontype) in configuration file: $Json"; Continue JsonData
+						Write-Output "`nERROR: invalid entry (logontype) in configuration file: $Json"; Continue JsonDatum
 					}
 					($JsonDatum.TriggerAt -isnot [datetime]) {
-						Write-Output "`nERROR: invalid entry (datetime for trigger) in configuration file: $Json"; Continue JsonData
+						Write-Output "`nERROR: invalid entry (datetime for trigger) in configuration file: $Json"; Continue JsonDatum
 					}
 					Default {
 						# if valid task path provided...
@@ -871,7 +885,7 @@ Process {
 							}
 							Catch {
 								Write-Output "ERROR: adding task to hashtable: '$($JsonDatum.TaskName)'"
-								Continue JsonData
+								Continue JsonDatum
 							}
 						}
 
@@ -988,11 +1002,11 @@ Process {
 			}
 
 			# process cleanup hashtable
-			ForEach ($TaskPath in $ExpectedTasks.Keys) {
+			:TaskPath ForEach ($TaskPath in $ExpectedTasks.Keys) {
 				# check if any bad path values have been snuck in
 				If (-not (Test-ScheduledTaskPath -TaskPath $TaskPath)) {
 					Write-Output "`nERROR: the path defined is not permitted: '$TaskPath' for '$($ExpectedTasks[$TaskPath])'"
-					Return
+					Continue TaskPath
 				}
 
 				# get all tasks in TaskPath
@@ -1019,16 +1033,12 @@ Process {
 				}
 			}
 		}
-		Default {
-			Write-Output "`nDisplaying '$Json'"
-			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
-		}
 	}
 }
 
 End {
 	# if running...
-	If ($Run -or $Update) {
+	If ($PSCmdlet.ParameterSetName -eq 'Default') {
 		# stop transcript with parameters
 		Try {
 			Stop-TranscriptWithHostAndDate @TranscriptWithHostAndDate
