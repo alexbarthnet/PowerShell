@@ -51,7 +51,7 @@ None. The script reports the actions taken and does not provide any actionable o
 .\Remove-OldFiles.ps1 -Json C:\Content\config.json -Add -Path 'C:\Content\test' -OlderThanUnits 30 -OlderThanType 'Days'
 #>
 
-[CmdletBinding(SupportsShouldProcess,DefaultParameterSetName = 'Default')]
+[CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Default')]
 Param(
 	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Show')]
 	[switch]$Show,
@@ -62,7 +62,7 @@ Param(
 	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Add')]
 	[switch]$Add,
 	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Remove')][ValidatePattern('^[^\*]+$')]
-	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')][ValidateScript({ Test-Path -Path $_ })]
+	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')]
 	[string]$Path,
 	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Add')][ValidateRange(1, 65535)]
 	[uint16]$OlderThanUnits,
@@ -70,6 +70,15 @@ Param(
 	[string]$OlderThanType,
 	[Parameter()]
 	[string]$Json,
+	# switch to skip transcript logging
+	[Parameter(DontShow)]
+	[switch]$SkipTranscript,
+	# name in transcript files
+	[Parameter(DontShow)]
+	[string]$TranscriptName,
+	# path to transcript files
+	[Parameter(DontShow)]
+	[string]$TranscriptPath,
 	# local hostname
 	[Parameter(DontShow)]
 	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
