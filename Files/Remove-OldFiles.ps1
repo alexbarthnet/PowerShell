@@ -436,19 +436,19 @@ Process {
 			}
 
 			# process entries in configuration file
-			ForEach ($JsonDatum in $JsonData) {
+			:JsonDatum ForEach ($JsonDatum in $JsonData) {
 				switch ($true) {
 					([string]::IsNullOrEmpty($JsonDatum.Path)) {
 						Write-Host "ERROR: invalid entry found in configuration file: $Json"
-						Continue
+						Continue :JsonDatum 
 					}
 					([string]::IsNullOrEmpty($JsonDatum.OlderThanUnits)) {
 						Write-Host "ERROR: invalid entry found in configuration file: $Json"
-						Continue
+						Continue :JsonDatum 
 					}
 					([string]::IsNullOrEmpty($JsonDatum.OlderThanType)) {
 						Write-Host "ERROR: invalid entry found in configuration file: $Json"
-						Continue
+						Continue :JsonDatum 
 					}
 					Default {
 						# get previous date from input
@@ -457,14 +457,18 @@ Process {
 						}
 						Catch {
 							Write-Host "ERROR: could not create date from '$($JsonDatum.OlderThanUnits) $($JsonDatum.OlderThanType)'"
-							Continue
+							Continue :JsonDatum
 						}
 
-						# define parameters for Remove-ItemsFromPathBeforeDate
+						# define required parameters for Remove-ItemsFromPathBeforeDate
 						$RemoveItemsFromPathBeforeDate = @{
-							Path   = $JsonDatum.Path
-							Date   = $Date
-							WhatIf = $WhatIf.ToBool()
+							Path   = [string]$JsonDatum.Path
+							Date   = [datetime]$Date
+						}
+
+						# define optional parameters for Remove-ItemsFromPathBeforeDate
+						If ($WhatIfPreference.IsPresent) {
+							$RemoveItemsFromPathBeforeDate['WhatIf'] = $true
 						}
 
 						# remove items from path before date
@@ -473,7 +477,7 @@ Process {
 						}
 						Catch {
 							Write-Host 'ERROR: could not remove items'
-							Continue
+							Continue :JsonDatum
 						}
 					}
 				}
