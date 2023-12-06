@@ -85,7 +85,6 @@ Param(
 )
 
 Begin {
-
 	Function Get-PreviousDate {
 		Param (
 			[Parameter(Mandatory = $true, Position = 0)][ValidateRange(1, 65535)]
@@ -136,7 +135,7 @@ Begin {
 		ForEach ($File in $Files) {
 			If ($PSCmdlet.ShouldProcess($File, 'Remove File')) {
 				Try {
-					Remove-Item -Path $File -Force -Verbose -ErrorAction Stop	
+					Remove-Item -Path $File -Force -Verbose -ErrorAction Stop
 				}
 				Catch {
 					Write-Warning "Could not perform `"Remove File`" on target `"$File`": $($_.ToString())"
@@ -175,7 +174,7 @@ Begin {
 		ForEach ($Directory in $Directories) {
 			If ($PSCmdlet.ShouldProcess($Directory, 'Remove Directory')) {
 				Try {
-					Remove-Item -Path $Directory -Force -Verbose -ErrorAction Stop	
+					Remove-Item -Path $Directory -Force -Verbose -ErrorAction Stop
 				}
 				Catch {
 					Write-Warning "Could not perform `"Remove Directory`" on target `"$Directory`": $($_.ToString())"
@@ -389,7 +388,7 @@ Process {
 					$JsonData | ConvertTo-Json | Set-Content -Path $Json
 					Write-Output "`nRemoved '$Path' from configuration file: '$Json'"
 				}
-				$JsonData | Format-List	
+				$JsonData | Format-List
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
@@ -460,7 +459,7 @@ Process {
 							Write-Host "ERROR: could not create date from '$($JsonDatum.OlderThanUnits) $($JsonDatum.OlderThanType)'"
 							Continue
 						}
-						
+
 						# define parameters for Remove-ItemsFromPathBeforeDate
 						$RemoveItemsFromPathBeforeDate = @{
 							Path   = $JsonDatum.Path
