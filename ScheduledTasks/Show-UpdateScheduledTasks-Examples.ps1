@@ -1,7 +1,7 @@
-Write-Host "`nThis file contains example hashtables for splatting Write-VMFromJsonFile.ps1`n"
+Write-Host "`nThis file contains examples for running Update-ScheduledTasks.ps1`n"
 Get-Content -Path $PSCommandPath | Select-Object -Skip 4
 Return
-
+# content below this line
 $Json = 'C:\Content\local\tasks.json'
 
 $UpdateScheduledTasks = @{
