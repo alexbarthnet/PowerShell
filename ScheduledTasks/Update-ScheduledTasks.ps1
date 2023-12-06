@@ -106,9 +106,9 @@ Param(
 	[switch]$Remove,
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[switch]$Add,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Default')]
+	[Parameter(ParameterSetName = 'Default')]
 	[switch]$Run,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Default')]
+	[Parameter(ParameterSetName = 'Default')]
 	[switch]$Update,
 	# scheduled task parameter - register
 	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
@@ -410,11 +410,11 @@ Begin {
 			'^[^\\].*' {
 				Return $false
 			}
-			# taskpath of '\' is not permitted; we do not want to manipulate any tasks in the default path
+			# taskpath of '\' is not permitted; the default '\' path is reserved for tasks registered by other applications and vendors
 			'^\\$' {
 				Return $false
 			}
-			# taskpath starting with '\Microsoft' is not permitted; we do not want to manipulate any tasks in the Microsoft path
+			# taskpath starting with '\Microsoft\' is not permitted; the \Microsoft\ path is reserved for tasks registered by Microsoft
 			'^\\(Microsoft(\\.*)?)?$' {
 				Return $false
 			}
