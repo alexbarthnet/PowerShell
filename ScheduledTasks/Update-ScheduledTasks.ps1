@@ -1011,7 +1011,7 @@ Process {
 
 				# get all tasks in TaskPath
 				Try {
-					$TasksInPath = Get-ScheduledTask | Where-Object { $_.TaskPath -eq $TaskPath } | Select-Object -Property 'TaskName'
+					$TasksInPath = Get-ScheduledTask | Where-Object { $_.TaskPath -eq $TaskPath } | Select-Object -ExpandProperty 'TaskName'
 				}
 				Catch {
 					Write-Output "`nERROR: could not retrieve tasks from path: '$TaskPath'"
