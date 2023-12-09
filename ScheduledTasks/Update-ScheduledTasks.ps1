@@ -679,7 +679,7 @@ Process {
 	If (Test-Path -Path $Json) {
 		# ...create JSON data object as array of PSCustomObjects from JSON file content
 		Try {
-			$JsonData = [array](Get-Content -Path $Json | ConvertFrom-Json)
+			$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 		}
 		Catch {
 			Write-Output "`nERROR: could not read configuration file: '$Json'"
@@ -765,8 +765,8 @@ Process {
 					$TaskPath = "$TaskPath\"
 				}
 
-				# create hashtable for custom object
-				$json_hashtable = [ordered]@{
+				# create ordered dictionary for custom object
+				$JsonParameters = [ordered]@{
 					TaskName  = $TaskName
 					TaskPath  = $TaskPath
 					Execute   = $Execute
@@ -778,38 +778,40 @@ Process {
 
 				# add RandomDelay if provided as datetime value
 				If ($null -ne $RandomDelay) {
-					$json_hashtable['RandomDelayTime'] = [datetime]($TriggerAt + $RandomDelay)
+					$JsonParameters['RandomDelayTime'] = [datetime]($TriggerAt + $RandomDelay)
 				}
 
 				# add ExecutionTimeLimitTime1 if provided as datetime value
 				If ($null -ne $ExecutionTimeLimit) {
-					$json_hashtable['ExecutionTimeLimitTime'] = [datetime]($TriggerAt + $ExecutionTimeLimit)
+					$JsonParameters['ExecutionTimeLimitTime'] = [datetime]($TriggerAt + $ExecutionTimeLimit)
 				}
 
 				# add RepetitionInterval if provided as datetime value
 				If ($null -ne $RepetitionInterval) {
-					$json_hashtable['RepetitionIntervalTime'] = [datetime]($TriggerAt + $RepetitionInterval)
+					$JsonParameters['RepetitionIntervalTime'] = [datetime]($TriggerAt + $RepetitionInterval)
 				}
 
 				# add RunLevel if provided
 				If ($null -ne $RunLevel) {
-					$json_hashtable['RunLevel'] = $RunLevel
+					$JsonParameters['RunLevel'] = $RunLevel
 				}
 
 				# add Modules if provided
 				If ($null -ne $Modules) {
-					$json_hashtable['Modules'] = $Modules
+					$JsonParameters['Modules'] = $Modules
 				}
 
 				# add current time as FileDateTimeUniversal
-				$json_hashtable['Updated'] = (Get-Date -Format FileDateTimeUniversal)
+				$JsonParameters['Updated'] = (Get-Date -Format FileDateTimeUniversal)
 
 				# create custom object from hashtable
-				$JsonDatum = [pscustomobject]$json_hashtable
+				$JsonDatum = [pscustomobject]$JsonParameters
 
-				# remove existing entry with same name
+				# if existing entry has same primary key(s)...
 				If ($JsonData | Where-Object { $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath }) {
+					# inquire before removing existing entry
 					Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
+					# remove existing entry with same primary key(s)
 					$JsonData = $JsonData | Where-Object { -not ($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath) }
 				}
 
@@ -826,7 +828,7 @@ Process {
 				Return $_
 			}
 		}
-		# run through entries in configuration file
+		# process entries in configuration file
 		Default {
 			# declare start
 			Write-Host "`nUpdating scheduled tasks from '$Json'"
@@ -851,25 +853,25 @@ Process {
 				# validate values in JSON file
 				Switch ($true) {
 					([string]::IsNullOrEmpty($JsonDatum.TaskName)) {
-						Write-Output "`nERROR: invalid entry (task name) in configuration file: $Json"; Continue JsonDatum
+						Write-Output "`nERROR: required entry (TaskName) not found in configuration file: $Json"; Continue JsonDatum
 					}
 					([string]::IsNullOrEmpty($JsonDatum.TaskPath)) {
-						Write-Output "`nERROR: invalid entry (task path) in configuration file: $Json"; Continue JsonDatum
+						Write-Output "`nERROR: required value (TaskPath) not found in configuration file: $Json"; Continue JsonDatum
 					}
 					([string]::IsNullOrEmpty($JsonDatum.Execute)) {
-						Write-Output "`nERROR: invalid entry (execute) in configuration file: $Json"; Continue JsonDatum
+						Write-Output "`nERROR: required value (Execute) not found in configuration file: $Json"; Continue JsonDatum
 					}
 					([string]::IsNullOrEmpty($JsonDatum.Argument)) {
-						Write-Output "`nERROR: invalid entry (argument) in configuration file: $Json"; Continue JsonDatum
+						Write-Output "`nERROR: required value (Argument) not found in configuration file: $Json"; Continue JsonDatum
 					}
 					([string]::IsNullOrEmpty($JsonDatum.UserId)) {
-						Write-Output "`nERROR: invalid entry (userid) in configuration file: $Json"; Continue JsonDatum
+						Write-Output "`nERROR: required value (UserId) not found in configuration file: $Json"; Continue JsonDatum
 					}
 					([string]::IsNullOrEmpty($JsonDatum.LogonType)) {
-						Write-Output "`nERROR: invalid entry (logontype) in configuration file: $Json"; Continue JsonDatum
+						Write-Output "`nERROR: required value (LogonType) not found in configuration file: $Json"; Continue JsonDatum
 					}
 					($JsonDatum.TriggerAt -isnot [datetime]) {
-						Write-Output "`nERROR: invalid entry (datetime for trigger) in configuration file: $Json"; Continue JsonDatum
+						Write-Output "`nERROR: invalid entry (TriggerAt) found in configuration file: $Json"; Continue JsonDatum
 					}
 					Default {
 						# if valid task path provided...
