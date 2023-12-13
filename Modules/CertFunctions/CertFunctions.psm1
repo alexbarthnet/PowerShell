@@ -66,6 +66,105 @@ Function ConvertTo-X509Certificate {
 	Return $Certificate
 }
 
+Function Get-CertificateBundle {
+	<#
+	.SYNOPSIS
+	Creates a CA Bundle from an X.509 certificate object.
+
+	.DESCRIPTION
+	Creates a CA Bundle from an X.509 certificate object.
+
+	.PARAMETER Certificate
+	Specifies the X.509 certificate for which the CA Bundle will be built.
+
+	.PARAMETER Path
+	Specifies the path where the CA Bundle will be saved. If the provided path is a directory, a "ca-bundle.crt" file will be created in the directory.
+
+	.PARAMETER IncludeCertificate
+	Switch to include the original X.509 certificate object in the CA Bundle.
+
+	.INPUTS
+	X509Certificate2. An object representing an X.509 certificate.
+
+	.OUTPUTS
+	String. A string containing the PEM-formatted certificates in CA Bundle order.
+
+	#>
+	[CmdletBinding()]
+	Param (
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
+		[object]$Certificate,
+		[Parameter(Position = 1)]
+		[string]$Path,
+		[Parameter(Position = 2)]
+		[switch]$IncludeCertificate
+	)
+
+	# get certificate chain from certificate
+	Try {
+		$CertificateChain = Get-CertificateChain -Certificate $Certificate
+	}
+	Catch {
+		Throw $_
+	}
+
+	# creat empty string for CA bundle
+	$CertificateBundle = [System.String]::Empty
+
+	# process each certificate in certificate chain
+	:CertificateInChain ForEach ($CertificateInChain in $CertificateChain) {
+		# if the following are true...
+		#  - thumbprint of certificate in chain matches thumbprint of provided certificate
+		#  - subject of certificate in chain does not match subject of provided certificate
+		#  - the IncludeCertificate switch was not set
+		If ($CertificateInChain.Thumbprint -eq $Certificate.Thumbprint -and -not $CertificateInChain.Subject -eq $Certificate.Subject -and -not $IncludeCertificate) {
+			# ...continue to next certificate in chain
+			Continue CertificateInChain
+		}
+
+		# encode certificate data with base64
+		Try {
+			$CertificateInChainBase64 = [System.Convert]::ToBase64String($CertificateInChain.RawData, [System.Base64FormattingOptions]::InsertLineBreaks)
+		}
+		Catch {
+			Throw $_
+		}
+
+		# add header and footer to encoded certificate data
+		$CertificateInChainPEM = "-----BEGIN CERTIFICATE-----`r`n$CertificateInChainBase64`r`n-----END CERTIFICATE-----"
+
+		# add encoded certificate data to bundle
+		If ([string]::IsNullOrEmpty($CertificateBundle)) {
+			$CertificateBundle = $CertificateInChainPEM
+		}
+		Else {
+			$CertificateBundle = $CertificateBundle, $CertificateInChainPEM -join "`r`n"
+		}
+	}
+
+	# if path provided...
+	If ($PSBoundParameters.ContainsKey('Path')) {
+		# if path is a directory...
+		If (Test-Path -Path $Path -PathType Container) {
+			# ...append ca-bundle.crt to path
+			$Path = Join-Path -Path $Path -ChildPath 'ca-bundle.crt'
+		}
+
+		# write the certificate bundle to path
+		Try {
+			Set-Content -Path $Path -Value $CertificateBundle
+		}
+		Catch {
+			Throw $_
+		}
+	}
+	# if path not provided...
+	Else {
+		# display bundle
+		Return $CertificateBundle
+	}
+}
+
 Function Get-CertificateChain {
 	<#
 	.SYNOPSIS
@@ -803,6 +902,7 @@ Function Test-Thumbprint {
 # define functions to export
 $functions_to_export = @()
 $functions_to_export += 'ConvertTo-X509Certificate'
+$functions_to_export += 'Get-CertificateBundle'
 $functions_to_export += 'Get-CertificateChain'
 $functions_to_export += 'Get-CertificateFromAD'
 $functions_to_export += 'Get-CertificateFromUri'
