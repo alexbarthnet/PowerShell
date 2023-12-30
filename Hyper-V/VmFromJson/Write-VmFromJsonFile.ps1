@@ -351,7 +351,7 @@ Begin {
 			ExcludeParameterSetName = $true
 		}
 
-		# define optional paramters for Get-ParametersFromCommand
+		# define optional parameters for Get-ParametersFromCommand
 		If ($PSBoundParameters['ParameterSetName']) {
 			$GetParametersFromCommand['ParameterSetName'] = $ParameterSetName
 		}

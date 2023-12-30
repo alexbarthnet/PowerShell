@@ -291,7 +291,7 @@ Begin {
 		# retrieve path to CM module from remote registry
 		Try {
 			$Path = Invoke-Command @InvokeCommand -ScriptBlock {
-				# define paramters for Get-ItemProperty
+				# define parameters for Get-ItemProperty
 				$GetItemProperty = @{
 					Path        = 'HKLM:\SOFTWARE\Microsoft\SMS\Setup'
 					Name        = 'UI Installation Directory'
@@ -319,7 +319,7 @@ Begin {
 		Try {
 			$CMModulePath = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
-				# define paramters for Join-Path
+				# define parameters for Join-Path
 				$JoinPath = @{
 					Path        = $ArgumentList['Path']
 					ChildPath   = $ArgumentList['ChildPath']
@@ -363,7 +363,7 @@ Begin {
 		# retrieve CM site code from remote registry
 		Try {
 			$CMSiteCode = Invoke-Command @InvokeCommand -ScriptBlock {
-				# define paramters for Get-ItemProperty
+				# define parameters for Get-ItemProperty
 				$GetItemProperty = @{
 					Path        = 'HKLM:\SOFTWARE\Microsoft\SMS\Identification'
 					Name        = 'Site Code'
@@ -401,7 +401,7 @@ Begin {
 
 		# if cluster name was provided...
 		If ($PSBoundParameters['ClusterName']) {
-			# define paramters for Get-ClusterNodeNames
+			# define parameters for Get-ClusterNodeNames
 			$GetClusterNodeNames = @{
 				ComputerName = $ComputerName
 				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
@@ -1674,7 +1674,7 @@ Begin {
 			# declare and begin
 			Write-Host ("$Hostname,$ComputerName,$Name - ...VM not found in cluster, adding to cluster: $ClusterName")
 
-			# define paramters for Add-ClusterVirtualMachineRole
+			# define parameters for Add-ClusterVirtualMachineRole
 			$AddClusterVirtualMachineRole = @{
 				Cluster     = $ClusterName
 				VMId        = $VM.Id
@@ -1720,7 +1720,7 @@ Begin {
 			# declare state
 			Write-Host ("$Hostname,$ComputerName,$Name - ...setting preferred owner on VM")
 
-			# define paramters for Move-ClusterGroup
+			# define parameters for Move-ClusterGroup
 			$SetClusterOwnerNode = @{
 				Owners      = $ComputerName
 				InputObject = $ClusterGroup
@@ -3591,7 +3591,7 @@ Process {
 				# declare and begin
 				Write-Host ("$Hostname,$ComputerName,$Name - VM cluster group is offline, starting VM on cluster...")
 
-				# define paramters for Start-ClusterGroup
+				# define parameters for Start-ClusterGroup
 				$StartClusterGroup = @{
 					Cluster        = $ClusterName
 					Name           = $ClusterGroup.Name
@@ -3617,7 +3617,7 @@ Process {
 				# declare and begin
 				Write-Host ("$Hostname,$ComputerName,$Name - VM cluster group is not offline but ForceRestart set, restarting VM on cluster...")
 
-				# define paramters for Stop-ClusterGroup
+				# define parameters for Stop-ClusterGroup
 				$StopClusterGroup = @{
 					Cluster     = $ClusterName
 					Name        = $ClusterGroup.Name
@@ -3633,7 +3633,7 @@ Process {
 					Throw $_
 				}
 
-				# define paramters for Start-ClusterGroup
+				# define parameters for Start-ClusterGroup
 				$StartClusterGroup = @{
 					Cluster        = $ClusterName
 					Name           = $ClusterGroup.Name
