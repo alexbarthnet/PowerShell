@@ -9,25 +9,28 @@ Removes files and empty directories based upon values in a JSON configuration fi
 The path to a JSON file containing the configuration for this script.
 
 .PARAMETER Show
-Switch parameter to show all entries from the JSON configuration file. Cannot be combined with the Clear, Remove, or Add parameters.
+Switch parameter to show all entries from the JSON configuration file. Cannot be combined with the Clear, Remove, Add, or Run parameters.
 
 .PARAMETER Clear
-Switch parameter to clear all entries from the JSON configuration file. Cannot be combined with the Show, Remove, or Add parameters.
+Switch parameter to clear all entries from the JSON configuration file. Cannot be combined with the Show, Remove, Add, or Run parameters.
 
 .PARAMETER Remove
-Switch parameter to remove an entry from the JSON configuration file. Cannot be combined with the Show, Clear, or Add parameters.
+Switch parameter to remove an entry from the JSON configuration file. Cannot be combined with the Show, Clear, Add, or Run parameters.
 
 .PARAMETER Add
-Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Show, Clear, or Remove parameters.
+Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Show, Clear, Remove, or Run parameters.
+
+.PARAMETER Run
+Switch parameter to remove files and empty directories based upoon the parameters provided to the script. Cannot be combined with the Show, Clear, Remove, or Add parameters.
 
 .PARAMETER Path
-The path containing files and empty directories that will be removed if older than the computed datetime. Required when the Add or Remove parameters are specified.
+The path containing files and empty directories that will be removed if older than the computed datetime. Required when the Remove, Add or Run parameters are specified.
 
 .PARAMETER OlderThanUnits
-The number of datetime units to create the computed datetime. Required when the Add parameter is specified.
+The number of datetime units to create the computed datetime. Required when the Add or Run parameters are specified.
 
 .PARAMETER OlderThanType
-The type of datetime units to create the computed datetime. Required when the Add parameter is specified. Valid values are 'Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', and 'Years'
+The type of datetime units to create the computed datetime. Required when the Add or Run parameters are specified. Valid values are 'Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', and 'Years'
 
 .INPUTS
 None.
@@ -49,6 +52,9 @@ None. The script reports the actions taken and does not provide any actionable o
 
 .EXAMPLE
 .\Remove-OldFiles.ps1 -Json C:\Content\config.json -Add -Path 'C:\Content\test' -OlderThanUnits 30 -OlderThanType 'Days'
+
+.EXAMPLE
+.\Remove-OldFiles.ps1 -Run -Path 'C:\Content\test' -OlderThanUnits 30 -OlderThanType 'Days'
 #>
 
 [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Default')]
@@ -61,12 +67,17 @@ Param(
 	[switch]$Remove,
 	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Add')]
 	[switch]$Add,
+	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Run')]
+	[switch]$Run,
 	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Remove')][ValidatePattern('^[^\*]+$')]
 	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')]
+	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Run')][ValidatePattern('^[^\*]+$')]
 	[string]$Path,
 	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Add')][ValidateRange(1, 65535)]
+	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Run')][ValidateRange(1, 65535)]
 	[uint16]$OlderThanUnits,
 	[Parameter(Position = 3, Mandatory = $True, ParameterSetName = 'Add')][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
+	[Parameter(Position = 3, Mandatory = $True, ParameterSetName = 'Run')][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
 	[string]$OlderThanType,
 	[Parameter()]
 	[string]$Json,
@@ -79,9 +90,15 @@ Param(
 	# path to transcript files
 	[Parameter(DontShow)]
 	[string]$TranscriptPath,
-	# local hostname
+	# local host name
 	[Parameter(DontShow)]
-	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
+	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
+	# local domain name
+	[Parameter(DontShow)]
+	[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
+	# local DNS hostname
+	[Parameter(DontShow)]
+	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
 )
 
 Begin {
@@ -305,7 +322,7 @@ Begin {
 	}
 
 	# if running...
-	If ($PSCmdlet.ParameterSetName -eq 'Default') {
+	If ($PSCmdlet.ParameterSetName -in 'Default', 'Run') {
 		# define hashtable for transcript functions
 		$TranscriptWithHostAndDate = @{}
 		# define parameters for transcript functions
@@ -326,7 +343,7 @@ Process {
 	If (Test-Path -Path $Json) {
 		# ...create JSON data object as array of PSCustomObjects from JSON file content
 		Try {
-			$JsonData = [array](Get-Content -Path $Json | ConvertFrom-Json)
+			$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 		}
 		Catch {
 			Write-Output "`nERROR: could not read configuration file: '$Json'"
@@ -365,27 +382,27 @@ Process {
 		}
 		# clear configuration file
 		$Clear {
-			If (Test-Path -Path $Json) {
-				Try {
-					[string]::Empty | Set-Content -Path $Json
-					Write-Output "`nCleared configuration file: '$Json'"
-				}
-				Catch {
-					Write-Output "`nERROR: could not clear configuration file: '$Json'"
-					Return $_
-				}
+			Try {
+				[string]::Empty | Set-Content -Path $Json
+				Write-Output "`nCleared configuration file: '$Json'"
+			}
+			Catch {
+				Write-Output "`nERROR: could not clear configuration file: '$Json'"
+				Return $_
 			}
 		}
 		# remove entry from configuration file
 		$Remove {
 			Try {
-				$JsonData = $JsonData | Where-Object { $_.Path -ne $Path }
+				$JsonData = $JsonData | Where-Object {
+					$_.Path -ne $Path
+				}
 				If ($null -eq $JsonData) {
 					[string]::Empty | Set-Content -Path $Json
 					Write-Output "`nRemoved '$Path' from configuration file: '$Json'"
 				}
 				Else {
-					$JsonData | ConvertTo-Json | Set-Content -Path $Json
+					$JsonData | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 					Write-Output "`nRemoved '$Path' from configuration file: '$Json'"
 				}
 				$JsonData | Format-List
@@ -398,36 +415,70 @@ Process {
 		# add entry to configuration file
 		$Add {
 			Try {
-				$json_hashtable = [ordered]@{
+				# create ordered dictionary for custom object
+				$JsonParameters = [ordered]@{
 					Path           = $Path
 					OlderThanUnits = $OlderThanUnits
 					OlderThanType  = $OlderThanType
 				}
 
 				# add current time as FileDateTimeUniversal
-				$json_hashtable['Updated'] = Get-Date -Format FileDateTimeUniversal
+				$JsonParameters['Updated'] = Get-Date -Format FileDateTimeUniversal
 
 				# create custom object from hashtable
-				$JsonDatum = [pscustomobject]$json_hashtable
+				$JsonDatum = [pscustomobject]$JsonParameters
 
-				# remove existing entry with same name
-				If ($JsonData.Path -contains $Path) {
-					Write-Warning -Message "Will overwrite existing entry for '$Path' configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
+				# if existing entry has same primary key(s)...
+				If ($JsonData | Where-Object { $_.Path -eq $Path }) {
+					# inquire before removing existing entry
+					Write-Warning -Message "Will overwrite existing entry for '$Path' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
+					# remove existing entry with same primary key(s)
 					$JsonData = $JsonData | Where-Object { $_.Path -ne $Path }
 				}
 
 				# add datum to data
 				$JsonData += $JsonDatum
-				$JsonData | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
+				$JsonData | Sort-Object -Property Path | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 				Write-Output "`nAdded '$Path' to configuration file: '$Json'"
-				$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+				$JsonData | Sort-Object -Property Path | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
 				Return $_
 			}
 		}
-		# run through entries in configuration file
+		# run script with provided parameters
+		$Run {
+			# get previous date from input
+			Try {
+				$Date = Get-PreviousDate -OlderThanUnits $OlderThanUnits -OlderThanType $OlderThanType
+			}
+			Catch {
+				Write-Host "ERROR: could not create date from '$OlderThanUnits $OlderThanType'"
+				Throw $_
+			}
+			
+			# define required parameters for Remove-ItemsFromPathBeforeDate
+			$RemoveItemsFromPathBeforeDate = @{
+				Path = [string]$Path
+				Date = [datetime]$Date
+			}
+			
+			# define optional parameters for Remove-ItemsFromPathBeforeDate
+			If ($WhatIfPreference.IsPresent) {
+				$RemoveItemsFromPathBeforeDate['WhatIf'] = $true
+			}
+			
+			# remove items from path before date
+			Try {
+				Remove-ItemsFromPathBeforeDate @RemoveItemsFromPathBeforeDate
+			}
+			Catch {
+				Write-Host 'ERROR: could not remove items'
+				Throw $_
+			}
+		}
+		# process entries in configuration file
 		Default {
 			# check entry count in configuration file
 			If ($JsonData.Count -eq 0) {
@@ -439,16 +490,13 @@ Process {
 			:JsonDatum ForEach ($JsonDatum in $JsonData) {
 				switch ($true) {
 					([string]::IsNullOrEmpty($JsonDatum.Path)) {
-						Write-Host "ERROR: invalid entry found in configuration file: $Json"
-						Continue :JsonDatum 
+						Write-Host "ERROR: required entry (Path) not found in configuration file: $Json"; Continue :JsonDatum
 					}
 					([string]::IsNullOrEmpty($JsonDatum.OlderThanUnits)) {
-						Write-Host "ERROR: invalid entry found in configuration file: $Json"
-						Continue :JsonDatum 
+						Write-Host "ERROR: required entry (OlderThanUnits) not found in configuration file: $Json"; Continue :JsonDatum
 					}
 					([string]::IsNullOrEmpty($JsonDatum.OlderThanType)) {
-						Write-Host "ERROR: invalid entry found in configuration file: $Json"
-						Continue :JsonDatum 
+						Write-Host "ERROR: required entry (OlderThanType) not found in configuration file: $Json"; Continue :JsonDatum
 					}
 					Default {
 						# get previous date from input
@@ -462,8 +510,8 @@ Process {
 
 						# define required parameters for Remove-ItemsFromPathBeforeDate
 						$RemoveItemsFromPathBeforeDate = @{
-							Path   = [string]$JsonDatum.Path
-							Date   = [datetime]$Date
+							Path = [string]$JsonDatum.Path
+							Date = [datetime]$Date
 						}
 
 						# define optional parameters for Remove-ItemsFromPathBeforeDate
@@ -488,7 +536,7 @@ Process {
 
 End {
 	# if running...
-	If ($PSCmdlet.ParameterSetName -eq 'Default') {
+	If ($PSCmdlet.ParameterSetName -in 'Default', 'Run') {
 		# stop transcript with parameters
 		Try {
 			Stop-TranscriptWithHostAndDate @TranscriptWithHostAndDate
