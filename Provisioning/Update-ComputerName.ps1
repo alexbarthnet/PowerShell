@@ -11,7 +11,7 @@ Begin {
 		$HasSucceeded = $false
 		$Counter = 1
 
-		# define paramters for Rename-Computer
+		# define parameters for Rename-Computer
 		$RenameComputer = @{
 			NewName  = $NewName
 			Force    = $true

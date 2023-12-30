@@ -262,7 +262,7 @@ Begin {
 
 		# if cluster name was provided...
 		If ($PSBoundParameters['ClusterName']) {
-			# define paramters for Get-ClusterNodeNames
+			# define parameters for Get-ClusterNodeNames
 			$GetClusterNodeNames = @{
 				ComputerName = $ComputerName
 				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop

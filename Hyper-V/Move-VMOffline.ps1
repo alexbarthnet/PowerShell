@@ -1066,7 +1066,7 @@ Begin {
 			# declare state
 			Write-Host "$ComputerName,$ClusterName - adding VM to cluster..."
 
-			# define paramters for Add-ClusterVirtualMachineRole
+			# define parameters for Add-ClusterVirtualMachineRole
 			$AddClusterVirtualMachineRole = @{
 				Cluster        = $ClusterName
 				VirtualMachine = $Name
