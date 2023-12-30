@@ -168,9 +168,15 @@ Param(
 	# path to transcript files
 	[Parameter(DontShow)]
 	[string]$TranscriptPath,
-	# local hostname
+	# local host name
 	[Parameter(DontShow)]
-	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
+	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
+	# local domain name
+	[Parameter(DontShow)]
+	[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
+	# local DNS hostname
+	[Parameter(DontShow)]
+	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
 )
 
 Begin {
