@@ -106,6 +106,10 @@ Param(
 	[switch]$Remove,
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[switch]$Add,
+	[Parameter(Mandatory = $True, ParameterSetName = 'Install')]
+	[switch]$Install,
+	[Parameter(Mandatory = $True, ParameterSetName = 'Uninstall')]
+	[switch]$Uninstall,
 	[Parameter(ParameterSetName = 'Default')]
 	[switch]$Run,
 	[Parameter(ParameterSetName = 'Default')]
@@ -126,15 +130,19 @@ Param(
 	[string]$Argument,
 	# scheduled task parameter - trigger
 	[Parameter(ParameterSetName = 'Add')]
+	[Parameter(ParameterSetName = 'Install')]
 	[datetime]$TriggerAt = [datetime]'00:00:00',
 	# scheduled task parameter - trigger
 	[Parameter(ParameterSetName = 'Add')]
+	[Parameter(ParameterSetName = 'Install')]
 	[timespan]$RandomDelay = (New-TimeSpan -Minutes 5),
 	# scheduled task parameter - trigger
 	[Parameter(ParameterSetName = 'Add')]
+	[Parameter(ParameterSetName = 'Install')]
 	[timespan]$RepetitionInterval = (New-TimeSpan -Hours 1),
 	# scheduled task parameter - settings
 	[Parameter(ParameterSetName = 'Add')]
+	[Parameter(ParameterSetName = 'Install')]
 	[timespan]$ExecutionTimeLimit = (New-TimeSpan -Minutes 30),
 	# scheduled task parameter - principal
 	[Parameter(ParameterSetName = 'Add')]
@@ -531,7 +539,7 @@ Begin {
 				Return $_
 			}
 			# ...then return and move to next tasks
-			Write-Output "Created new scheduled task '$TaskName' at path '$TaskPath'"
+			Write-Output "Registered new scheduled task '$TaskName' at path '$TaskPath'"
 			Return
 		}
 	}
@@ -675,6 +683,86 @@ Begin {
 }
 
 Process {
+	# if Install set...
+	If ($Install) {
+		# define static parameters for Update-ScheduledTaskFromJson
+		$UpdateScheduledTaskFromJson = @{
+			TaskName  = 'Update-ScheduledTasks'
+			TaskPath  = '\'
+			Execute   = Join-Path -Path $PSHOME -ChildPath 'powershell.exe'
+			Argument  = "-NonInteractive -NoProfile -ExecutionPolicy ByPass -File `"$PSCommandPath`" -Json `"$Json`""
+			UserId    = 'SYSTEM'
+			LogonType = 'ServiceAccount'
+			RunLevel  = 'Highest'
+		}
+
+		# if TriggerAt parameter provided...
+		If ($PSBoundParameters.ContainsKey('TriggerAt')) {
+			$UpdateScheduledTaskFromJson['TriggerAt'] = $TriggerAt
+		}
+		Else {
+			$UpdateScheduledTaskFromJson['TriggerAt'] = [datetime]'00:00:00'
+		}
+
+		# if RandomDelay parameter provided...
+		If ($PSBoundParameters.ContainsKey('RandomDelay')) {
+			$UpdateScheduledTaskFromJson['RandomDelay'] = $RandomDelay
+		}
+		Else {
+			$UpdateScheduledTaskFromJson['RandomDelay'] = (New-TimeSpan -Minutes 0)
+		}
+
+		# if ExecutionTimeLimit parameter provided...
+		If ($PSBoundParameters.ContainsKey('ExecutionTimeLimit')) {
+			$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = $ExecutionTimeLimit
+		}
+		Else {
+			$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = (New-TimeSpan -Minutes 1)
+		}
+
+		# if RepetitionInterval parameter provided...
+		If ($PSBoundParameters.ContainsKey('RepetitionInterval')) {
+			$UpdateScheduledTaskFromJson['RepetitionInterval'] = $RepetitionInterval
+		}
+		Else {
+			$UpdateScheduledTaskFromJson['RepetitionInterval'] = (New-TimeSpan -Minutes 15)
+		}
+
+		# install scheduled task
+		Try {
+			Update-ScheduledTaskFromJson @UpdateScheduledTaskFromJson
+		}
+		Catch {
+			Return $_
+		}
+
+		# report and return
+		Write-Output "`nInstalled Update-ScheduledTasks"
+		Return
+	}
+
+	# if Uninstall set...
+	If ($Uninstall) {
+		# define parameters for Unregister-ScheduledTask
+		$UnregisterScheduledTask = @{
+			TaskName = 'Update-ScheduledTasks'
+			TaskPath = '\'
+			Confirm  = $false
+		}
+
+		# uninstall scheduled task
+		Try {
+			Unregister-ScheduledTask @UnregisterScheduledTask
+		}
+		Catch {
+			Return $_
+		}
+
+		# report and return
+		Write-Output 'Uninstalled Update-ScheduledTasks'
+		Return
+	}
+
 	# if JSON file found...
 	If (Test-Path -Path $Json) {
 		# ...create JSON data object as array of PSCustomObjects from JSON file content
