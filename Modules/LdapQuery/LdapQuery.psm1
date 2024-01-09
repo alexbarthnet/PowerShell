@@ -117,11 +117,11 @@ Function Invoke-LdapQuery {
 		[int]$PageSize = [int]1000,
 		[Parameter(Position = 8)]
 		[boolean]$SSL = $true,
-		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Cert', ValueFromPipeline = $true)]
+		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Certificate', ValueFromPipeline = $true)]
 		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
-		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Cred', ValueFromPipeline = $true)]
+		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Credential', ValueFromPipeline = $true)]
 		[pscredential]$Credential,
-		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Kerb')]
+		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Kerberos')]
 		[switch]$Kerberos
 	)
 
@@ -147,12 +147,12 @@ Function Invoke-LdapQuery {
 		switch ($PSCmdlet.ParameterSetName) {
 			'Cert' {
 				$LdapConnection.AuthType = 'Anonymous'
-				$LdapConnection.SessionOptions.QueryClientCertificate = { $Cert }
+				$LdapConnection.SessionOptions.QueryClientCertificate = { $Certificate }
 				$LdapConnection.SessionOptions.SecureSocketLayer = $SSL
 			}
 			'Cred' {
 				$LdapConnection.AuthType = 'Basic'
-				$LdapConnection.Credential = $Cred
+				$LdapConnection.Credential = $Credential
 				$LdapConnection.SessionOptions.SecureSocketLayer = $SSL
 			}
 			'Kerb' {
@@ -178,7 +178,7 @@ Function Invoke-LdapQuery {
 
 	Process {
 		# if authentication is not with a certificate...
-		If ($PSCmdlet.ParameterSetName -ne 'Cert') {
+		If ($PSCmdlet.ParameterSetName -ne 'Certificate') {
 			# bind to LDAP server
 			Try {
 				$LdapConnection.Bind()
