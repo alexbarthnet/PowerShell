@@ -117,9 +117,9 @@ Function Invoke-LdapQuery {
 		[int]$PageSize = [int]1000,
 		[Parameter(Position = 8)]
 		[boolean]$SSL = $true,
-		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Certificate', ValueFromPipeline = $true)]
+		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Certificate')]
 		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
-		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Credential', ValueFromPipeline = $true)]
+		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Credential')]
 		[pscredential]$Credential,
 		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Kerberos')]
 		[switch]$Kerberos
