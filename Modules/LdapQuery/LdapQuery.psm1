@@ -136,7 +136,7 @@ Function Invoke-LdapQuery {
 		ForEach ($Assembly in $Assemblies) { If ($Assembly -notin $AssembliesFound) { $null = [System.Reflection.Assembly]::LoadWithPartialName($Assembly) } }
 
 		# define LDAP server
-		$LdapDirectoryIdentifier = [System.DirectoryServices.Protocols.LdapDirectoryIdentifier]::new($Server, $Port)
+		$LdapDirectoryIdentifier = [System.DirectoryServices.Protocols.LdapDirectoryIdentifier]::new($Server, $Port, $true, $false)
 
 		# create LDAP connection
 		$LdapConnection = [System.DirectoryServices.Protocols.LdapConnection]::new($LdapDirectoryIdentifier)
