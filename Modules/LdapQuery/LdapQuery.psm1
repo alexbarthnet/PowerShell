@@ -145,17 +145,17 @@ Function Invoke-LdapQuery {
 
 		# define credentials
 		switch ($PSCmdlet.ParameterSetName) {
-			'Cert' {
+			'Certificate' {
 				$LdapConnection.AuthType = 'Anonymous'
 				$LdapConnection.SessionOptions.QueryClientCertificate = { $Certificate }
 				$LdapConnection.SessionOptions.SecureSocketLayer = $SSL
 			}
-			'Cred' {
+			'Credential' {
 				$LdapConnection.AuthType = 'Basic'
 				$LdapConnection.Credential = $Credential
 				$LdapConnection.SessionOptions.SecureSocketLayer = $SSL
 			}
-			'Kerb' {
+			'Kerberos' {
 				$LdapConnection.AuthType = 'Kerberos'
 			}
 			Default {
