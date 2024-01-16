@@ -161,6 +161,9 @@ Param(
 	# OS Deployment - SCCM - maintenance window collection
 	[Parameter(Position = 8, ParameterSetName = 'AddOSD')]
 	[string]$MaintenanceCollection,
+	# VM - optional affinity rules for clustered VMs
+	[Parameter(Position = 22, ParameterSetName = 'Add')]
+	[string[]]$ClusterAffinityRules,
 	# VM - startup priority value for clustered VMs, 0 = no auto start, 1000 = low, 2000 = medium, 3000 = high
 	[Parameter(Position = 22, ParameterSetName = 'Add')]
 	[ValidateSet(0, 1000, 2000, 3000)]

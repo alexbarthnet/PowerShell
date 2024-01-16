@@ -1635,7 +1635,11 @@ Begin {
 			[string]$ComputerName = $VM.ComputerName.ToLower(),
 			# define cluster parameters
 			[Parameter(Mandatory = $true)]
-			[string]$ClusterName
+			[string]$ClusterName,
+			[Parameter()]
+			[uint32]$ClusterPriority,
+			[Parameter()]
+			[string[]]$ClusterAffinityRules
 		)
 
 		# get VM from parameters
@@ -1650,17 +1654,16 @@ Begin {
 		# define parameters for Get-ClusterGroup
 		$GetClusterGroup = @{
 			Cluster     = $ClusterName
-			VMId        = $VM.Id
-			ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
 
 		# retrieve existing cluster group
 		Try {
 			Write-Host ("$Hostname,$ComputerName,$Name - checking cluster for VM...")
-			$ClusterGroup = Get-ClusterGroup @GetClusterGroup
+			$ClusterGroup = Get-ClusterGroup @GetClusterGroup | Where-Object { $_.Id -eq $VM.Id }
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: getting cluster group for VM")
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving cluster groups")
 			Throw $_
 		}
 
@@ -1692,6 +1695,84 @@ Begin {
 
 			# declare state
 			Write-Host ("$Hostname,$ComputerName,$Name - ...added VM to cluster")
+		}
+
+		# if cluster priority defined...
+		If ($PSBoundParameters.ContainsKey('ClusterPriority')) {
+			Write-Host ("$Hostname,$ComputerName,$Name - checking cluster group priority...")
+			# if cluster priority does not match...
+			If ($ClusterGroup.Priority -ne $ClusterPriority) {
+				# declare and begin
+				Write-Host ("$Hostname,$ComputerName,$Name - ...setting cluster group priority to: $ClusterPriority")
+
+				# set cluster priority
+				Try {
+					$ClusterGroup.Priority = $ClusterPriority
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: setting cluster group priority")
+					Throw $_
+				}
+			}
+			# if cluster priority matches...
+			Else {
+				# declare
+				Write-Host ("$Hostname,$ComputerName,$Name - ...found priority already set to: $ClusterPriority")
+			}
+		}
+
+		# if cluster affinity rules defined...
+		If ($PSBoundParameters.ContainsKey('ClusterAffinityRules')) {
+			Write-Host ("$Hostname,$ComputerName,$Name - checking cluster affinity rules...")
+			# process any requested cluster affinity rule
+			:ClusterAffinityRules ForEach ($ClusterAffinityRuleName in $ClusterAffinityRules) {
+				# define parameters for Get-ClusterAffinityRule
+				$GetClusterAffinityRule = @{
+					Cluster     = $ClusterName
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# retrieve cluster affinity rules
+				Try {
+					$ClusterAffinityRule = Get-ClusterAffinityRule @GetClusterAffinityRule | Where-Object { $_.Name -eq $ClusterAffinityRuleName }
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving cluster affinity rules")
+					Throw $_
+				}
+
+				# if affinity rule not found...
+				If ($null -eq $ClusterAffinityRule) {
+					Write-Host ("$Hostname,$ComputerName,$Name - WARNING: cluster affinity rule not found: $ClusterAffinityRuleName")
+					Continue ClusterAffinityRules
+				}
+
+				# check affinity rule...
+				If ($ClusterAffinityRule.Groups -contains $ClusterGroup.Name) {
+					# declare
+					Write-Host ("$Hostname,$ComputerName,$Name - ...found cluster group in cluster affinity rule: $ClusterAffinityRuleName")
+					Continue ClusterAffinityRules
+				}
+
+				# declare and begin
+				Write-Host ("$Hostname,$ComputerName,$Name - ...adding cluster group to cluster affinity rule: $ClusterAffinityRuleName")
+
+				# define parameters for Get-ClusterAffinityRule
+				$AddClusterGroupToAffinityRule = @{
+					InputObject = $ClusterAffinityRule
+					Groups      = $ClusterGroup.Name
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# add cluster group to cluster affinity rule
+				Try {
+					Add-ClusterGroupToAffinityRule @AddClusterGroupToAffinityRule
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: setting cluster group priority")
+					Throw $_
+				}
+			}
 		}
 
 		# if SkipPreferredOwner set...
@@ -3276,8 +3357,11 @@ Process {
 				}
 			}
 
+			# filter hard drives with controller number and controller location
+			$VMHardDiskDrivesWithNumberAndLocation = $JsonData.$Name.VMHardDiskDrives | Where-Object { $null -ne $_.ControllerNumber -and $null -ne $_.ControllerLocation }
+
 			# attach hard drives with controller number and controller location
-			ForEach ($VMHardDiskDrive in ($JsonData.$Name.VMHardDiskDrives | Where-Object { $null -ne $_.ControllerNumber -and $null -ne $_.ControllerLocation })) {
+			ForEach ($VMHardDiskDrive in $VMHardDiskDrivesWithNumberAndLocation) {
 				$VMHardDiskDrives
 				$AddVHDFromParams = @{
 					ComputerName       = $ComputerName
@@ -3294,8 +3378,11 @@ Process {
 				}
 			}
 
+			# filter hard drives with controller number and without controller location
+			$VMHardDiskDrivesWithNumberWithoutLocation = $JsonData.$Name.VMHardDiskDrives | Where-Object { $null -ne $_.ControllerNumber -and $null -eq $_.ControllerLocation }
+
 			# attach hard drives with controller number and without controller location
-			ForEach ($VMHardDiskDrive in ($JsonData.$Name.VMHardDiskDrives | Where-Object { $null -ne $_.ControllerNumber -and $null -eq $_.ControllerLocation })) {
+			ForEach ($VMHardDiskDrive in $VMHardDiskDrivesWithNumberWithoutLocation) {
 				$AddVHDFromParams = @{
 					ComputerName     = $ComputerName
 					VM               = $VM
@@ -3310,8 +3397,11 @@ Process {
 				}
 			}
 
+			# filter hard drives without controller number but with controller location
+			$VMHardDiskDrivesWithoutNumberWithLocation = $JsonData.$Name.VMHardDiskDrives | Where-Object { $null -eq $_.ControllerNumber -and $null -ne $_.ControllerLocation }
+
 			# attach hard drives without controller number but with controller location
-			ForEach ($VMHardDiskDrive in ($JsonData.$Name.VMHardDiskDrives | Where-Object { $null -eq $_.ControllerNumber -and $null -ne $_.ControllerLocation })) {
+			ForEach ($VMHardDiskDrive in $VMHardDiskDrivesWithoutNumberWithLocation) {
 				$AddVHDFromParams = @{
 					ComputerName       = $ComputerName
 					VM                 = $VM
@@ -3327,7 +3417,10 @@ Process {
 			}
 
 			# attach hard drives without controller number or controller location
-			ForEach ($VMHardDiskDrive in ($JsonData.$Name.VMHardDiskDrives | Where-Object { $null -eq $_.ControllerNumber -and $null -eq $_.ControllerLocation })) {
+			$VMHardDiskDrivesWithoutNumberWithoutLocation = $JsonData.$Name.VMHardDiskDrives | Where-Object { $null -eq $_.ControllerNumber -and $null -eq $_.ControllerLocation }
+
+			# attach hard drives without controller number or controller location
+			ForEach ($VMHardDiskDrive in $VMHardDiskDrivesWithoutNumberWithoutLocation) {
 				$AddVHDFromParams = @{
 					ComputerName = $ComputerName
 					VM           = $VM
@@ -3537,45 +3630,20 @@ Process {
 					ClusterName = $ClusterName
 				}
 
+				# define optional parameters for Add-VMToClusterName
+				If ($null -ne $JsonData.$Name.ClusterPriority) {
+					$AddVMToClusterName['ClusterPriority'] = $JsonData.$Name.ClusterPriority
+				}
+				If ($null -ne $JsonData.$Name.ClusterAffinityRules) {
+					$AddVMToClusterName['ClusterAffinityRules'] = $JsonData.$Name.ClusterAffinityRules
+				}
+
 				# add VM to cluster
 				Try {
 					$ClusterGroup = Add-VMToClusterName @AddVMToClusterName
 				}
 				Catch {
 					Throw $_
-				}
-
-				# retrieve cluster priority
-				Try {
-					$ClusterPriority = $JsonData.$Name.ClusterPriority
-				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving cluster group priority from JSON")
-					Throw $_
-				}
-
-				# if cluster priority defined...
-				If ($null -ne $ClusterPriority) {
-					Write-Host ("$Hostname,$ComputerName,$Name - checking cluster group priority...")
-					# if cluster priority does not match...
-					If ($ClusterGroup.Priority -ne $ClusterPriority) {
-						# declare and begin
-						Write-Host ("$Hostname,$ComputerName,$Name - ...setting cluster group priority to: $ClusterPriority")
-
-						# set cluster priority
-						Try {
-							$ClusterGroup.Priority = $ClusterPriority
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: setting cluster group priority")
-							Throw $_
-						}
-					}
-					# if cluster priority matches...
-					Else {
-						# declare
-						Write-Host ("$Hostname,$ComputerName,$Name - ...found priority already set to: $ClusterPriority")
-					}
 				}
 			}
 		}
