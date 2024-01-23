@@ -501,18 +501,19 @@ Begin {
 			Return $JsonData
 		}
 
+		# define JsonKeyName from JsonKeyParameter property
+		$JsonKeyName = (Get-Variable -Name $JsonKeyParameter -ValueOnly)
+		# get JSON data object property
+		$JsonKey = $JsonData.$JsonKeyName
+
 		# if verbose...
-		If ($VerbosePreference) {
+		If ($VerbosePreference -or $null -eq $JsonKey) {
 			# ...display full file
 			Write-Host "`nDisplaying full configuration file: '$Json'"
 			$JsonData | ConvertTo-Json -Depth 100
 		}
 		# if not verbose...
 		Else {
-			# ...define JsonKeyName from JsonKeyParameter property...
-			$JsonKeyName = (Get-Variable -Name $JsonKeyParameter -ValueOnly)
-			# ...get JSON data object property...
-			$JsonKey = $JsonData.$JsonKeyName
 			# ...and display JSON item if it exists (i.e. wasn't removed)
 			If ($null -ne $JsonKey) {
 				Write-Host "`nDisplaying '$(Get-Variable -Name $JsonKeyParameter -ValueOnly)' entry in configuration file: '$Json'"
