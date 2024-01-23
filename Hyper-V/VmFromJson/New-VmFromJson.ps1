@@ -1660,7 +1660,7 @@ Begin {
 		# retrieve existing cluster group
 		Try {
 			Write-Host ("$Hostname,$ComputerName,$Name - checking cluster for VM...")
-			$ClusterGroup = Get-ClusterGroup @GetClusterGroup | Where-Object { $_.Id -eq $VM.Id }
+			$ClusterGroup = Get-ClusterGroup @GetClusterGroup | Where-Object { $_.Name -eq $Name }
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving cluster groups")
@@ -1689,7 +1689,7 @@ Begin {
 				$ClusterGroup = Add-ClusterVirtualMachineRole @AddClusterVirtualMachineRole
 			}
 			Catch {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: adding VM to cluster: '$ClusterName'")
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: adding VM to cluster: $ClusterName")
 				Throw $_
 			}
 
@@ -3662,8 +3662,8 @@ Process {
 				# define parameters for Start-ClusterGroup
 				$StartClusterGroup = @{
 					Cluster        = $ClusterName
-					Name           = $ClusterGroup.Name
-					ChooseBestNode = $True
+					Name           = $Name
+					ChooseBestNode = $true
 					ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
 				}
 
@@ -3687,8 +3687,9 @@ Process {
 
 				# define parameters for Stop-ClusterGroup
 				$StopClusterGroup = @{
-					Cluster     = $ClusterName
-					Name        = $ClusterGroup.Name
+					Cluster        = $ClusterName
+					Name           = $Name
+					ChooseBestNode = $true
 					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 				}
 
@@ -3704,8 +3705,9 @@ Process {
 				# define parameters for Start-ClusterGroup
 				$StartClusterGroup = @{
 					Cluster        = $ClusterName
-					Name           = $ClusterGroup.Name
-					ChooseBestNode = $True
+					Name           = $Name
+					ChooseBestNode = $true
+					ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
 				}
 
 				# start cluster group
