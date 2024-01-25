@@ -21,10 +21,14 @@ Switch parameter to remove an entry from the JSON configuration file. Cannot be 
 Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Show, Clear, Remove, Install, or Uninstall parameters.
 
 .PARAMETER Install
-Switch parameter to create the Update-ScheduledTasks scheduled task that runs this script from the current path. Cannot be combined with the Show, Clear, Remove, Add, or Uninstall parameters.
+Switch parameter to create the Update-ScheduledTasks scheduled task in the root task path. Cannot be combined with the Show, Clear, Remove, Add, or Uninstall parameters. The task is created with a following defaults:
+ - The task will run the script from the current path with the provided JSON file
+ - The task will run as SYSTEM with highest privilegs
+ - The task will run at midnight then every 15 minutes afterwards
+ - The task will run for a maximum of 1 minute
 
 .PARAMETER Uninstall
-Switch parameter to remove the Update-ScheduledTasks scheduled task that runs this script from the current path. Cannot be combined with the Show, Clear, Remove, Add, or Install parameters.
+Switch parameter to remove the Update-ScheduledTasks scheduled task from the root task path. Cannot be combined with the Show, Clear, Remove, Add, or Install parameters.
 
 .PARAMETER TaskName
 The name of the scheduled task. Required when the Add or Remove parameters are specified.
