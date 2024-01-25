@@ -110,10 +110,6 @@ Param(
 	[switch]$Install,
 	[Parameter(Mandatory = $True, ParameterSetName = 'Uninstall')]
 	[switch]$Uninstall,
-	[Parameter(ParameterSetName = 'Default')]
-	[switch]$Run,
-	[Parameter(ParameterSetName = 'Default')]
-	[switch]$Update,
 	# scheduled task parameter - register
 	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
@@ -146,12 +142,15 @@ Param(
 	[timespan]$ExecutionTimeLimit = (New-TimeSpan -Minutes 30),
 	# scheduled task parameter - principal
 	[Parameter(ParameterSetName = 'Add')]
+	[Parameter(ParameterSetName = 'Install')]
 	[string]$UserId = 'SYSTEM',
 	# scheduled task parameter - principal
 	[Parameter(ParameterSetName = 'Add')][ValidateSet('ServiceAccount', 'Password')]
+	[Parameter(ParameterSetName = 'Install')]
 	[string]$LogonType = 'ServiceAccount',
 	# scheduled task parameter - principal
 	[Parameter(ParameterSetName = 'Add')][ValidateSet('Highest', 'Limited')]
+	[Parameter(ParameterSetName = 'Install')]
 	[string]$RunLevel = 'Highest',
 	# scheduled task parameter - modules
 	[Parameter(ParameterSetName = 'Add')]
@@ -159,6 +158,12 @@ Param(
 	# switch to remove old tasks during run
 	[Parameter(ParameterSetName = 'Default')]
 	[switch]$RemoveOldTasks,
+	# switch to process JSON entries for previous versions of the script
+	[Parameter(ParameterSetName = 'Default')]
+	[switch]$Run,
+	# switch to process JSON entries for previous versions of the script
+	[Parameter(ParameterSetName = 'Default')]
+	[switch]$Update,
 	# switch to skip transcript logging
 	[Parameter(DontShow)]
 	[switch]$SkipTranscript,
