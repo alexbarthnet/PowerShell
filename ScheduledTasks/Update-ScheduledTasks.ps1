@@ -581,21 +581,36 @@ Begin {
 			[string]$TranscriptHost = ([System.Environment]::MachineName)
 		)
 
-		# verify transcript name
+		# check transcript name parameter
 		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
-			$TranscriptName = (Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty 'BaseName')
+			$TranscriptName = (Get-Item -Path $PSCommandPath).BaseName
+		}
+
+		# check transcript path parameter
+		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
+			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
 		}
 
 		# verify transcript path
-		If (!$PSBoundParameters.ContainsKey('TranscriptPath') -or !(Test-Path -Path $TranscriptPath -PathType Container)) {
-			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData')
+		If (!(Test-Path -Path $TranscriptPath -PathType [Microsoft.PowerShell.Commands.TestPathType]::Container)) {
+			# define parameters for New-Item
+			$NewItem = @{
+				Path        = $TranscriptPath
+				ItemType    = 'Directory'
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# create transcript path
+			Try {
+				$null = New-Item @NewItem
+			}
+			Catch {
+				Throw $_
+			}
 		}
 
-		# build transcript basename from transcript name and hostname
-		$TranscriptBase = "PowerShell_transcript.$TranscriptHost.$TranscriptName"
-
-		# build transcript file name with transcript basename and current datetime
-		$TranscriptFile = "$TranscriptBase.$TranscriptTime.txt"
+		# build transcript file name with defined prefix, hostname, transcript name and current datetime
+		$TranscriptFile = "PowerShell_transcript.$TranscriptHost.$TranscriptName.$TranscriptTime.txt"
 
 		# define parameters for Start-Transcript
 		$StartTranscript = @{
@@ -635,14 +650,14 @@ Begin {
 			[string]$TranscriptHost = ([System.Environment]::MachineName)
 		)
 
-		# verify transcript name
+		# check transcript name parameter
 		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
-			$TranscriptName = (Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty 'BaseName')
+			$TranscriptName = (Get-Item -Path $PSCommandPath).BaseName
 		}
 
-		# verify transcript path
-		If (!$PSBoundParameters.ContainsKey('TranscriptPath') -or !(Test-Path -Path $TranscriptPath -PathType Container)) {
-			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData')
+		# check transcript path parameter
+		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
+			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
 		}
 
 		# build transcript basename from transcript name and hostname
