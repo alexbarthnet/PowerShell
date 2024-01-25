@@ -9,16 +9,22 @@ Adds or removes Scheduled Tasks defined by entries in a JSON configuration file.
 The path to a JSON file containing the configuration for this script.
 
 .PARAMETER Show
-Switch parameter to show all entries from the JSON configuration file. Cannot be combined with the Clear, Remove, or Add parameters.
+Switch parameter to show all entries from the JSON configuration file. Cannot be combined with the Clear, Remove, Add, Install, or Uninstall parameters.
 
 .PARAMETER Clear
-Switch parameter to clear all entries from the JSON configuration file. Cannot be combined with the Remove, Add, or Run parameters.
+Switch parameter to clear all entries from the JSON configuration file. Cannot be combined with the Show, Remove, Add, Install, or Uninstall parameters.
 
 .PARAMETER Remove
-Switch parameter to remove an entry from the JSON configuration file. Cannot be combined with the Clear, Add, or Run parameters.
+Switch parameter to remove an entry from the JSON configuration file. Cannot be combined with the Show, Clear, Add, Install, or Uninstall parameters.
 
 .PARAMETER Add
-Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Clear, Remove, or Run parameters.
+Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Show, Clear, Remove, Install, or Uninstall parameters.
+
+.PARAMETER Install
+Switch parameter to create the Update-ScheduledTasks scheduled task that runs this script from the current path. Cannot be combined with the Show, Clear, Remove, Add, or Uninstall parameters.
+
+.PARAMETER Uninstall
+Switch parameter to remove the Update-ScheduledTasks scheduled task that runs this script from the current path. Cannot be combined with the Show, Clear, Remove, Add, or Install parameters.
 
 .PARAMETER TaskName
 The name of the scheduled task. Required when the Add or Remove parameters are specified.
