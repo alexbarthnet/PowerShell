@@ -592,7 +592,7 @@ Begin {
 		}
 
 		# verify transcript path
-		If (!(Test-Path -Path $TranscriptPath -PathType [Microsoft.PowerShell.Commands.TestPathType]::Container)) {
+		If (!(Test-Path -Path $TranscriptPath -PathType 'Container')) {
 			# define parameters for New-Item
 			$NewItem = @{
 				Path        = $TranscriptPath
