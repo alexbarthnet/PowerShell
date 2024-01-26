@@ -269,14 +269,14 @@ Begin {
 				$TargetHash = Get-FileHash -Path $Destination | Select-Object -ExpandProperty Hash
 			}
 			Catch {
-				Write-Output "`nERROR: could not get hash of target module: '$Destination)'"
+				Write-Output "`nERROR: could not get hash of target module: '$Destination'"
 				Return $_
 			}
 
 			# if hashes match...
 			If ($TargetHash -eq $SourceHash) {
 				# report and return
-				Write-Output "Verified module '$Path' at '$Destination'"
+				Write-Output "Verified module '$Destination' against '$Path'"
 				Return
 			}
 			# if hashes do not match...
@@ -296,7 +296,7 @@ Begin {
 		# install module
 		Try {
 			Copy-Item -Path $Path -Destination $Destination -ErrorAction Stop
-			Write-Output "Installed module '$Path' at '$Destination'"
+			Write-Output "Installed module '$Destination' from '$Path'"
 		}
 		Catch {
 			Write-Output "`nERROR: could not write module: '$Destination'"
