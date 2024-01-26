@@ -819,3 +819,12 @@ Function Import-FilesWithPSDirect {
 		}
 	}
 }
+
+# define functions to export
+$FunctionsToExport = @(
+	'Export-FilesWithPSDirect'
+	'Import-FilesWithPSDirect'
+)
+
+# export module members
+Export-ModuleMember -Function $FunctionsToExport
