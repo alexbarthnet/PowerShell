@@ -592,7 +592,7 @@ Begin {
 
 		# define default transcript name as basename of running script
 		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
-			$TranscriptName = (Get-Item -Path $PSCommandPath).BaseName
+			$TranscriptName = (Get-PSCallStack)[1].Command -replace '\.ps1$'
 		}
 
 		# define default transcript path as named folder under transcripts folder in common application data folder
@@ -661,7 +661,7 @@ Begin {
 
 		# define default transcript name as basename of running script
 		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
-			$TranscriptName = (Get-Item -Path $PSCommandPath).BaseName
+			$TranscriptName = (Get-PSCallStack)[1].Command -replace '\.ps1$'
 		}
 
 		# define default transcript path as named folder under transcripts folder in common application data folder
