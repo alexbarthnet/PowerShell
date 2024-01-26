@@ -158,7 +158,7 @@ Function Copy-PathFromPSDirect {
 	}
 	Catch {
 		Write-Output "Could not unprotect credentials for VM: '$VMName'"
-		Return
+		Return $_
 	}
 
 	# verify VM credentials
@@ -173,7 +173,7 @@ Function Copy-PathFromPSDirect {
 	}
 	Catch {
 		Write-Output "Could not create PowerShell Direct session for VM: '$VMName'"
-		Return
+		Return $_
 	}
 
 	# test path on VM
@@ -182,7 +182,7 @@ Function Copy-PathFromPSDirect {
 	}
 	Catch {
 		Write-Output "Could test path '$Path' on VM: '$VMName'"
-		Return
+		Return $_
 	}
 
 	# verify path on VM
@@ -203,7 +203,7 @@ Function Copy-PathFromPSDirect {
 	}
 	Catch {
 		Write-Output "Could not retrieve files in '$Path' on VM: '$VMName'"
-		Return
+		Return $_
 	}
 
 	# remove files in destination on host before copying files from path on VM
@@ -213,6 +213,7 @@ Function Copy-PathFromPSDirect {
 		}
 		Catch {
 			Write-Output "Could not clear destination folder '$Destination' on host before file copy"
+			Return $_
 		}
 	}
 
@@ -224,6 +225,7 @@ Function Copy-PathFromPSDirect {
 	}
 	Catch {
 		Write-Output "Could not copy files to destination folder '$Destination' on host"
+		Return $_
 	}
 
 	# disconnect from VM
@@ -232,6 +234,7 @@ Function Copy-PathFromPSDirect {
 	}
 	Catch {
 		Write-Output "Could not remove PowerShell Direct session for VM: '$VMName'"
+		Return $_
 	}
 }
 
@@ -259,7 +262,7 @@ Function Copy-PathToPSDirect {
 	}
 	Catch {
 		Write-Output "Could not unprotect credentials for VM: '$VMName'"
-		Return
+		Return $_
 	}
 
 	# verify VM credentials
@@ -274,7 +277,7 @@ Function Copy-PathToPSDirect {
 	}
 	Catch {
 		Write-Output "Could not create PowerShell Direct session for VM: '$VMName'"
-		Return
+		Return $_
 	}
 
 	# test path on host
@@ -289,7 +292,7 @@ Function Copy-PathToPSDirect {
 	}
 	Catch {
 		Write-Output "Could test path '$Destination' on VM: '$VMName'"
-		Return
+		Return $_
 	}
 
 	# verify path on VM
@@ -304,7 +307,7 @@ Function Copy-PathToPSDirect {
 	}
 	Catch {
 		Write-Output "Could not retrieve files in '$Path' on host"
-		Return
+		Return $_
 	}
 
 	# remove files in destination on VM before copying files from path on host
@@ -314,6 +317,7 @@ Function Copy-PathToPSDirect {
 		}
 		Catch {
 			Write-Output "Could not clear destination folder '$Destination' on VM before file copy"
+			Return $_
 		}
 	}
 
@@ -325,6 +329,7 @@ Function Copy-PathToPSDirect {
 	}
 	Catch {
 		Write-Output "Could not copy files to destination folder '$Destination' on VM: '$VMName'"
+		Return $_
 	}
 
 	# disconnect from VM
@@ -333,6 +338,7 @@ Function Copy-PathToPSDirect {
 	}
 	Catch {
 		Write-Output "Could not remove PowerShell Direct session for VM: '$VMName'"
+		Return $_
 	}
 }
 
