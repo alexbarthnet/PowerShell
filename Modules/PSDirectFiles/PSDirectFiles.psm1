@@ -4,20 +4,48 @@ Function Start-TranscriptWithHostAndDate {
 	Param(
 		# name for transcript file
 		[Parameter()]
-		[string]$TranscriptName = (Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty 'BaseName'),
+		[string]$TranscriptName,
 		# path for transcript file
 		[Parameter()]
-		[string]$TranscriptPath = ([System.Environment]::GetFolderPath('CommonApplicationData')),
+		[string]$TranscriptPath,
 		# log start time
 		[Parameter(DontShow)]
-		[string]$LogStart = (Get-Date -Format FileDateTimeUniversal),
+		[string]$TranscriptTime = ([datetime]::Now.ToString('yyyyMMddHHmmss')),
 		# local hostname
 		[Parameter(DontShow)]
-		[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
+		[string]$TranscriptHost = ([System.Environment]::MachineName)
 	)
 
-	# build transcript file name from transcript name, hostname, current datetime
-	$TranscriptFile = "$TranscriptName`_$HostName`_$LogStart`.txt"
+	# define default transcript name as basename of running script
+	If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
+		$TranscriptName = (Get-Item -Path $PSCommandPath).BaseName
+	}
+
+	# define default transcript path as named folder under transcripts folder in common application data folder
+	If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
+		$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
+	}
+
+	# verify transcript path
+	If (!(Test-Path -Path $TranscriptPath -PathType 'Container')) {
+		# define parameters for New-Item
+		$NewItem = @{
+			Path        = $TranscriptPath
+			ItemType    = 'Directory'
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# create transcript path
+		Try {
+			$null = New-Item @NewItem
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
+	# build transcript file name with defined prefix, hostname, transcript name and current datetime
+	$TranscriptFile = "PowerShell_transcript.$TranscriptHost.$TranscriptName.$TranscriptTime.txt"
 
 	# define parameters for Start-Transcript
 	$StartTranscript = @{
@@ -39,44 +67,55 @@ Function Stop-TranscriptWithHostAndDate {
 	Param(
 		# name for transcript file
 		[Parameter()]
-		[string]$TranscriptName = (Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty 'BaseName'),
-		# path for transcript file
+		[string]$TranscriptName,
+		# path of transcript files
 		[Parameter()]
-		[string]$TranscriptPath = ([System.Environment]::GetFolderPath('CommonApplicationData')),
-		# log file max age
+		[string]$TranscriptPath,
+		# minimum number of transcript files for removal
 		[Parameter(DontShow)]
-		[double]$LogDays = 7,
-		# log file min count
+		[uint16]$TranscriptCount = 7,
+		# minimum age of transcript files for removal
 		[Parameter(DontShow)]
-		[uint16]$LogCount = 7,
+		[double]$TranscriptDays = 7,
+		# datetime for transcript files for removal
+		[Parameter(DontShow)]
+		[datetime]$TranscriptDate = ([datetime]::Now.AddDays(-$TranscriptDays)),
 		# local hostname
 		[Parameter(DontShow)]
-		[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
+		[string]$TranscriptHost = ([System.Environment]::MachineName)
 	)
 
-	# build transcript basename from transcript name and hostname
-	$TranscriptBase = $TranscriptName, $HostName -join '_'
-
-	# declare transcript cleanup
-	Write-Verbose -Message "Removing old transcript files named '$TranscriptBase' from '$TranscriptPath'" -Verbose
-
-	# get transcript files
-	$TranscriptFiles = Get-ChildItem -Path $TranscriptPath | Where-Object { $_.BaseName.StartsWith($TranscriptBase, [System.StringComparison]::InvariantCultureIgnoreCase) -and $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) }
-
-	# get transcript files newer than cleanup date
-	$NewFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-$LogDays) }
-
-	# if count of transcript files count is less than cleanup threshold...
-	If ($LogCount -lt $NewFiles.Count ) {
-		# declare and continue
-		Write-Verbose -Message "Skipping transcript file cleanup; count of transcript files ($($NewFiles.Count)) after cleanup would be below cleanup threshold ($LogCount)" -Verbose
+	# define default transcript name as basename of running script
+	If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
+		$TranscriptName = (Get-Item -Path $PSCommandPath).BaseName
 	}
-	# if count of transcript files is not less than cleanup threshold...
+
+	# define default transcript path as named folder under transcripts folder in common application data folder
+	If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
+		$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
+		# LEGACY: re-define default transcript path as string array containing current path and original path in common application data folder
+		[string[]]$TranscriptPath = @([System.Environment]::GetFolderPath('CommonApplicationData'), $TranscriptPath)
+	}
+
+	# define filter using default transcript prefix, hostname, and script name
+	$TranscriptFilter = "PowerShell_transcript.$TranscriptHost.$TranscriptName*"
+
+	# get transcript files matching filter
+	$TranscriptFiles = Get-ChildItem -Path $TranscriptPath -Filter $TranscriptFilter -ErrorAction 'SilentlyContinue'
+
+	# split transcript files on transcript date
+	$NewFiles, $OldFiles = $TranscriptFiles.Where({ $_.LastWriteTime -ge $TranscriptDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
+	
+	# if count of files after transcript date is less than to cleanup threshold...
+	If ($NewFiles.Count -lt $TranscriptCount) {
+		# declare skip
+		Write-Verbose -Message "Skipping transcript file cleanup; count of transcripts ($($NewFiles.Count)) would be below minimum transcript count ($TranscriptCount)" -Verbose
+	}
 	Else {
-		# get log files older than cleanup date
-		$OldFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$LogDays) } | Sort-Object -Property FullName
+		# declare cleanup
+		Write-Verbose -Message "Removing any transcript files matching '$TranscriptFilter' that are older than '$TranscriptDays' days from: $TranscriptPath" -Verbose
 		# remove old logs
-		ForEach ($OldFile in $OldFiles) {
+		ForEach ($OldFile in ($OldFiles | Sort-Object -Property FullName)) {
 			Try {
 				Remove-Item -Path $OldFile.FullName -Force -Verbose -ErrorAction Stop
 			}
@@ -322,11 +361,11 @@ Function Export-FilesWithPSDirect {
 		[switch]$Purge,
 		[Parameter()]
 		[string]$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json'),
-		# path for transcript files
-		[Parameter()]
+		# name in transcript files
+		[Parameter(DontShow)]
 		[string]$TranscriptName,
-		# path for transcript files
-		[Parameter()]
+		# path to transcript files
+		[Parameter(DontShow)]
 		[string]$TranscriptPath,
 		# local hostname
 		[Parameter(DontShow)]

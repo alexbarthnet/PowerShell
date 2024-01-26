@@ -659,14 +659,11 @@ Begin {
 		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
 			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
 			# LEGACY: re-define default transcript path as string array containing current path and original path in common application data folder
-			$TranscriptPath = @($TranscriptPath, [System.Environment]::GetFolderPath('CommonApplicationData'))
+			[string[]]$TranscriptPath = @([System.Environment]::GetFolderPath('CommonApplicationData'), $TranscriptPath)
 		}
 
 		# define filter using default transcript prefix, hostname, and script name
 		$TranscriptFilter = "PowerShell_transcript.$TranscriptHost.$TranscriptName*"
-
-		# declare transcript cleanup
-		Write-Verbose -Message "Removing any transcript files matching '$TranscriptFilter' that are older than '$TranscriptDays' days from: $($TranscriptPath -join '; ')" -Verbose
 
 		# get transcript files matching filter
 		$TranscriptFiles = Get-ChildItem -Path $TranscriptPath -Filter $TranscriptFilter -ErrorAction 'SilentlyContinue'
@@ -674,13 +671,14 @@ Begin {
 		# split transcript files on transcript date
 		$NewFiles, $OldFiles = $TranscriptFiles.Where({ $_.LastWriteTime -ge $TranscriptDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
 		
-		# if count of transcript files count is less than cleanup threshold...
-		If ($TranscriptCount -lt $NewFiles.Count) {
-			# declare and continue
-			Write-Verbose -Message "Skipping transcript removal; count of transcripts ($($NewFiles.Count)) would be below minimum transcript count ($TranscriptCount)" -Verbose
+		# if count of files after transcript date is less than to cleanup threshold...
+		If ($NewFiles.Count -lt $TranscriptCount) {
+			# declare skip
+			Write-Verbose -Message "Skipping transcript file cleanup; count of transcripts ($($NewFiles.Count)) would be below minimum transcript count ($TranscriptCount)" -Verbose
 		}
-		# if count of transcript files is not less than cleanup threshold...
 		Else {
+			# declare cleanup
+			Write-Verbose -Message "Removing any transcript files matching '$TranscriptFilter' that are older than '$TranscriptDays' days from: $TranscriptPath" -Verbose
 			# remove old logs
 			ForEach ($OldFile in ($OldFiles | Sort-Object -Property FullName)) {
 				Try {
@@ -706,8 +704,8 @@ Begin {
 		# define hashtable for transcript functions
 		$TranscriptWithHostAndDate = @{}
 		# define parameters for transcript functions
-		If ($PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptWithHostAndDate['TranscriptName'] = $TranscriptName }
-		If ($PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptWithHostAndDate['TranscriptPath'] = $TranscriptPath }
+		If ($PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptWithHostAndDate['TranscriptName'] = $PSBoundParameters['TranscriptName'] }
+		If ($PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptWithHostAndDate['TranscriptPath'] = $PSBoundParameters['TranscriptPath'] }
 		# start transcript with parameters
 		Try {
 			Start-TranscriptWithHostAndDate @TranscriptWithHostAndDate
