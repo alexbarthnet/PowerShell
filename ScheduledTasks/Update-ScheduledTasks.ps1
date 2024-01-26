@@ -198,120 +198,109 @@ Begin {
 	Function Install-ModuleFromJson {
 		[CmdletBinding()]
 		Param(
-			[Parameter(DontShow)]	
+			[Parameter(DontShow)]
 			[string]$Path,
 			[Parameter(DontShow)]
-			[string]$ProgramFiles = [System.Environment]::GetFolderPath('ProgramFiles'),
-			[Parameter(DontShow)]
-			[string]$ModulesPath = 'WindowsPowerShell\Modules'
+			[string]$AllUsers = [System.Environment]::GetEnvironmentVariable('PSModulePath') -split ';' -notlike "$PSHOME*" -notlike "$HOME*" -join ''
 		)
 
-		# if source module path exists...
-		If (Test-Path -Path $Path) {
+		# if source module exists...
+		If (Test-Path -Path $Path -PathType Leaf) {
 			# get source module file
 			Try {
 				$SourceModule = Get-Item -Path $Path -ErrorAction Stop
 			}
 			Catch {
-				Write-Output "`nERROR: could not get source module file: '$Path'"
+				Write-Output "`nERROR: could not get source module file: $Path"
 				Return $_
 			}
+			# get base and file names from source module
+			$BaseName = $SourceModule.BaseName
+			$FileName = $SourceModule.Name
 		}
 		Else {
-			Write-Output "`nERROR: could not find source module file: '$Path'"
+			Write-Output "`nERROR: could not find source module file: $Path"
 			Return
 		}
 
-		# build PowerShell module path
+		# build target module folder path
 		Try {
-			$ModulePath = Join-Path -Path $ProgramFiles -ChildPath $ModulesPath
+			$ModulePath = Join-Path -Path $AllUsers -ChildPath $BaseName
 		}
 		Catch {
-			Write-Output "`nERROR: could not build PowerShell module path"
+			Write-Output "`nERROR: could not build target module path"
 			Return $_
 		}
 
-		# build individual module path
-		Try {
-			$TargetPath = Join-Path -Path $ModulePath -ChildPath $SourceModule.BaseName
-		}
-		Catch {
-			Write-Output "`nERROR: could not build individual module path"
-			Return $_
-		}
-
-		# get target module folder
-		If (-not (Test-Path -Path $TargetPath)) {
+		# if target module folder not found...
+		If (!(Test-Path -Path $ModulePath -PathType Container)) {
 			# create target module folder
 			Try {
-				$TargetFolder = New-Item -Path $TargetPath -ItemType Directory
+				$null = New-Item -Path $ModulePath -ItemType Directory -ErrorAction Stop
 			}
 			Catch {
-				Write-Output "`nERROR: could not create individual module path"
+				Write-Output "`nERROR: could not create target module path: $ModulePath"
 				Return $_
 			}
 		}
 
-		# get target module path
+		# build target file path
 		Try {
-			$TargetModule = Get-ChildItem -Path $TargetFolder | Where-Object { $_.BaseName -eq $SourceModule.BaseName -and $_.Extension -eq '.psm1' }
+			$Destination = Join-Path -Path $ModulePath -ChildPath $FileName
 		}
 		Catch {
-			Write-Output "`nERROR: could not find module folder: '$TargetPath'"
+			Write-Output "`nERROR: could not build target file path"
 			Return $_
 		}
 
 		# if target module found...
-		If ($TargetModule) {
+		If (Test-Path -Path $Destination -PathType Leaf) {
 			# get source module hash
 			Try {
-				$SourceHash = Get-FileHash -Path $SourceModule.FullName | Select-Object -ExpandProperty Hash
+				$SourceHash = Get-FileHash -Path $Path | Select-Object -ExpandProperty Hash
 			}
 			Catch {
-				Write-Output "`nERROR: could not get hash of source module: '$($SourceModule.FullName)'"
+				Write-Output "`nERROR: could not get hash of source module: '$Path'"
 				Return $_
 			}
+
 			# get target module hash
 			Try {
-				$TargetHash = Get-FileHash -Path $TargetModule.FullName | Select-Object -ExpandProperty Hash
+				$TargetHash = Get-FileHash -Path $Destination | Select-Object -ExpandProperty Hash
 			}
 			Catch {
-				Write-Output "`nERROR: could not get hash of target module: '$($TargetModule.FullName)'"
+				Write-Output "`nERROR: could not get hash of target module: '$Destination)'"
 				Return $_
 			}
 
 			# if hashes match...
 			If ($TargetHash -eq $SourceHash) {
 				# report and return
-				Write-Output "Verified module '$($TargetModule.BaseName)' at '$($TargetModule.FullName)'"
+				Write-Output "Verified module '$Path' at '$Destination'"
 				Return
 			}
 			# if hashes do not match...
 			Else {
 				# remove target module
 				Try {
-					$TargetModule | Remove-Item -Force
-					Write-Output "Removed module '$($TargetModule.FullName)'"
+					Remove-Item -Path $Destination -Force -ErrorAction Stop
+					Write-Output "Removed module '$Destination'"
 				}
 				Catch {
-					Write-Output "`nERROR: could not remove old module: '$($TargetModule.FullName)'"
+					Write-Output "`nERROR: could not remove old module: '$Destination'"
 					Return $_
 				}
-				# set target module to $null
-				$TargetModule = $null
 			}
 		}
 
-		# if target module not found...
-		If ($null -eq $TargetModule) {
-			Try {
-				$TargetModule = Copy-Item -Path $SourceModule.FullName -Destination $TargetFolder.FullName -PassThru
-				Write-Output "Installed module '$($TargetModule.BaseName)' to '$($TargetModule.FullName)'"
-			}
-			Catch {
-				Write-Output "`nERROR: could not copy module: '$($TargetModule.FullName)'"
-				Return $_
-			}
+		# install module
+		Try {
+			Copy-Item -Path $Path -Destination $Destination -ErrorAction Stop
+			Write-Output "Installed module '$Path' at '$Destination'"
+		}
+		Catch {
+			Write-Output "`nERROR: could not write module: '$Destination'"
+			Return $_
 		}
 	}
 
