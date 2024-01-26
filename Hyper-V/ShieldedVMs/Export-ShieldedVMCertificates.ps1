@@ -21,18 +21,24 @@ Param(
 	# path to JSON file with parameters
 	[Parameter(DontShow)]
 	[string]$ParametersFromJsonPath,
-	# log file max age
+	# switch to skip transcript logging
 	[Parameter(DontShow)]
-	[double]$LogDays = 7,
-	# log file min count
+	[switch]$SkipTranscript,
+	# name in transcript files
 	[Parameter(DontShow)]
-	[uint16]$LogCount = 7,
-	# log start time
+	[string]$TranscriptName,
+	# path to transcript files
 	[Parameter(DontShow)]
-	[string]$LogStart = (Get-Date -Format FileDateTimeUniversal),
-	# local hostname
+	[string]$TranscriptPath,
+	# local host name
 	[Parameter(DontShow)]
-	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
+	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
+	# local domain name
+	[Parameter(DontShow)]
+	[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
+	# local DNS hostname
+	[Parameter(DontShow)]
+	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
 )
 
 Begin {
