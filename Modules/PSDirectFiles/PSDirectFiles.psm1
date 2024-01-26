@@ -339,48 +339,65 @@ Function Copy-PathToPSDirect {
 Function Export-FilesWithPSDirect {
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param(
+		# path to JSON configuration file
+		[Parameter(Mandatory = $True, Position = 0)]
+		[string]$Json,
+		# script parameters - mode
+		[Parameter(Mandatory = $True, ParameterSetName = 'Show')]
+		[switch]$Show,
 		[Parameter(Mandatory = $True, ParameterSetName = 'Clear')]
 		[switch]$Clear,
 		[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
 		[switch]$Remove,
 		[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 		[switch]$Add,
-		[Parameter(Mandatory = $True, ParameterSetName = 'Run')]
-		[switch]$Run,
+		# copy parameter - VM name
 		[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
 		[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 		[ValidatePattern('^[^\*]+$')]
 		[string]$VMName,
+		# copy parameter - path on VM
 		[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 		[ValidatePattern('^[^\*]+$')]
 		[string]$Path,
+		# copy parameter - path on hosst
 		[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 		[ValidatePattern('^[^\*]+$')]
 		[string]$Destination,
+		# copy parameter - clear destination on host first
 		[Parameter(ParameterSetName = 'Add')]
 		[switch]$Purge,
-		[Parameter()]
-		[string]$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json'),
+		# switch to skip transcript logging
+		[Parameter(DontShow)]
+		[switch]$SkipTranscript,
 		# name in transcript files
 		[Parameter(DontShow)]
 		[string]$TranscriptName,
 		# path to transcript files
 		[Parameter(DontShow)]
 		[string]$TranscriptPath,
-		# local hostname
+		# local host name
 		[Parameter(DontShow)]
-		[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
+		[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
+		# local domain name
+		[Parameter(DontShow)]
+		[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
+		# local DNS hostname
+		[Parameter(DontShow)]
+		[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
 	)
 
 	Begin {
 		# if running...
-		If ($Run) {
-			# define parameters
-			If (!$PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptName = $MyInvocation.MyCommand -replace '\.ps[m|d]?1$' }
-			If (!$PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptPath = $PSScriptRoot }
-			# call transcript function
+		If ($PSCmdlet.ParameterSetName -eq 'Default') {
+			# define hashtable for transcript functions
+			$TranscriptWithHostAndDate = @{}
+			# define parameters for transcript functions
+			If ($PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptWithHostAndDate['TranscriptName'] = $PSBoundParameters['TranscriptName'] }
+			If ($PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptWithHostAndDate['TranscriptPath'] = $PSBoundParameters['TranscriptPath'] }
+			# start transcript with parameters
 			Try {
-				Start-TranscriptWithHostAndDate -TranscriptPath $TranscriptPath -TranscriptName $TranscriptName
+				Start-TranscriptWithHostAndDate @TranscriptWithHostAndDate
 			}
 			Catch {
 				Throw $_
@@ -425,30 +442,39 @@ Function Export-FilesWithPSDirect {
 
 		# evaluate parameters
 		switch ($true) {
+			# show configuration file
+			$Show {
+				Write-Output "`nDisplaying '$Json'"
+				$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+			}
 			# clear configuration file
 			$Clear {
 				Try {
-					Remove-Item -Path $Json -Force
+					[string]::Empty | Set-Content -Path $Json
 					Write-Output "`nCleared configuration file: '$Json'"
 				}
 				Catch {
 					Write-Output "`nERROR: could not clear configuration file: '$Json'"
+					Return $_
 				}
 			}
 			# remove entry from configuration file
 			$Remove {
 				Try {
+					# remove existing entry by primary key(s)...
 					$JsonData = $JsonData | Where-Object { $_.VMName -ne $VMName }
+					# if JSON data empty...
 					If ($null -eq $JsonData) {
+						# clear JSON data
 						[string]::Empty | Set-Content -Path $Json
 						Write-Output "`nRemoved '$VMName' from configuration file: '$Json'"
 					}
 					Else {
-						$JsonData | ConvertTo-Json | Set-Content -Path $Json
+						# export JSON data
+						$JsonData | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 						Write-Output "`nRemoved '$VMName' from configuration file: '$Json'"
+						$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 					}
-					$JsonData | Format-List
-
 				}
 				Catch {
 					Write-Output "`nERROR: could not update configuration file: '$Json'"
@@ -458,7 +484,7 @@ Function Export-FilesWithPSDirect {
 			$Add {
 				Try {
 					# create hashtable for custom object
-					$JsonValues = [ordered]@{
+					$JsonParameters = [ordered]@{
 						VMName      = $VMName
 						Path        = $Path
 						Destination = $Destination
@@ -466,16 +492,20 @@ Function Export-FilesWithPSDirect {
 					}
 
 					# create custom object from hashtable
-					$JsonEntry = [pscustomobject]$JsonValues
+					$JsonEntry = [pscustomobject]$JsonParameters
 
-					# remove existing entry with same name
+					# if existing entry has same primary key(s)...
 					If ($JsonData | Where-Object { $_.VMName -eq $VMName }) {
+						# inquire before removing existing entry
 						Write-Warning -Message "Will overwrite existing entry for '$VMName' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
+						# remove existing entry with same primary key(s)
 						$JsonData = $JsonData | Where-Object { $_.VMName -ne $VMName }
 					}
 
-					# add datum to data
+					# add entry to data
 					$JsonData += $JsonEntry
+
+					# export JSON data
 					$JsonData | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 					Write-Output "`nAdded '$VMName' to configuration file: '$Json'"
 					$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
@@ -484,8 +514,11 @@ Function Export-FilesWithPSDirect {
 					Write-Output "`nERROR: could not update configuration file: '$Json'"
 				}
 			}
-			# run through entries in configuration file
-			$Run {
+			# process entries in configuration file
+			Default {
+				# declare start
+				Write-Host "`nExporting files from VM with PSDirect per '$Json'"
+
 				# check entry count in configuration file
 				If ($JsonData.Count -eq 0) {
 					Write-Output "`nERROR: no entries found in configuration file: '$Json'"
@@ -493,32 +526,47 @@ Function Export-FilesWithPSDirect {
 				}
 
 				# process configuration file
-				ForEach ($JsonEntry in $JsonData) {
-					If ([string]::IsNullOrEmpty($JsonEntry.VMName) -or [string]::IsNullOrEmpty($JsonEntry.Path) -or [string]::IsNullOrEmpty($JsonEntry.Destination)) {
-						Write-Output "`nERROR: invalid entry found in configuration file: '$Json'"
-					}
-					Else {
-						Try {
-							Copy-PathFromPSDirect -VMName $JsonEntry.VMName -Path $JsonEntry.Path -Destination $JsonEntry.Destination -Purge:$JsonEntry.Purge
+				:JsonEntry ForEach ($JsonEntry in $JsonData) {
+					# validate values in JSON file
+					Switch ($true) {
+						([string]::IsNullOrEmpty($JsonEntry.VMName)) {
+							Write-Output "`nERROR: required entry (VMName) not found in configuration file: $Json"; Continue JsonEntry
 						}
-						Catch {
-							Return $_
+						([string]::IsNullOrEmpty($JsonEntry.Path)) {
+							Write-Output "`nERROR: required value (Path) not found in configuration file: $Json"; Continue JsonEntry
+						}
+						([string]::IsNullOrEmpty($JsonEntry.Destination)) {
+							Write-Output "`nERROR: required value (Destination) not found in configuration file: $Json"; Continue JsonEntry
+						}
+						Default {
+							# define parameters
+							$CopyPathFromPSDirect = @{
+								VMName      = $JsonEntry.VMName
+								Path        = $JsonEntry.Path
+								Destination = $JsonEntry.Destination
+								Purge       = $JsonEntry.Purge
+							}
+
+							# copy files from VM
+							Try {
+								Copy-PathFromPSDirect @CopyPathFromPSDirect
+							}
+							Catch {
+								Return $_
+							}
 						}
 					}
 				}
-			}
-			Default {
-				Write-Output "`nDisplaying configuration file: '$Json'"
-				$JsonData | Select-Object VMName, Path, Destination, Purge
 			}
 		}
 	}
 
 	End {
 		# if running...
-		If ($Run) {
+		If ($PSCmdlet.ParameterSetName -eq 'Default') {
+			# stop transcript with parameters
 			Try {
-				Stop-TranscriptWithHostAndDate -TranscriptPath $TranscriptPath -TranscriptName $TranscriptName
+				Stop-TranscriptWithHostAndDate @TranscriptWithHostAndDate
 			}
 			Catch {
 				Throw $_
@@ -530,48 +578,65 @@ Function Export-FilesWithPSDirect {
 Function Import-FilesWithPSDirect {
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param(
+		# path to JSON configuration file
+		[Parameter(Mandatory = $True, Position = 0)]
+		[string]$Json,
+		# script parameters - mode
+		[Parameter(Mandatory = $True, ParameterSetName = 'Show')]
+		[switch]$Show,
 		[Parameter(Mandatory = $True, ParameterSetName = 'Clear')]
 		[switch]$Clear,
 		[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
 		[switch]$Remove,
 		[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 		[switch]$Add,
-		[Parameter(Mandatory = $True, ParameterSetName = 'Run')]
-		[switch]$Run,
+		# copy parameter - VM name
 		[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
 		[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 		[ValidatePattern('^[^\*]+$')]
 		[string]$VMName,
+		# copy parameter - path on host
 		[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 		[ValidatePattern('^[^\*]+$')]
 		[string]$Path,
+		# copy parameter - path on VM
 		[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 		[ValidatePattern('^[^\*]+$')]
 		[string]$Destination,
+		# copy parameter - clear destination on VM first
 		[Parameter(ParameterSetName = 'Add')]
 		[switch]$Purge,
-		[Parameter()]
-		[string]$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json'),
-		# path for transcript files
-		[Parameter()]
-		[string]$TranscriptName,
-		# path for transcript files
-		[Parameter()]
-		[string]$TranscriptPath,
-		# local hostname
+		# switch to skip transcript logging
 		[Parameter(DontShow)]
-		[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
+		[switch]$SkipTranscript,
+		# name in transcript files
+		[Parameter(DontShow)]
+		[string]$TranscriptName,
+		# path to transcript files
+		[Parameter(DontShow)]
+		[string]$TranscriptPath,
+		# local host name
+		[Parameter(DontShow)]
+		[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
+		# local domain name
+		[Parameter(DontShow)]
+		[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
+		# local DNS hostname
+		[Parameter(DontShow)]
+		[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
 	)
 
 	Begin {
 		# if running...
-		If ($Run) {
-			# define parameters
-			If (!$PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptName = $MyInvocation.MyCommand -replace '\.ps[m|d]?1$' }
-			If (!$PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptPath = $PSScriptRoot }
-			# call transcript function
+		If ($PSCmdlet.ParameterSetName -eq 'Default') {
+			# define hashtable for transcript functions
+			$TranscriptWithHostAndDate = @{}
+			# define parameters for transcript functions
+			If ($PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptWithHostAndDate['TranscriptName'] = $PSBoundParameters['TranscriptName'] }
+			If ($PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptWithHostAndDate['TranscriptPath'] = $PSBoundParameters['TranscriptPath'] }
+			# start transcript with parameters
 			Try {
-				Start-TranscriptWithHostAndDate -TranscriptPath $TranscriptPath -TranscriptName $TranscriptName
+				Start-TranscriptWithHostAndDate @TranscriptWithHostAndDate
 			}
 			Catch {
 				Throw $_
@@ -584,7 +649,7 @@ Function Import-FilesWithPSDirect {
 		If (Test-Path -Path $Json) {
 			# ...create JSON data object as array of PSCustomObjects from JSON file content
 			Try {
-				$JsonData = [array](Get-Content -Path $Json | ConvertFrom-Json)
+				$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 			}
 			Catch {
 				Write-Output "`nERROR: could not read configuration file: '$Json'"
@@ -616,32 +681,39 @@ Function Import-FilesWithPSDirect {
 
 		# evaluate parameters
 		switch ($true) {
+			# show configuration file
+			$Show {
+				Write-Output "`nDisplaying '$Json'"
+				$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+			}
 			# clear configuration file
 			$Clear {
-				If (Test-Path -Path $Json) {
-					Try {
-						Remove-Item -Path $Json -Force
-						Write-Output "`nCleared configuration file: '$Json'"
-					}
-					Catch {
-						Write-Output "`nERROR: could not clear configuration file: '$Json'"
-					}
+				Try {
+					[string]::Empty | Set-Content -Path $Json
+					Write-Output "`nCleared configuration file: '$Json'"
+				}
+				Catch {
+					Write-Output "`nERROR: could not clear configuration file: '$Json'"
+					Return $_
 				}
 			}
 			# remove entry from configuration file
 			$Remove {
 				Try {
+					# remove existing entry by primary key(s)...
 					$JsonData = $JsonData | Where-Object { $_.VMName -ne $VMName }
+					# if JSON data empty...
 					If ($null -eq $JsonData) {
+						# clear JSON data
 						[string]::Empty | Set-Content -Path $Json
 						Write-Output "`nRemoved '$VMName' from configuration file: '$Json'"
 					}
 					Else {
-						$JsonData | ConvertTo-Json | Set-Content -Path $Json
+						# export JSON data
+						$JsonData | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 						Write-Output "`nRemoved '$VMName' from configuration file: '$Json'"
+						$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 					}
-					$JsonData | Format-List
-
 				}
 				Catch {
 					Write-Output "`nERROR: could not update configuration file: '$Json'"
@@ -651,7 +723,7 @@ Function Import-FilesWithPSDirect {
 			$Add {
 				Try {
 					# create hashtable for custom object
-					$JsonValues = [ordered]@{
+					$JsonParameters = [ordered]@{
 						VMName      = $VMName
 						Path        = $Path
 						Destination = $Destination
@@ -659,16 +731,20 @@ Function Import-FilesWithPSDirect {
 					}
 
 					# create custom object from hashtable
-					$JsonEntry = [pscustomobject]$JsonValues
+					$JsonEntry = [pscustomobject]$JsonParameters
 
-					# remove existing entry with same name
+					# if existing entry has same primary key(s)...
 					If ($JsonData | Where-Object { $_.VMName -eq $VMName }) {
+						# inquire before removing existing entry
 						Write-Warning -Message "Will overwrite existing entry for '$VMName' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
+						# remove existing entry with same primary key(s)
 						$JsonData = $JsonData | Where-Object { $_.VMName -ne $VMName }
 					}
 
-					# add datum to data
+					# add entry to data
 					$JsonData += $JsonEntry
+
+					# export JSON data
 					$JsonData | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 					Write-Output "`nAdded '$VMName' to configuration file: '$Json'"
 					$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
@@ -677,8 +753,11 @@ Function Import-FilesWithPSDirect {
 					Write-Output "`nERROR: could not update configuration file: '$Json'"
 				}
 			}
-			# run through entries in configuration file
-			$Run {
+			# process entries in configuration file
+			Default {
+				# declare start
+				Write-Host "`nImporting files to VM with PSDirect per '$Json'"
+
 				# check entry count in configuration file
 				If ($JsonData.Count -eq 0) {
 					Write-Output "`nERROR: no entries found in configuration file: '$Json'"
@@ -686,32 +765,47 @@ Function Import-FilesWithPSDirect {
 				}
 
 				# process configuration file
-				ForEach ($JsonEntry in $JsonData) {
-					If ([string]::IsNullOrEmpty($JsonEntry.VMName) -or [string]::IsNullOrEmpty($JsonEntry.Path) -or [string]::IsNullOrEmpty($JsonEntry.Destination)) {
-						Write-Output "`nERROR: invalid entry found in configuration file: '$Json'"
-					}
-					Else {
-						Try {
-							Copy-PathToPSDirect -VMName $JsonEntry.VMName -Path $JsonEntry.Path -Destination $JsonEntry.Destination -Purge:$JsonEntry.Purge
+				:JsonEntry ForEach ($JsonEntry in $JsonData) {
+					# validate values in JSON file
+					Switch ($true) {
+						([string]::IsNullOrEmpty($JsonEntry.VMName)) {
+							Write-Output "`nERROR: required entry (VMName) not found in configuration file: $Json"; Continue JsonEntry
 						}
-						Catch {
-							Return $_
+						([string]::IsNullOrEmpty($JsonEntry.Path)) {
+							Write-Output "`nERROR: required value (Path) not found in configuration file: $Json"; Continue JsonEntry
+						}
+						([string]::IsNullOrEmpty($JsonEntry.Destination)) {
+							Write-Output "`nERROR: required value (Destination) not found in configuration file: $Json"; Continue JsonEntry
+						}
+						Default {
+							# define parameters
+							$CopyPathToPSDirect = @{
+								VMName      = $JsonEntry.VMName
+								Path        = $JsonEntry.Path
+								Destination = $JsonEntry.Destination
+								Purge       = $JsonEntry.Purge
+							}
+
+							# copy files to VM
+							Try {
+								Copy-PathToPSDirect @CopyPathToPSDirect
+							}
+							Catch {
+								Return $_
+							}
 						}
 					}
 				}
-			}
-			Default {
-				Write-Output "`nDisplaying configuration file: '$Json'"
-				$JsonData | Select-Object VMName, Path, Destination, Purge
 			}
 		}
 	}
 
 	End {
 		# if running...
-		If ($Run) {
+		If ($PSCmdlet.ParameterSetName -eq 'Default') {
+			# stop transcript with parameters
 			Try {
-				Stop-TranscriptWithHostAndDate -TranscriptPath $TranscriptPath -TranscriptName $TranscriptName
+				Stop-TranscriptWithHostAndDate @TranscriptWithHostAndDate
 			}
 			Catch {
 				Throw $_
