@@ -66,6 +66,262 @@ Function ConvertTo-X509Certificate {
 	Return $Certificate
 }
 
+Function Format-ReversedDistinguishedName {
+	<#
+	.SYNOPSIS
+	Reverses the order of the elements of a distingiushed name.
+
+	.DESCRIPTION
+	Reverses the order of the elements of a distingiushed name.
+
+	.PARAMETER DistingiushedName
+	Specifies the distinguished name to be reversed.
+
+	.PARAMETER Separator
+	Specifies the separator character in the distinguished name. The default value is the comma (,) character.
+
+	.INPUTS
+	String. A string containing a distinguished name.
+
+	.OUTPUTS
+	String. A string containing the original elements of the distinguished name in reverse.
+
+	#>
+	[CmdletBinding()]
+	Param (
+		[Parameter(Position = 0, Mandatory = $true)]
+		[string]$DistinguishedName,
+		[Parameter(Position = 1)]
+		[string]$Separator = ','
+	)
+
+	# split DistinguishedName
+	$DistinguishedNameArray = $DistinguishedName -split $Separator -ne [String]::Empty
+
+	# reverse array elements
+	[System.Array]::Reverse($DistinguishedNameArray)
+
+	# join array elements
+	$ReveresedDistinguishedName = $DistinguishedNameArray -join $Separator
+
+	# return ReversedDistinguishedName
+	Return $ReveresedDistinguishedName
+}
+
+Function Format-ReversedString {
+	<#
+	.SYNOPSIS
+	Reverses the characters in a string.
+
+	.DESCRIPTION
+	Reverses the characters in a string.
+
+	.PARAMETER String
+	Specifies the string to be reversed.
+
+	.PARAMETER Count
+	Specifies the count of characters to be considered a single element in the string. The default value is 1 character.
+
+	.INPUTS
+	String. A string.
+
+	.OUTPUTS
+	String. A string containing the characters of the original string in reverse.
+
+	#>
+	[CmdletBinding()]
+	Param (
+		[Parameter(Position = 0, Mandatory = $true)]
+		[string]$String,
+		[Parameter(Position = 1)]
+		[int32]$Count = 1
+	)
+
+	# split String
+	$StringArray = $String -split "(\w{$($Count.ToString())})" -ne [String]::Empty
+
+	# reverse array elements
+	[System.Array]::Reverse($StringArray)
+
+	# join array elements
+	$ReveresedStringArray = $StringArray -join [String]::Empty
+
+	# return ReveresedStringArray
+	Return $ReveresedStringArray
+}
+
+Function Get-CertificateAltSecurityIdentity {
+	<#
+	.SYNOPSIS
+	Retrieves the alternate security identity from a certificate.
+
+	.DESCRIPTION
+	Retrieves the alternate security identity from a certificate.
+
+	.PARAMETER Certificate
+	Specifies the X.509 certificate for which the identity will be built.
+
+	.PARAMETER MappingType
+	Specifies the type of mapping returned by the function. The valid values are detailed below. The default value is 'IssuerSerialNumber'.
+	 - IssuerSerialNumber
+	 - SKI
+	 - SHA1PublicKey
+	 - IssuerSubject
+	 - SubjectOnly
+	 - PrincipalName
+	 - RFC822
+
+	.INPUTS
+	X509Certificate2. An object representing an X.509 certificate.
+
+	.OUTPUTS
+	String. A string containing an alternate security identity.
+
+	.LINK
+	https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-pkca/282ed46a-97c2-4fab-8456-a6bd67b9ba71
+
+	.LINK
+	https://learn.microsoft.com/en-us/entra/identity/authentication/concept-certificate-based-authentication-certificateuserids#supported-patterns-for-certificate-user-ids
+
+	.LINK
+	https://support.microsoft.com/en-us/topic/kb5014754-certificate-based-authentication-changes-on-windows-domain-controllers-ad2c23b0-15d8-4340-a468-4d4f3b188f16#bkmk_certmap
+
+	#>
+	[CmdletBinding()]
+	Param (
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
+		[object]$Certificate,
+		[Parameter(Position = 1)][ValidateSet('IssuerSerialNumber', 'SKI', 'SHA1PublicKey', 'IssuerSubject', 'SubjectOnly', 'RFC822')]
+		[string]$Type = 'IssuerSerialNumber'
+	)
+
+	# verify certificate properties
+	switch ($Type) {
+		'IssuerSerialNumber' {
+			# if Issuer empty or not found...
+			If ([String]::IsNullOrEmpty($Certificate.Issuer)) {
+				# ...warn and return
+				Write-Warning 'Issuer empty or not found on certificate'
+				Return $null
+			}
+	
+			# if SerialNumber empty or not found...
+			If ([String]::IsNullOrEmpty($Certificate.SerialNumber)) {
+				# ...warn and return
+				Write-Warning 'SerialNumber empty or not found on certificate'
+				Return $null
+			}
+		}
+		'SKI' {
+			# if SubjectKeyIdentifier not found...
+			If ([String]::IsNullOrEmpty($Certificate.Extensions.SubjectKeyIdentifier)) {
+				# ...warn and return
+				Write-Warning 'SubjectKeyIdentifier empty or not found on certificate'
+				Return $null
+			}
+
+			# if SubjectKeyIdentifier is not unique...
+			If ($Certificate.Extensions.SubjectKeyIdentifier.Count -gt 1) {
+				# ...warn and return
+				Write-Warning 'Multiple SubjectKeyIdentifier extensions found on certificate'
+				Return $null
+			}
+		}
+		'SHA1PublicKey' {
+			# if Thumbprint empty or not found...
+			If ([String]::IsNullOrEmpty($Certificate.Thumbprint)) {
+				# ...warn and return
+				Write-Warning 'Thumbprint empty or not found on certificate'
+				Return $null
+			}
+		}
+		'IssuerSubject' {
+			# if Issuer empty or not found...
+			If ([String]::IsNullOrEmpty($Certificate.Issuer)) {
+				# ...warn and return
+				Write-Warning 'Issuer empty or not found on certificate'
+				Return $null
+			}
+	
+			# if Subject empty or not found...
+			If ([String]::IsNullOrEmpty($Certificate.Subject)) {
+				# ...warn and return
+				Write-Warning 'Subject not found on certificate'
+				Return $null
+			}
+		}
+		'SubjectOnly' {
+			# if Subject empty or not found...
+			If ([String]::IsNullOrEmpty($Certificate.Subject)) {
+				# ...warn and return
+				Write-Warning 'Subject not found on certificate'
+				Return $null
+			}
+		}
+		'RFC822' {
+			# if UserPrincipalName empty or not found...
+			If ([String]::IsNullOrEmpty($Certificate.Extensions.UserPrincipalName)) {
+				# ...warn and return
+				Write-Warning 'UserPrincipalName not found on certificate'
+				Return $null
+			}
+
+			# if UserPrincipalName is not unique...
+			If ($Certificate.Extensions.UserPrincipalName.Count -gt 1) {
+				# ...warn and return
+				Write-Warning 'Multiple UserPrincipalName extensions found on certificate'
+				Return $null
+			}
+		}
+	}
+
+	# create alternate security identity
+	switch ($Type) {
+		'IssuerSerialNumber' {
+			# get the reversed issuer
+			$ReversedIssuer = Format-ReversedDistinguishedName -DistinguishedName $Certificate.Issuer
+			
+			# get the reversed serial number respecting byte boundaries
+			$ReversedSerialNumber = Format-ReversedString -String $Certificate.SerialNumber -Count 2
+
+			# create alternate security identity
+			$CertificateAltSecurityIdentity = "X509:<I>$ReversedIssuer<SR>$ReversedSerialNumber"
+		}
+		'SKI' {
+			# create alternate security identity
+			$CertificateAltSecurityIdentity = "X509:<SKI>$($Certificate.Extensions.SubjectKeyIdentifier)"
+		}
+		'SHA1PublicKey' {
+			# create alternate security identity
+			$CertificateAltSecurityIdentity = "X509:<SHA1-PUKEY>$($Certificate.Thumbprint)"
+		}
+		'IssuerSubject' {
+			# get the reversed issuer
+			$ReversedIssuer = Format-ReversedDistinguishedName -DistinguishedName $Certificate.Issuer
+
+			# get the reversed subject
+			$ReversedSubject = Format-ReversedDistinguishedName -DistinguishedName $Certificate.Subject
+
+			# create alternate security identity
+			$CertificateAltSecurityIdentity = "X509:<I>$ReversedIssuer<S>$ReversedSubject"
+		}
+		'SubjectOnly' {
+			# get the reversed subject
+			$ReversedSubject = Format-ReversedDistinguishedName -DistinguishedName $Certificate.Subject
+
+			# create alternate security identity
+			$CertificateAltSecurityIdentity = "X509:<S>$ReversedSubject"
+		}
+		'RFC822' {
+			# create alternate security identity
+			$CertificateAltSecurityIdentity = "X509:<RFC822>$($Certificate.Extensions.UserPrincipalName)"
+		}
+	}
+
+	# return alternate security identity
+	Return $CertificateAltSecurityIdentity
+}
+
 Function Get-CertificateBundle {
 	<#
 	.SYNOPSIS
@@ -93,7 +349,7 @@ Function Get-CertificateBundle {
 	[CmdletBinding()]
 	Param (
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
-		[object]$Certificate,
+		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
 		[Parameter(Position = 1)]
 		[string]$Path,
 		[Parameter(Position = 2)]
@@ -192,7 +448,7 @@ Function Get-CertificateChain {
 	[CmdletBinding()]
 	Param (
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
-		[object]$Certificate,
+		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
 		[Parameter(Position = 1)]
 		[switch]$CheckRevocation,
 		[Parameter(Position = 2)]
@@ -902,6 +1158,9 @@ Function Test-Thumbprint {
 # define functions to export
 $functions_to_export = @()
 $functions_to_export += 'ConvertTo-X509Certificate'
+$functions_to_export += 'Format-ReversedDistinguishedName'
+$functions_to_export += 'Format-ReversedString'
+$functions_to_export += 'Get-CertificateAltSecurityIdentity'
 $functions_to_export += 'Get-CertificateBundle'
 $functions_to_export += 'Get-CertificateChain'
 $functions_to_export += 'Get-CertificateFromAD'
