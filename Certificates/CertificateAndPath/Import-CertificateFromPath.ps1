@@ -1,50 +1,93 @@
+<#
+.SYNOPSIS
+Imports certificates to the local machine store based upon values in a JSON configuration file.
+
+.DESCRIPTION
+Imports certificates to the local machine store based upon values in a JSON configuration file. The JSON identifies the subject of certificate to be imported, the path to the certificate files, and the principals to grant access to the certificate after import.
+
+.PARAMETER Json
+The path to a JSON file containing the configuration for this script.
+
+.PARAMETER Show
+Switch parameter to show all entries from the JSON configuration file. Cannot be combined with the Clear, Remove, or Add parameters.
+
+.PARAMETER Clear
+Switch parameter to clear all entries from the JSON configuration file. Cannot be combined with the Show, Remove, or Add parameters.
+
+.PARAMETER Remove
+Switch parameter to remove an entry from the JSON configuration file. Cannot be combined with the Show, Clear, or Add parameters.
+
+.PARAMETER Add
+Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Show, Clear, or Remove parameters.
+
+.PARAMETER Subject
+The subject of a certificate file. Required when the Add or Remove parameters are specified.
+
+.PARAMETER Path
+The path to search for certificates. Required when the Add parameter is specified.
+
+.PARAMETER Principals
+The pricinipals that will be granted read access on any imported certificates. Required when the Add parameter is specified.
+
+.INPUTS
+None.
+
+.OUTPUTS
+None. The script reports the actions taken and does not provide any actionable output.
+
+.EXAMPLE
+.\Import-CertificateFromPath.ps1 -Json C:\Content\config.json
+
+.EXAMPLE
+.\Import-CertificateFromPath.ps1 -Json C:\Content\config.json -Show
+
+.EXAMPLE
+.\Import-CertificateFromPath.ps1 -Json C:\Content\config.json -Clear
+
+.EXAMPLE
+.\Import-CertificateFromPath.ps1 -Json C:\Content\config.json -Remove -Subject 'host.example.com'
+
+.EXAMPLE
+.\Import-CertificateFromPath.ps1 -Json C:\Content\config.json -Add -Subject 'host.example.com' -Path 'C:\path\' -Principals 'Domain Admins'
+#>
+
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	[Parameter(Mandatory = $True, ParameterSetName = 'Import')]
+	[Parameter(Position = 0, ParameterSetName = 'Default')]
 	[switch]$Import,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Clear')]
+	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Show')]
+	[switch]$Show,
+	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Clear')]
 	[switch]$Clear,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
+	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Remove')]
 	[switch]$Remove,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
+	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Add')]
 	[switch]$Add,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
-	[Parameter(Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')]
+	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Remove')]
+	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')]
 	[string]$Subject,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')][ValidateScript({ Test-Path -Path $_ })]
-	[string]$Storage,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
+	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')][ValidateScript({ Test-Path -Path $_ })]
+	[string]$Path,
+	[Parameter(Position = 3, Mandatory = $True, ParameterSetName = 'Add')]
 	[string[]]$Principals,
 	# path to JSON configuration file
 	[Parameter(Mandatory = $True)]
 	[string]$Json,
-	# log file max age
+	# switch to skip transcript logging
 	[Parameter(DontShow)]
-	[double]$LogDays = 7,
-	# log file min count
+	[switch]$SkipTranscript,
+	# name in transcript files
 	[Parameter(DontShow)]
-	[uint16]$LogCount = 7,
-	# log start time
+	[string]$TranscriptName,
+	# path to transcript files
 	[Parameter(DontShow)]
-	[string]$LogStart = (Get-Date -Format FileDateTimeUniversal),
+	[string]$TranscriptPath,
 	# local hostname
 	[Parameter(DontShow)]
 	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
 )
 
 Begin {
-	# if JSON file not provided...
-	If ([string]::IsNullOrEmpty($Json)) {
-		# ...define default JSON file
-		$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
-	}
-
-	# if importing...
-	If ($Import) {
-		# ...define transcript file from script path and start transcript
-		Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, "_$HostName.txt") -Force
-	}
-
 	Function Set-CertificatePermissions {
 		[CmdletBinding()]
 		Param(
@@ -365,7 +408,7 @@ Begin {
 	Function Import-PfxCertificateFromFolder {
 		[CmdletBinding()]
 		Param(
-			[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ })]
+			[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ -PathType Container })]
 			[object]$Path,
 			[Parameter(Position = 1, Mandatory = $true)][ValidatePattern('^[^\*]+$')]
 			[string]$Subject,
@@ -374,25 +417,189 @@ Begin {
 		)
 
 		# create empty objects
-		$cert_pfx_files = @()
+		$PFXFiles = Get-ChildItem -Path $Path | Where-Object { $_.Extension -match '(\.pfx|\.p12)' } | Sort-Object BaseName
 
 		# retrieve PKCS12 files matching $Subject
-		If ($Subject -eq '_default') {
-			$cert_pfx_files += Get-ChildItem -Path $Path | Where-Object { $_.Extension -match '(\.pfx|\.p12)' } | Sort-Object BaseName
-		}
-		Else {
-			$cert_pfx_files += Get-ChildItem -Path $Path | Where-Object { $_.Extension -match '(\.pfx|\.p12)' } | Sort-Object BaseName | Where-Object { $_.BaseName -match "^$Subject" } | Select-Object -Last 1
+		If ($Subject -ne '_default') {
+			$PFXFiles = $PFXFiles | Where-Object { $_.BaseName -match "^$Subject" -or $_.BaseName -match ($Subject -replace '^CN=') } | Select-Object -Last 1
 		}
 
-		# check file count
-		If ($cert_pfx_files.Count -eq 0) {
+		# if no PFX files found...
+		If ($PFXFiles.Count -eq 0) {
+			# declare and return
 			Write-Host "`nERROR: no certificates found with subject: $Subject"
+			Return
+		}
+
+		# process each PFX file
+		ForEach ($PFXFile in $PFXFiles) {
+			# declare state
+			Write-Host "`nFound PFX file: '$($PFXFile.FullName)'"
+
+			# define required parameters for Import-PfxCertificateFromFolder
+			$ImportPfxCertificateFromFile = @{
+				FilePath   = $PFXFile.FullName
+				Principals = $Principals
+				Validate   = $true
+			}
+
+			# import certificate from PFX file
+			Try {
+				Import-PfxCertificateFromFile @ImportPfxCertificateFromFile
+			}
+			Catch {
+				Throw $_
+			}
+		}
+	}
+
+	Function Start-TranscriptWithHostAndDate {
+		Param(
+			# name for transcript file
+			[Parameter()]
+			[string]$TranscriptName,
+			# path for transcript file
+			[Parameter()]
+			[string]$TranscriptPath,
+			# log start time
+			[Parameter(DontShow)]
+			[string]$TranscriptTime = ([datetime]::Now.ToString('yyyyMMddHHmmss')),
+			# local hostname
+			[Parameter(DontShow)]
+			[string]$TranscriptHost = ([System.Environment]::MachineName)
+		)
+
+		# define default transcript name as basename of running script
+		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
+			$TranscriptName = (Get-Item -Path $PSCommandPath).BaseName
+		}
+
+		# define default transcript path as named folder under transcripts folder in common application data folder
+		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
+			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
+		}
+
+		# verify transcript path
+		If (!(Test-Path -Path $TranscriptPath -PathType 'Container')) {
+			# define parameters for New-Item
+			$NewItem = @{
+				Path        = $TranscriptPath
+				ItemType    = 'Directory'
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# create transcript path
+			Try {
+				$null = New-Item @NewItem
+			}
+			Catch {
+				Throw $_
+			}
+		}
+
+		# build transcript file name with defined prefix, hostname, transcript name and current datetime
+		$TranscriptFile = "PowerShell_transcript.$TranscriptHost.$TranscriptName.$TranscriptTime.txt"
+
+		# define parameters for Start-Transcript
+		$StartTranscript = @{
+			Path        = Join-Path -Path $TranscriptPath -ChildPath $TranscriptFile
+			Force       = $true
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# start transcript
+		Try	{
+			$null = Start-Transcript @StartTranscript
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
+	Function Stop-TranscriptWithHostAndDate {
+		Param(
+			# name for transcript file
+			[Parameter()]
+			[string]$TranscriptName,
+			# path of transcript files
+			[Parameter()]
+			[string]$TranscriptPath,
+			# minimum number of transcript files for removal
+			[Parameter(DontShow)]
+			[uint16]$TranscriptCount = 7,
+			# minimum age of transcript files for removal
+			[Parameter(DontShow)]
+			[double]$TranscriptDays = 7,
+			# datetime for transcript files for removal
+			[Parameter(DontShow)]
+			[datetime]$TranscriptDate = ([datetime]::Now.AddDays(-$TranscriptDays)),
+			# local hostname
+			[Parameter(DontShow)]
+			[string]$TranscriptHost = ([System.Environment]::MachineName)
+		)
+
+		# define default transcript name as basename of running script
+		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
+			$TranscriptName = (Get-Item -Path $PSCommandPath).BaseName
+		}
+
+		# define default transcript path as named folder under transcripts folder in common application data folder
+		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
+			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
+			# LEGACY: re-define default transcript path as string array containing current path and original path in common application data folder
+			[string[]]$TranscriptPath = @([System.Environment]::GetFolderPath('CommonApplicationData'), $TranscriptPath)
+		}
+
+		# define filter using default transcript prefix, hostname, and script name
+		$TranscriptFilter = "PowerShell_transcript.$TranscriptHost.$TranscriptName*"
+
+		# get transcript files matching filter
+		$TranscriptFiles = Get-ChildItem -Path $TranscriptPath -Filter $TranscriptFilter -ErrorAction 'SilentlyContinue'
+
+		# split transcript files on transcript date
+		$NewFiles, $OldFiles = $TranscriptFiles.Where({ $_.LastWriteTime -ge $TranscriptDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
+		
+		# if count of files after transcript date is less than to cleanup threshold...
+		If ($NewFiles.Count -lt $TranscriptCount) {
+			# declare skip
+			Write-Verbose -Message "Skipping transcript file cleanup; count of transcripts ($($NewFiles.Count)) would be below minimum transcript count ($TranscriptCount)" -Verbose
 		}
 		Else {
-			ForEach ($cert_pfx_file in $cert_pfx_files) {
-				Write-Host "`nFound PFX file: '$($cert_pfx_file.FullName)'"
-				Import-PfxCertificateFromFile -FilePath $cert_pfx_file.FullName -Principals $Principals -Validate
+			# declare cleanup
+			Write-Verbose -Message "Removing any transcript files matching '$TranscriptFilter' that are older than '$TranscriptDays' days from: $TranscriptPath" -Verbose
+			# remove old logs
+			ForEach ($OldFile in ($OldFiles | Sort-Object -Property FullName)) {
+				Try {
+					Remove-Item -Path $OldFile.FullName -Force -Verbose -ErrorAction Stop
+				}
+				Catch {
+					$_
+				}
 			}
+		}
+
+		# stop transcript
+		Try {
+			$null = Stop-Transcript
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
+	# if running...
+	If ($PSCmdlet.ParameterSetName -eq 'Default') {
+		# define hashtable for transcript functions
+		$TranscriptWithHostAndDate = @{}
+		# define parameters for transcript functions
+		If ($PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptWithHostAndDate['TranscriptName'] = $PSBoundParameters['TranscriptName'] }
+		If ($PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptWithHostAndDate['TranscriptPath'] = $PSBoundParameters['TranscriptPath'] }
+		# start transcript with parameters
+		Try {
+			Start-TranscriptWithHostAndDate @TranscriptWithHostAndDate
+		}
+		Catch {
+			Throw $_
 		}
 	}
 }
@@ -434,17 +641,20 @@ Process {
 
 	# evaluate parameters
 	switch ($true) {
+		# show configuration file
+		$Show {
+			Write-Output "`nDisplaying '$Json'"
+			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+		}
 		# clear configuration file
 		$Clear {
-			If (Test-Path -Path $Json) {
-				Try {
-					[string]::Empty | Set-Content -Path $Json
-					Write-Output "`nCleared configuration file: '$Json'"
-				}
-				Catch {
-					Write-Output "`nERROR: could not clear configuration file: '$Json'"
-					Return $_
-				}
+			Try {
+				[string]::Empty | Set-Content -Path $Json
+				Write-Output "`nCleared configuration file: '$Json'"
+			}
+			Catch {
+				Write-Output "`nERROR: could not clear configuration file: '$Json'"
+				Return $_
 			}
 		}
 		# remove entry from configuration file
@@ -499,7 +709,8 @@ Process {
 				Return $_
 			}
 		}
-		$Import {
+		# process configuration file
+		Default {
 			# declare start
 			Write-Host "`nImporting certificates per '$Json'"
 
@@ -510,29 +721,54 @@ Process {
 			}
 
 			# process configuration file
-			ForEach ($json_datum in $JsonData) {
-				If ([string]::IsNullOrEmpty($json_datum.Subject) -or [string]::IsNullOrEmpty($json_datum.Storage)) {
-					Write-Host "ERROR: invalid entry found in configuration file: $Json"
-				}
-				Else {
-					Write-Host " - subject    : '$($json_datum.Subject)'"
-					Write-Host " - storage    : '$($json_datum.Storage)'"
-					Write-Host " - principals : '$($json_datum.Principals)'"
-					Import-PfxCertificateFromFolder -Subject $json_datum.Subject -Path $json_datum.Storage -Principals $json_datum.Principals
+			:JsonDatum ForEach ($JsonDatum in $JsonData) {
+				switch ($true) {
+					([string]::IsNullOrEmpty($JsonDatum.Subject)) {
+						Write-Host "ERROR: required entry (Subject) not found in configuration file: $Json"; Continue :JsonDatum
+					}
+					([string]::IsNullOrEmpty($JsonDatum.Path)) {
+						Write-Host "ERROR: required entry (Path) not found in configuration file: $Json"; Continue :JsonDatum
+					}
+					([string]::IsNullOrEmpty($JsonDatum.Principals)) {
+						Write-Host "ERROR: required entry (Principals) not found in configuration file: $Json"; Continue :JsonDatum
+					}
+					Default {
+						# declare JSON entry contents
+						Write-Host " - Subject    : '$($JsonDatum.Subject)'"
+						Write-Host " - Path       : '$($JsonDatum.Path)'"
+						Write-Host " - Principals : '$($JsonDatum.Principals)'"
+
+						# define required parameters for Import-PfxCertificateFromFolder
+						$ImportPfxCertificateFromFolder = @{
+							Subject    = [string]$JsonDatum.Subject
+							Path       = [string]$JsonDatum.Path
+							Principals = [string]$JsonDatum.Principals
+						}
+
+						# import PFX certificate from folder
+						Try {
+							Import-PfxCertificateFromFolder @ImportPfxCertificateFromFolder
+						}
+						Catch {
+							Write-Host 'ERROR: could not import certificate:' $_.ToString()
+							Continue :JsonDatum
+						}
+					}
 				}
 			}
-		}
-		Default {
-			Write-Output "Displaying '$Json'"
-			$JsonData | Select-Object Subject, Storage, Principals, Updated | Format-Table
 		}
 	}
 }
 
 End {
-	# if importing...
-	If ($Import) {
-		# ...stop transcript
-		Stop-Transcript
+	# if running...
+	If ($PSCmdlet.ParameterSetName -eq 'Default') {
+		# stop transcript with parameters
+		Try {
+			Stop-TranscriptWithHostAndDate @TranscriptWithHostAndDate
+		}
+		Catch {
+			Throw $_
+		}
 	}
 }
