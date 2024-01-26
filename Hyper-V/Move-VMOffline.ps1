@@ -1238,6 +1238,12 @@ Process {
 		Write-Host "$SourceComputerName - retrieved VM object"
 	}
 
+	# check for snapshot
+	If ($VM.ParentSnapshotId) {
+		Write-Warning "VM has an active snapshot. Remove or consolidate snapshots before migration"
+		Return
+	}
+
 	# get VM properties
 	$Id = $VM.Id
 	$Name = $VM.Name.ToLowerInvariant()
