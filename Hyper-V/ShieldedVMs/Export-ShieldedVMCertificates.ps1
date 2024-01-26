@@ -1,4 +1,4 @@
-[CmdletBinding(DefaultParameterSetName = 'Password')]
+[CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
 	# path for exported PFX files
 	[Parameter(Position = 0, Mandatory = $True)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
