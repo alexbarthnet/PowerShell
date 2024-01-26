@@ -2,32 +2,35 @@
 .SYNOPSIS
 Synchronize files and directories in a source path with a destination path.
 
-.DESCRIPTION 
-Synchronize files and directories in a source path with a destination path based upon runtime parameters or settings from a JSON file. The JSON file enables the 
+.DESCRIPTION
+Synchronize files and directories in a source path with a destination path based upon runtime parameters or settings from a JSON file.
 
-.PARAMETER Now
-Synchronize files and directories per the parameters provided to the script.
+.PARAMETER Json
+The path to a JSON file containing the configuration for this script.
 
-.PARAMETER Sync
-Synchronize files and directories per the configuration entries stored in the JSON file.
+.PARAMETER Show
+Switch parameter to show all entries from the JSON configuration file. Cannot be combined with the Clear, Remove, Add, or Run parameters.
 
 .PARAMETER Clear
-Removes all configuration entries from the JSON file.
+Switch parameter to clear all entries from the JSON configuration file. Cannot be combined with the Show, Remove, Add, or Run parameters.
 
 .PARAMETER Remove
-Removes a configuration entry from the JSON file.
+Switch parameter to remove an entry from the JSON configuration file. Cannot be combined with the Show, Clear, Add, or Run parameters.
 
 .PARAMETER Add
-Adds a configuration entry to the JSON file.
+Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Show, Clear, Remove, or Run parameters.
+
+.PARAMETER Run
+Switch parameter to immediately synchronize files and directories per the parameters provided to the script. Cannot be combined with the Show, Clear, Remove, or Add parameters.
 
 .PARAMETER Path
-Specifies the path of the source directory.
+The path of the source directory. Required when the Remove, Add, or Run parameters are specified.
 
 .PARAMETER Destination
-Specifies the path of the destination directory.
+The path of the destination directory. Required when the Remove, Add, or Run parameters are specified.
 
 .PARAMETER Preset
-Specifies multiple parameters from a single value:
+String paramter to specify multiple parameters from a single value:
 - 'Sync' sets Direction = 'Both', SkipDelete = $false, SkipExisting = $false
 - 'Merge' sets Direction = 'Both', SkipDelete = $true, SkipExisting = $false
 - 'Mirror' sets Direction = 'Forward', SkipDelete = $false, SkipExisting = $false
@@ -41,28 +44,28 @@ Specifics the direction of the synchronization:
 - 'Both' synchronizes items in both directions and is the default.
 
 .PARAMETER Purge
-Removes all files and directories in the Destination path before synchronization.
+Switch to removes all files and directories in the Destination path before synchronization.
 
 .PARAMETER Recurse
-Specifies that files and directories in child directories of the path and destination should be synchronized.
+Switch to synchronize files and directories in child directories of the path and destination.
 
 .PARAMETER CheckHash
-Specifies that files should be compared using Get-FileHash instead of the LastWriteTime attribute.
+Switch to compare files using Get-FileHash instead of the LastWriteTime attribute.
 
 .PARAMETER SkipDelete
-Specifies that existing files and directories should not be removed by synchronization.
+Switch to keep files and directories that would be removed by synchronization.
 
 .PARAMETER SkipExisting
-Specifies that existing files and directories should not be compared by synchronization.
+Switch to exclude existing files and directories from synchronization.
 
 .PARAMETER SkipFiles
-Specifies that files should not be synchronized.
+Switch to skip synchronizing files; only directories will be synchronized.
 
 .PARAMETER CreatePath
-Specifies that the Path directory should be created if it does not already exist.
+Switch to create the Path directory if it does not already exist.
 
 .PARAMETER CreateDestination
-Specifies that the Destination directory should be created if it does not already exist.
+Switch to create the Destination directory if it does not already exist.
 
 .INPUTS
 None. Sync-PathWithDestination does not accept pipeline input.
@@ -74,85 +77,89 @@ None. The script merely reports on actions taken and does not provide any action
 To be added...
 #>
 
-[CmdletBinding(DefaultParameterSetName = 'Default')]
+[CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Default')]
 Param(
-	[Parameter(Mandatory = $True, ParameterSetName = 'Now')]
-	[switch]$Now,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Sync')]
-	[switch]$Sync,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Clear')]
+	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Show')]
+	[switch]$Show,
+	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Clear')]
 	[switch]$Clear,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
+	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Remove')]
 	[switch]$Remove,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
+	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Add')]
 	[switch]$Add,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
-	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
-	[Parameter(Mandatory = $True, ParameterSetName = 'Now')]
+	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Run')]
+	[switch]$Run,
+	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Remove')]
+	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Add')]
+	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Run')]
 	[ValidatePattern('^[^\*]+$')]
 	[string]$Path,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
-	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
-	[Parameter(Mandatory = $True, ParameterSetName = 'Now')]
+	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Remove')]
+	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Add')]
+	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Run')]
 	[ValidatePattern('^[^\*]+$')]
 	[string]$Destination,
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Now')]
+	[Parameter(ParameterSetName = 'Run')]
 	[ValidateSet('Sync', 'Contribute', 'Mirror', 'Merge')]
 	[string]$Preset = 'Sync',
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Now')]
+	[Parameter(ParameterSetName = 'Run')]
 	[ValidateSet('Both', 'Forward', 'Reverse')]
 	[string]$Direction = 'Both',
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Now')]
+	[Parameter(ParameterSetName = 'Run')]
 	[switch]$Purge,
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Now')]
+	[Parameter(ParameterSetName = 'Run')]
 	[switch]$Recurse,
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Now')]
+	[Parameter(ParameterSetName = 'Run')]
 	[switch]$CheckHash,
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Now')]
+	[Parameter(ParameterSetName = 'Run')]
 	[switch]$SkipDelete,
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Now')]
+	[Parameter(ParameterSetName = 'Run')]
 	[switch]$SkipExisting,
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Now')]
+	[Parameter(ParameterSetName = 'Run')]
 	[switch]$SkipFiles,
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Now')]
+	[Parameter(ParameterSetName = 'Run')]
 	[switch]$CreatePath,
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Now')]
+	[Parameter(ParameterSetName = 'Run')]
 	[switch]$CreateDestination,
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Now')]
+	[Parameter(ParameterSetName = 'Run')]
 	[uint64]$LastSyncTime,
 	[Parameter()]
 	[string]$Json,
+	# switch to skip transcript logging
 	[Parameter(DontShow)]
-	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
+	[switch]$SkipTranscript,
+	# name in transcript files
+	[Parameter(DontShow)]
+	[string]$TranscriptName,
+	# path to transcript files
+	[Parameter(DontShow)]
+	[string]$TranscriptPath,
+	# local host name
+	[Parameter(DontShow)]
+	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
+	# local domain name
+	[Parameter(DontShow)]
+	[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
+	# local DNS hostname
+	[Parameter(DontShow)]
+	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
 )
 
 Begin {
-	# if JSON file not provided...
-	If ([string]::IsNullOrEmpty($Json)) {
-		# ...define default JSON file
-		$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
-	}
-
-	# if update mode...
-	If ($Sync -or $Now) {
-		# ...define transcript file from script path and start transcript
-		Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, "_$Hostname.txt") -Force
-	}
-
 	Function Resolve-PresetToParameters {
 		# resolve direction
-		If ($null -eq $PSBoundParameters['Direction']) { 
+		If ($null -eq $PSBoundParameters['Direction']) {
 			If ($script:Preset -eq 'Sync' -or $script:Preset -eq 'Merge') {
 				$script:Direction = 'Both'
 			}
@@ -162,7 +169,7 @@ Begin {
 		}
 
 		# resolve SkipDelete
-		If ($null -eq $PSBoundParameters['SkipDelete']) { 
+		If ($null -eq $PSBoundParameters['SkipDelete']) {
 			If ($script:Preset -eq 'Merge' -or $script:Preset -eq 'Contribute' -or $script:Preset -eq 'Missing') {
 				$script:SkipDelete = $true
 			}
@@ -172,7 +179,7 @@ Begin {
 		}
 
 		# resolve SkipExisting
-		If ($null -eq $PSBoundParameters['SkipExisting']) { 
+		If ($null -eq $PSBoundParameters['SkipExisting']) {
 			If ($script:Preset -eq 'Missing') {
 				$script:SkipExisting = $true
 			}
@@ -213,7 +220,7 @@ Begin {
 
 		# get current time
 		$sync_time_ticks = (Get-Date).Ticks
-		
+
 		# trim inputs
 		$Path = $Path.TrimEnd('\')
 		$Destination = $Destination.TrimEnd('\')
@@ -242,7 +249,7 @@ Begin {
 				}
 				Catch {
 					Write-Output "Could not create Destination folder '$Destination' on host"; Return
-				}	
+				}
 			}
 			Else {
 				Write-Output "Could not find Destination folder '$Destination' on host"; Return
@@ -401,7 +408,7 @@ Begin {
 				# retrieve files
 				$file_item_on_source = Get-Item -Path $file_path_on_source
 				$file_item_on_target = Get-Item -Path $file_path_on_target
-				# compare files by last 
+				# compare files by last
 				If (-not $CheckHash) {
 					If ($file_item_on_source.LastWriteTime -eq $file_item_on_target.LastWriteTime) {
 						Write-Verbose "Skipping '$file_path_on_source' as '$file_path_on_target' has same LastWriteTime"
@@ -544,8 +551,8 @@ Begin {
 		# update JSON file if LastSyncTime is not 0
 		If ($Json -and $LastSyncTime -ne 0) {
 			Try {
-				$json_data = [array]($json_data | Where-Object { $_.Path -ne $source_path })
-				$json_data += [pscustomobject]@{
+				$JsonData = [array]($JsonData | Where-Object { $_.Path -ne $source_path })
+				$JsonData += [pscustomobject]@{
 					Path              = $source_path.TrimEnd('\')
 					Destination       = $target_path.TrimEnd('\')
 					Direction         = $Direction
@@ -559,140 +566,278 @@ Begin {
 					CreateDestination = $CreateDestination.ToBool()
 					LastSyncTime      = $sync_time_ticks
 				}
-				$json_data | ConvertTo-Json | Set-Content -Path $Json
+				$JsonData | ConvertTo-Json | Set-Content -Path $Json
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file after Sync: '$Json'"
 			}
 		}
 	}
+
+	Function Start-TranscriptWithHostAndDate {
+		Param(
+			# name for transcript file
+			[Parameter()]
+			[string]$TranscriptName,
+			# path for transcript file
+			[Parameter()]
+			[string]$TranscriptPath,
+			# log start time
+			[Parameter(DontShow)]
+			[string]$TranscriptTime = ([datetime]::Now.ToString('yyyyMMddHHmmss')),
+			# local hostname
+			[Parameter(DontShow)]
+			[string]$TranscriptHost = ([System.Environment]::MachineName)
+		)
+
+		# define default transcript name as basename of running script
+		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
+			$TranscriptName = (Get-Item -Path $PSCommandPath).BaseName
+		}
+
+		# define default transcript path as named folder under transcripts folder in common application data folder
+		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
+			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
+		}
+
+		# verify transcript path
+		If (!(Test-Path -Path $TranscriptPath -PathType 'Container')) {
+			# define parameters for New-Item
+			$NewItem = @{
+				Path        = $TranscriptPath
+				ItemType    = 'Directory'
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# create transcript path
+			Try {
+				$null = New-Item @NewItem
+			}
+			Catch {
+				Throw $_
+			}
+		}
+
+		# build transcript file name with defined prefix, hostname, transcript name and current datetime
+		$TranscriptFile = "PowerShell_transcript.$TranscriptHost.$TranscriptName.$TranscriptTime.txt"
+
+		# define parameters for Start-Transcript
+		$StartTranscript = @{
+			Path        = Join-Path -Path $TranscriptPath -ChildPath $TranscriptFile
+			Force       = $true
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# start transcript
+		Try	{
+			$null = Start-Transcript @StartTranscript
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
+	Function Stop-TranscriptWithHostAndDate {
+		Param(
+			# name for transcript file
+			[Parameter()]
+			[string]$TranscriptName,
+			# path of transcript files
+			[Parameter()]
+			[string]$TranscriptPath,
+			# minimum number of transcript files for removal
+			[Parameter(DontShow)]
+			[uint16]$TranscriptCount = 7,
+			# minimum age of transcript files for removal
+			[Parameter(DontShow)]
+			[double]$TranscriptDays = 7,
+			# datetime for transcript files for removal
+			[Parameter(DontShow)]
+			[datetime]$TranscriptDate = ([datetime]::Now.AddDays(-$TranscriptDays)),
+			# local hostname
+			[Parameter(DontShow)]
+			[string]$TranscriptHost = ([System.Environment]::MachineName)
+		)
+
+		# define default transcript name as basename of running script
+		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
+			$TranscriptName = (Get-Item -Path $PSCommandPath).BaseName
+		}
+
+		# define default transcript path as named folder under transcripts folder in common application data folder
+		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
+			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
+			# LEGACY: re-define default transcript path as string array containing current path and original path in common application data folder
+			[string[]]$TranscriptPath = @([System.Environment]::GetFolderPath('CommonApplicationData'), $TranscriptPath)
+		}
+
+		# define filter using default transcript prefix, hostname, and script name
+		$TranscriptFilter = "PowerShell_transcript.$TranscriptHost.$TranscriptName*"
+
+		# get transcript files matching filter
+		$TranscriptFiles = Get-ChildItem -Path $TranscriptPath -Filter $TranscriptFilter -ErrorAction 'SilentlyContinue'
+
+		# split transcript files on transcript date
+		$NewFiles, $OldFiles = $TranscriptFiles.Where({ $_.LastWriteTime -ge $TranscriptDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
+		
+		# if count of files after transcript date is less than to cleanup threshold...
+		If ($NewFiles.Count -lt $TranscriptCount) {
+			# declare skip
+			Write-Verbose -Message "Skipping transcript file cleanup; count of transcripts ($($NewFiles.Count)) would be below minimum transcript count ($TranscriptCount)" -Verbose
+		}
+		Else {
+			# declare cleanup
+			Write-Verbose -Message "Removing any transcript files matching '$TranscriptFilter' that are older than '$TranscriptDays' days from: $TranscriptPath" -Verbose
+			# remove old logs
+			ForEach ($OldFile in ($OldFiles | Sort-Object -Property FullName)) {
+				Try {
+					Remove-Item -Path $OldFile.FullName -Force -Verbose -ErrorAction Stop
+				}
+				Catch {
+					$_
+				}
+			}
+		}
+
+		# stop transcript
+		Try {
+			$null = Stop-Transcript
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
+	# if running...
+	If ($PSCmdlet.ParameterSetName -in 'Default', 'Run') {
+		# define hashtable for transcript functions
+		$TranscriptWithHostAndDate = @{}
+		# define parameters for transcript functions
+		If ($PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptWithHostAndDate['TranscriptName'] = $PSBoundParameters['TranscriptName'] }
+		If ($PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptWithHostAndDate['TranscriptPath'] = $PSBoundParameters['TranscriptPath'] }
+		# start transcript with parameters
+		Try {
+			Start-TranscriptWithHostAndDate @TranscriptWithHostAndDate
+		}
+		Catch {
+			Throw $_
+		}
+	}
 }
 
 Process {
-	# verify JSON file
-	If (-not (Test-Path -Path $Json)) {
+	# if JSON file not provided...
+	If ($PSBoundParameters.ContainsKey('Json') -eq $false) {
+		# ...define default JSON file
+		$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
+	}
+
+	# if JSON file found...
+	If (Test-Path -Path $Json) {
+		# ...create JSON data object as array of PSCustomObjects from JSON file content
+		Try {
+			$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
+		}
+		Catch {
+			Write-Output "`nERROR: could not read configuration file: '$Json'"
+			Return $_
+		}
+	}
+	# if JSON file was not found...
+	Else {
+		# ...and Add set...
 		If ($Add) {
+			# ...try to create the JSON file
 			Try {
-				$null = New-Item -ItemType 'File' -Path $Json
+				$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
 			}
 			Catch {
-				Write-Output "`nERROR: could not create configuration file:"
-				Write-Output "$Json`n"
-				Return
+				Write-Output "`nERROR: could not create configuration file: '$Json'"
+				Return $_
 			}
+			# ...create JSON data object as empty array
+			$JsonData = @()
 		}
+		# ...and Add not set...
 		Else {
-			Write-Output "`nERROR: could not find configuration file:"
-			Write-Output "$Json`n"
+			# ...report and return
+			Write-Output "`nERROR: could not find configuration file: '$Json'"
 			Return
 		}
 	}
 
-	# import JSON data
-	$json_data = @()
-	$json_data += Get-Content -Path $Json | ConvertFrom-Json
-
 	# evaluate parameters
 	switch ($true) {
+		# show configuration file
+		$Show {
+			Write-Output "`nDisplaying '$Json'"
+			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+		}
+		# clear configuration file
 		$Clear {
-			# remove configuration file
-			If (Test-Path -Path $Json) {
-				Try {
-					Remove-Item -Path $Json -Force
-					Write-Output "`nCleared configuration file: '$Json'"
-				}
-				Catch {
-					Write-Output "`nERROR: could not clear configuration file: '$Json'"
-				}
+			Try {
+				[string]::Empty | Set-Content -Path $Json
+				Write-Output "`nCleared configuration file: '$Json'"
+			}
+			Catch {
+				Write-Output "`nERROR: could not clear configuration file: '$Json'"
+				Return $_
 			}
 		}
+		# remove entry from configuration file
 		$Remove {
-			# remove matching entries from object
 			Try {
-				$json_data = $json_data | Where-Object {
+				$JsonData = $JsonData | Where-Object {
 					$_.Path -ne $Path -and $_.Destination -ne $Destination
 				}
-				If ($null -eq $json_data) {
+				If ($null -eq $JsonData) {
 					[string]::Empty | Set-Content -Path $Json
-					Write-Output "`nRemoved '$Path' from configuration file: '$Json'"
+					Write-Output "`nRemoved entry for '$Path' and '$Destination' from configuration file: '$Json'"
 				}
 				Else {
-					$json_data | ConvertTo-Json | Set-Content -Path $Json
-					Write-Output "`nRemoved '$Path' from configuration file: '$Json'"
+					$JsonData | Sort-Object -Property Path, Destination | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
+					Write-Output "`nRemoved entry for '$Path' and '$Destination' from configuration file: '$Json'"
 				}
-				$json_data | Format-Table
+				$JsonData | Format-List
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
+				Return $_
 			}
 		}
+		# add entry to configuration file
 		$Add {
 			# resolve preset to parameters
-			Resolve-PresetToParameters
-			# create custom object from parameters then add to object
 			Try {
-				$json_data += [pscustomobject]@{
-					Path              = $Path.TrimEnd('\')
-					Destination       = $Destination.TrimEnd('\')
-					Direction         = $Direction
-					Purge             = $Purge.ToBool()
-					Recurse           = $Recurse.ToBool()
-					CheckHash         = $CheckHash.ToBool()
-					SkipDelete        = $SkipDelete.ToBool()
-					SkipExisting      = $SkipExisting.ToBool()
-					SkipFiles         = $SkipFiles.ToBool()
-					CreatePath        = $CreatePath.ToBool()
-					CreateDestination = $CreateDestination.ToBool()
-					LastSyncTime      = 0
-				}
-				$json_data | ConvertTo-Json | Set-Content -Path $Json
-				Write-Output "`nAdded '$Path' to configuration file: '$Json'"
-				$json_data | Format-Table
+				Resolve-PresetToParameters
 			}
 			Catch {
-				Write-Output "`nERROR: could not update configuration file: '$Json'"
-			}
-		}
-		$Sync {
-			# check entry count in configuration file
-			If ($json_data.Count -eq 0) {
-				Write-Output "`nERROR: no entries found in configuration file: $Json"
-				Return
+				Write-Output "`nERROR: could not resolve preset to parameters: '$Preset'"
+				Throw $_
 			}
 
-			# process configuration file
-			ForEach ($json_datum in $json_data) {
-				If ([string]::IsNullOrEmpty($json_datum.Path) -or [string]::IsNullOrEmpty($json_datum.Destination) -or [string]::IsNullOrEmpty($json_datum.Direction)) {
-					Write-Output "`nERROR: invalid entry found in configuration file: $Json"
-				}
-				Else {
-					$json_hashtable = @{
-						Path              = $json_datum.Path
-						Destination       = $json_datum.Destination
-						Direction         = $json_datum.Direction
-						Purge             = $json_datum.Purge
-						Recurse           = $json_datum.Recurse
-						CheckHash         = $json_datum.CheckHash
-						SkipDelete        = $json_datum.SkipDelete
-						SkipExisting      = $json_datum.SkipExisting
-						SkipFiles         = $json_datum.SkipFiles
-						CreatePath        = $CreatePath.ToBool()
-						CreateDestination = $CreateDestination.ToBool()
-						LastSyncTime      = $json_datum.LastSyncTime
-					}
-					Sync-ItemsInPathWithDestination @json_hashtable
-				}
+			# trim any trailing backslash from Path
+			Try {
+				$Path = $Path.TrimEnd('\')
 			}
-		}
-		$Now {
-			# resolve preset to parameters
-			Resolve-PresetToParameters
-			# verify required parameters are present
-			If ([string]::IsNullOrEmpty($Direction)) {
-				Write-Output "`nERROR: no Direction specified; provide a Direction or a Preset"
+			Catch {
+				Write-Output "`nERROR: could not trim Path"
+				Throw $_
 			}
-			Else {
-				$json_hashtable = @{
+
+			# trim any trailing backslash from Destination
+			Try {
+				$Destination = $Destination.TrimEnd('\')
+			}
+			Catch {
+				Write-Output "`nERROR: could not trim Destination"
+				Throw $_
+			}
+
+			# create custom object from parameters then add to object
+			Try {
+				# create ordered dictionary for custom object
+				$JsonParameters += [pscustomobject]@{
 					Path              = $Path
 					Destination       = $Destination
 					Direction         = $Direction
@@ -704,22 +849,146 @@ Process {
 					SkipFiles         = $SkipFiles.ToBool()
 					CreatePath        = $CreatePath.ToBool()
 					CreateDestination = $CreateDestination.ToBool()
-					LastSyncTime      = $LastSyncTime
+					LastSyncTime      = 0
 				}
-				Sync-ItemsInPathWithDestination @json_hashtable
+
+				# add current time as FileDateTimeUniversal
+				$JsonParameters['Updated'] = Get-Date -Format FileDateTimeUniversal
+
+				# create custom object from hashtable
+				$JsonDatum = [pscustomobject]$JsonParameters
+
+				# if existing entry has same primary key(s)...
+				If ($JsonData | Where-Object { $_.Path -eq $_.Path -and $_.Destination -eq $_.Destination }) {
+					# inquire before removing existing entry
+					Write-Warning -Message "Will overwrite existing entry for '$Path' and '$Destination' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
+					# remove existing entry with same primary key(s)
+					$JsonData = $JsonData | Where-Object { $_.Path -ne $_.Path -and $_.Destination -ne $_.Destination }
+				}
+
+				# add datum to data
+				$JsonData += $JsonDatum
+				$JsonData | Sort-Object -Property Path, Destination | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
+				Write-Output "`nAdded entry for '$Path' and '$Destination' to configuration file: '$Json'"
+				$JsonData | Sort-Object -Property Path, Destination | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+			}
+			Catch {
+				Write-Output "`nERROR: could not update configuration file: '$Json'"
 			}
 		}
+		# run script with provided parameters
+		$Run {
+			# resolve preset to parameters
+			Try {
+				Resolve-PresetToParameters
+			}
+			Catch {
+				Write-Output "`nERROR: could not resolve preset to parameters: '$Preset'"
+				Throw $_
+			}
+
+			# trim any trailing backslash from Path
+			Try {
+				$Path = $Path.TrimEnd('\')
+			}
+			Catch {
+				Write-Output "`nERROR: could not trim Path"
+				Throw $_
+			}
+
+			# trim any trailing backslash from Destination
+			Try {
+				$Destination = $Destination.TrimEnd('\')
+			}
+			Catch {
+				Write-Output "`nERROR: could not trim Destination"
+				Throw $_
+			}
+
+			# define required parameters for Sync-ItemsInPathWithDestination
+			$SyncItemsInPathWithDestination = @{
+				Path              = $Path
+				Destination       = $Destination
+				Direction         = $Direction
+				Purge             = $Purge.ToBool()
+				Recurse           = $Recurse.ToBool()
+				CheckHash         = $CheckHash.ToBool()
+				SkipDelete        = $SkipDelete.ToBool()
+				SkipExisting      = $SkipExisting.ToBool()
+				SkipFiles         = $SkipFiles.ToBool()
+				CreatePath        = $CreatePath.ToBool()
+				CreateDestination = $CreateDestination.ToBool()
+				LastSyncTime      = $LastSyncTime
+			}
+
+			# define optional parameters for Sync-ItemsInPathWithDestination
+			If ($WhatIfPreference.IsPresent) {
+				$SyncItemsInPathWithDestination['WhatIf'] = $true
+			}
+
+			# sync items in path with destination
+			Sync-ItemsInPathWithDestination @SyncItemsInPathWithDestination
+		}
+		# process entries in configuration file
 		Default {
-			Write-Output "`nDisplaying configuration file: '$Json'"
-			$json_data | Format-Table
+			# check entry count in configuration file
+			If ($JsonData.Count -eq 0) {
+				Write-Output "`nERROR: no entries found in configuration file: $Json"
+				Return
+			}
+
+			# process configuration file
+			:JsonDatum ForEach ($JsonDatum in $JsonData) {
+				switch ($true) {
+					([string]::IsNullOrEmpty($JsonDatum.Path)) {
+						Write-Host "ERROR: required entry (Path) not found in configuration file: $Json"; Continue :JsonDatum
+					}
+					([string]::IsNullOrEmpty($JsonDatum.Destination)) {
+						Write-Host "ERROR: required entry (Destination) not found in configuration file: $Json"; Continue :JsonDatum
+					}
+					([string]::IsNullOrEmpty($JsonDatum.Direction)) {
+						Write-Host "ERROR: required entry (Destination) not found in configuration file: $Json"; Continue :JsonDatum
+					}
+					Default {
+						# define required parameters for Sync-ItemsInPathWithDestination
+						$SyncItemsInPathWithDestination = @{
+							Path              = $JsonDatum.Path
+							Destination       = $JsonDatum.Destination
+							Direction         = $JsonDatum.Direction
+							Purge             = $JsonDatum.Purge
+							Recurse           = $JsonDatum.Recurse
+							CheckHash         = $JsonDatum.CheckHash
+							SkipDelete        = $JsonDatum.SkipDelete
+							SkipExisting      = $JsonDatum.SkipExisting
+							SkipFiles         = $JsonDatum.SkipFiles
+							CreatePath        = $CreatePath.ToBool()
+							CreateDestination = $CreateDestination.ToBool()
+							LastSyncTime      = $JsonDatum.LastSyncTime
+						}
+
+						# define optional parameters for Sync-ItemsInPathWithDestination
+						If ($WhatIfPreference.IsPresent) {
+							$SyncItemsInPathWithDestination['WhatIf'] = $true
+						}
+
+						# sync items in path with destination
+						Sync-ItemsInPathWithDestination @SyncItemsInPathWithDestination
+					}
+				}
+			}
 		}
 	}
 }
 
 End {
-	# if update mode...
-	If ($Sync -or $Now) {
-		# ...stop transcript
-		Stop-Transcript
+	# if running...
+	If ($PSCmdlet.ParameterSetName -in 'Default', 'Run') {
+		# stop transcript with parameters
+		Try {
+			Stop-TranscriptWithHostAndDate @TranscriptWithHostAndDate
+		}
+		Catch {
+			Throw $_
+		}
 	}
 }
