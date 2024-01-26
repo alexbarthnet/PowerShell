@@ -850,16 +850,20 @@ Process {
 		# remove entry from configuration file
 		$Remove {
 			Try {
+				# remove existing entry by primary key(s)...
 				$JsonData = $JsonData | Where-Object { -not ($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath) }
+				# if JSON data empty...
 				If ($null -eq $JsonData) {
+					# clear JSON data
 					[string]::Empty | Set-Content -Path $Json
 					Write-Output "`nRemoved '$TaskName' at '$Taskpath' from configuration file: '$Json'"
 				}
 				Else {
-					$JsonData | ConvertTo-Json | Set-Content -Path $Json
+					# export JSON data
+					$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 					Write-Output "`nRemoved '$TaskName' at '$Taskpath' from configuration file: '$Json'"
+					$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 				}
-				$JsonData | Format-List
 			}
 			Catch {
 				Write-Output "`nERROR: could not update configuration file: '$Json'"
@@ -925,7 +929,7 @@ Process {
 				$JsonParameters['Updated'] = (Get-Date -Format FileDateTimeUniversal)
 
 				# create custom object from hashtable
-				$JsonDatum = [pscustomobject]$JsonParameters
+				$JsonEntry = [pscustomobject]$JsonParameters
 
 				# if existing entry has same primary key(s)...
 				If ($JsonData | Where-Object { $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath }) {
@@ -936,11 +940,11 @@ Process {
 				}
 
 				# add entry to data
-				$JsonData += $JsonDatum
+				$JsonData += $JsonEntry
 
 				# export JSON data
 				$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-				Write-Output "`nAdded '$TaskName' to configuration file: '$Json'"
+				Write-Output "`nAdded '$TaskName' at '$Taskpath' to configuration file: '$Json'"
 				$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			Catch {
@@ -969,133 +973,133 @@ Process {
 			}
 
 			# process configuration file
-			:JsonDatum ForEach ($JsonDatum in $JsonData) {
+			:JsonEntry ForEach ($JsonEntry in $JsonData) {
 				# validate values in JSON file
 				Switch ($true) {
-					([string]::IsNullOrEmpty($JsonDatum.TaskName)) {
-						Write-Output "`nERROR: required entry (TaskName) not found in configuration file: $Json"; Continue JsonDatum
+					([string]::IsNullOrEmpty($JsonEntry.TaskName)) {
+						Write-Output "`nERROR: required entry (TaskName) not found in configuration file: $Json"; Continue JsonEntry
 					}
-					([string]::IsNullOrEmpty($JsonDatum.TaskPath)) {
-						Write-Output "`nERROR: required value (TaskPath) not found in configuration file: $Json"; Continue JsonDatum
+					([string]::IsNullOrEmpty($JsonEntry.TaskPath)) {
+						Write-Output "`nERROR: required value (TaskPath) not found in configuration file: $Json"; Continue JsonEntry
 					}
-					([string]::IsNullOrEmpty($JsonDatum.Execute)) {
-						Write-Output "`nERROR: required value (Execute) not found in configuration file: $Json"; Continue JsonDatum
+					([string]::IsNullOrEmpty($JsonEntry.Execute)) {
+						Write-Output "`nERROR: required value (Execute) not found in configuration file: $Json"; Continue JsonEntry
 					}
-					([string]::IsNullOrEmpty($JsonDatum.Argument)) {
-						Write-Output "`nERROR: required value (Argument) not found in configuration file: $Json"; Continue JsonDatum
+					([string]::IsNullOrEmpty($JsonEntry.Argument)) {
+						Write-Output "`nERROR: required value (Argument) not found in configuration file: $Json"; Continue JsonEntry
 					}
-					([string]::IsNullOrEmpty($JsonDatum.UserId)) {
-						Write-Output "`nERROR: required value (UserId) not found in configuration file: $Json"; Continue JsonDatum
+					([string]::IsNullOrEmpty($JsonEntry.UserId)) {
+						Write-Output "`nERROR: required value (UserId) not found in configuration file: $Json"; Continue JsonEntry
 					}
-					([string]::IsNullOrEmpty($JsonDatum.LogonType)) {
-						Write-Output "`nERROR: required value (LogonType) not found in configuration file: $Json"; Continue JsonDatum
+					([string]::IsNullOrEmpty($JsonEntry.LogonType)) {
+						Write-Output "`nERROR: required value (LogonType) not found in configuration file: $Json"; Continue JsonEntry
 					}
-					($JsonDatum.TriggerAt -isnot [datetime]) {
-						Write-Output "`nERROR: invalid entry (TriggerAt) found in configuration file: $Json"; Continue JsonDatum
+					($JsonEntry.TriggerAt -isnot [datetime]) {
+						Write-Output "`nERROR: invalid entry (TriggerAt) found in configuration file: $Json"; Continue JsonEntry
 					}
 					Default {
 						# if valid task path provided...
-						If (Test-ScheduledTaskPath -TaskPath $JsonDatum.TaskPath) {
+						If (Test-ScheduledTaskPath -TaskPath $JsonEntry.TaskPath) {
 							# check expected tasks hashtable for task path
-							If (!$ExpectedTasks.ContainsKey($JsonDatum.TaskPath) -or $ExpectedTasks[$JsonDatum.TaskPath] -isnot [System.Collections.Generic.List[string]]) {
-								$ExpectedTasks[$JsonDatum.TaskPath] = [System.Collections.Generic.List[string]]::new()
+							If (!$ExpectedTasks.ContainsKey($JsonEntry.TaskPath) -or $ExpectedTasks[$JsonEntry.TaskPath] -isnot [System.Collections.Generic.List[string]]) {
+								$ExpectedTasks[$JsonEntry.TaskPath] = [System.Collections.Generic.List[string]]::new()
 							}
 
 							# update expected tasks hashtable with task name
 							Try {
-								$ExpectedTasks[$JsonDatum.TaskPath].Add($JsonDatum.TaskName)
+								$ExpectedTasks[$JsonEntry.TaskPath].Add($JsonEntry.TaskName)
 							}
 							Catch {
-								Write-Output "ERROR: adding task to hashtable: '$($JsonDatum.TaskName)'"
-								Continue JsonDatum
+								Write-Output "ERROR: adding task to hashtable: '$($JsonEntry.TaskName)'"
+								Continue JsonEntry
 							}
 						}
 
 						# define hashtable for function
 						$UpdateScheduledTaskFromJson = @{
-							TaskName  = [string]$JsonDatum.TaskName
-							TaskPath  = [string]$JsonDatum.TaskPath
-							Execute   = [string]$JsonDatum.Execute
-							Argument  = [string]$JsonDatum.Argument
-							UserId    = [string]$JsonDatum.UserId
-							LogonType = [string]$JsonDatum.LogonType
-							TriggerAt = [datetime]$JsonDatum.TriggerAt
+							TaskName  = [string]$JsonEntry.TaskName
+							TaskPath  = [string]$JsonEntry.TaskPath
+							Execute   = [string]$JsonEntry.Execute
+							Argument  = [string]$JsonEntry.Argument
+							UserId    = [string]$JsonEntry.UserId
+							LogonType = [string]$JsonEntry.LogonType
+							TriggerAt = [datetime]$JsonEntry.TriggerAt
 						}
 
 						# if RunLevel defind in JSON...
-						If ($null -ne $JsonDatum.RunLevel -and $JsonDatum.RunLevel -is [string]) {
+						If ($null -ne $JsonEntry.RunLevel -and $JsonEntry.RunLevel -is [string]) {
 							# add RunLevel to hashtable
 							$UpdateScheduledTaskFromJson['RunLevel'] = [string]$RunLevel
 						}
 
 						# if TriggerAt defined in JSON...
-						If ($null -ne $JsonDatum.TriggerAt) {
+						If ($null -ne $JsonEntry.TriggerAt) {
 							# ...and TriggerAt is datetime...
-							If ($JsonDatum.TriggerAt -is [datetime]) {
+							If ($JsonEntry.TriggerAt -is [datetime]) {
 								# ...add TriggerAt to hashtable
-								$UpdateScheduledTaskFromJson['TriggerAt'] = [datetime]$JsonDatum.TriggerAt
+								$UpdateScheduledTaskFromJson['TriggerAt'] = [datetime]$JsonEntry.TriggerAt
 							}
 							Else {
-								Write-Output "ERROR: could not cast TriggerAt to [datetime] in task: '$($JsonDatum.TaskName)'"
+								Write-Output "ERROR: could not cast TriggerAt to [datetime] in task: '$($JsonEntry.TaskName)'"
 								Continue JsonData
 							}
 
 							# ...and RandomDelayTime defined in JSON...
-							If ($null -ne $JsonDatum.RandomDelayTime) {
+							If ($null -ne $JsonEntry.RandomDelayTime) {
 								# ...and RandomDelayTime is datetime...
-								If ($JsonDatum.RandomDelayTime -is [datetime]) {
+								If ($JsonEntry.RandomDelayTime -is [datetime]) {
 									# ...and RandomDelayTime is greater than (after) TriggerAt
-									If ($JsonDatum.RandomDelayTime -ge $JsonDatum.TriggerAt) {
+									If ($JsonEntry.RandomDelayTime -ge $JsonEntry.TriggerAt) {
 										# ...create RandomDelay timespan and add to hashtable
-										$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonDatum.RandomDelayTime - $JsonDatum.TriggerAt)
+										$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonEntry.RandomDelayTime - $JsonEntry.TriggerAt)
 									}
 									Else {
-										Write-Output "ERROR: RandomDelayTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
+										Write-Output "ERROR: RandomDelayTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
 										Continue JsonData
 									}
 								}
 								Else {
-									Write-Output "ERROR: could not cast RandomDelayTime to [datetime] in task: '$($JsonDatum.TaskName)'"
+									Write-Output "ERROR: could not cast RandomDelayTime to [datetime] in task: '$($JsonEntry.TaskName)'"
 									Continue JsonData
 								}
 							}
 
 							# ...and RepetitionIntervalTime defined in JSON...
-							If ($null -ne $JsonDatum.RepetitionIntervalTime) {
+							If ($null -ne $JsonEntry.RepetitionIntervalTime) {
 								# ...and RepetitionIntervalTime is datetime...
-								If ($JsonDatum.RepetitionIntervalTime -is [datetime]) {
+								If ($JsonEntry.RepetitionIntervalTime -is [datetime]) {
 									# ...and RepetitionIntervalTime is greater than (after) TriggerAt
-									If ($JsonDatum.RepetitionIntervalTime -ge $JsonDatum.TriggerAt) {
+									If ($JsonEntry.RepetitionIntervalTime -ge $JsonEntry.TriggerAt) {
 										# ...create RepetitionInterval timespan and add to hashtable
-										$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonDatum.RepetitionIntervalTime - $JsonDatum.TriggerAt)
+										$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonEntry.RepetitionIntervalTime - $JsonEntry.TriggerAt)
 									}
 									Else {
-										Write-Output "ERROR: RepetitionIntervalTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
+										Write-Output "ERROR: RepetitionIntervalTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
 										Continue JsonData
 									}
 								}
 								Else {
-									Write-Output "ERROR: could not cast RepetitionIntervalTime to [datetime] in task: '$($JsonDatum.TaskName)'"
+									Write-Output "ERROR: could not cast RepetitionIntervalTime to [datetime] in task: '$($JsonEntry.TaskName)'"
 									Continue JsonData
 								}
 							}
 
 							# ...and ExecutionTimeLimitTime defined in JSON...
-							If ($null -ne $JsonDatum.ExecutionTimeLimitTime) {
+							If ($null -ne $JsonEntry.ExecutionTimeLimitTime) {
 								# ...and ExecutionTimeLimitTime is datetime...
-								If ($JsonDatum.ExecutionTimeLimitTime -is [datetime]) {
+								If ($JsonEntry.ExecutionTimeLimitTime -is [datetime]) {
 									# ...and ExecutionTimeLimitTime is greater than (after) TriggerAt
-									If ($JsonDatum.ExecutionTimeLimitTime -ge $JsonDatum.TriggerAt) {
+									If ($JsonEntry.ExecutionTimeLimitTime -ge $JsonEntry.TriggerAt) {
 										# ...create ExecutionTimeLimit timespan and add to hashtable
-										$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonDatum.ExecutionTimeLimitTime - $JsonDatum.TriggerAt)
+										$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonEntry.ExecutionTimeLimitTime - $JsonEntry.TriggerAt)
 									}
 									Else {
-										Write-Output "ERROR: ExecutionTimeLimitTime is before TriggerAt in task: '$($JsonDatum.TaskName)'"
+										Write-Output "ERROR: ExecutionTimeLimitTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
 										Continue JsonData
 									}
 								}
 								Else {
-									Write-Output "ERROR: could not cast ExecutionTimeLimitTime to [datetime] in task: '$($JsonDatum.TaskName)'"
+									Write-Output "ERROR: could not cast ExecutionTimeLimitTime to [datetime] in task: '$($JsonEntry.TaskName)'"
 									Continue JsonData
 								}
 							}
@@ -1110,7 +1114,7 @@ Process {
 						}
 
 						# if Modules defined in JSON...
-						ForEach ($Module in $JsonDatum.Modules) {
+						ForEach ($Module in $JsonEntry.Modules) {
 							# install module
 							Try {
 								Install-ModuleFromJson -Path $Module
