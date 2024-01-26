@@ -623,12 +623,13 @@ Function Invoke-ZenossCloudDeviceRemodel {
 }
 
 # define functions to export
-$functions_to_export = @()
-$functions_to_export += 'Get-ZenossCloudDevices'
-$functions_to_export += 'Get-ZenossCloudDevice'
-$functions_to_export += 'Get-ZenossCloudProductionStates'
-$functions_to_export += 'Set-ZenossCloudProductionState'
-$functions_to_export += 'Invoke-ZenossCloudDeviceRemodel'
+$FunctionsToExport = @(
+    'Get-ZenossCloudDevices'
+    'Get-ZenossCloudDevice'
+    'Get-ZenossCloudProductionStates'
+    'Set-ZenossCloudProductionState'
+    'Invoke-ZenossCloudDeviceRemodel'
+)
 
 # export module members
-Export-ModuleMember -Function $functions_to_export
+Export-ModuleMember -Function $FunctionsToExport
