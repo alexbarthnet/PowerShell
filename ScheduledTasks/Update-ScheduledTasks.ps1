@@ -198,21 +198,33 @@ Begin {
 	Function Install-ModuleFromJson {
 		[CmdletBinding()]
 		Param(
-			[string]$Path
+			[Parameter(DontShow)]	
+			[string]$Path,
+			[Parameter(DontShow)]
+			[string]$ProgramFiles = [System.Environment]::GetFolderPath('ProgramFiles'),
+			[Parameter(DontShow)]
+			[string]$ModulesPath = 'WindowsPowerShell\Modules'
 		)
 
-		# get source module file
-		Try {
-			$SourceModule = Get-Item -Path $Path -ErrorAction Stop
+		# if source module path exists...
+		If (Test-Path -Path $Path) {
+			# get source module file
+			Try {
+				$SourceModule = Get-Item -Path $Path -ErrorAction Stop
+			}
+			Catch {
+				Write-Output "`nERROR: could not get source module file: '$Path'"
+				Return $_
+			}
 		}
-		Catch {
+		Else {
 			Write-Output "`nERROR: could not find source module file: '$Path'"
-			Return $_
+			Return
 		}
 
 		# build PowerShell module path
 		Try {
-			$ModulePath = Join-Path -Path ([System.Environment]::GetFolderPath('ProgramFiles')) -ChildPath 'WindowsPowerShell\Modules'
+			$ModulePath = Join-Path -Path $ProgramFiles -ChildPath $ModulesPath
 		}
 		Catch {
 			Write-Output "`nERROR: could not build PowerShell module path"
@@ -229,10 +241,7 @@ Begin {
 		}
 
 		# get target module folder
-		Try {
-			$TargetFolder = Get-Item -Path $TargetPath -ErrorAction Stop
-		}
-		Catch {
+		If (-not (Test-Path -Path $TargetPath)) {
 			# create target module folder
 			Try {
 				$TargetFolder = New-Item -Path $TargetPath -ItemType Directory
