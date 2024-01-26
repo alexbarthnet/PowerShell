@@ -581,12 +581,12 @@ Begin {
 			[string]$TranscriptHost = ([System.Environment]::MachineName)
 		)
 
-		# check transcript name parameter
+		# define default transcript name as basename of running script
 		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
 			$TranscriptName = (Get-Item -Path $PSCommandPath).BaseName
 		}
 
-		# check transcript path parameter
+		# define default transcript path as named folder under transcripts folder in common application data folder
 		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
 			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
 		}
@@ -633,7 +633,7 @@ Begin {
 			# name for transcript file
 			[Parameter()]
 			[string]$TranscriptName,
-			# path for transcript file
+			# path of transcript files
 			[Parameter()]
 			[string]$TranscriptPath,
 			# minimum number of transcript files for removal
@@ -650,39 +650,39 @@ Begin {
 			[string]$TranscriptHost = ([System.Environment]::MachineName)
 		)
 
-		# check transcript name parameter
+		# define default transcript name as basename of running script
 		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
 			$TranscriptName = (Get-Item -Path $PSCommandPath).BaseName
 		}
 
-		# check transcript path parameter
+		# define default transcript path as named folder under transcripts folder in common application data folder
 		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
 			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
+			# LEGACY: re-define default transcript path as string array containing current path and original path in common application data folder
+			$TranscriptPath = @($TranscriptPath, [System.Environment]::GetFolderPath('CommonApplicationData'))
 		}
 
-		# build transcript basename from transcript name and hostname
-		$TranscriptBase = "PowerShell_transcript.$TranscriptHost.$TranscriptName"
+		# define filter using default transcript prefix, hostname, and script name
+		$TranscriptFilter = "PowerShell_transcript.$TranscriptHost.$TranscriptName*"
 
 		# declare transcript cleanup
-		Write-Verbose -Message "Removing any transcripts named '$TranscriptBase' from '$TranscriptPath' that are older than '$TranscriptDays' days" -Verbose
+		Write-Verbose -Message "Removing any transcript files matching '$TranscriptFilter' that are older than '$TranscriptDays' days from: $($TranscriptPath -join '; ')" -Verbose
 
-		# get transcript files
-		$TranscriptFiles = Get-ChildItem -Path $TranscriptPath | Where-Object { $_.BaseName.StartsWith($TranscriptBase, [System.StringComparison]::InvariantCultureIgnoreCase) -and $_.LastWriteTime -lt $TranscriptDate }
+		# get transcript files matching filter
+		$TranscriptFiles = Get-ChildItem -Path $TranscriptPath -Filter $TranscriptFilter -ErrorAction 'SilentlyContinue'
 
-		# get transcript files newer than cleanup date
-		$NewFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -gt $TranscriptDate }
-
+		# split transcript files on transcript date
+		$NewFiles, $OldFiles = $TranscriptFiles.Where({ $_.LastWriteTime -ge $TranscriptDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
+		
 		# if count of transcript files count is less than cleanup threshold...
-		If ($TranscriptCount -lt $NewFiles.Count ) {
+		If ($TranscriptCount -lt $NewFiles.Count) {
 			# declare and continue
 			Write-Verbose -Message "Skipping transcript removal; count of transcripts ($($NewFiles.Count)) would be below minimum transcript count ($TranscriptCount)" -Verbose
 		}
 		# if count of transcript files is not less than cleanup threshold...
 		Else {
-			# get log files older than cleanup date
-			$OldFiles = $TranscriptFiles | Where-Object { $_.LastWriteTime -lt $TranscriptDate } | Sort-Object -Property FullName
 			# remove old logs
-			ForEach ($OldFile in $OldFiles) {
+			ForEach ($OldFile in ($OldFiles | Sort-Object -Property FullName)) {
 				Try {
 					Remove-Item -Path $OldFile.FullName -Force -Verbose -ErrorAction Stop
 				}
