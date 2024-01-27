@@ -201,7 +201,7 @@ Begin {
 			[Parameter(DontShow)]
 			[string]$Path,
 			[Parameter(DontShow)]
-			[string]$AllUsers = [System.Environment]::GetEnvironmentVariable('PSModulePath') -split ';' -notlike "$PSHOME*" -notlike "$HOME*" -join ''
+			[string]$AllUsers = ([System.Environment]::GetEnvironmentVariable('ProgramFiles'), 'WindowsPowerShell\Modules' -join '\')
 		)
 
 		# if source module exists...
