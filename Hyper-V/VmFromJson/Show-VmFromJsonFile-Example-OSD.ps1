@@ -6,28 +6,28 @@ $Json = '..\..\..\Personal\HyperV\vm-test.json'
 
 .\Write-VMFromJsonFile.ps1 -Json $Json -Clear
 
-# ISO
+# add OS deployment via ISO
 
-$WriteVMFromJsonFile_AddOSD = @{
+$AddOSD = @{
 	AddOSD           = $true
 	VMName           = 'testvm1'
 	DeploymentMethod = 'ISO'
-	DeploymentPath   = 'F:\\storage\\images\\microsoft\\technet\\en-us_windows_server_2022_x64_dvd_620d7eac.iso'
+	DeploymentPath   = 'F:\storage\images\microsoft\technet\en-us_windows_server_2022_x64_dvd.iso'
 }
 
-# WDS
+# add OS deployment via WDS
 
-$WriteVMFromJsonFile_AddOSD = @{
+$AddOSD = @{
 	AddOSD           = $true
 	VMName           = 'testvm1'
 	DeploymentMethod = 'WDS'
 	DeploymentServer = 'wds1'
-	DeploymentPath   = 'WdsClientUnattend\\Unattend-1-Prestaged-WindowsServer2022.xml'
+	DeploymentPath   = 'WdsClientUnattend\Unattend-1-Prestaged-WindowsServer2022.xml'
 }
 
-# SCCM
+# add OS deployment via SCCM
 
-$WriteVMFromJsonFile_AddOSD = @{
+$AddOSD = @{
 	AddOSD                = $true
 	VMName                = 'testvm1'
 	DeploymentMethod      = 'SCCM'
@@ -38,4 +38,4 @@ $WriteVMFromJsonFile_AddOSD = @{
 	MaintenanceCollection = 'MW - Every Tuesday 2000-0000'
 }
 
-.\Write-VMFromJsonFile.ps1 -Json $Json @WriteVMFromJsonFile_AddOSD
+.\Write-VMFromJsonFile.ps1 -Json $Json @AddOSD

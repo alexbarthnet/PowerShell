@@ -6,9 +6,9 @@ $Json = '..\..\..\Personal\HyperV\vm-test.json'
 
 .\Write-VMFromJsonFile.ps1 -Json $Json -Clear
 
-# standalone
+# add VM to stand-alone hypervisor
 
-$WriteVMFromJsonFile_Add = @{
+$AddVM = @{
 	Add                           = $true
 	VMName                        = 'testvm0'
 	Path                          = 'E:\Hyper-V'
@@ -24,17 +24,17 @@ $WriteVMFromJsonFile_Add = @{
 	PreserveVMParameters          = $true
 	SwitchName                    = 'ConvergedSwitch'
 	VlanId                        = 10
-	MacAddressPrefix              = '0AAB'
+	MacAddressPrefix              = '0ABC'
 	IPAddress                     = '192.168.10.250'
 	DhcpServer                    = 'dhcp1'
 	DhcpScope                     = '192.168.10.0'
 }
 
-.\Write-VMFromJsonFile.ps1 -Json $Json @WriteVMFromJsonFile_Add
+.\Write-VMFromJsonFile.ps1 -Json $Json @AddVM
 
-# clustered
+# add VM to clustered hypervisor
 
-$WriteVMFromJsonFile_Add = @{
+$AddVM = @{
 	Add                           = $true
 	VMName                        = 'testvm1'
 	Path                          = 'C:\ClusterStorage\Hyper-V-1'
@@ -50,10 +50,10 @@ $WriteVMFromJsonFile_Add = @{
 	PreserveVMParameters          = $true
 	SwitchName                    = 'ConvergedSwitch'
 	VlanId                        = 10
-	MacAddressPrefix              = '0AAB'
+	MacAddressPrefix              = '0ABC'
 	IPAddress                     = '192.168.10.251'
 	DhcpServer                    = 'dhcp1'
 	DhcpScope                     = '192.168.10.0'
 }
 
-.\Write-VMFromJsonFile.ps1 -Json $Json @WriteVMFromJsonFile_Add
+.\Write-VMFromJsonFile.ps1 -Json $Json @AddVM

@@ -8,7 +8,7 @@ $Json = '..\..\..\Personal\HyperV\vm-test.json'
 
 # add VMNetworkAdapter with next MAC address on host
 
-$WriteVMFromJsonFile_AddVMNetworkAdapter = @{
+$AddVMNetworkAdapter = @{
 	AddVMNetworkAdapter = $true
 	VMName              = 'testvm1'
 	NetworkAdapterName  = 'Private1'
@@ -17,7 +17,7 @@ $WriteVMFromJsonFile_AddVMNetworkAdapter = @{
 
 # add VMNetworkAdapter with fixed MAC address
 
-$WriteVMFromJsonFile_AddVMNetworkAdapter = @{
+$AddVMNetworkAdapter = @{
 	AddVMNetworkAdapter = $true
 	VMName              = 'testvm1'
 	NetworkAdapterName  = 'Private1'
@@ -28,7 +28,7 @@ $WriteVMFromJsonFile_AddVMNetworkAdapter = @{
 
 # add VMNetworkAdapter with MAC address constructed from prefix and known IP address 
 
-$WriteVMFromJsonFile_AddVMNetworkAdapter = @{
+$AddVMNetworkAdapter = @{
 	AddVMNetworkAdapter = $true
 	VMName              = 'testvm1'
 	NetworkAdapterName  = 'Private1'
@@ -40,7 +40,7 @@ $WriteVMFromJsonFile_AddVMNetworkAdapter = @{
 
 # add VMNetworkAdapter and DHCP reservation with fixed MAC address
 
-$WriteVMFromJsonFile_AddVMNetworkAdapter = @{
+$AddVMNetworkAdapter = @{
 	AddVMNetworkAdapter = $true
 	VMName              = 'testvm1'
 	NetworkAdapterName  = 'Private1'
@@ -54,7 +54,7 @@ $WriteVMFromJsonFile_AddVMNetworkAdapter = @{
 
 # add VMNetworkAdapter and DHCP reservation with MAC address constructed from prefix and known IP address 
 
-$WriteVMFromJsonFile_AddVMNetworkAdapter = @{
+$AddVMNetworkAdapter = @{
 	AddVMNetworkAdapter = $true
 	VMName              = 'testvm1'
 	NetworkAdapterName  = 'Private1'
@@ -66,4 +66,4 @@ $WriteVMFromJsonFile_AddVMNetworkAdapter = @{
 	DhcpScope           = '192.168.10.0'
 }
 
-.\Write-VMFromJsonFile.ps1 -Json $Json @WriteVMFromJsonFile_AddVMNetworkAdapter
+.\Write-VMFromJsonFile.ps1 -Json $Json @AddVMNetworkAdapter
