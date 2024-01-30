@@ -2,14 +2,13 @@ Write-Host 'This file contains example hashtables for splatting Write-VMFromJson
 Get-Content -Path $PSCommandPath
 Return
 
-$Json = '..\..\..\Personal\HyperV\vm-test.json'
+$Json = '.\vm-test.json'
 
 .\Write-VMFromJsonFile.ps1 -Json $Json -Clear
 
 # add VMNetworkAdapter with next MAC address on host
 
 $AddVMNetworkAdapter = @{
-	AddVMNetworkAdapter = $true
 	VMName              = 'testvm1'
 	NetworkAdapterName  = 'Private1'
 	SwitchName          = 'ConvergedSwitch'
@@ -18,7 +17,6 @@ $AddVMNetworkAdapter = @{
 # add VMNetworkAdapter with fixed MAC address
 
 $AddVMNetworkAdapter = @{
-	AddVMNetworkAdapter = $true
 	VMName              = 'testvm1'
 	NetworkAdapterName  = 'Private1'
 	SwitchName          = 'ConvergedSwitch'
@@ -29,7 +27,6 @@ $AddVMNetworkAdapter = @{
 # add VMNetworkAdapter with MAC address constructed from prefix and known IP address 
 
 $AddVMNetworkAdapter = @{
-	AddVMNetworkAdapter = $true
 	VMName              = 'testvm1'
 	NetworkAdapterName  = 'Private1'
 	SwitchName          = 'ConvergedSwitch'
@@ -41,7 +38,6 @@ $AddVMNetworkAdapter = @{
 # add VMNetworkAdapter and DHCP reservation with fixed MAC address
 
 $AddVMNetworkAdapter = @{
-	AddVMNetworkAdapter = $true
 	VMName              = 'testvm1'
 	NetworkAdapterName  = 'Private1'
 	SwitchName          = 'ConvergedSwitch'
@@ -55,7 +51,6 @@ $AddVMNetworkAdapter = @{
 # add VMNetworkAdapter and DHCP reservation with MAC address constructed from prefix and known IP address 
 
 $AddVMNetworkAdapter = @{
-	AddVMNetworkAdapter = $true
 	VMName              = 'testvm1'
 	NetworkAdapterName  = 'Private1'
 	SwitchName          = 'ConvergedSwitch'
@@ -66,4 +61,4 @@ $AddVMNetworkAdapter = @{
 	DhcpScope           = '192.168.10.0'
 }
 
-.\Write-VMFromJsonFile.ps1 -Json $Json @AddVMNetworkAdapter
+.\Write-VMFromJsonFile.ps1 -Json $Json -AddVMNetworkAdapter @AddVMNetworkAdapter

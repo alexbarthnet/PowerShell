@@ -2,14 +2,30 @@ Write-Host 'This file contains example hashtables for splatting Write-VMFromJson
 Get-Content -Path $PSCommandPath
 Return
 
-$Json = '..\..\..\Personal\HyperV\vm-test.json'
+$Json = '.\vm-test.json'
 
 .\Write-VMFromJsonFile.ps1 -Json $Json -Clear
 
 # add VM to stand-alone hypervisor
 
 $AddVM = @{
-	Add                           = $true
+	VMName                        = 'testvm0'
+	Path                          = 'E:\Hyper-V'
+	ComputerName                  = 'hv1'
+	ProcessorCount                = 2
+	MemoryStartupBytes            = 2GB
+	MemoryMinimumBytes            = 1GB
+	MemoryMaximumBytes            = 4GB
+	DoNotCluster                  = $true
+	EnableVMTPM                   = $true
+	CreateDefaultVMHardDiskDrive  = $true
+	CreateDefaultVMNetworkAdapter = $true
+	PreserveVMParameters          = $true
+}
+
+# add VM to clustered hypervisor with default VMNetworkAdapter configuration
+
+$AddVM = @{
 	VMName                        = 'testvm0'
 	Path                          = 'E:\Hyper-V'
 	ComputerName                  = 'hv1'
@@ -30,12 +46,26 @@ $AddVM = @{
 	DhcpScope                     = '192.168.10.0'
 }
 
-.\Write-VMFromJsonFile.ps1 -Json $Json @AddVM
-
 # add VM to clustered hypervisor
 
 $AddVM = @{
-	Add                           = $true
+	VMName                        = 'testvm1'
+	Path                          = 'C:\ClusterStorage\Hyper-V-1'
+	ComputerName                  = 'hv1'
+	ProcessorCount                = 2
+	MemoryStartupBytes            = 4GB
+	MemoryMinimumBytes            = 1GB
+	MemoryMaximumBytes            = 8GB
+	ClusterPriority               = 2000
+	EnableVMTPM                   = $true
+	CreateDefaultVMHardDiskDrive  = $true
+	CreateDefaultVMNetworkAdapter = $true
+	PreserveVMParameters          = $true
+}
+
+# add VM to clustered hypervisor with default VMNetworkAdapter configuration
+
+$AddVM = @{
 	VMName                        = 'testvm1'
 	Path                          = 'C:\ClusterStorage\Hyper-V-1'
 	ComputerName                  = 'hv1'
@@ -56,4 +86,4 @@ $AddVM = @{
 	DhcpScope                     = '192.168.10.0'
 }
 
-.\Write-VMFromJsonFile.ps1 -Json $Json @AddVM
+.\Write-VMFromJsonFile.ps1 -Json $Json -Add @AddVM

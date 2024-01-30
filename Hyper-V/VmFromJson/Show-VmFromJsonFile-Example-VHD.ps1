@@ -2,14 +2,13 @@ Write-Host 'This file contains example hashtables for splatting Write-VMFromJson
 Get-Content -Path $PSCommandPath
 Return
 
-$Json = '..\..\..\Personal\HyperV\vm-test.json'
+$Json = '.\vm-test.json'
 
 .\Write-VMFromJsonFile.ps1 -Json $Json -Clear
 
 # add VMHardDiskDrive to first available controller with first available LUN number
 
 $AddVMHardDiskDrive = @{
-	AddVMHardDiskDrive = $true
 	VMName             = 'testvm1'
 	Path               = 'E:\Hyper-V\testvm1\testvm1-0.vhdx'
 	SizeBytes          = 100GB
@@ -18,7 +17,6 @@ $AddVMHardDiskDrive = @{
 # add VMHardDiskDrive to first available controller with specific LUN number
 
 $AddVMHardDiskDrive = @{
-	AddVMHardDiskDrive = $true
 	VMName             = 'testvm1'
 	Path               = 'E:\Hyper-V\testvm1\testvm1-1.vhdx'
 	SizeBytes          = 100GB
@@ -28,7 +26,6 @@ $AddVMHardDiskDrive = @{
 # add VMHardDiskDrive to specific controller with first available LUN number
 
 $AddVMHardDiskDrive = @{
-	AddVMHardDiskDrive = $true
 	VMName             = 'testvm1'
 	Path               = 'E:\Hyper-V\testvm1\testvm1-2.vhdx'
 	SizeBytes          = 100GB
@@ -38,7 +35,6 @@ $AddVMHardDiskDrive = @{
 # add VMHardDiskDrive to specific controller with specific LUN number
 
 $AddVMHardDiskDrive = @{
-	AddVMHardDiskDrive = $true
 	VMName             = 'testvm1'
 	Path               = 'E:\Hyper-V\testvm1\testvm1-3.vhdx'
 	SizeBytes          = 100GB
@@ -46,4 +42,4 @@ $AddVMHardDiskDrive = @{
 	ControllerLocation = 3
 }
 
-.\Write-VMFromJsonFile.ps1 -Json $Json @AddVMHardDiskDrive
+.\Write-VMFromJsonFile.ps1 -Json $Json -AddVMHardDiskDrive @AddVMHardDiskDrive
