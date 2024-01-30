@@ -1,6 +1,8 @@
 Write-Host 'This file contains example hashtables for splatting Write-VMFromJsonFile.ps1'
-Get-Content -Path $PSCommandPath
+Get-Content -Path $PSCommandPath | Select-Object -Skip 3
 Return
+
+# define path to JSON file
 
 $Json = '.\vm-test.json'
 

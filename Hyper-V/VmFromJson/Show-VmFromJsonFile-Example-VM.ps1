@@ -1,6 +1,8 @@
 Write-Host 'This file contains example hashtables for splatting Write-VMFromJsonFile.ps1'
-Get-Content -Path $PSCommandPath
+Get-Content -Path $PSCommandPath | Select-Object -Skip 3
 Return
+
+# define path to JSON file
 
 $Json = '.\vm-test.json'
 
@@ -23,29 +25,6 @@ $AddVM = @{
 	PreserveVMParameters          = $true
 }
 
-# add VM to clustered hypervisor with default VMNetworkAdapter configuration
-
-$AddVM = @{
-	VMName                        = 'testvm0'
-	Path                          = 'E:\Hyper-V'
-	ComputerName                  = 'hv1'
-	ProcessorCount                = 2
-	MemoryStartupBytes            = 2GB
-	MemoryMinimumBytes            = 1GB
-	MemoryMaximumBytes            = 4GB
-	DoNotCluster                  = $true
-	EnableVMTPM                   = $true
-	CreateDefaultVMHardDiskDrive  = $true
-	CreateDefaultVMNetworkAdapter = $true
-	PreserveVMParameters          = $true
-	SwitchName                    = 'ConvergedSwitch'
-	VlanId                        = 10
-	MacAddressPrefix              = '0ABC'
-	IPAddress                     = '192.168.10.250'
-	DhcpServer                    = 'dhcp1'
-	DhcpScope                     = '192.168.10.0'
-}
-
 # add VM to clustered hypervisor
 
 $AddVM = @{
@@ -63,21 +42,10 @@ $AddVM = @{
 	PreserveVMParameters          = $true
 }
 
-# add VM to clustered hypervisor with default VMNetworkAdapter configuration
+.\Write-VMFromJsonFile.ps1 -Json $Json -Add @AddVM
 
-$AddVM = @{
-	VMName                        = 'testvm1'
-	Path                          = 'C:\ClusterStorage\Hyper-V-1'
-	ComputerName                  = 'hv1'
-	ProcessorCount                = 2
-	MemoryStartupBytes            = 4GB
-	MemoryMinimumBytes            = 1GB
-	MemoryMaximumBytes            = 8GB
-	ClusterPriority               = 2000
-	EnableVMTPM                   = $true
-	CreateDefaultVMHardDiskDrive  = $true
-	CreateDefaultVMNetworkAdapter = $true
-	PreserveVMParameters          = $true
+# add configuration for default VMNetworkAdapter
+$AddDefaultVMNetworkAdapter = @{
 	SwitchName                    = 'ConvergedSwitch'
 	VlanId                        = 10
 	MacAddressPrefix              = '0ABC'
@@ -86,4 +54,4 @@ $AddVM = @{
 	DhcpScope                     = '192.168.10.0'
 }
 
-.\Write-VMFromJsonFile.ps1 -Json $Json -Add @AddVM
+.\Write-VMFromJsonFile.ps1 -Json $Json -Add @AddVM @AddDefaultVMNetworkAdapter
