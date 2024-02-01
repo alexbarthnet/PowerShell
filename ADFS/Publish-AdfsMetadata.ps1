@@ -245,7 +245,7 @@ Process {
 		$Role = Get-AdfsSyncProperties | Select-Object -ExpandProperty 'Role'
 	}
 	Catch {
-		Write-Output "ERROR: retrieving ADFS sync properties"
+		Write-Output 'ERROR: retrieving ADFS sync properties'
 		Return $_
 	}
 
