@@ -277,7 +277,7 @@ Process {
 	
 	# export token signing certificate
 	Try {
-		$AdfsCertificate | Export-Certificate -Force -FilePath $FilePath
+		$null = $AdfsCertificate | Export-Certificate -Force -FilePath $FilePath
 	}
 	Catch {
 		Return $_
