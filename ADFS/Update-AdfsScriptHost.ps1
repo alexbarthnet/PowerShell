@@ -261,10 +261,10 @@ Process {
 	}
 
 	# if hosts contains an entry for FQDN...
-	If ($Hosts -match "^[^#].*$Fqdn$") {
+	If ($Hosts -match "^[^#].*$($JsonData.Fqdn)$") {
 		# resolve host in URI to IP Address to workaround potential hosts file resolution of ADFS servers
 		Try {
-			$IPAddress = Resolve-DnsName -Name $Fqdn -DnsOnly -NoHostsFile | Where-Object { $_.Type -eq 'A' } | Select-Object -ExpandProperty IPAddress
+			$IPAddress = Resolve-DnsName -Name $($JsonData.Fqdn) -DnsOnly -NoHostsFile | Where-Object { $_.Type -eq 'A' } | Select-Object -ExpandProperty IPAddress
 			Write-Output "Resolved IP address from URL: '$($Uri.AbsoluteUri)'"
 		}
 		Catch {
