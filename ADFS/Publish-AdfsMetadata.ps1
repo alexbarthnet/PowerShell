@@ -231,13 +231,20 @@ Process {
 	$Path = Join-Path -Path $JsonData.Path -ChildPath $ChildPath
 
 	# verify path
-	If (-not (Test-Path -Path $Path)) {
+	If (Test-Path -Path $Path -PathType Container) {
+		# report path
+		Write-Output "Found metadata path: $Path"
+	}
+	Else {
+		# create path
 		Try {
 			$null = New-Item -ItemType 'Directory' -Path $Path -ErrorAction Stop
 		}
 		Catch {
 			Return $_
 		}
+		# report path created
+		Write-Output "Created metadata path: $Path"
 	}
 
 	# get ADFS role
@@ -270,6 +277,7 @@ Process {
 	# retrieve token signing certificate
 	Try {
 		$AdfsCertificate = Get-AdfsCertificate -CertificateType 'Token-Signing' | Select-Object -ExpandProperty 'Certificate' | Sort-Object -Property NotBefore | Select-Object -Last 1
+		Write-Output "Retrieved token signing certificate with thumbprint: $($AdfsCertificate.Thumbprint)"
 	}
 	Catch {
 		Return $_
@@ -278,6 +286,7 @@ Process {
 	# export token signing certificate
 	Try {
 		$null = $AdfsCertificate | Export-Certificate -Force -FilePath $FilePath
+		Write-Output "Exported token signing certificate to path: $FilePath"
 	}
 	Catch {
 		Return $_
@@ -286,6 +295,7 @@ Process {
 	# get ADFS endpoints
 	Try {
 		$ADFSEndpoint = Get-ADFSEndpoint -ErrorAction Stop
+		Write-Output "Retrieved endpoint data from ADFS"
 	}
 	Catch {
 		Return $_
@@ -294,39 +304,78 @@ Process {
 	# get URL for metadata
 	$UriForMetadata = ($ADFSEndpoint | Where-Object Protocol -EQ 'Federation Metadata').FullUrl.ToString()
 
+	# test URL for endpoint
+	If ([string]::IsNullOrEmpty($UriForMetadata)) {
+		Write-Warning "could not find URL for 'Federation Metadata' in endpoint data"
+		Return
+	}
+
+	# get URL for endpoint
+	$UriForEndpoint = ($ADFSEndpoint | Where-Object Protocol -EQ 'SAML 2.0/WS-Federation').FullUrl.ToString()
+
+	# test URL for endpoint
+	If ([string]::IsNullOrEmpty($UriForEndpoint)) {
+		Write-Warning "could not find URL for 'SAML 2.0/WS-Federation' in endpoint data"
+		Return
+	}
+
 	# get URL for rest method against local server
 	$UriForRestMethod = $UriForMetadata.Replace($JsonData.Fqdn, $DnsHostName)
+
+	# test URL for SAML
+	If ($UriForRestMethod -eq $UriForEndpoint) {
+		Write-Warning "could not create local URL for 'SAML 2.0/WS-Federation' endpoint"
+		Return
+	}
 
 	# get local URL for metadata
 	Try {
 		$Xml = Invoke-RestMethod -Uri $UriForRestMethod
+		Write-Output "Retrieved XML from local metadata endpoint: $UriForRestMethod"
 	}
 	Catch {
 		Return $_
 	}
 
-	# build paths for post method files
-	$PostPath = Join-Path -Path $Path -ChildPath 'saml-single-logout-post.xml'
-	$PostPathLegacy = Join-Path -Path $Path -ChildPath 'custom-logout-post.xml'
-
-	# get URL for SAML
-	$UriForEndpoint = ($ADFSEndpoint | Where-Object Protocol -EQ 'SAML 2.0/WS-Federation').FullUrl.ToString()
-
-	# modify metadata for Single Logout Service then save modified metadata
+	# copy metadata then modify Single Logout Service location for post binding
 	$XmlForPost = $Xml
 	$XmlForPost.GetElementsByTagName('IDPSSODescriptor').GetElementsByTagName('SingleLogoutService') | Where-Object { $_.Binding -match 'Post' } | ForEach-Object { $_.Location = ($UriForEndpoint + 'logout.aspx') }
-	$XmlForPost.Save($PostPath)
-	$XmlForPost.Save($PostPathLegacy)
+	
+	# define child paths for XML files with post method
+	$XmlChildPaths = @('saml-single-logout-post.xml', 'custom-logout-post.xml')
+	
+	# process child paths for XML files
+	ForEach ($XmlChildPath in $XmlChildPaths) {
+		# create full path for XML file
+		$XmlPath = Join-Path -Path $Path -ChildPath 'XmlChildPath'
+		# write XML file
+		Try {
+			$XmlForPost.Save($XmlPath)	
+		}
+		Catch {
+			Return $_
+		}
+	}
 
-	# build paths for post method files
-	$RedirectPath = Join-Path -Path $Path -ChildPath 'saml-single-logout-redirect.xml'
-	$RedirectPathLegacy = Join-Path -Path $Path -ChildPath 'custom-logout-redirect.xml'
-
-	# modify metadata for Single Logout Service then save modified metadata
+	# copy metadata then modify Single Logout Service location for redirect binding
 	$XmlForRedirect = $Xml
 	$XmlForRedirect.GetElementsByTagName('IDPSSODescriptor').GetElementsByTagName('SingleLogoutService') | Where-Object { $_.Binding -match 'Redirect' } | ForEach-Object { $_.Location = ($UriForEndpoint + '?wa=wsignout1.0') }
-	$XmlForRedirect.Save($RedirectPath)
-	$XmlForRedirect.Save($RedirectPathLegacy)
+
+	# define child paths for XML files with post method
+	$XmlChildPaths = @('saml-single-logout-post.xml', 'custom-logout-post.xml')
+	
+	# process child paths for XML files
+	ForEach ($XmlChildPath in $XmlChildPaths) {
+		# create full path for XML file
+		$XmlPath = Join-Path -Path $Path -ChildPath 'XmlChildPath'
+		# write XML file
+		Try {
+			$XmlForRedirect.Save($XmlPath)	
+		}
+		Catch {
+			Return $_
+		}
+	}
 }
 
 End {
