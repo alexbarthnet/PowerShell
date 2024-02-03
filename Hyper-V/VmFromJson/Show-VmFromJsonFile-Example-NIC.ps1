@@ -1,15 +1,12 @@
 Write-Host 'This file contains example hashtables for splatting Write-VMFromJsonFile.ps1'
-Get-Content -Path $PSCommandPath | Select-Object -Skip 3
+Get-Content -Path $PSCommandPath | Select-Object -Skip 4
 Return
+# content below this line
 
 # define path to JSON file
-
 $Json = '.\vm-test.json'
 
-.\Write-VMFromJsonFile.ps1 -Json $Json -Clear
-
 # add VMNetworkAdapter to defined switch with default VLAN ID and next MAC address on host
-
 $AddVMNetworkAdapter = @{
 	VMName              = 'testvm1'
 	NetworkAdapterName  = 'Private1'
@@ -17,7 +14,6 @@ $AddVMNetworkAdapter = @{
 }
 
 # add VMNetworkAdapter to defined switch with defined VLAN ID and next MAC address on host
-
 $AddVMNetworkAdapter = @{
 	VMName              = 'testvm1'
 	NetworkAdapterName  = 'Private1'
@@ -26,7 +22,6 @@ $AddVMNetworkAdapter = @{
 }
 
 # add VMNetworkAdapter with defined VLAN ID and defined MAC address
-
 $AddVMNetworkAdapter = @{
 	VMName              = 'testvm1'
 	NetworkAdapterName  = 'Private1'
@@ -36,7 +31,6 @@ $AddVMNetworkAdapter = @{
 }
 
 # add VMNetworkAdapter with defined VLAN ID and MAC address constructed from prefix and defined IP address 
-
 $AddVMNetworkAdapter = @{
 	VMName              = 'testvm1'
 	NetworkAdapterName  = 'Private1'
@@ -47,7 +41,6 @@ $AddVMNetworkAdapter = @{
 }
 
 # add VMNetworkAdapter with defined VLAN ID and DHCP reservation with fixed MAC address
-
 $AddVMNetworkAdapter = @{
 	VMName              = 'testvm1'
 	NetworkAdapterName  = 'Private1'
@@ -60,7 +53,6 @@ $AddVMNetworkAdapter = @{
 }
 
 # add VMNetworkAdapter with defined VLAN ID and DHCP reservation with MAC address constructed from prefix and defined IP address 
-
 $AddVMNetworkAdapter = @{
 	VMName              = 'testvm1'
 	NetworkAdapterName  = 'Private1'
@@ -72,6 +64,5 @@ $AddVMNetworkAdapter = @{
 	DhcpScope           = '192.168.10.0'
 }
 
-# call Write-VMFromJson.ps1 and add VMNetworkAdapter to 
-
+# call Write-VMFromJson.ps1 and add VMNetworkAdapter to VM
 .\Write-VMFromJsonFile.ps1 -Json $Json -AddVMNetworkAdapter @AddVMNetworkAdapter
