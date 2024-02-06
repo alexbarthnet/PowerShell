@@ -259,14 +259,14 @@ Process {
 	# check ADFS role
 	switch ($Role) {
 		'PrimaryComputer' {
-			Write-Output 'primary ADFS server: updating metadata...'
+			Write-Output 'Primary ADFS server: updating metadata...'
 		}
 		'SecondaryComputer' {
-			Write-Output 'secondary ADFS server: skipping metadata update'
+			Write-Output 'Secondary ADFS server: skipping metadata update'
 			Return
 		}
 		Default {
-			Write-Output "unknown ADFS server role: $Role"
+			Write-Output "Unknown ADFS server role: $Role"
 			Return
 		}
 	}
@@ -328,52 +328,51 @@ Process {
 		Return
 	}
 
+	# define parameters for Invoke-WebRequest
+	$InvokeRestMethod = @{
+		Uri                = $UriForRestMethod
+		Headers            = @{'host' = $JsonData.Fqdn }
+		UseBasicParsing    = $true
+		MaximumRedirection = 0
+		ErrorAction        = [System.Management.Automation.ActionPreference]::Stop
+	}
+
 	# get local URL for metadata
 	Try {
-		$Xml = Invoke-RestMethod -Uri $UriForRestMethod
+		$RestMethod = Invoke-RestMethod @InvokeRestMethod
 		Write-Output "Retrieved XML from local metadata endpoint: $UriForRestMethod"
 	}
 	Catch {
 		Return $_
 	}
 
-	# copy metadata then modify Single Logout Service location for post binding
-	$XmlForPost = $Xml
-	$XmlForPost.GetElementsByTagName('IDPSSODescriptor').GetElementsByTagName('SingleLogoutService') | Where-Object { $_.Binding -match 'Post' } | ForEach-Object { $_.Location = ($UriForEndpoint + 'logout.aspx') }
-
-	# define child paths for XML files with post method
-	$XmlChildPaths = @('saml-single-logout-post.xml', 'custom-logout-post.xml')
-
-	# process child paths for XML files
-	ForEach ($XmlChildPath in $XmlChildPaths) {
-		# create full path for XML file
-		$XmlPath = Join-Path -Path $Path -ChildPath $XmlChildPath
-		# write XML file
-		Try {
-			$XmlForPost.Save($XmlPath)
-		}
-		Catch {
-			Return $_
-		}
+	# build hashtable of bindings and suffixes
+	$CustomMetadata = @{
+		Post     = 'logout.aspx'
+		Redirect = '?wa=wsignout1.0'
 	}
 
-	# copy metadata then modify Single Logout Service location for redirect binding
-	$XmlForRedirect = $Xml
-	$XmlForRedirect.GetElementsByTagName('IDPSSODescriptor').GetElementsByTagName('SingleLogoutService') | Where-Object { $_.Binding -match 'Redirect' } | ForEach-Object { $_.Location = ($UriForEndpoint + '?wa=wsignout1.0') }
+	# process custom metadata
+	ForEach ($Binding in $CustomMetadata.Keys) {
+		# copy metadata then modify Single Logout Service location for post binding
+		$XmlForPost = $RestMethod
+		$XmlForPost.GetElementsByTagName('IDPSSODescriptor').GetElementsByTagName('SingleLogoutService') | Where-Object { $_.Binding -match $Binding } | ForEach-Object { $_.Location = ($UriForEndpoint + $CustomMetadata[$Binding]) }
 
-	# define child paths for XML files with post method
-	$XmlChildPaths = @('saml-single-logout-post.xml', 'custom-logout-post.xml')
+		# define child paths for XML files with post method
+		$XmlChildPaths = @("saml-single-logout-$($Binding.ToLowerInvariant()).xml", "custom-logout-$($Binding.ToLowerInvariant()).xml")
 
-	# process child paths for XML files
-	ForEach ($XmlChildPath in $XmlChildPaths) {
-		# create full path for XML file
-		$XmlPath = Join-Path -Path $Path -ChildPath $XmlChildPath
-		# write XML file
-		Try {
-			$XmlForRedirect.Save($XmlPath)
-		}
-		Catch {
-			Return $_
+		# process child paths for XML files
+		ForEach ($XmlChildPath in $XmlChildPaths) {
+			# create full path for XML file
+			$XmlPath = Join-Path -Path $Path -ChildPath $XmlChildPath
+			# write XML file
+			Try {
+				$XmlForPost.Save($XmlPath)
+				Write-Output "Wrote metadata file: $XmlPath"
+			}
+			Catch {
+				Return $_
+			}
 		}
 	}
 }
