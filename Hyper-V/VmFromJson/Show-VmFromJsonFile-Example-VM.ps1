@@ -47,12 +47,12 @@ $AddVM = @{
 
 # add configuration for default VMNetworkAdapter
 $AddDefaultVMNetworkAdapter = @{
-	SwitchName                    = 'ConvergedSwitch'
-	VlanId                        = 10
-	MacAddressPrefix              = '0ABC'
-	IPAddress                     = '192.168.10.251'
-	DhcpServer                    = 'dhcp1'
-	DhcpScope                     = '192.168.10.0'
+	SwitchName       = 'ConvergedSwitch'
+	VlanId           = 10
+	MacAddressPrefix = '0ABC'
+	IPAddress        = '192.168.10.251'
+	DhcpServer       = 'dhcp1'
+	DhcpScope        = '192.168.10.0'
 }
 
 .\Write-VMFromJsonFile.ps1 -Json $Json -Add @AddVM @AddDefaultVMNetworkAdapter

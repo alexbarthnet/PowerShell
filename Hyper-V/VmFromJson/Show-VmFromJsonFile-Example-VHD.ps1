@@ -12,9 +12,9 @@ $Json = '.\vm-test.json'
 # add VMHardDiskDrive to first available controller with first available LUN number
 
 $AddVMHardDiskDrive = @{
-	VMName             = 'testvm1'
-	Path               = 'E:\Hyper-V\testvm1\testvm1-0.vhdx'
-	SizeBytes          = 100GB
+	VMName    = 'testvm1'
+	Path      = 'E:\Hyper-V\testvm1\testvm1-0.vhdx'
+	SizeBytes = 100GB
 }
 
 # add VMHardDiskDrive to first available controller with specific LUN number
@@ -29,10 +29,10 @@ $AddVMHardDiskDrive = @{
 # add VMHardDiskDrive to specific controller with first available LUN number
 
 $AddVMHardDiskDrive = @{
-	VMName             = 'testvm1'
-	Path               = 'E:\Hyper-V\testvm1\testvm1-2.vhdx'
-	SizeBytes          = 100GB
-	ControllerNumber   = 2
+	VMName           = 'testvm1'
+	Path             = 'E:\Hyper-V\testvm1\testvm1-2.vhdx'
+	SizeBytes        = 100GB
+	ControllerNumber = 2
 }
 
 # add VMHardDiskDrive to specific controller with specific LUN number
