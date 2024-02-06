@@ -62,13 +62,13 @@ Begin {
 			$FederationServiceTrustCredential = Unprotect-CmsCredentials -Identity $FederationServiceName
 		}
 		Catch {
-			Write-Output "error retrieving CMS credentials: $($_.ToString())"
+			Write-Warning "error retrieving CMS credentials: $($_.ToString())"
 			Throw $_
 		}
 
 		# install WAP configuration
 		If ($FederationServiceTrustCredential -isnot [System.Management.Automation.PSCredential]) {
-			Write-Error -Message 'required CMS credential not found'
+			Write-Warning 'required CMS credential not found'
 			Throw
 		}
 
@@ -91,16 +91,40 @@ Begin {
 	}
 
 	Function Start-WebApplicationProxyServices {
+		[CmdletBinding()]
+		Param(
+			[switch]$Quiet
+		)
 		# start services in forward order:
 		#  1. proxy controller (retrieves configuration from ADFS for proxy service)
 		#  2. proxy service (proxies requests to destination)
 		#  3. "ADFS" service (extends proxy service to support tokens)
-		ForEach ($Service in 'appproxyctrl', 'appproxysvc', 'adfssrv') {
+		ForEach ($Name in 'appproxyctrl', 'appproxysvc', 'adfssrv') {
+			# define parameters
+			$ServiceParmeters = @{
+				Name        = $Name
+				Verbose     = $True
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+			# get service
 			Try {
-				Get-Service -Name $Service -ErrorAction Stop | Where-Object { $_.Status -ne 'Running' } | Start-Service -Verbose -ErrorAction Stop
+				$Service = Get-Service $ServiceParmeters
 			}
 			Catch {
-				Write-Output "...could not start service: '$Service'"
+				Write-Warning "could not get service: '$Name'"
+				Throw $_
+			}
+			# test service
+			If ($Service.Status -eq 'Running' -and -not $Quiet) {
+				Write-Warning "service already running: '$Name'"
+				Continue
+			}
+			# start service
+			Try {
+				Start-Service @ServiceParmeters
+			}
+			Catch {
+				Write-Warning "could not start service: '$Name'"
 				Throw $_
 			}
 		}
@@ -108,17 +132,39 @@ Begin {
 
 	Function Stop-WebApplicationProxyServices {
 		[CmdletBinding()]
-		Param()
+		Param(
+			[switch]$Quiet
+		)
 		# stop services in reverse order:
-		#  2. "ADFS" service (extends proxy service to support tokens)
+		#  1. "ADFS" service (extends proxy service to support tokens)
 		#  2. proxy service (proxies requests to destination)
 		#  3. proxy controller (retrieves configuration from ADFS for proxy service)
-		ForEach ($Service in 'adfssrv', 'appproxysvc', 'appproxyctrl') {
+		ForEach ($Name in 'adfssrv', 'appproxysvc', 'appproxyctrl') {
+			# define parameters
+			$ServiceParmeters = @{
+				Name        = $Name
+				Verbose     = $True
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+			# get service
 			Try {
-				Get-Service -Name $Service -ErrorAction Stop | Where-Object { $_.Status -ne 'Stopped' } | Stop-Service -Verbose -Force -ErrorAction Stop
+				$Service = Get-Service $ServiceParmeters
 			}
 			Catch {
-				Write-Output "...could not stop service: '$Service'"
+				Write-Warning "could not get service: '$Name'"
+				Throw $_
+			}
+			# test service
+			If ($Service.Status -eq 'stopped') {
+				Write-Warning "service already stopped: '$Name'"
+				Continue
+			}
+			# start service
+			Try {
+				Stop-Service @ServiceParmeters
+			}
+			Catch {
+				Write-Warning "could not stop service: '$Name'"
 				Throw $_
 			}
 		}
@@ -141,7 +187,8 @@ Begin {
 			$CurrentCertificate = Get-Item -Path (Join-Path -Path $CertStorePath -ChildPath $Thumbprint)
 		}
 		Catch {
-			Write-Output "ERROR: retrieving external certificate for: '$Name'"
+			Write-Warning "could not retrieve external certificate for '$Name' by thumbprint: $Thumbprint"
+			Throw $_
 		}
 
 		# get latest certificate with same subject as current certificate
@@ -149,7 +196,7 @@ Begin {
 
 		# if current certificate is latest certificate...
 		If ($CurrentCertificate.Thumbprint -eq $LatestCertificate.Thumbprint) {
-			Write-Output "Verified external certificate for: '$Name'"
+			Write-Output "Verified external certificate for '$Name' with thumbprint: $($CurrentCertificate.Thumbprint)"
 			Return
 		}
 
@@ -164,11 +211,11 @@ Begin {
 		# update application with latest certificate
 		Try {
 			Set-WebApplicationProxyApplication @SetWebApplicationProxyApplication
-			Write-Output "Updated external certificate for: '$Name'"
+			Write-Output "Updated external certificate for '$Name' with thumbprint: $($LatestCertificate.Thumbprint)"
 		}
 		Catch {
-			Write-Output "ERROR: updating external certificate for: '$Name'"
-			Return $_
+			Write-Warning "could not update external certificate for '$Name' with thumbprint: $($LatestCertificate.Thumbprint)"
+			Throw $_
 		}
 	}
 
@@ -340,33 +387,33 @@ Process {
 	}
 
 	# verify services are running
-	Write-Output 'verifying WAP services'
+	Write-Output 'Verifying WAP services'
 	Try {
-		Start-WebApplicationProxyServices
+		Start-WebApplicationProxyServices -Quiet
 	}
 	Catch {
 		Return $_
 	}
 
 	# check WAP health (try 1)
-	Try {
-		# if configuration not found...
-		If ($null -eq $WebApplicationProxyConfiguration) {
-			# ...retrieve configuration!
-			Write-Output 'retrieving WAP configuration from ADFS'
+	If ($null -eq $WebApplicationProxyConfiguration) {
+		Write-Output 'Retrieving WAP configuration from ADFS'
+		Try {
 			$WebApplicationProxyConfiguration = Get-WebApplicationProxyConfiguration	
 		}
+		Catch {
+			Write-Warning 'could not retrieve WAP configuration'
+		}
 	}
-	# restart services
-	Catch {
-		Write-Output '...error checking WAP configuration'
-		Write-Output 'restarting services...'
+
+	# address WAP health (try 1)
+	If ($null -eq $WebApplicationProxyConfiguration) {
+		Write-Output 'Restarting WAP services'
 		# stop services
 		Try {
 			Stop-WebApplicationProxyServices
 		}
 		Catch {
-			Write-Output '...error stopping services'
 			Return $_
 		}
 		# start services
@@ -374,59 +421,55 @@ Process {
 			Start-WebApplicationProxyServices
 		}
 		Catch {
-			Write-Output '...error starting services'
 			Return $_
 		}
 	}
 
 	# check WAP health (try 2)
-	Try {
-		# if configuration not found...
-		If ($null -eq $WebApplicationProxyConfiguration) {
-			# ...retrieve configuration!
-			Write-Output 'retrieving WAP configuration from ADFS after restart'
+	If ($null -eq $WebApplicationProxyConfiguration) {
+		Write-Output 'Retrieving WAP configuration from ADFS after restart'
+		Try {
 			$WebApplicationProxyConfiguration = Get-WebApplicationProxyConfiguration	
 		}
+		Catch {
+			Write-Warning 'could not retrieve WAP configuration after restart'
+		}
 	}
-	# reset proxy
-	Catch {
-		Write-Output '...error retrieving WAP configuration after service restart'
-		Write-Output 'installing WAP...'
+
+	# address WAP health (try 2)
+	If ($null -eq $WebApplicationProxyConfiguration) {
+		Write-Output 'Installing WAP with CmsCredentials'
 		# get WAP configuration
 		Try {
 			Install-WebApplicationProxyWithCMS -CertificateThumbprint $JsonData.Hash -FederationServiceName $JsonData.Fqdn
 		}
 		Catch {
-			Write-Output '...error installing WAP'
 			Return $_
 		}
 	}
 
 	# check WAP health (try 3)
-	Try {
-		# if configuration not found...
-		If ($null -eq $WebApplicationProxyConfiguration) {
-			# ...retrieve configuration!
-			Write-Output 'retrieving WAP configuration from ADFS after re-install'
+	If ($null -eq $WebApplicationProxyConfiguration) {
+		Write-Output 'Retrieving WAP configuration from ADFS after reinstall'
+		Try {
 			$WebApplicationProxyConfiguration = Get-WebApplicationProxyConfiguration	
 		}
-	}
-	# throw and exit
-	Catch {
-		Write-Output '...error installing WAP'
-		Return $_
+		Catch {
+			Write-Warning 'could not retrieve WAP configuration after reinstall'
+			Return $_
+		}
 	}
 
-	# retrieve applications
+	# check WAP applications
 	Try {
 		$WebApplicationProxyApplications = Get-WebApplicationProxyApplication
 	}
 	Catch {
-		Write-Output "`nERROR: retrieving WAP applications`n"
-		Return
+		Write-Warning 'could not retrieve WAP applications'
+		Return $_
 	}
 
-	# check external certificates of applications
+	# check each WAP application
 	ForEach ($WebApplicationProxyApplication in $WebApplicationProxyApplications) {
 		# define parameters
 		$UpdateWebApplicationProxyApplicationCertificate = @{
@@ -440,7 +483,7 @@ Process {
 			Update-WebApplicationProxyApplicationCertificate @UpdateWebApplicationProxyApplicationCertificate
 		}
 		Catch {
-			Write-Output '...error updating WAP application certificate'
+			Write-Warning "could not update WAP application certificate for: $Name"
 			Return $_
 		}
 	}
