@@ -52,6 +52,83 @@ Param(
 )
 
 Begin {
+	Function Get-UriWithIPAddressFromUriWithHostname {
+		Param(
+			# a URI object or a string that can be cast a URI object
+			[Parameter(Required)]
+			[uri]$Uri,
+			[Parameter(DontShow)][ValidateScript({ [Microsoft.DnsClient.Commands.RecordType].IsEnumDefined($_) })]
+			# the DNS record type to resolve
+			[string]$Type = 'A'
+		)
+
+		# get DnsSafeHost from Uri
+		Try {
+			$DnsSafeHost = $Uri.DnsSafeHost
+		}
+		Catch {
+			Write-Warning "could not retrieve DnsSafeHost from Uri: $($Uri.AbsoluteUri)"
+			Return $_
+		}
+
+		# define parameters
+		$ResolveDnsName = @{
+			Name        = $DnsSafeHost
+			Type        = $Type
+			DnsOnly     = $True
+			NoHostsFile = $True
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# resolve DnsSafeHost
+		Try {
+			$DnsName = Resolve-DnsName @ResolveDnsName
+		}
+		Catch {
+			Write-Warning "could not resolve DnsSafeHost '$DnsSafeHost' from Uri: $($Uri.AbsoluteUri)"
+			Return $_
+		}
+
+		# filter results and extract IPAddress
+		$IPAddress = $DnsName.Where({ $_.Type -eq $Type }).IPAddress
+
+		# check for
+		switch ($IPAddress.Count) {
+			# if 0 records in IPAddress...
+			0 {
+				# warn and return null
+				Write-Warning "could resolve any '$Type' records from DNS for DnsSafeHost '$DnsSafeHost' from Uri: $($Uri.AbsoluteUri)"
+				Return $null
+			}
+			# if 1 record in IPaddress...
+			1 {
+				# break out of switch and continue
+				Break
+			}
+			# if more than 1 record in IPaddress...
+			Default {
+				# select first address and continue
+				$IPAddress = $IPAddress[0]
+			}
+		}
+
+		# report IP address
+		Write-Output "Resolved IP address '$IPAddress' from URL: '$($Uri.AbsoluteUri)'"
+
+		# update URI with IP address
+		Try {
+			$Uri = [Uri]$Uri.AbsoluteUri.Replace($Uri.DnsSafeHost, $IPAddress)
+			Write-Output "Constructed host URL from IP: '$($Uri.AbsoluteUri)'"
+		}
+		Catch {
+			Write-Warning "Error constructing host URL from IP: '$($Uri.AbsoluteUri)'"
+			Return $_
+		}
+
+		# return updated URI
+		Return $Uri
+	}
+
 	Function Start-TranscriptWithHostAndDate {
 		Param(
 			# name for transcript file
@@ -157,7 +234,7 @@ Begin {
 
 		# split transcript files on transcript date
 		$NewFiles, $OldFiles = $TranscriptFiles.Where({ $_.LastWriteTime -ge $TranscriptDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
-		
+
 		# if count of files after transcript date is less than to cleanup threshold...
 		If ($NewFiles.Count -lt $TranscriptCount) {
 			# declare skip
@@ -247,7 +324,7 @@ Process {
 		Write-Output "Constructed URL IP address from URL: '$($Uri.AbsoluteUri)'"
 	}
 	Catch {
-		Write-Output "Error creating URL from FQDN: '$($JsonData.Fqdn)'"
+		Write-Warning "Error creating URL from FQDN: '$($JsonData.Fqdn)'"
 		Return $_
 	}
 
@@ -256,40 +333,39 @@ Process {
 		$Hosts = Get-Content -Path "$env:SystemRoot\System32\drivers\etc\hosts"
 	}
 	Catch {
-		Write-Output 'Error retrieving hosts file'
+		Write-Warning 'Error retrieving hosts file'
 		Return $_
 	}
 
 	# if hosts contains an entry for FQDN...
 	If ($Hosts -match "^[^#].*$($JsonData.Fqdn)$") {
+		Write-Output 'Hosts file contains active entry with the ADFS FQDN; resolving FQDN to IP via DNS to build alternate host URL'
 		# resolve host in URI to IP Address to workaround potential hosts file resolution of ADFS servers
 		Try {
-			$IPAddress = Resolve-DnsName -Name $($JsonData.Fqdn) -DnsOnly -NoHostsFile | Where-Object { $_.Type -eq 'A' } | Select-Object -ExpandProperty IPAddress
-			Write-Output "Resolved IP address from URL: '$($Uri.AbsoluteUri)'"
+			$Uri = Get-UriWithIPAddressFromUriWithHostname -Uri $Uri
 		}
 		Catch {
-			Write-Output "Error resolving IP address from URL: '$($Uri.AbsoluteUri)'"
+			Write-Warning "could not create new URI with IPaddress from original URI"
 			Return $_
 		}
+	}
 
-		# update URI with IP address
-		Try {
-			$Uri = [Uri]$Uri.AbsoluteUri.Replace($Uri.DnsSafeHost, $IPAddress)
-			Write-Output "Constructed host URL from IP: '$($Uri.AbsoluteUri)'"
-		}
-		Catch {
-			Write-Output "Error constructing host URL from IP: '$($Uri.AbsoluteUri)'"
-			Return $_
-		}
+	# define parameters for Invoke-WebRequest
+	$InvokeWebRequest = @{
+		Uri                = $Uri
+		Headers            = @{'host' = $JsonData.Fqdn }
+		UseBasicParsing    = $true
+		MaximumRedirection = 0
+		ErrorAction        = [System.Management.Automation.ActionPreference]::Stop
 	}
 
 	# retrieve content from URI
 	Try {
-		$WebRequest = Invoke-WebRequest -UseBasicParsing -Uri $Uri -Headers @{'host' = $Fqdn } -MaximumRedirection 0
+		$WebRequest = Invoke-WebRequest @InvokeWebRequest
 		Write-Output "Retrieved response from host URL: '$($Uri.AbsoluteUri)'"
 	}
 	Catch {
-		Write-Output "Error retrieving response from host URL: '$($Uri.AbsoluteUri)'"
+		Write-Warning "Error retrieving response from host URL: '$($Uri.AbsoluteUri)'"
 		Return $_
 	}
 
@@ -299,7 +375,7 @@ Process {
 		Write-Output "Parsed response from host URL: '$($Uri.AbsoluteUri)'"
 	}
 	Catch {
-		Write-Output "Error parsing response from host URL: '$($Uri.AbsoluteUri)'"
+		Write-Warning "Error parsing response from host URL: '$($Uri.AbsoluteUri)'"
 		Return $_
 	}
 
@@ -314,7 +390,7 @@ Process {
 			Write-Output "Retrieved script host from file: '$FilePath'"
 		}
 		Catch {
-			Write-Output "Error retrieving script host from file: '$FilePath'"
+			Write-Warning "Error retrieving script host from file: '$FilePath'"
 			Return $_
 		}
 	}
@@ -325,7 +401,7 @@ Process {
 			Write-Output "Created script host file: '$FilePath'"
 		}
 		Catch {
-			Write-Output "Error creating script host file: '$FilePath"
+			Write-Warning "Error creating script host file: '$FilePath"
 			Return $_
 		}
 	}
@@ -333,7 +409,7 @@ Process {
 	# check current host and active host
 	If ($CurrentHost -eq $ActiveHost) {
 		Write-Output "'$ActiveHost' is active host and script host; no change required"
-		Return 
+		Return
 	}
 
 	# update host name
@@ -342,7 +418,7 @@ Process {
 		Write-Output "'$ActiveHost' is new script host; replaced old script host: '$CurrentHost' "
 	}
 	Catch {
-		Write-Output "Error updating script host file: '$FilePath"
+		Write-Warning "Error updating script host file: '$FilePath"
 		Return $_
 	}
 }
