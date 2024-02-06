@@ -159,7 +159,7 @@ Begin {
 
 		# split transcript files on transcript date
 		$NewFiles, $OldFiles = $TranscriptFiles.Where({ $_.LastWriteTime -ge $TranscriptDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
-		
+
 		# if count of files after transcript date is less than to cleanup threshold...
 		If ($NewFiles.Count -lt $TranscriptCount) {
 			# declare skip
@@ -282,7 +282,7 @@ Process {
 	Catch {
 		Return $_
 	}
-	
+
 	# export token signing certificate
 	Try {
 		$null = $AdfsCertificate | Export-Certificate -Force -FilePath $FilePath
@@ -295,7 +295,7 @@ Process {
 	# get ADFS endpoints
 	Try {
 		$ADFSEndpoint = Get-ADFSEndpoint -ErrorAction Stop
-		Write-Output "Retrieved endpoint data from ADFS"
+		Write-Output 'Retrieved endpoint data from ADFS'
 	}
 	Catch {
 		Return $_
@@ -340,17 +340,17 @@ Process {
 	# copy metadata then modify Single Logout Service location for post binding
 	$XmlForPost = $Xml
 	$XmlForPost.GetElementsByTagName('IDPSSODescriptor').GetElementsByTagName('SingleLogoutService') | Where-Object { $_.Binding -match 'Post' } | ForEach-Object { $_.Location = ($UriForEndpoint + 'logout.aspx') }
-	
+
 	# define child paths for XML files with post method
 	$XmlChildPaths = @('saml-single-logout-post.xml', 'custom-logout-post.xml')
-	
+
 	# process child paths for XML files
 	ForEach ($XmlChildPath in $XmlChildPaths) {
 		# create full path for XML file
-		$XmlPath = Join-Path -Path $Path -ChildPath 'XmlChildPath'
+		$XmlPath = Join-Path -Path $Path -ChildPath $XmlChildPath
 		# write XML file
 		Try {
-			$XmlForPost.Save($XmlPath)	
+			$XmlForPost.Save($XmlPath)
 		}
 		Catch {
 			Return $_
@@ -363,14 +363,14 @@ Process {
 
 	# define child paths for XML files with post method
 	$XmlChildPaths = @('saml-single-logout-post.xml', 'custom-logout-post.xml')
-	
+
 	# process child paths for XML files
 	ForEach ($XmlChildPath in $XmlChildPaths) {
 		# create full path for XML file
-		$XmlPath = Join-Path -Path $Path -ChildPath 'XmlChildPath'
+		$XmlPath = Join-Path -Path $Path -ChildPath $XmlChildPath
 		# write XML file
 		Try {
-			$XmlForRedirect.Save($XmlPath)	
+			$XmlForRedirect.Save($XmlPath)
 		}
 		Catch {
 			Return $_
