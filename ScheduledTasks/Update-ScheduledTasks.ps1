@@ -677,7 +677,7 @@ Begin {
 		Else {
 			# declare cleanup
 			Write-Verbose -Message "Removing any transcript files matching '$TranscriptFilter' that are older than '$TranscriptDays' days from: $TranscriptPath" -Verbose
-			# remove old logs
+			# remove old transcript files
 			ForEach ($OldFile in ($OldFiles | Sort-Object -Property FullName)) {
 				Try {
 					Remove-Item -Path $OldFile.FullName -Force -Verbose -ErrorAction Stop
