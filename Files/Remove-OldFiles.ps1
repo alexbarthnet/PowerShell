@@ -314,7 +314,7 @@ Begin {
 		Else {
 			# declare cleanup
 			Write-Verbose -Message "Removing any transcript files matching '$TranscriptFilter' that are older than '$TranscriptDays' days from: $TranscriptPath" -Verbose
-			# remove old logs
+			# remove old transcript files
 			ForEach ($OldFile in ($OldFiles | Sort-Object -Property FullName)) {
 				Try {
 					Remove-Item -Path $OldFile.FullName -Force -Verbose -ErrorAction Stop
@@ -407,16 +407,19 @@ Process {
 		# remove entry from configuration file
 		$Remove {
 			Try {
-				$JsonData = $JsonData | Where-Object {
-					$_.Path -ne $Path
-				}
+				# remove existing entry by primary key(s)...
+				$JsonData = $JsonData | Where-Object { $_.Path -ne $Path }
+				# if JSON data empty...
 				If ($null -eq $JsonData) {
+					# clear JSON data
 					[string]::Empty | Set-Content -Path $Json
 					Write-Output "`nRemoved '$Path' from configuration file: '$Json'"
 				}
 				Else {
-					$JsonData | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
+					# export JSON data
+					$JsonData | Sort-Object -Property Path | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 					Write-Output "`nRemoved '$Path' from configuration file: '$Json'"
+					$JsonData | Sort-Object -Property Path | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 				}
 				$JsonData | Format-List
 			}
@@ -439,7 +442,7 @@ Process {
 				$JsonParameters['Updated'] = Get-Date -Format FileDateTimeUniversal
 
 				# create custom object from hashtable
-				$JsonDatum = [pscustomobject]$JsonParameters
+				$JsonEntry = [pscustomobject]$JsonParameters
 
 				# if existing entry has same primary key(s)...
 				If ($JsonData | Where-Object { $_.Path -eq $Path }) {
@@ -449,8 +452,10 @@ Process {
 					$JsonData = $JsonData | Where-Object { $_.Path -ne $Path }
 				}
 
-				# add datum to data
-				$JsonData += $JsonDatum
+				# add entry to data
+				$JsonData += $JsonEntry
+
+				# export JSON data
 				$JsonData | Sort-Object -Property Path | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 				Write-Output "`nAdded '$Path' to configuration file: '$Json'"
 				$JsonData | Sort-Object -Property Path | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
@@ -500,30 +505,30 @@ Process {
 			}
 
 			# process entries in configuration file
-			:JsonDatum ForEach ($JsonDatum in $JsonData) {
+			:JsonEntry ForEach ($JsonEntry in $JsonData) {
 				switch ($true) {
-					([string]::IsNullOrEmpty($JsonDatum.Path)) {
-						Write-Host "ERROR: required entry (Path) not found in configuration file: $Json"; Continue :JsonDatum
+					([string]::IsNullOrEmpty($JsonEntry.Path)) {
+						Write-Host "ERROR: required entry (Path) not found in configuration file: $Json"; Continue :JsonEntry
 					}
-					([string]::IsNullOrEmpty($JsonDatum.OlderThanUnits)) {
-						Write-Host "ERROR: required entry (OlderThanUnits) not found in configuration file: $Json"; Continue :JsonDatum
+					([string]::IsNullOrEmpty($JsonEntry.OlderThanUnits)) {
+						Write-Host "ERROR: required entry (OlderThanUnits) not found in configuration file: $Json"; Continue :JsonEntry
 					}
-					([string]::IsNullOrEmpty($JsonDatum.OlderThanType)) {
-						Write-Host "ERROR: required entry (OlderThanType) not found in configuration file: $Json"; Continue :JsonDatum
+					([string]::IsNullOrEmpty($JsonEntry.OlderThanType)) {
+						Write-Host "ERROR: required entry (OlderThanType) not found in configuration file: $Json"; Continue :JsonEntry
 					}
 					Default {
 						# get previous date from input
 						Try {
-							$Date = Get-PreviousDate -OlderThanUnits ($JsonDatum.OlderThanUnits) -OlderThanType ($JsonDatum.OlderThanType)
+							$Date = Get-PreviousDate -OlderThanUnits ($JsonEntry.OlderThanUnits) -OlderThanType ($JsonEntry.OlderThanType)
 						}
 						Catch {
-							Write-Host "ERROR: could not create date from '$($JsonDatum.OlderThanUnits) $($JsonDatum.OlderThanType)'"
-							Continue :JsonDatum
+							Write-Host "ERROR: could not create date from '$($JsonEntry.OlderThanUnits) $($JsonEntry.OlderThanType)'"
+							Continue :JsonEntry
 						}
 
 						# define required parameters for Remove-ItemsFromPathBeforeDate
 						$RemoveItemsFromPathBeforeDate = @{
-							Path = [string]$JsonDatum.Path
+							Path = [string]$JsonEntry.Path
 							Date = [datetime]$Date
 						}
 
@@ -538,7 +543,7 @@ Process {
 						}
 						Catch {
 							Write-Host 'ERROR: could not remove items'
-							Continue :JsonDatum
+							Continue :JsonEntry
 						}
 					}
 				}
