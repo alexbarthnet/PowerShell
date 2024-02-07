@@ -2,6 +2,7 @@ Write-Host "`nThis file contains examples for running Update-ScheduledTasks.ps1`
 Get-Content -Path $PSCommandPath | Select-Object -Skip 4
 Return
 # content below this line
+
 $Json = 'C:\Content\local\tasks.json'
 
 $UpdateScheduledTasks = @{
