@@ -382,7 +382,7 @@ Begin {
 
 		# define default transcript name as basename of running script
 		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
-			$TranscriptName = (Get-Item -Path $PSCommandPath).BaseName
+			$TranscriptName = (Get-PSCallStack)[1].Command -replace '\.ps1$'
 		}
 
 		# define default transcript path as named folder under transcripts folder in common application data folder
@@ -451,7 +451,7 @@ Begin {
 
 		# define default transcript name as basename of running script
 		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
-			$TranscriptName = (Get-Item -Path $PSCommandPath).BaseName
+			$TranscriptName = (Get-PSCallStack)[1].Command -replace '\.ps1$'
 		}
 
 		# define default transcript path as named folder under transcripts folder in common application data folder
@@ -478,7 +478,7 @@ Begin {
 		Else {
 			# declare cleanup
 			Write-Verbose -Message "Removing any transcript files matching '$TranscriptFilter' that are older than '$TranscriptDays' days from: $TranscriptPath" -Verbose
-			# remove old logs
+			# remove old transcript files
 			ForEach ($OldFile in ($OldFiles | Sort-Object -Property FullName)) {
 				Try {
 					Remove-Item -Path $OldFile.FullName -Force -Verbose -ErrorAction Stop
