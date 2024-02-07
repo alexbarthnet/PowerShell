@@ -75,6 +75,7 @@ Begin {
 		$ResolveDnsName = @{
 			Name        = $DnsSafeHost
 			Type        = $Type
+			Server      = '8.8.8.8'
 			DnsOnly     = $True
 			NoHostsFile = $True
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
