@@ -286,13 +286,19 @@ Begin {
 }
 
 Process {
+	# example try/catch block
 	Try {
 		# insert commands here
+		$null = Get-PSCallStack
+		# write to transcript example
+		Write-TranscriptWithHostAndDate -Message 'retrieved PSCallStack'
 	}
 	Catch {
-		# call return to hand errors up the stack
-		# do not use Throw in the Process section; calling Throw will terminate the script and skip the End block
+		# write to transcript example for warning
+		Write-TranscriptWithHostAndDate -Message $_.ToString() -MessageType Warning
+		# use return to hand errors to the calling function or console
 		Return $_
+		# avoid using Throw in the Process section; calling Throw will terminate the script, skip the End block, and skip transcript cleanup
 	}
 }
 
