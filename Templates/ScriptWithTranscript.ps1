@@ -251,12 +251,19 @@ Begin {
 			}
 		}
 
+		# address bug in PowerShell 5 with transcripts and Write-Information
+		If ($MessageType -eq 'Information' -and $PSVersionTable.PSVersion.Major -lt 6) {
+			Write-Information -MessageData $Message -InformationAction SilentlyContinue
+		}
+
+		# prefix information messages
+		If ($MessageType -eq 'Information') {
+			$Message = "INFO: $Message"
+		}
+
 		# write message
 		switch ($MessageType) {
 			'Information' {
-				# write-information to transcript in PowerShell 5; addresses Write-Information bug in PowerShell 5
-				If ($PSVersionTable.PSVersion.Major -lt 6) { Write-Information -MessageData $Message -InformationAction SilentlyContinue }
-				# write information to screen in PowerShell 5; write information to screen and transcript in PowerShell 6+
 				Write-Information -MessageData $Message -InformationAction Continue; Break
 			}
 			'Verbose' {
