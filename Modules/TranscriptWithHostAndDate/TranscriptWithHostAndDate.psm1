@@ -185,59 +185,131 @@ Function Stop-TranscriptWithHostAndDate {
 }
 
 Function Write-TranscriptWithHostAndDate {
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param(
 		# message for transcript
 		[Parameter(Position = 0, Mandatory = $true)]
 		[string]$Message,
-		# message type for transcript
-		[Parameter(Position = 1)][ValidateSet('Information', 'Verbose', 'Warning')]
-		[string]$MessageType = 'Information',
-		# prefix for transcript
-		[Parameter(Position = 2)][ValidateSet('Full', 'Formatted', 'Basic', 'None')]
-		[string]$Prefix = 'Full',
+		# optional prefix type for message; add datetime
+		[Parameter(ParameterSetName = 'Basic')]
+		[switch]$Basic,
+		# optional prefix type for message; add datetime and command, messsage is collection of key/value pairs
+		[Parameter(ParameterSetName = 'Collection')]
+		[switch]$Collection,
+		# optional prefix type for message; add datetime and command, message will be wrapped in double quotes
+		[Parameter(ParameterSetName = 'Wrap')]
+		[switch]$Wrap,
 		# command name for transcript
-		[Parameter(Position = 3, DontShow)]
+		[Parameter(DontShow)]
 		[string]$Command = (Get-PSCallStack)[0].Command,
 		# formatted datetime for message
-		[Parameter(Position = 4, DontShow)]
+		[Parameter(DontShow)]
 		[string]$Datetime = [datetime]::Now.ToString('yyyy-MM-ddThh:mm:ss.fffZ')
 	)
 
-	# prefix message
-	switch ($Prefix) {
-		'Full' {
-			$Message = "datetime=$Datetime command=$Command message=`"$Message`""; Break
+	# update message per parameters
+	switch ($PSCmdlet.ParameterSetName) {
+		'Basic' {
+			$Message = "$Datetime $Message"; Break
 		}
-		'Formatted' {
+		'Collection' {
 			$Message = "datetime=$Datetime command=$Command $Message"; Break
 		}
-		'Basic' {
-			$Message = "$Datetime;$Message"; Break
+		'Wrap' {
+			$Message = "datetime=$Datetime command=$Command message=`"$Message`""; Break
 		}
 	}
 
 	# address bug in PowerShell 5 with transcripts and Write-Information
-	If ($MessageType -eq 'Information' -and $PSVersionTable.PSVersion.Major -lt 6) {
+	If ($PSVersionTable.PSVersion.Major -lt 6) {
 		Write-Information -MessageData $Message -InformationAction SilentlyContinue
 	}
 
-	# prefix information messages
-	If ($MessageType -eq 'Information') {
-		$Message = "INFO: $Message"
+	# prefix message
+	$Message = "INFO: $Message"
+
+	# write information message
+	Write-Information -MessageData $Message -InformationAction Continue
+}
+
+Function Write-VerboseToTranscriptWithHostAndDate {
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
+	Param(
+		# message for transcript
+		[Parameter(Position = 0, Mandatory = $true)]
+		[string]$Message,
+		# optional prefix type for message; add datetime
+		[Parameter(ParameterSetName = 'Basic')]
+		[switch]$Basic,
+		# optional prefix type for message; add datetime and command, messsage is collection of key/value pairs
+		[Parameter(ParameterSetName = 'Collection')]
+		[switch]$Collection,
+		# optional prefix type for message; add datetime and command, message will be wrapped in double quotes
+		[Parameter(ParameterSetName = 'Wrap')]
+		[switch]$Wrap,
+		# command name for transcript
+		[Parameter(DontShow)]
+		[string]$Command = (Get-PSCallStack)[0].Command,
+		# formatted datetime for message
+		[Parameter(DontShow)]
+		[string]$Datetime = [datetime]::Now.ToString('yyyy-MM-ddThh:mm:ss.fffZ')
+	)
+
+	# update message per parameters
+	switch ($PSCmdlet.ParameterSetName) {
+		'Basic' {
+			$Message = "$Datetime $Message"; Break
+		}
+		'Collection' {
+			$Message = "datetime=$Datetime command=$Command $Message"; Break
+		}
+		'Wrap' {
+			$Message = "datetime=$Datetime command=$Command message=`"$Message`""; Break
+		}
 	}
 
-	# write message
-	switch ($MessageType) {
-		'Information' {
-			Write-Information -MessageData $Message -InformationAction Continue; Break
+	# write verbose message
+	Write-Verbose -Message $Message -Verbose
+}
+
+Function Write-WarningToTranscriptWithHostAndDate {
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
+	Param(
+		# message for transcript
+		[Parameter(Position = 0, Mandatory = $true)]
+		[string]$Message,
+		# optional prefix type for message; add datetime
+		[Parameter(ParameterSetName = 'Basic')]
+		[switch]$Basic,
+		# optional prefix type for message; add datetime and command, messsage is collection of key/value pairs
+		[Parameter(ParameterSetName = 'Collection')]
+		[switch]$Collection,
+		# optional prefix type for message; add datetime and command, message will be wrapped in double quotes
+		[Parameter(ParameterSetName = 'Wrap')]
+		[switch]$Wrap,
+		# command name for transcript
+		[Parameter(DontShow)]
+		[string]$Command = (Get-PSCallStack)[0].Command,
+		# formatted datetime for message
+		[Parameter(DontShow)]
+		[string]$Datetime = [datetime]::Now.ToString('yyyy-MM-ddThh:mm:ss.fffZ')
+	)
+
+	# update message per parameters
+	switch ($PSCmdlet.ParameterSetName) {
+		'Basic' {
+			$Message = "$Datetime $Message"; Break
 		}
-		'Verbose' {
-			Write-Verbose -Message $Message -Verbose; Break
+		'Collection' {
+			$Message = "datetime=$Datetime command=$Command $Message"; Break
 		}
-		'Warning' {
-			Write-Warning -Message $Message -WarningAction Continue; Break
+		'Wrap' {
+			$Message = "datetime=$Datetime command=$Command message=`"$Message`""; Break
 		}
 	}
+
+	# write warning message
+	Write-Warning -Message $Message -WarningAction Continue
 }
 
 # if skip transcript not requested...
@@ -258,9 +330,11 @@ If ($SkipTranscript -eq $false) {
 
 # define functions to export
 $FunctionsToExport = @(
-    'Start-TranscriptWithHostAndDate'
-    'Stop-TranscriptWithHostAndDate'
+	'Start-TranscriptWithHostAndDate'
+	'Stop-TranscriptWithHostAndDate'
 	'Write-TranscriptWithHostAndDate'
+	'Write-VerboseToTranscriptWithHostAndDate'
+	'Write-WarningToTranscriptWithHostAndDate'
 )
 
 # export module members
