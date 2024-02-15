@@ -348,7 +348,7 @@ Begin {
 	}
 
 	# if skip transcript not requested...
-	If ($SkipTranscript -eq $false -or -not $PSBoundParameters.ContainsKey('SkipTranscript')) {
+	If ($SkipTranscript -ne $true) {
 		# define hashtable for transcript functions
 		$TranscriptWithHostAndDate = @{}
 		# define parameters for transcript functions
@@ -383,7 +383,7 @@ Process {
 
 End {
 	# if skip transcript not requested...
-	If ($SkipTranscript -eq $false -or -not $PSBoundParameters.ContainsKey('SkipTranscript')) {
+	If ($SkipTranscript -ne $true) {
 		# update parameters for transcript functions
 		If ($PSBoundParameters.ContainsKey('TranscriptDateUnits')) { $TranscriptWithHostAndDate['TranscriptDateUnits'] = $PSBoundParameters['TranscriptDateUnits'] }
 		If ($PSBoundParameters.ContainsKey('TranscriptDateValue')) { $TranscriptWithHostAndDate['TranscriptDateValue'] = $PSBoundParameters['TranscriptDateValue'] }
