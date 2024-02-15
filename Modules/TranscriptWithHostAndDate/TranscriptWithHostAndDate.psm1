@@ -312,22 +312,6 @@ Function Write-WarningToTranscriptWithHostAndDate {
 	Write-Warning -Message $Message -WarningAction Continue
 }
 
-# if skip transcript not requested...
-If ($SkipTranscript -eq $false) {
-	# define hashtable for transcript functions
-	$TranscriptWithHostAndDate = @{}
-	# define parameters for transcript functions
-	If ($PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptWithHostAndDate['TranscriptName'] = $PSBoundParameters['TranscriptName'] }
-	If ($PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptWithHostAndDate['TranscriptPath'] = $PSBoundParameters['TranscriptPath'] }
-	# start transcript with parameters
-	Try {
-		Start-TranscriptWithHostAndDate @TranscriptWithHostAndDate
-	}
-	Catch {
-		Throw $_
-	}
-}
-
 # define functions to export
 $FunctionsToExport = @(
 	'Start-TranscriptWithHostAndDate'
