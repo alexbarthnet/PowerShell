@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-Adds a forward zone to a DNS server.
+Adds a new forward zone to a DNS server.
 
 .DESCRIPTION
-Adds a forward zone to a DNS server. A source zone name can be specified to copy configuration details such as NS records and values from an SOA record to the new zone.
+Adds a new forward zone to a DNS server. The name of source zone can be provided to copy configuration details such as NS records and values from an SOA record to the new zone.
 
 .PARAMETER ZoneName
 The name of the new forward zone. Required.
@@ -53,11 +53,11 @@ Function Add-DnsServerResourceRecordToList {
 
 	# update hasthable with DNS record name
 	switch ($DnsServerResourceRecord.HostName) {
-		$SubDomain {
+		$ZoneLabel {
 			$HashtableForParameters['Name'] = '@'
 		}
-		{ $_.EndsWith(".$SubDomain") } {
-			$HashtableForParameters['Name'] = $DnsServerResourceRecord.HostName.TrimEnd(".$SubDomain")
+		{ $_.EndsWith(".$ZoneLabel") } {
+			$HashtableForParameters['Name'] = $DnsServerResourceRecord.HostName.TrimEnd(".$ZoneLabel")
 		}
 		Default {
 			$HashtableForParameters['Name'] = $DnsServerResourceRecord.HostName
@@ -90,23 +90,34 @@ Function Add-DnsServerResourceRecordToList {
 
 	# add hashtable to list
 	$script:DnsServerResourceRecordsToMake.Add($HashtableForParameters)
-
-	# declare record
-	Write-Host "`nThe following record will be created:"
-	$HashtableForParameters
 }
 
-# retrieve first element of zone name
-$SubDomain = $ZoneName.Split('.')[0]
+# validate zone name parameter
+switch ($ZoneName) {
+	# if the DNS root provided...
+	'.' {
+		# warn and return
+		Write-Warning "ZoneName parameter cannot be '.'"
+		Return
+	}
+	# if zone name is a fully qualified DNS domain...
+	{ $_.EndsWith('.') } {
+		# redefine zone name without the trailing dot
+		$ZoneName = $ZoneName.TrimEnd('.')	
+	}
+}
+
+# retrieve label of zone name
+$ZoneLabel = $ZoneName.Split('.')[0]
 
 # create list for hashtables
 $DnsServerResourceRecordsToMake = [System.Collections.Generic.List[hashtable]]::new()
 
 # retrieve zones
-Write-Output "`nRetrieving forward DNS zones..."
+Write-Host "`nRetrieving forward DNS zones..."
 Try {
 	$DnsServerZones = Get-DnsServerZone -ComputerName $ComputerName | Where-Object { $_.ZoneType -eq 'Primary' -and -not $_.IsAutoCreated -and -not $_.IsReverseLookupZone }
-	Write-Output "...found '$($DnsServerZones.Count) forward zone(s)"
+	Write-Host "...found '$($DnsServerZones.Count)' forward zone(s)"
 }
 Catch {
 	Write-Warning "could not retrieve DNS zones from server: $ComputerName"
@@ -127,10 +138,10 @@ If ($PSBoundParameters.ContainsKey('SourceZoneName') -and $SourceZoneName -notin
 
 # process zones
 ForEach ($DnsServerZone in $DnsServerZones) {
-	# if zone is subdomain of existing zone...
-	If ($ZoneName -eq ($SubDomain, $DnsServerZone.ZoneName -join '.')) {
+	# if zone is child domain of existing zone...
+	If ($ZoneName -eq ($ZoneLabel, $DnsServerZone.ZoneName -join '.')) {
 		# declare parent zone
-		Write-Output "...found parent zone: $($ParentZone.ZoneName)"
+		Write-Host "...found parent zone: $($DnsServerZone.ZoneName)"
 		# record parent zone name
 		$ParentZone = $DnsServerZone
 	}
@@ -144,45 +155,15 @@ ForEach ($DnsServerZone in $DnsServerZones) {
 # if parent zone defined but source zone not defined...
 If ($null -ne $ParentZone -and $null -eq $SourceZone) {
 	# declare source zone
-	Write-Output "...no source zone set and parent zone found; setting parent zone as source zone"
+	Write-Host '...no source zone set and parent zone found; setting parent zone as source zone'
 	# define source zone
 	$SourceZone = $ParentZone
 }
 
-# if parent zone defined...
-If ($null -ne $ParentZone) {
-	# if source zone not defined...
-	If ($null -eq $SourceZone) {
-		$SourceZone = $ParentZone
-	}
-
-	# get DNS records from parent zone
-	Try {
-		$DnsServerResourceRecordsFromParent = Get-DnsServerResourceRecord -ComputerName $ComputerName -ZoneName $ParentZone.ZoneName
-	}
-	Catch {
-		Return $_
-	}
-
-	# retrieve any DNS records in subdomain
-	$DnsServerResourceRecordsToCopy = $DnsServerResourceRecordsFromParent | Where-Object { $_.HostName.EndsWith($SubDomain) }
-
-	# process each DNS records
-	ForEach ($DnsServerResourceRecord in $DnsServerResourceRecordsToCopy) {
-		# create hashtable of parameters from DNS record
-		Try {
-			Add-DnsServerResourceRecordToList -DnsServerResourceRecord $DnsServerResourceRecord
-		}
-		Catch {
-			Return $_
-		}
-	}
-}
-
 # if source zone defined...
-If ($null -eq $SourceZone) {
+If ($null -ne $SourceZone) {
 	# declare start
-	Write-Output "`nRetrieving DNS records from source zone..."
+	Write-Host "`nRetrieving SOA and NS DNS records from source zone..."
 
 	# get DNS records from source zone
 	Try {
@@ -198,9 +179,12 @@ If ($null -eq $SourceZone) {
 	# retrieve NS records from source zone
 	$DnsServerResourceRecordsForNS = $DnsServerResourceRecordsFromSource | Where-Object { $_.RecordType -in 'NS' }
 
+	# declare count and display records
+	Write-Host "...found '$($DnsServerResourceRecordsForNS.Count)' NS record(s):"
+	$DnsServerResourceRecordsForNS
+
 	# process NS DNS records
 	ForEach ($DnsServerResourceRecord in $DnsServerResourceRecordsForNS) {
-		Write-Output "...found '$($DnsServerResourceRecord.RecordType)' record: $($DnsServerResourceRecord.HostName)"
 		# create hashtable of parameters from DNS record
 		Try {
 			Add-DnsServerResourceRecordToList -DnsServerResourceRecord $DnsServerResourceRecord
@@ -214,7 +198,7 @@ If ($null -eq $SourceZone) {
 # if parent zone defined...
 If ($null -ne $ParentZone) {
 	# declare start
-	Write-Output "`nRetrieving DNS records from parent zone..."
+	Write-Host "`nRetrieving matching DNS records from parent zone..."
 
 	# get DNS records from parent zone
 	Try {
@@ -224,12 +208,15 @@ If ($null -ne $ParentZone) {
 		Return $_
 	}
 
-	# retrieve any DNS records in subdomain
-	$DnsServerResourceRecordsToCopy = $DnsServerResourceRecordsFromParent | Where-Object { $_.HostName.EndsWith($SubDomain) }
+	# retrieve any DNS records in child domain
+	$DnsServerResourceRecordsToCopy = $DnsServerResourceRecordsFromParent | Where-Object { $_.HostName.EndsWith($ZoneLabel) }
+
+	# declare count and display records
+	Write-Host "...found '$($DnsServerResourceRecordsToCopy.Count)' record(s):"
+	$DnsServerResourceRecordsToCopy
 
 	# process each DNS records
 	ForEach ($DnsServerResourceRecord in $DnsServerResourceRecordsToCopy) {
-		Write-Output "...found '$($DnsServerResourceRecord.RecordType)' record: $($DnsServerResourceRecord.HostName)"
 		# create hashtable of parameters from DNS record
 		Try {
 			Add-DnsServerResourceRecordToList -DnsServerResourceRecord $DnsServerResourceRecord
@@ -243,17 +230,15 @@ If ($null -ne $ParentZone) {
 # if sub domain records exist...
 If ($DnsServerResourceRecordsToMake.Count -gt $DnsServerResourceRecordsForNS.Count -and -not $Force) {
 	If (-not $Force) {
-		Write-Warning "The provided zone name is a child zone of '$($ParentZone.ZoneName)' zone. Existing records in the subdomain will removed from the parent zone and recreated in the new zone." -WarningAction Inquire
+		Write-Warning "The provided zone name is a child zone of '$($ParentZone.ZoneName)' zone. Existing records in the child domain will recreated in the new zone." -WarningAction Inquire
 	}
 }
-
-# return
-Return
 
 # define parameters
 $AddDnsServerPrimaryZone = @{
 	ComputerName = $ComputerName
 	ZoneName     = $ZoneName
+	ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 }
 
 # if soure zone exists...
@@ -261,6 +246,9 @@ If ($null -ne $SourceZone) {
 	$AddDnsServerPrimaryZone['ReplicationScope'] = $SourceZone.ReplicationScope
 	$AddDnsServerPrimaryZone['DynamicUpdate'] = $SourceZone.DynamicUpdate
 }
+
+# declare state
+Write-Host "`nCreating DNS zone..."
 
 # create destination zone
 Try {
@@ -271,6 +259,12 @@ Catch {
 	Return $_
 }
 
+# declare state
+Write-Host "`n...created DNS zone"
+
+# declare state
+Write-Host "`nRetrieving SOA record..."
+
 # retreive destination zone SOA record
 Try {
 	$OldSoaRecord = Get-DnsServerResourceRecord -ComputerName $ComputerName -ZoneName $ZoneName -Name '@' -RRType Soa
@@ -279,6 +273,9 @@ Catch {
 	Write-Warning "could not retrieve SOA record for zone: $ZoneName"
 	Return $_
 }
+
+# declare state
+Write-Host "`n...retrieved SOA record"
 
 # clone SOA record
 Try {
@@ -312,6 +309,9 @@ $SetDnsServerResourceRecord = @{
 	ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
 }
 
+# declare state
+Write-Host "`nUpdating SOA record..."
+
 # update destination zone SOA record
 Try {
 	Set-DnsServerResourceRecord @SetDnsServerResourceRecord
@@ -321,8 +321,16 @@ Catch {
 	Return $_
 }
 
-# create subdomain records
+# declare state
+Write-Host "`n...updated SOA record"
+Write-Host "`nRecreating DNS records..."
+
+# create child domain records
 ForEach ($DnsServerResourceRecord in $DnsServerResourceRecordsToMake) {
+	# declare record
+	Write-Host "...re-creating '$($DnsServerResourceRecordsToCopy.HostName)'"
+
+	# create record
 	Try {
 		Add-DnsServerResourceRecord @DnsServerResourceRecord
 	}
