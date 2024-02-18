@@ -12,7 +12,7 @@ The name of the zone hosting the zone delegations. The zone hosting the delegati
 The single-label name of one or more existing zone delegations. The zone delegations are also known as the child zones. Required.
 
 .PARAMETER NameServers
-The fully-qualified names of one or more name servers for the zone delegations. The values for this parameter must resolve to A or AAAA DNS records. The NameServers parameter cannot be combined with the Recursive parameter. Optional. 
+The fully-qualified names of one or more name servers for the zone delegations. The values for this parameter must resolve to A or AAAA DNS records. The NameServers parameter cannot be combined with the Recursive parameter. Optional.
 
 .PARAMETER Recursive
 Switch to configure the existing zone delegations as recursive zone delegations. See the Notes section for details on recursive zone delegations. The Recursive parameter cannot be combined with the NameServers parameter. Optional.
@@ -76,8 +76,9 @@ If ($PSBoundParameters.ContainsKey('NameServers')) {
 }
 # if name servers not provided...
 Else {
-	# if name servers not provided and 
+	# ...and recursive not set...
 	If ($Recursive -ne $true) {
+		# warn about recursive zone delegation
 		Write-Warning "'Neither the NameServers or Recursive parameters were defined. The zone delegation(s) will be configured as a recursive zone delegation(s) using NS records in the '$ZoneName' zone.'" -WarningAction Inquire
 	}
 
@@ -119,7 +120,7 @@ Else {
 }
 
 # declare state
-Write-Host "`nValidating NS records..."
+Write-Host "`nValidating glue records for name servers..."
 
 # validate NS records
 ForEach ($NameServer in $NameServerList) {
@@ -132,7 +133,7 @@ ForEach ($NameServer in $NameServerList) {
 		# define name value for glue record as nameserver
 		$Name = $NameServer
 	}
-	
+
 	# define parameters
 	$GetDnsServerResourceRecord = @{
 		ComputerName = $ComputerName
@@ -268,7 +269,7 @@ ForEach ($NameServer in $NameServerList) {
 	}
 
 	# declare start
-	Write-Host "`nRetrieving delegation records for zone: $ChildZoneName.$ZoneName"
+	Write-Host "`nRetrieving NS records for zone delegation: $ChildZoneName.$ZoneName"
 
 	# get delegation records
 	Try {
