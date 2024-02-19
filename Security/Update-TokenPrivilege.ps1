@@ -36,7 +36,7 @@ https://github.com/gtworek/PSBits/blob/master/Misc/EnableSeBackupPrivilege.ps1
 https://github.com/gtworek/PSBits/blob/master/Misc/EnableSeRestorePrivilege.ps1
 #>
 
-[CmdletBinding(DefaultParameterSetName = 'Default')]
+[CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Default')]
 Param (
 	[Parameter(Position = 0, Mandatory = $true)][ValidateSet(
 		'SeAssignPrimaryTokenPrivilege',
@@ -98,21 +98,23 @@ public struct TokenPrivileges
 
 public static class Advapi32
 {
-	[DllImport("advapi32.dll", SetLastError = true)]
+	[DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+
+	[DllImport("advapi32", SetLastError = true)]
 	public static extern bool OpenProcessToken(
-		IntPtr ProcessHandle, 
+		IntPtr ProcessHandle,
 		int DesiredAccess,
 		ref IntPtr TokenHandle
 	);
 
-	[DllImport("advapi32.dll", SetLastError = true)]
+	[DllImport("advapi32", SetLastError = true)]
 	public static extern bool LookupPrivilegeValue(
 		string SystemName,
 		string Name,
 		ref long Luid
 	);
 
-	[DllImport("advapi32.dll", SetLastError = true)]
+	[DllImport("advapi32", SetLastError = true)]
 	public static extern bool AdjustTokenPrivileges(
 		IntPtr TokenHandle,
 		bool DisableAllPrivileges,
@@ -127,6 +129,7 @@ public static class Advapi32
 # start job to update process token avoid loading type defintions directly into session
 $Job = Start-Job -ScriptBlock {
 	# define objects
+	$VerbosePreference = $using:VerbosePreference
 	$TypeDefinition = $using:TypeDefinition
 	$Privilege = $using:Privilege
 	$ProcessId = $using:ProcessId
@@ -140,9 +143,24 @@ $Job = Start-Job -ScriptBlock {
 		Throw $_
 	}
 
+	# define arguments for Get-Process
+	$GetProcess = @{
+		Id          = $ProcessId
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+	}
+
+	# get process object
+	Write-Verbose "Calling Get-Process for process Id: $ProcessId"
+	Try {
+		$Process = Get-Process @GetProcess
+	}
+	Catch {
+		Throw $_
+	}
+
 	# define arguments for OpenProcessToken
 	# reference: https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
-	$ProcessHandle = Get-Process -Id $ProcessId | Select-Object -ExpandProperty Handle
+	$ProcessHandle = $Process.Handle
 	$DesiredAccess = 0x28 # TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY
 	$TokenHandle = [IntPtr]::Zero
 
