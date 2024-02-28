@@ -1,3 +1,56 @@
+<#
+.SYNOPSIS
+Display information about the certificate presented by remote host.
+
+.DESCRIPTION
+Display information about the certificate presented by remote host. The script will display the Thumbprint, Subject, Issuer, and any Subject Alternate Names.
+
+.PARAMETER Hostname
+The fully-qualified hostname of the remote system.
+
+.PARAMETER Port
+The TCP port on the remote system. The default value is 443.
+
+.PARAMETER Chain
+Switch parameter to build a certificate chain for the retrieved certificate.
+
+.PARAMETER Passthru
+Switch parameter to return the certificate or certificate chain as objects instead of displaying information. Cannot be combined with the Validate parameter.
+
+.PARAMETER Validate
+Switch parameter to validate the certificate or certificate chain against the local certificate store. Cannot be combined with the Passthru parameter.
+
+.INPUTS
+System.String
+
+.OUTPUTS
+System.String, X509Certificate2, X509Chain
+
+.EXAMPLE
+.\Get-CertificateFromHost.ps1 -Hostname 'www.google.com'
+
+.EXAMPLE
+.\Get-CertificateFromHost.ps1 -Hostname 'www.google.com' -Chain
+
+.EXAMPLE
+.\Get-CertificateFromHost.ps1 -Hostname 'www.google.com' -Passthru
+
+.EXAMPLE
+.\Get-CertificateFromHost.ps1 -Hostname 'www.google.com' -Chain -Passthru
+
+.EXAMPLE
+.\Get-CertificateFromHost.ps1 -Hostname 'smtp.gmail.com' -Port 465
+
+.EXAMPLE
+.\Get-CertificateFromHost.ps1 -Hostname 'smtp.gmail.com' -Port 465 -Chain
+
+.EXAMPLE
+.\Get-CertificateFromHost.ps1 -Hostname 'smtp.gmail.com' -Port 465 -Passthru
+
+.EXAMPLE
+.\Get-CertificateFromHost.ps1 -Hostname 'smtp.gmail.com' -Port 465 -Chain -Passthur
+#>
+
 [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Default')]
 Param (
 	# string for remote host
@@ -89,11 +142,11 @@ If ($Chain) {
 		If ($Validate) {
 			Write-Host "Certificate chain validated: $X509ChainValid"
 			If ($X509Chain.ChainStatus.Count -eq 0) {
-				Write-Host "Certificate chain is trusted"
+				Write-Host 'Certificate chain is trusted'
 			}
 			Else {
-				Write-Host "Certificate chain is NOT trusted:"
-				$X509Chain.ChainStatus | Format-List Status,StatusInformation
+				Write-Host 'Certificate chain is NOT trusted:'
+				$X509Chain.ChainStatus | Format-List Status, StatusInformation
 			}
 			Write-Host "`n"
 		}
@@ -111,11 +164,11 @@ Else {
 		If ($Validate) {
 			Write-Host "Certificate chain validated: $X509ChainValid"
 			If ($X509Chain.ChainStatus.Count -eq 0) {
-				Write-Host "Certificate is trusted"
+				Write-Host 'Certificate is trusted'
 			}
 			Else {
-				Write-Host "Certificate is NOT trusted:"
-				$X509Chain.ChainStatus | Format-List Status,StatusInformation
+				Write-Host 'Certificate is NOT trusted:'
+				$X509Chain.ChainStatus | Format-List Status, StatusInformation
 			}
 			Write-Host "`n"
 		}
