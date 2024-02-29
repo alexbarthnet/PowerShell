@@ -151,7 +151,7 @@ Begin {
 		# if certificates were updated on the primary...
 		If ($Updated) {
 			# update JSON data
-			$JsonData.Hash = $adfs_svc_cert_latest.Thumbprint
+			$JsonData.Hash = $LatestServiceCertificate.Thumbprint
 
 			# update JSON file
 			Try {
@@ -485,7 +485,7 @@ Begin {
 Process {
 	# retrieve JSON data
 	Try {
-		$JsonData = Get-Content -Path $Json | ConvertFrom-Json
+		$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 	}
 	Catch {
 		Write-Output 'ERROR: retrieving JSON file'
