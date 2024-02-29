@@ -101,14 +101,14 @@ Begin {
 		#  3. "ADFS" service (extends proxy service to support tokens)
 		ForEach ($Name in 'appproxyctrl', 'appproxysvc', 'adfssrv') {
 			# define parameters
-			$ServiceParmeters = @{
+			$ServiceParameters = @{
 				Name        = $Name
 				Verbose     = $True
 				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 			}
 			# get service
 			Try {
-				$Service = Get-Service $ServiceParmeters
+				$Service = Get-Service @ServiceParameters
 			}
 			Catch {
 				Write-Warning "could not get service: '$Name'"
@@ -121,7 +121,7 @@ Begin {
 			}
 			# start service
 			Try {
-				Start-Service @ServiceParmeters
+				Start-Service @ServiceParameters
 			}
 			Catch {
 				Write-Warning "could not start service: '$Name'"
@@ -141,14 +141,14 @@ Begin {
 		#  3. proxy controller (retrieves configuration from ADFS for proxy service)
 		ForEach ($Name in 'adfssrv', 'appproxysvc', 'appproxyctrl') {
 			# define parameters
-			$ServiceParmeters = @{
+			$ServiceParameters = @{
 				Name        = $Name
 				Verbose     = $True
 				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 			}
 			# get service
 			Try {
-				$Service = Get-Service $ServiceParmeters
+				$Service = Get-Service @ServiceParameters
 			}
 			Catch {
 				Write-Warning "could not get service: '$Name'"
@@ -161,7 +161,7 @@ Begin {
 			}
 			# start service
 			Try {
-				Stop-Service @ServiceParmeters
+				Stop-Service @ServiceParameters
 			}
 			Catch {
 				Write-Warning "could not stop service: '$Name'"
@@ -372,7 +372,7 @@ Begin {
 
 Process {
 	# get JSON data
-	$JsonData = Get-Content -Path $Json | ConvertFrom-Json
+	$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 
 	# test FQDN from JSON data
 	If ([string]::IsNullOrEmpty($JsonData.Fqdn)) {
