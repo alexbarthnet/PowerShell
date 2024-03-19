@@ -62,7 +62,7 @@ Begin {
 			$CertificateHash = Get-AdfsSslCertificate | Where-Object { $_.HostName -eq $Fqdn -and $_.PortNumber -eq '443' } | Select-Object -ExpandProperty 'CertificateHash'
 		}
 		Catch {
-			Write-Output "`nERROR: retrieving current ADFS SSL certificate thumbprint`n"
+			Write-Host "`nERROR: retrieving current ADFS SSL certificate thumbprint`n"
 			Return
 		}
 
@@ -71,7 +71,7 @@ Begin {
 			$ActiveSslCertificate = Get-ChildItem -Path Cert:\LocalMachine\My | Where-Object { $_.Thumbprint -eq $CertificateHash }
 		}
 		Catch {
-			Write-Output "`nERROR: current ADFS SSL certificate not found in certificate store`n"
+			Write-Host "`nERROR: current ADFS SSL certificate not found in certificate store`n"
 			Return
 		}
 
@@ -80,31 +80,31 @@ Begin {
 			$LatestSslCertificate = Get-ChildItem -Path Cert:\LocalMachine\My | Where-Object { $_.Subject -eq $ActiveSslCertificate.Subject -and $_.NotBefore -lt [datetime]::Now.AddDays(-1) } | Sort-Object NotBefore | Select-Object -Last 1
 		}
 		Catch {
-			Write-Output "`nERROR: retrieving latest ADFS SSL certificate by subject`n"
+			Write-Host "`nERROR: retrieving latest ADFS SSL certificate by subject`n"
 			Return
 		}
 
 		# check certificate
 		If ($null -eq $LatestSslCertificate) {
-			Write-Output "`nERROR: latest ADFS SSL certificate not found in certificate store`n"
+			Write-Host "`nERROR: latest ADFS SSL certificate not found in certificate store`n"
 			Return
 		}
 
 		# check thumbprints
 		If ($ActiveSslCertificate.Thumbprint -ne $LatestSslCertificate.Thumbprint) {
-			Write-Output 'active and latest ADFS SSL certificate do not match; updating ADFS certificate'
+			Write-Host 'active and latest ADFS SSL certificate do not match; updating ADFS certificate'
 			# update certicate
 			Try {
 				Set-AdfsSslCertificate -Thumbprint $LatestSslCertificate.Thumbprint
 				$Updated = $true
 			}
 			Catch {
-				Write-Output "`nERROR: updating ADFS SSL certificate by thumbprint`n"
+				Write-Host "`nERROR: updating ADFS SSL certificate by thumbprint`n"
 				Return
 			}
 		}
 		Else {
-			Write-Output 'ADFS SSL certificate is current: latest SSL certificate and active SSL certificate match'
+			Write-Host 'ADFS SSL certificate is current: latest SSL certificate and active SSL certificate match'
 		}
 
 		# retrieve ADFS service communications certificate
@@ -112,7 +112,7 @@ Begin {
 			$ActiveServiceCertificate = Get-AdfsCertificate -CertificateType 'Service-Communications' | Select-Object -ExpandProperty 'Certificate'
 		}
 		Catch {
-			Write-Output "`nERROR: retrieving current ADFS service communications certificate`n"
+			Write-Host "`nERROR: retrieving current ADFS service communications certificate`n"
 			Return
 		}
 
@@ -121,35 +121,35 @@ Begin {
 			$LatestServiceCertificate = Get-ChildItem -Path Cert:\LocalMachine\My | Where-Object { $_.Subject -eq $ActiveServiceCertificate.Subject -and $_.NotBefore -lt [datetime]::Now.AddDays(-1) } | Sort-Object NotBefore | Select-Object -Last 1
 		}
 		Catch {
-			Write-Output "`nERROR: retrieving latest ADFS service communications certificate by subject`n"
+			Write-Host "`nERROR: retrieving latest ADFS service communications certificate by subject`n"
 			Return
 		}
 
 		# check certificate
 		If ($null -eq $LatestServiceCertificate) {
-			Write-Output "`nERROR: latest ADFS service communications certificate not found in certificate store`n"
+			Write-Host "`nERROR: latest ADFS service communications certificate not found in certificate store`n"
 			Return
 		}
 
 		# check thumbprints
 		If ($ActiveServiceCertificate.Thumbprint -ne $LatestServiceCertificate.Thumbprint) {
-			Write-Output 'active and latest ADFS service communications certificate do not match; updating ADFS service communications certificate'
+			Write-Host 'active and latest ADFS service communications certificate do not match; updating ADFS service communications certificate'
 			# update certicate
 			Try {
 				Set-AdfsCertificate -CertificateType 'Service-Communications' -Thumbprint $LatestServiceCertificate.Thumbprint
 				$Updated = $true
 			}
 			Catch {
-				Write-Output "`nERROR: updating ADFS service communications certificate by thumbprint`n"
+				Write-Host "`nERROR: updating ADFS service communications certificate by thumbprint`n"
 				Return
 			}
 		}
 		Else {
-			Write-Output 'ADFS service communications certificate is current: latest service communications certificate and active service communications certificate match'
+			Write-Host 'ADFS service communications certificate is current: latest service communications certificate and active service communications certificate match'
 		}
 
-		# if certificates were updated on the primary...
-		If ($Updated) {
+		# check hash in JSON data 
+		If ($JsonData.Hash -ne $LatestServiceCertificate.Thumbprint) {
 			# update JSON data
 			$JsonData.Hash = $LatestServiceCertificate.Thumbprint
 
@@ -158,21 +158,28 @@ Begin {
 				$JsonData | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 			}
 			Catch {
-				Write-Output "`nERROR: updating ADFS JSON file`n"
+				Write-Host "`nERROR: updating ADFS JSON file`n"
 				Return
 			}
 
+			# declare update
+			Write-Host "Updated JSON hash with thumbprint: $($LatestServiceCertificate.Thumbprint)"
+		}
+
+
+		# if certificates were updated on the primary...
+		If ($Updated) {
 			# restart service on primary node
 			Try {
 				$null = Restart-Service 'adfssrv'
 			}
 			Catch {
-				Write-Output "`nERROR: restarting ADFS service on: '$Hostname'`n"
+				Write-Host "`nERROR: restarting ADFS service on: '$Hostname'`n"
 				Return
 			}
 
 			# pause for 30 seconds for service restart
-			Write-Output "pausing 30 seconds for service restart on '$fqdn'"
+			Write-Host "pausing 30 seconds for service restart on '$fqdn'"
 			Start-Sleep -Seconds 30
 
 			# retrieve FQDNs of secondary computers
@@ -180,12 +187,12 @@ Begin {
 				$secondaries = (Get-AdfsFarmInformation).FarmNodes | Where-Object { $_.NodeType -eq 'SecondaryComputer' }
 			}
 			Catch {
-				Write-Output "`nERROR: retrieving ADFS secondary computers`n"
+				Write-Host "`nERROR: retrieving ADFS secondary computers`n"
 				Return
 			}
 
 			# pause for 60 seconds for replication
-			Write-Output 'pausing 1 minute for replication to ADFS secondary computers'
+			Write-Host 'pausing 1 minute for replication to ADFS secondary computers'
 			Start-Sleep -Seconds 60
 
 			# restart service on secondary computers
@@ -196,12 +203,12 @@ Begin {
 					Invoke-Command -ComputerName $fqdn -ScriptBlock { $null = Restart-Service -Name 'adfssrv' }
 				}
 				Catch {
-					Write-Output "`nERROR: restarting ADFS service on: '$fqdn'`n"
+					Write-Host "`nERROR: restarting ADFS service on: '$fqdn'`n"
 					Return
 				}
 
 				# pause for 30 seconds for service restart
-				Write-Output "pausing 30 seconds for service restart on '$fqdn'"
+				Write-Host "pausing 30 seconds for service restart on '$fqdn'"
 				Start-Sleep -Seconds 30
 			}
 		}
@@ -211,7 +218,7 @@ Begin {
 				$SecondaryComputers = @((Get-AdfsFarmInformation).FarmNodes | Where-Object { $_.NodeType -eq 'SecondaryComputer' } | Select-Object -ExpandProperty 'FQDN')
 			}
 			Catch {
-				Write-Output "`nERROR: retrieving ADFS secondary servers`n"
+				Write-Host "`nERROR: retrieving ADFS secondary servers`n"
 				Return
 			}
 
@@ -220,7 +227,7 @@ Begin {
 
 			# if no files found...
 			If ($Files.Count -eq 0) {
-				Write-Output 'No certificate update files found for secondary servers'
+				Write-Host 'No certificate update files found for secondary servers'
 			}
 
 			# process each hostname file
@@ -233,7 +240,7 @@ Begin {
 
 				# test member
 				If ($null -eq $Member) {
-					Write-Output "`nWARNING: certificate update file found for server that did not match farm nodes: '$ServerName'`n"
+					Write-Host "`nWARNING: certificate update file found for server that did not match farm nodes: '$ServerName'`n"
 					Continue Files
 				}
 
@@ -242,7 +249,7 @@ Begin {
 					Set-AdfsSslCertificate -Thumbprint $Hash -Member $Member
 				}
 				Catch {
-					Write-Output "`nERROR: updating ADFS SSL certificate by thumbprint on: '$Member'`n"
+					Write-Host "`nERROR: updating ADFS SSL certificate by thumbprint on: '$Member'`n"
 					Continue Files
 				}
 
@@ -251,7 +258,7 @@ Begin {
 					$File | Remove-Item -Confirm:$false
 				}
 				Catch {
-					Write-Output "`nERROR: removing certificate update file for: '$ServerName'`n"
+					Write-Host "`nERROR: removing certificate update file for: '$ServerName'`n"
 					Continue Files
 				}
 			}
@@ -271,17 +278,17 @@ Begin {
 			$CertificateHash = Get-AdfsSslCertificate | Where-Object { $_.HostName -eq $Fqdn -and $_.PortNumber -eq '443' } | Select-Object -ExpandProperty 'CertificateHash'
 		}
 		Catch {
-			Write-Output 'ERROR: retrieving ADFS SSL certificate'
+			Write-Host 'ERROR: retrieving ADFS SSL certificate'
 			Return
 		}
 
 		# if hashes match...
 		If ($Hash -eq $CertificateHash) {
-			Write-Output 'ADFS SSL certificate hash matches JSON hash'
+			Write-Host 'ADFS SSL certificate hash matches JSON hash'
 			$Current = $true
 		}
 		Else {
-			Write-Output 'ADFS SSL certificate hash does not match JSON hash'
+			Write-Host 'ADFS SSL certificate hash does not match JSON hash'
 			$Current = $false
 		}
 
@@ -296,10 +303,10 @@ Begin {
 			# remove hostname file
 			Try {
 				Remove-Item -Path $FilePath -Confirm:$false
-				Write-Output 'removed certificate update file'
+				Write-Host 'removed certificate update file'
 			}
 			Catch {
-				Write-Output 'ERROR: removing certificate update file'
+				Write-Host 'ERROR: removing certificate update file'
 				Return
 			}
 		}
@@ -309,10 +316,10 @@ Begin {
 			# create hostname file
 			Try {
 				New-Item -Path $Path -Name $ChildPath -ItemType File
-				Write-Output 'created certificate update file'
+				Write-Host 'created certificate update file'
 			}
 			Catch {
-				Write-Output 'ERROR: creating certificate update file'
+				Write-Host 'ERROR: creating certificate update file'
 				Return
 			}
 		}
@@ -322,10 +329,10 @@ Begin {
 			# update hostname file
 			Try {
 				Set-Content -Path $FilePath -Value (Get-Date -Format FileDateTimeUniversal)
-				Write-Output 'refreshed certificate update file'
+				Write-Host 'refreshed certificate update file'
 			}
 			Catch {
-				Write-Output 'ERROR: writing certificate update file'
+				Write-Host 'ERROR: writing certificate update file'
 				Return
 			}
 		}
@@ -485,28 +492,28 @@ Begin {
 Process {
 	# retrieve JSON data
 	Try {
-		$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
+		$JsonData = Get-Content -Path $Json | ConvertFrom-Json
 	}
 	Catch {
-		Write-Output 'ERROR: retrieving JSON file'
+		Write-Host 'ERROR: retrieving JSON file'
 		Return
 	}
 
 	# test FQDN from JSON data
 	If ([string]::IsNullOrEmpty($JsonData.Fqdn)) {
-		Write-Output 'FQDN was not found in JSON file'
+		Write-Host 'FQDN was not found in JSON file'
 		Return
 	}
 
 	# test hash from JSON data
 	If ([string]::IsNullOrEmpty($JsonData.Hash)) {
-		Write-Output 'Hash was not found in JSON file'
+		Write-Host 'Hash was not found in JSON file'
 		Return
 	}
 
 	# test path from JSON data
 	If ([string]::IsNullOrEmpty($JsonData.Path)) {
-		Write-Output 'Path was not found in JSON file'
+		Write-Host 'Path was not found in JSON file'
 		Return
 	}
 
@@ -528,14 +535,14 @@ Process {
 		$Role = Get-AdfsSyncProperties | Select-Object -ExpandProperty 'Role'
 	}
 	Catch {
-		Write-Output "`nERROR: retrieving ADFS sync properties`n"
+		Write-Host "`nERROR: retrieving ADFS sync properties`n"
 		Return $_
 	}
 
 	# check ADFS role
 	switch ($Role) {
 		'PrimaryComputer' {
-			Write-Output 'primary ADFS server: checking certificate...'
+			Write-Host 'primary ADFS server: checking certificate...'
 			Try {
 				Update-AdfsCertificatePrimaryServer -Fqdn $JsonData.Fqdn -Hash $JsonData.Hash -Path $Path -Filter 'adfs_update_*'
 			}
@@ -544,7 +551,7 @@ Process {
 			}
 		}
 		'SecondaryComputer' {
-			Write-Output 'secondary ADFS server: checking certificate...'
+			Write-Host 'secondary ADFS server: checking certificate...'
 			Try {
 				Update-AdfsCertificateSecondaryServer -Fqdn $JsonData.Fqdn -Hash $JsonData.Hash -Path $Path -ChildPath "adfs_update_$Hostname.txt"
 			}
@@ -553,7 +560,7 @@ Process {
 			}
 		}
 		Default {
-			Write-Output "unknown ADFS server role: $Role"
+			Write-Host "unknown ADFS server role: $Role"
 		}
 	}
 }

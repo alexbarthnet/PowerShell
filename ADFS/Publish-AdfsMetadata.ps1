@@ -211,19 +211,19 @@ Process {
 		$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 	}
 	Catch {
-		Write-Output 'ERROR: retrieving ADFS JSON file'
+		Write-Host 'ERROR: retrieving ADFS JSON file'
 		Return
 	}
 
 	# test FQDN from JSON data
 	If ([string]::IsNullOrEmpty($JsonData.Fqdn)) {
-		Write-Output 'FQDN was not found in ADFS JSON file'
+		Write-Host 'FQDN was not found in ADFS JSON file'
 		Return
 	}
 
 	# test path from JSON data
 	If ([string]::IsNullOrEmpty($JsonData.Path)) {
-		Write-Output 'Path was not found in ADFS JSON file'
+		Write-Host 'Path was not found in ADFS JSON file'
 		Return
 	}
 
@@ -233,7 +233,7 @@ Process {
 	# verify path
 	If (Test-Path -Path $Path -PathType Container) {
 		# report path
-		Write-Output "Found metadata path: $Path"
+		Write-Host "Found metadata path: $Path"
 	}
 	Else {
 		# create path
@@ -244,7 +244,7 @@ Process {
 			Return $_
 		}
 		# report path created
-		Write-Output "Created metadata path: $Path"
+		Write-Host "Created metadata path: $Path"
 	}
 
 	# get ADFS role
@@ -252,21 +252,21 @@ Process {
 		$Role = Get-AdfsSyncProperties | Select-Object -ExpandProperty 'Role'
 	}
 	Catch {
-		Write-Output 'ERROR: retrieving ADFS sync properties'
+		Write-Host 'ERROR: retrieving ADFS sync properties'
 		Return $_
 	}
 
 	# check ADFS role
 	switch ($Role) {
 		'PrimaryComputer' {
-			Write-Output 'Primary ADFS server: updating metadata...'
+			Write-Host 'Primary ADFS server: updating metadata...'
 		}
 		'SecondaryComputer' {
-			Write-Output 'Secondary ADFS server: skipping metadata update'
+			Write-Host 'Secondary ADFS server: skipping metadata update'
 			Return
 		}
 		Default {
-			Write-Output "Unknown ADFS server role: $Role"
+			Write-Host "Unknown ADFS server role: $Role"
 			Return
 		}
 	}
@@ -277,7 +277,7 @@ Process {
 	# retrieve token signing certificate
 	Try {
 		$AdfsCertificate = Get-AdfsCertificate -CertificateType 'Token-Signing' | Select-Object -ExpandProperty 'Certificate' | Sort-Object -Property NotBefore | Select-Object -Last 1
-		Write-Output "Retrieved token signing certificate with thumbprint: $($AdfsCertificate.Thumbprint)"
+		Write-Host "Retrieved token signing certificate with thumbprint: $($AdfsCertificate.Thumbprint)"
 	}
 	Catch {
 		Return $_
@@ -286,7 +286,7 @@ Process {
 	# export token signing certificate
 	Try {
 		$null = $AdfsCertificate | Export-Certificate -Force -FilePath $FilePath
-		Write-Output "Exported token signing certificate to path: $FilePath"
+		Write-Host "Exported token signing certificate to path: $FilePath"
 	}
 	Catch {
 		Return $_
@@ -295,7 +295,7 @@ Process {
 	# get ADFS endpoints
 	Try {
 		$ADFSEndpoint = Get-ADFSEndpoint -ErrorAction Stop
-		Write-Output 'Retrieved endpoint data from ADFS'
+		Write-Host 'Retrieved endpoint data from ADFS'
 	}
 	Catch {
 		Return $_
@@ -340,7 +340,7 @@ Process {
 	# get local URL for metadata
 	Try {
 		$RestMethod = Invoke-RestMethod @InvokeRestMethod
-		Write-Output "Retrieved XML from local metadata endpoint: $UriForRestMethod"
+		Write-Host "Retrieved XML from local metadata endpoint: $UriForRestMethod"
 	}
 	Catch {
 		Return $_
@@ -370,7 +370,7 @@ Process {
 			# write XML file
 			Try {
 				$XmlFromRest.Save($XmlPath)
-				Write-Output "Wrote metadata file: $XmlPath"
+				Write-Host "Wrote metadata file: $XmlPath"
 			}
 			Catch {
 				Return $_

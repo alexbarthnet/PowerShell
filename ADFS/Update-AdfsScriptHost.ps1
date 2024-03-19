@@ -98,7 +98,7 @@ Begin {
 			# if 0 records in IPAddress...
 			0 {
 				# warn and return null
-				Write-Warning "could resolve any '$Type' records from DNS for DnsSafeHost '$DnsSafeHost' from Uri: $($Uri.AbsoluteUri)"
+				Write-Warning "could not resolve any '$Type' records from DNS for DnsSafeHost '$DnsSafeHost' from Uri: $($Uri.AbsoluteUri)"
 				Return $null
 			}
 			# if 1 record in IPaddress...
@@ -114,12 +114,12 @@ Begin {
 		}
 
 		# report IP address
-		Write-Output "Resolved IP address '$IPAddress' from URL: '$($Uri.AbsoluteUri)'"
+		Write-Host "Resolved IP address '$IPAddress' from URL: '$($Uri.AbsoluteUri)'"
 
 		# update URI with IP address
 		Try {
 			$Uri = [Uri]$Uri.AbsoluteUri.Replace($Uri.DnsSafeHost, $IPAddress)
-			Write-Output "Constructed host URL from IP: '$($Uri.AbsoluteUri)'"
+			Write-Host "Constructed host URL from IP: '$($Uri.AbsoluteUri)'"
 		}
 		Catch {
 			Write-Warning "Error constructing host URL from IP: '$($Uri.AbsoluteUri)'"
@@ -287,19 +287,19 @@ Process {
 		$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 	}
 	Catch {
-		Write-Output 'ERROR: retrieving ADFS JSON file'
+		Write-Host 'ERROR: retrieving ADFS JSON file'
 		Return $_
 	}
 
 	# test FQDN from JSON data
 	If ([string]::IsNullOrEmpty($JsonData.Fqdn)) {
-		Write-Output 'required value not found in JSON file: Fqdn'
+		Write-Host 'required value not found in JSON file: Fqdn'
 		Return
 	}
 
 	# test Path from JSON data
 	If ([string]::IsNullOrEmpty($JsonData.Path)) {
-		Write-Output 'required value not found in JSON file: Path'
+		Write-Host 'required value not found in JSON file: Path'
 		Return
 	}
 
@@ -322,7 +322,7 @@ Process {
 	# define URI to ADFS hostname
 	Try {
 		$Uri = [uri]"https://$($JsonData.Fqdn)/host/"
-		Write-Output "Constructed URL IP address from URL: '$($Uri.AbsoluteUri)'"
+		Write-Host "Constructed URL IP address from URL: '$($Uri.AbsoluteUri)'"
 	}
 	Catch {
 		Write-Warning "Error creating URL from FQDN: '$($JsonData.Fqdn)'"
@@ -340,7 +340,7 @@ Process {
 
 	# if hosts contains an entry for FQDN...
 	If ($Hosts -match "^[^#].*$($JsonData.Fqdn)$") {
-		Write-Output 'Hosts file contains active entry with the ADFS FQDN; resolving FQDN to IP via DNS to build alternate host URL'
+		Write-Host 'Hosts file contains active entry with the ADFS FQDN; resolving FQDN to IP via DNS to build alternate host URL'
 		# resolve host in URI to IP Address to workaround potential hosts file resolution of ADFS servers
 		Try {
 			$Uri = Get-UriWithIPAddressFromUriWithHostname -Uri $Uri
@@ -363,7 +363,7 @@ Process {
 	# retrieve content from URI
 	Try {
 		$WebRequest = Invoke-WebRequest @InvokeWebRequest
-		Write-Output "Retrieved response from host URL: '$($Uri.AbsoluteUri)'"
+		Write-Host "Retrieved response from host URL: '$($Uri.AbsoluteUri)'"
 	}
 	Catch {
 		Write-Warning "Error retrieving response from host URL: '$($Uri.AbsoluteUri)'"
@@ -373,7 +373,7 @@ Process {
 	# parse response
 	Try {
 		$ActiveHost = $WebRequest.Content.Trim().ToLowerInvariant()
-		Write-Output "Parsed response from host URL: '$($Uri.AbsoluteUri)'"
+		Write-Host "Parsed response from host URL: '$($Uri.AbsoluteUri)'"
 	}
 	Catch {
 		Write-Warning "Error parsing response from host URL: '$($Uri.AbsoluteUri)'"
@@ -388,7 +388,7 @@ Process {
 		# retrieve current host from file
 		Try {
 			$CurrentHost = Get-Content -Path $FilePath
-			Write-Output "Retrieved script host from file: '$FilePath'"
+			Write-Host "Retrieved script host from file: '$FilePath'"
 		}
 		Catch {
 			Write-Warning "Error retrieving script host from file: '$FilePath'"
@@ -399,7 +399,7 @@ Process {
 		# create script host file and variable
 		Try {
 			$null = New-Item -ItemType 'File' -Path $FilePath
-			Write-Output "Created script host file: '$FilePath'"
+			Write-Host "Created script host file: '$FilePath'"
 		}
 		Catch {
 			Write-Warning "Error creating script host file: '$FilePath"
@@ -409,14 +409,14 @@ Process {
 
 	# check current host and active host
 	If ($CurrentHost -eq $ActiveHost) {
-		Write-Output "'$ActiveHost' is active host and script host; no change required"
+		Write-Host "'$ActiveHost' is active host and script host; no change required"
 		Return
 	}
 
 	# update host name
 	Try {
 		Set-Content -Path $FilePath -Value $ActiveHost
-		Write-Output "'$ActiveHost' is new script host; replaced old script host: '$CurrentHost' "
+		Write-Host "'$ActiveHost' is new script host; replaced old script host: '$CurrentHost' "
 	}
 	Catch {
 		Write-Warning "Error updating script host file: '$FilePath"

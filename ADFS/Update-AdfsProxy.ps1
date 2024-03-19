@@ -192,7 +192,7 @@ Begin {
 
 		# if current certificate is latest certificate...
 		If ($CurrentCertificate.Thumbprint -eq $LatestCertificate.Thumbprint) {
-			Write-Output "Verified external certificate for '$Name' with thumbprint: $($CurrentCertificate.Thumbprint)"
+			Write-Host "Verified external certificate for '$Name' with thumbprint: $($CurrentCertificate.Thumbprint)"
 			Return
 		}
 
@@ -207,7 +207,7 @@ Begin {
 		# update application with latest certificate
 		Try {
 			Set-WebApplicationProxyApplication @SetWebApplicationProxyApplication
-			Write-Output "Updated external certificate for '$Name' with thumbprint: $($LatestCertificate.Thumbprint)"
+			Write-Host "Updated external certificate for '$Name' with thumbprint: $($LatestCertificate.Thumbprint)"
 		}
 		Catch {
 			Write-Warning "could not update external certificate for '$Name' with thumbprint: $($LatestCertificate.Thumbprint)"
@@ -372,18 +372,18 @@ Process {
 
 	# test FQDN from JSON data
 	If ([string]::IsNullOrEmpty($JsonData.Fqdn)) {
-		Write-Output 'FQDN was not found in ADFS JSON file'
+		Write-Host 'FQDN was not found in ADFS JSON file'
 		Return
 	}
 
 	# test hash from JSON data
 	If ([string]::IsNullOrEmpty($JsonData.Hash)) {
-		Write-Output 'Hash was not found in ADFS JSON file'
+		Write-Host 'Hash was not found in ADFS JSON file'
 		Return
 	}
 
 	# verify services are running
-	Write-Output 'Verifying WAP services'
+	Write-Host 'Verifying WAP services'
 	Try {
 		Start-WebApplicationProxyServices
 	}
@@ -393,7 +393,7 @@ Process {
 
 	# check WAP health (try 1)
 	If ($null -eq $WebApplicationProxyConfiguration) {
-		Write-Output 'Retrieving WAP configuration from ADFS'
+		Write-Host 'Retrieving WAP configuration from ADFS'
 		Try {
 			$WebApplicationProxyConfiguration = Get-WebApplicationProxyConfiguration	
 		}
@@ -404,7 +404,7 @@ Process {
 
 	# address WAP health (try 1)
 	If ($null -eq $WebApplicationProxyConfiguration) {
-		Write-Output 'Restarting WAP services'
+		Write-Host 'Restarting WAP services'
 		# stop services
 		Try {
 			Stop-WebApplicationProxyServices
@@ -423,7 +423,7 @@ Process {
 
 	# check WAP health (try 2)
 	If ($null -eq $WebApplicationProxyConfiguration) {
-		Write-Output 'Retrieving WAP configuration from ADFS after restart'
+		Write-Host 'Retrieving WAP configuration from ADFS after restart'
 		Try {
 			$WebApplicationProxyConfiguration = Get-WebApplicationProxyConfiguration	
 		}
@@ -434,7 +434,7 @@ Process {
 
 	# address WAP health (try 2)
 	If ($null -eq $WebApplicationProxyConfiguration) {
-		Write-Output 'Installing WAP with CmsCredentials'
+		Write-Host 'Installing WAP with CmsCredentials'
 		# get WAP configuration
 		Try {
 			Install-WebApplicationProxyWithCMS -CertificateThumbprint $JsonData.Hash -FederationServiceName $JsonData.Fqdn
@@ -446,7 +446,7 @@ Process {
 
 	# check WAP health (try 3)
 	If ($null -eq $WebApplicationProxyConfiguration) {
-		Write-Output 'Retrieving WAP configuration from ADFS after reinstall'
+		Write-Host 'Retrieving WAP configuration from ADFS after reinstall'
 		Try {
 			$WebApplicationProxyConfiguration = Get-WebApplicationProxyConfiguration
 		}
