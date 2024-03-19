@@ -55,7 +55,7 @@ Begin {
 	Function Get-UriWithIPAddressFromUriWithHostname {
 		Param(
 			# a URI object or a string that can be cast a URI object
-			[Parameter(Required)]
+			[Parameter(Mandatory = $true)]
 			[uri]$Uri,
 			[Parameter(DontShow)][ValidateScript({ [Microsoft.DnsClient.Commands.RecordType].IsEnumDefined($_) })]
 			# the DNS record type to resolve
@@ -284,7 +284,7 @@ Begin {
 Process {
 	# retrieve JSON data
 	Try {
-		$JsonData = Get-Content -Path $Json | ConvertFrom-Json
+		$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 	}
 	Catch {
 		Write-Output 'ERROR: retrieving ADFS JSON file'
