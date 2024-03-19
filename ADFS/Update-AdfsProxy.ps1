@@ -169,7 +169,7 @@ Begin {
 	Function Update-WebApplicationProxyApplicationCertificate {
 		[CmdletBinding()]
 		Param(
-			[Parameter(Mandatory = $true)]	
+			[Parameter(Mandatory = $true)]
 			[string]$Name,
 			[Parameter(Mandatory = $true)]
 			[string]$Id,
@@ -320,7 +320,7 @@ Begin {
 
 		# split transcript files on transcript date
 		$NewFiles, $OldFiles = $TranscriptFiles.Where({ $_.LastWriteTime -ge $TranscriptDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
-		
+
 		# if count of files after transcript date is less than to cleanup threshold...
 		If ($NewFiles.Count -lt $TranscriptCount) {
 			# declare skip
@@ -395,7 +395,7 @@ Process {
 	If ($null -eq $WebApplicationProxyConfiguration) {
 		Write-Host 'Retrieving WAP configuration from ADFS'
 		Try {
-			$WebApplicationProxyConfiguration = Get-WebApplicationProxyConfiguration	
+			$WebApplicationProxyConfiguration = Get-WebApplicationProxyConfiguration
 		}
 		Catch {
 			Write-Warning 'could not retrieve WAP configuration'
@@ -425,7 +425,7 @@ Process {
 	If ($null -eq $WebApplicationProxyConfiguration) {
 		Write-Host 'Retrieving WAP configuration from ADFS after restart'
 		Try {
-			$WebApplicationProxyConfiguration = Get-WebApplicationProxyConfiguration	
+			$WebApplicationProxyConfiguration = Get-WebApplicationProxyConfiguration
 		}
 		Catch {
 			Write-Warning 'could not retrieve WAP configuration after restart'
@@ -467,6 +467,12 @@ Process {
 
 	# check each WAP application
 	ForEach ($WebApplicationProxyApplication in $WebApplicationProxyApplications) {
+		# if application is http only...
+		If ($WebApplicationProxyApplication.ExternalUrl.StartsWith('http://') -and -not $WebApplicationProxyApplication.EnableHTTPRedirect) {
+			Write-Warning "skipping HTTP-only application: $($WebApplicationProxyApplication.Name)"
+			Continue
+		}
+
 		# define parameters
 		$UpdateWebApplicationProxyApplicationCertificate = @{
 			Name       = $WebApplicationProxyApplication.Name
@@ -479,7 +485,7 @@ Process {
 			Update-WebApplicationProxyApplicationCertificate @UpdateWebApplicationProxyApplicationCertificate
 		}
 		Catch {
-			Write-Warning "could not update WAP application certificate for: $Name"
+			Write-Warning "could not update WAP application certificate for: $($WebApplicationProxyApplication.Name)"
 			Return $_
 		}
 	}
