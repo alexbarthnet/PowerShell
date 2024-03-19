@@ -208,7 +208,7 @@ Begin {
 Process {
 	# retrieve JSON data
 	Try {
-		$JsonData = Get-Content -Path $Json | ConvertFrom-Json
+		$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 	}
 	Catch {
 		Write-Output 'ERROR: retrieving ADFS JSON file'
@@ -354,11 +354,13 @@ Process {
 
 	# process custom metadata
 	ForEach ($Binding in $CustomMetadata.Keys) {
-		# copy metadata then modify Single Logout Service location for post binding
-		$XmlForPost = $RestMethod
-		$XmlForPost.GetElementsByTagName('IDPSSODescriptor').GetElementsByTagName('SingleLogoutService') | Where-Object { $_.Binding -match $Binding } | ForEach-Object { $_.Location = ($UriForEndpoint + $CustomMetadata[$Binding]) }
+		# copy original metadata
+		$XmlFromRest = $RestMethod
 
-		# define child paths for XML files with post method
+		# retrieve binding-specific URI for SingleLogoutService then append binding-specific suffix to URI
+		$XmlFromRest.GetElementsByTagName('IDPSSODescriptor').GetElementsByTagName('SingleLogoutService') | Where-Object { $_.Binding -match $Binding } | ForEach-Object { $_.Location = ($UriForEndpoint + $CustomMetadata[$Binding]) }
+
+		# define binding-specific child paths for XML files
 		$XmlChildPaths = @("saml-single-logout-$($Binding.ToLowerInvariant()).xml", "custom-logout-$($Binding.ToLowerInvariant()).xml")
 
 		# process child paths for XML files
@@ -367,7 +369,7 @@ Process {
 			$XmlPath = Join-Path -Path $Path -ChildPath $XmlChildPath
 			# write XML file
 			Try {
-				$XmlForPost.Save($XmlPath)
+				$XmlFromRest.Save($XmlPath)
 				Write-Output "Wrote metadata file: $XmlPath"
 			}
 			Catch {
