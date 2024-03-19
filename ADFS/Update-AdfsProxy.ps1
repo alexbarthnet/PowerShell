@@ -91,10 +91,6 @@ Begin {
 	}
 
 	Function Start-WebApplicationProxyServices {
-		[CmdletBinding()]
-		Param(
-			[switch]$Quiet
-		)
 		# start services in forward order:
 		#  1. proxy controller (retrieves configuration from ADFS for proxy service)
 		#  2. proxy service (proxies requests to destination)
@@ -115,8 +111,8 @@ Begin {
 				Throw $_
 			}
 			# test service
-			If ($Service.Status -eq 'Running' -and -not $Quiet) {
-				Write-Warning "service already running: '$Name'"
+			If ($Service.Status -eq 'Running') {
+				Write-Host "found service running: '$Name'"
 				Continue
 			}
 			# start service
@@ -127,14 +123,12 @@ Begin {
 				Write-Warning "could not start service: '$Name'"
 				Throw $_
 			}
+			# declare started
+			Write-Host "started service: '$Name'"
 		}
 	}
 
 	Function Stop-WebApplicationProxyServices {
-		[CmdletBinding()]
-		Param(
-			[switch]$Quiet
-		)
 		# stop services in reverse order:
 		#  1. "ADFS" service (extends proxy service to support tokens)
 		#  2. proxy service (proxies requests to destination)
@@ -156,10 +150,10 @@ Begin {
 			}
 			# test service
 			If ($Service.Status -eq 'stopped') {
-				Write-Warning "service already stopped: '$Name'"
+				Write-Host "found service stopped: '$Name'"
 				Continue
 			}
-			# start service
+			# stop service
 			Try {
 				Stop-Service @ServiceParameters
 			}
@@ -167,6 +161,8 @@ Begin {
 				Write-Warning "could not stop service: '$Name'"
 				Throw $_
 			}
+			# declare stopped
+			Write-Host "stopped service: '$Name'"
 		}
 	}
 
@@ -389,7 +385,7 @@ Process {
 	# verify services are running
 	Write-Output 'Verifying WAP services'
 	Try {
-		Start-WebApplicationProxyServices -Quiet
+		Start-WebApplicationProxyServices
 	}
 	Catch {
 		Return $_
@@ -452,7 +448,7 @@ Process {
 	If ($null -eq $WebApplicationProxyConfiguration) {
 		Write-Output 'Retrieving WAP configuration from ADFS after reinstall'
 		Try {
-			$WebApplicationProxyConfiguration = Get-WebApplicationProxyConfiguration	
+			$WebApplicationProxyConfiguration = Get-WebApplicationProxyConfiguration
 		}
 		Catch {
 			Write-Warning 'could not retrieve WAP configuration after reinstall'
