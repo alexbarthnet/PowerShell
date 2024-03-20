@@ -367,19 +367,21 @@ Begin {
 }
 
 Process {
+	# define JSON properties
+	$JsonProperties = 'Fqdn', 'Hash'
+
 	# get JSON data
 	$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 
-	# test FQDN from JSON data
-	If ([string]::IsNullOrEmpty($JsonData.Fqdn)) {
-		Write-Host 'FQDN was not found in ADFS JSON file'
-		Return
-	}
-
-	# test hash from JSON data
-	If ([string]::IsNullOrEmpty($JsonData.Hash)) {
-		Write-Host 'Hash was not found in ADFS JSON file'
-		Return
+	# create variables from JSON properties
+	ForEach ($Property in $JsonProperties) {
+		If ($null -eq $JsonData.$Property) {
+			Write-Warning "could not find '$Property' in JSON file"
+			Return
+		}
+		Else {
+			New-Variable -Name $Property -Value $JsonData.$Property
+		}
 	}
 
 	# verify services are running
@@ -437,7 +439,7 @@ Process {
 		Write-Host 'Installing WAP with CmsCredentials'
 		# get WAP configuration
 		Try {
-			Install-WebApplicationProxyWithCMS -CertificateThumbprint $JsonData.Hash -FederationServiceName $JsonData.Fqdn
+			Install-WebApplicationProxyWithCMS -CertificateThumbprint $Hash -FederationServiceName $Fqdn
 		}
 		Catch {
 			Return $_
