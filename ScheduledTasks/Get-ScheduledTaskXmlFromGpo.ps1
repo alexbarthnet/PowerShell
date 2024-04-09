@@ -8,14 +8,20 @@ Retrieves the Scheduled Tasks defined in a GPO as an XML object.
 .PARAMETER GPO
 A reference to the GPO. Must be a GPO object from Get-GPO, the GUID of a GPO, or the name of a GPO.
 
+.PARAMETER AsText
+Switch to return the Scheduled Task XML as plain text rather than an XML object.
+
 .INPUTS
-None.
+Microsoft.Gpo
 
 .OUTPUTS
-None. The script reports the actions taken and does not provide any actionable output.
+System.Xml.XmlDocument
 
 .EXAMPLE
 .\Get-ScheduledTaskXmlFromGpo.ps1 -GPO $GPO
+
+.EXAMPLE
+.\Get-ScheduledTaskXmlFromGpo.ps1 -GPO $GPO -AsText
 
 .EXAMPLE
 .\Get-ScheduledTaskXmlFromGpo.ps1 -GPO 'Scheduled Tasks GPO'
@@ -29,7 +35,7 @@ Param(
 	[Parameter(Mandatory = $true, ValueFromPipeline = $true)]
 	[object]$GPO,
 	[Parameter()]
-	[switch]$Text,
+	[switch]$AsText,
 	[Parameter(DontShow)]
 	[string]$Domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().Name,
 	[Parameter(DontShow)]
@@ -38,7 +44,7 @@ Param(
 
 Begin {
 	# if input object is not a GPO...
-	If ($GPO -isnot [Microssoft.Gpo]) {
+	If ($GPO -isnot [Microsoft.Gpo]) {
 		# ...and input object is a GUID...
 		If ($GPO -is [guid] -or [guid]::TryParse($GPO, [ref][guid]::Empty)) {
 			# ...get GPO by GUID
@@ -73,7 +79,7 @@ Process {
 	}
 
 	# define scheduled tasks path
-	$Path = Join-Path -Path $Path -ChildPath "Machine\Preferences\ScheduledTasks\ScheduledTasks.xml"
+	$Path = Join-Path -Path $Path -ChildPath 'Machine\Preferences\ScheduledTasks\ScheduledTasks.xml'
 
 	# test path
 	If (!(Test-Path -Path $Path -PathType Leaf)) {
@@ -94,7 +100,7 @@ Process {
 	}
 
 	# return XML
-	If ($Text) {
+	If ($AsText) {
 		$Xml.Save([System.Console]::Out)
 	}
 	Else {

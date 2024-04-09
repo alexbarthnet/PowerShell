@@ -21,7 +21,7 @@ None. The script reports the actions taken and does not provide any actionable o
 .\Set-ScheduledTaskXmlFromGpo.ps1 -GPO $GPO -Xml $Xml
 
 .EXAMPLE
-.\Set-ScheduledTaskXmlFromGpo.ps1 -GPO 'Scheduled Tasks GPO'  -Xml $Xml
+.\Set-ScheduledTaskXmlFromGpo.ps1 -GPO 'Scheduled Tasks GPO' -Xml $Xml
 
 .EXAMPLE
 .\Set-ScheduledTaskXmlFromGpo.ps1 -GPO 00000000-0000-0000-0000-000000000000 -Xml $Xml
@@ -41,7 +41,7 @@ Param(
 
 Begin {
 	# if GPO parameter is not a GPO...
-	If ($Gpo -isnot [Microssoft.Gpo]) {
+	If ($Gpo -isnot [Microsoft.Gpo]) {
 		# ...and input object is a GUID...
 		If ($Gpo -is [guid] -or [guid]::TryParse($Gpo, [ref][guid]::Empty)) {
 			# ...get GPO by GUID
@@ -73,7 +73,6 @@ Begin {
 			Throw $_
 		}
 	}
-
 }
 
 Process {
@@ -87,9 +86,9 @@ Process {
 	}
 
 	# define scheduled tasks path
-	$Path = Join-Path -Path $Path -ChildPath "Machine\Preferences\ScheduledTasks\ScheduledTasks.xml"
+	$Path = Join-Path -Path $Path -ChildPath 'Machine\Preferences\ScheduledTasks\ScheduledTasks.xml'
 
-	# load GPO scheduled task into XML
+	# save XML as GPO scheduled task
 	Try {
 		$Xml.Save($Path)
 	}
