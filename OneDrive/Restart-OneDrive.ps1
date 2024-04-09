@@ -129,5 +129,3 @@ Function Restart-OneDrive {
 	# address OneDrive not restoring previous foreground window on start
 	Invoke-ShowWindow -WindowHandleId $MainWindowHandle
 }
-
-Restart-OneDrive
