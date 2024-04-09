@@ -67,7 +67,7 @@ If ($Force -or -not $SkipDownload) {
 # install file
 If ($Install -or $InstallService) {
 	# check for admin rights
-	If (-not ([Security.Principal.WindowsPrincipal]([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
+	If (-not ([System.Security.Principal.WindowsPrincipal]([System.Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
 		Write-Error "ERROR: the 'Install' switch was set but the script cannot continue. The current PowerShell session does not have the Administrator role."
 		Return
 	}
