@@ -1,55 +1,55 @@
-<#
-.SYNOPSIS
-Template for writing PowerShell transcripts for a script.
-
-.DESCRIPTION
-Template for writing PowerShell transcripts for a script. The End block will remove any transcript files that match the generated transcript file name less the date and are older than the computed transcript cleanup date.
-
-.PARAMETER Parameter1
-Example parameter for script
-
-.PARAMETER SkipTranscript
-Switch parameter to skip writing transcript and transcript cleanup.
-
-.PARAMETER TranscriptName
-The string to substitute for the random component of the default PowerShell transcript file name.
-
-.PARAMETER TranscriptPath
-The path to a folder for saving PowerShell transcript files.
-
-.PARAMETER TranscriptDateUnits
-The units for computing the transcript cleanup date. Must be one of: Hours, Days, Months, Years
-
-.PARAMETER TranscriptDateValue
-The value for computing the transcript cleanup date. Must be an unsigned integer and at least 1
-
-.PARAMETER TranscriptFileCount
-The number of transcript files that must remain after cleanup. Transcript cleanup will not run if the count of transcript files that would remain is not at least the value of this parameter.
-
-.PARAMETER HostName
-The host name for the current computer.
-
-.PARAMETER DomainName
-The domain name for the current computer.
-
-.PARAMETER DnsHostName
-The fully qualified DNS host name for the current computer.
-
-.INPUTS
-None.
-
-.OUTPUTS
-None.
-#>
-
 Function Start-TranscriptWithHostAndDate {
+	<#
+	.SYNOPSIS
+	Starts a PowerShell transcript with the given parameters in a defined folder structure.
+
+	.DESCRIPTION
+	Starts a PowerShell transcript with the given parameters in a defined folder structure. The defaults create a folder for each calling script or function under a named folder in a well-known and accessible location on most operating systems.
+
+	.PARAMETER TranscriptName
+	The name of the transcript. The default is the sanitized name of the calling script or function. File extensions are removed from calling script names. Leading and trailing angle brackets are removed from sources such as '<ScriptBlock>'.
+
+	.PARAMETER TranscriptRoot
+	The path to the folder where the root transcript folder will be created. The default value is the 'C:\ProgramData' folder on Windows and the '/usr/share' folder on macOS and Linux systems.
+
+	.PARAMETER TranscriptLeaf
+	The name of the immediate leaf folder in the transcript root folder. The default value is 'PowerShell_transcript'.
+
+	.PARAMETER TranscriptBase
+	The path to the folder where folders will created for each distinct calling function or script  The default value is the 'C:\ProgramData\PowerShell_transcript' folder on Windows and the '/usr/share/PowerShell_transcript' folder on macOS and Linux.
+	
+	.PARAMETER TranscriptPath
+	The path to a folder for saving PowerShell transcript files. The default is the $TranscriptName folder under the $TranscriptBase folder.
+
+	.PARAMETER TranscriptHost
+	The name of the machine which is included in the transcript file name. The default is the local machine name.
+
+	.PARAMETER TranscriptTime
+	The time the transcript was created. The default is the current time formatted with the 'yyyyMMddHHmmss' .NET datetime format string.
+
+	.INPUTS
+	None.
+
+	.OUTPUTS
+	None. The function does not generate any output.
+	#>
+
 	Param(
 		# name for transcript items; default is sanitized name of calling script or function
-		[Parameter()]
+		[Parameter(Position = 0)]
 		[string]$TranscriptName = (Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$',
-		# folder path for transcript files; default is named folder under 'PowerShell_transcript' folder in common application data folder
-		[Parameter()]
-		[string]$TranscriptPath = ([System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'),
+		# root folder for transcript folders; default is common application data folder
+		[Parameter(DontShow)]
+		[string]$TranscriptRoot = ([System.Environment]::GetFolderPath('CommonApplicationData')),
+		# leaf folder for transcript folders; default is 'PowerShell_transcript'
+		[Parameter(DontShow)]
+		[string]$TranscriptLeaf = 'PowerShell_transcript',
+		# base folder for transcript folders; default is 'PowerShell_transcript' folder in common application data folder
+		[Parameter(DontShow)]
+		[string]$TranscriptBase = (Join-Path -Path $TranscriptRoot -ChildPath $TranscriptLeaf),
+		# path for transcript files; default is named folder under 'PowerShell_transcript' folder in common application data folder
+		[Parameter(DontShow)]
+		[string]$TranscriptPath = (Join-Path -Path $TranscriptBase -ChildPath $TranscriptName),
 		# host for transcript file name
 		[Parameter(DontShow)]
 		[string]$TranscriptHost = ([System.Environment]::MachineName),
@@ -96,13 +96,66 @@ Function Start-TranscriptWithHostAndDate {
 }
 
 Function Stop-TranscriptWithHostAndDate {
+	<#
+	.SYNOPSIS
+	Stops a PowerShell transcript with the given parameters in a defined folder structure and removes old transcript files from the folder.
+
+	.DESCRIPTION
+	Stops a PowerShell transcript with the given parameters in a defined folder structure and removes old transcript files from the folder.
+
+	.PARAMETER TranscriptName
+	The name of the transcript. The default is the sanitized name of the calling script or function. File extensions are removed from calling script names. Leading and trailing angle brackets are removed from sources such as '<ScriptBlock>'.
+
+	.PARAMETER TranscriptRoot
+	The path to the folder where the root transcript folder will be created. The default value is the 'C:\ProgramData' folder on Windows and the '/usr/share' folder on macOS and Linux systems.
+
+	.PARAMETER TranscriptLeaf
+	The name of the immediate leaf folder in the transcript root folder. The default value is 'PowerShell_transcript'.
+
+	.PARAMETER TranscriptBase
+	The path to the folder where folders will created for each distinct calling function or script  The default value is the 'C:\ProgramData\PowerShell_transcript' folder on Windows and the '/usr/share/PowerShell_transcript' folder on macOS and Linux.
+	
+	.PARAMETER TranscriptPath
+	The path to a folder for saving PowerShell transcript files. The default is the $TranscriptName folder under the $TranscriptBase folder.
+
+	.PARAMETER TranscriptHost
+	The name of the machine which is included in the transcript file name. The default is the local machine name.
+
+	.PARAMETER TranscriptTime
+	The time the transcript was created. The default is the current time formatted with the 'yyyyMMddHHmmss' .NET datetime format string.
+
+	.PARAMETER TranscriptDateUnits
+	The string to define the datetime units for computing a datetime offset. The default value is 'Days'. The valid values are 'Hours', 'Days', 'Weeks', 'Months', and 'Years'.
+
+	.PARAMETER TranscriptDateValue
+	The uint16 to define the datetime value for computing a datetime offset. The default value is '7'. The valid values between 1 and 65535.
+
+	.PARAMETER TranscriptFileCount
+	The uint16 to define the count of transcript files that must remain after old transcripts are removed. The removal of old files is skipped if the resulting count of transcript files would be below this value.
+
+	.INPUTS
+	None.
+
+	.OUTPUTS
+	None. The function does not generate any output.
+	#>
+
 	Param(
 		# name for transcript items; default is sanitized name of calling script or function
 		[Parameter()]
 		[string]$TranscriptName = (Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$',
-		# folder path for transcript files; default is named folder under 'PowerShell_transcript' folder in common application data folder
+		# root folder for transcript folders; default is common application data folder
 		[Parameter()]
-		[string]$TranscriptPath = ([System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'),
+		[string]$TranscriptRoot = ([System.Environment]::GetFolderPath('CommonApplicationData')),
+		# leaf folder for transcript folders; default is 'PowerShell_transcript'
+		[Parameter()]
+		[string]$TranscriptLeaf = 'PowerShell_transcript',
+		# base folder for transcript folders; default is 'PowerShell_transcript' folder in common application data folder
+		[Parameter()]
+		[string]$TranscriptBase = (Join-Path -Path $TranscriptRoot -ChildPath $TranscriptLeaf),
+		# path for transcript files; default is named folder under 'PowerShell_transcript' folder in common application data folder
+		[Parameter()]
+		[string]$TranscriptPath = (Join-Path -Path $TranscriptBase -ChildPath $TranscriptName),
 		# host for transcript file names
 		[Parameter(DontShow)]
 		[string]$TranscriptHost = ([System.Environment]::MachineName),
@@ -185,18 +238,50 @@ Function Stop-TranscriptWithHostAndDate {
 }
 
 Function Write-TranscriptWithHostAndDate {
+	<#
+	.SYNOPSIS
+	Writes information to both console and transcript with optional formatting.
+
+	.DESCRIPTION
+	Writes information to both console and transcript with optional formatting.
+
+	.PARAMETER Message
+	The string containing information to be written to the console and transcript.
+
+	.PARAMETER Basic
+	Switch parameter to append the current datetime to the message parameter. Cannot be combined with the 'Collection' or 'Wrap' parameters
+
+	.PARAMETER Collection
+	Switch parameter to prepend the current datetime and calling function or script to the message parameter as key/value pairs. Assumes the Message parameter is an existing string of key/value pairs. Cannot be combined with the 'Basic' or 'Wrap' parameters
+
+	.PARAMETER Wrap
+	Switch parameter to prepend the current datetime and calling function or script to the message parameter as key/value pairs. Prepends the the Message parameter with 'message=' and wraps the message in double quotes to create a single key/value pair for the Message parameter. Cannot be combined with the 'Basic' or 'Wrap' parameters
+	
+	.PARAMETER Command
+	A string containing the name of the command that originated the message. Defaults to the calling function or script.
+
+	.PARAMETER Datetime
+	A string containing a formatted datetime. Defaults to the current time in ISO 8601 format.
+
+	.INPUTS
+	None.
+
+	.OUTPUTS
+	None. The function does not generate any output.
+	#>
+
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param(
 		# message for transcript
 		[Parameter(Position = 0, Mandatory = $true)]
 		[string]$Message,
-		# optional prefix type for message; add datetime
+		# optional prefix type for message; prefix datetime
 		[Parameter(ParameterSetName = 'Basic')]
 		[switch]$Basic,
-		# optional prefix type for message; add datetime and command, messsage is collection of key/value pairs
+		# optional prefix type for message; prefix datetime and command as key/value pairs, messsage is collection of key/value pairs
 		[Parameter(ParameterSetName = 'Collection')]
 		[switch]$Collection,
-		# optional prefix type for message; add datetime and command, message will be wrapped in double quotes
+		# optional prefix type for message; prefix datetime and command as key/value pairs, message will be wrapped in double quotes
 		[Parameter(ParameterSetName = 'Wrap')]
 		[switch]$Wrap,
 		# command name for transcript
@@ -220,31 +305,63 @@ Function Write-TranscriptWithHostAndDate {
 		}
 	}
 
-	# address bug in PowerShell 5 with transcripts and Write-Information
+	# address known issue in PowerShell 5 with transcripts and Write-Information
 	If ($PSVersionTable.PSVersion.Major -lt 6) {
 		Write-Information -MessageData $Message -InformationAction SilentlyContinue
 	}
 
-	# prefix message
+	# prefix message after addressing known issue in PowerShell 5 
 	$Message = "INFO: $Message"
 
 	# write information message
-	Write-Information -MessageData $Message -InformationAction Continue
+	Microsoft.PowerShell.Utility\Write-Information -MessageData $Message -InformationAction Continue
 }
 
 Function Write-VerboseToTranscriptWithHostAndDate {
+	<#
+	.SYNOPSIS
+	Writes verbose output to both console and transcript with optional formatting.
+
+	.DESCRIPTION
+	Writes verbose output to both console and transcript with optional formatting.
+
+	.PARAMETER Message
+	The string containing verbose output to be written to the console and transcript.
+
+	.PARAMETER Basic
+	Switch parameter to append the current datetime to the message parameter. Cannot be combined with the 'Collection' or 'Wrap' parameters
+
+	.PARAMETER Collection
+	Switch parameter to prepend the current datetime and calling function or script to the message parameter as key/value pairs. Assumes the Message parameter is an existing string of key/value pairs. Cannot be combined with the 'Basic' or 'Wrap' parameters
+
+	.PARAMETER Wrap
+	Switch parameter to prepend the current datetime and calling function or script to the message parameter as key/value pairs. Prepends the the Message parameter with 'message=' and wraps the message in double quotes to create a single key/value pair for the Message parameter. Cannot be combined with the 'Basic' or 'Wrap' parameters
+	
+	.PARAMETER Command
+	A string containing the name of the command that originated the message. Defaults to the calling function or script.
+
+	.PARAMETER Datetime
+	A string containing a formatted datetime. Defaults to the current time in ISO 8601 format.
+
+	.INPUTS
+	None.
+
+	.OUTPUTS
+	None. The function does not generate any output.
+	#>
+
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param(
 		# message for transcript
 		[Parameter(Position = 0, Mandatory = $true)]
 		[string]$Message,
-		# optional prefix type for message; add datetime
+		# optional prefix type for message; prefix datetime
 		[Parameter(ParameterSetName = 'Basic')]
 		[switch]$Basic,
-		# optional prefix type for message; add datetime and command, messsage is collection of key/value pairs
+		# optional prefix type for message; prefix datetime and command as key/value pairs, messsage is collection of key/value pairs
 		[Parameter(ParameterSetName = 'Collection')]
 		[switch]$Collection,
-		# optional prefix type for message; add datetime and command, message will be wrapped in double quotes
+		# optional prefix type for message; prefix datetime and command as key/value pairs, message will be wrapped in double quotes
 		[Parameter(ParameterSetName = 'Wrap')]
 		[switch]$Wrap,
 		# command name for transcript
@@ -269,22 +386,54 @@ Function Write-VerboseToTranscriptWithHostAndDate {
 	}
 
 	# write verbose message
-	Write-Verbose -Message $Message -Verbose
+	Microsoft.PowerShell.Utility\Write-Verbose -Message $Message -Verbose
 }
 
 Function Write-WarningToTranscriptWithHostAndDate {
+	<#
+	.SYNOPSIS
+	Writes a warning to both console and transcript with optional formatting.
+
+	.DESCRIPTION
+	Writes a warning to both console and transcript with optional formatting.
+
+	.PARAMETER Message
+	The string containing a warning to be written to the console and transcript.
+
+	.PARAMETER Basic
+	Switch parameter to append the current datetime to the message parameter. Cannot be combined with the 'Collection' or 'Wrap' parameters
+
+	.PARAMETER Collection
+	Switch parameter to prepend the current datetime and calling function or script to the message parameter as key/value pairs. Assumes the Message parameter is an existing string of key/value pairs. Cannot be combined with the 'Basic' or 'Wrap' parameters
+
+	.PARAMETER Wrap
+	Switch parameter to prepend the current datetime and calling function or script to the message parameter as key/value pairs. Prepends the the Message parameter with 'message=' and wraps the message in double quotes to create a single key/value pair for the Message parameter. Cannot be combined with the 'Basic' or 'Wrap' parameters
+	
+	.PARAMETER Command
+	A string containing the name of the command that originated the message. Defaults to the calling function or script.
+
+	.PARAMETER Datetime
+	A string containing a formatted datetime. Defaults to the current time in ISO 8601 format.
+
+	.INPUTS
+	None.
+
+	.OUTPUTS
+	None. The function does not generate any output.
+	#>
+
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param(
 		# message for transcript
 		[Parameter(Position = 0, Mandatory = $true)]
 		[string]$Message,
-		# optional prefix type for message; add datetime
+		# optional prefix type for message; prefix datetime
 		[Parameter(ParameterSetName = 'Basic')]
 		[switch]$Basic,
-		# optional prefix type for message; add datetime and command, messsage is collection of key/value pairs
+		# optional prefix type for message; prefix datetime and command as key/value pairs, messsage is collection of key/value pairs
 		[Parameter(ParameterSetName = 'Collection')]
 		[switch]$Collection,
-		# optional prefix type for message; add datetime and command, message will be wrapped in double quotes
+		# optional prefix type for message; prefix datetime and command as key/value pairs, message will be wrapped in double quotes
 		[Parameter(ParameterSetName = 'Wrap')]
 		[switch]$Wrap,
 		# command name for transcript
@@ -309,7 +458,7 @@ Function Write-WarningToTranscriptWithHostAndDate {
 	}
 
 	# write warning message
-	Write-Warning -Message $Message -WarningAction Continue
+	Microsoft.PowerShell.Utility\Write-Warning -Message $Message -WarningAction Continue
 }
 
 # define functions to export
