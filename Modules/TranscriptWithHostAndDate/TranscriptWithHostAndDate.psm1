@@ -98,10 +98,10 @@ Function Start-TranscriptWithHostAndDate {
 Function Stop-TranscriptWithHostAndDate {
 	<#
 	.SYNOPSIS
-	Stops a PowerShell transcript with the given parameters in a defined folder structure and removes old transcript files from the folder.
+	Stops a PowerShell transcript after removing old transcript files from the defined transcript folder.
 
 	.DESCRIPTION
-	Stops a PowerShell transcript with the given parameters in a defined folder structure and removes old transcript files from the folder.
+	Stops a PowerShell transcript after removing old transcript files from the defined transcript folder.
 
 	.PARAMETER TranscriptName
 	The name of the transcript. The default is the sanitized name of the calling script or function. File extensions are removed from calling script names. Leading and trailing angle brackets are removed from sources such as '<ScriptBlock>'.
@@ -131,7 +131,7 @@ Function Stop-TranscriptWithHostAndDate {
 	The uint16 to define the datetime value for computing a datetime offset. The default value is '7'. The valid values between 1 and 65535.
 
 	.PARAMETER TranscriptFileCount
-	The uint16 to define the count of transcript files that must remain after old transcripts are removed. The removal of old files is skipped if the resulting count of transcript files would be below this value.
+	the uint16 to define the count of transcript files that must remain if old transcripts are removed. The removal of old files is skipped if the resulting count of transcript files would be below this value. The default value is '7'.
 
 	.INPUTS
 	None.
@@ -249,19 +249,19 @@ Function Write-TranscriptWithHostAndDate {
 	The string containing information to be written to the console and transcript.
 
 	.PARAMETER Basic
-	Switch parameter to append the current datetime to the message parameter. Cannot be combined with the 'Collection' or 'Wrap' parameters
+	Switch parameter to prefix the message parameter with the value of the Datetime parameter. Cannot be combined with the 'Collection' or 'Wrap' parameters
 
 	.PARAMETER Collection
-	Switch parameter to prepend the current datetime and calling function or script to the message parameter as key/value pairs. Assumes the Message parameter is an existing string of key/value pairs. Cannot be combined with the 'Basic' or 'Wrap' parameters
+	Switch parameter to prefix the message parameter with the values of the Datetime and Command parameters as key/value pairs and assumes the value of the Message parameter is an existing string of key/value pairs. Cannot be combined with the 'Basic' or 'Wrap' parameters
 
 	.PARAMETER Wrap
-	Switch parameter to prepend the current datetime and calling function or script to the message parameter as key/value pairs. Prepends the the Message parameter with 'message=' and wraps the message in double quotes to create a single key/value pair for the Message parameter. Cannot be combined with the 'Basic' or 'Wrap' parameters
+	Switch parameter to prefix the message parameter with the values of the Datetime and Command parameters as key/value pairs then creates a key/value pair using the value of the Message parameter wrapped double quotes. Cannot be combined with the 'Basic' or 'Collection' parameters
 	
 	.PARAMETER Command
-	A string containing the name of the command that originated the message. Defaults to the calling function or script.
+	The name of the command that originated the message. The default value is the name of the calling function or script.
 
 	.PARAMETER Datetime
-	A string containing a formatted datetime. Defaults to the current time in ISO 8601 format.
+	A string containing a formatted datetime. The default value is the current time in ISO 8601 format.
 
 	.INPUTS
 	None.
@@ -329,19 +329,19 @@ Function Write-VerboseToTranscriptWithHostAndDate {
 	The string containing verbose output to be written to the console and transcript.
 
 	.PARAMETER Basic
-	Switch parameter to append the current datetime to the message parameter. Cannot be combined with the 'Collection' or 'Wrap' parameters
+	Switch parameter to prefix the message parameter with the value of the Datetime parameter. Cannot be combined with the 'Collection' or 'Wrap' parameters
 
 	.PARAMETER Collection
-	Switch parameter to prepend the current datetime and calling function or script to the message parameter as key/value pairs. Assumes the Message parameter is an existing string of key/value pairs. Cannot be combined with the 'Basic' or 'Wrap' parameters
+	Switch parameter to prefix the message parameter with the values of the Datetime and Command parameters as key/value pairs and assumes the value of the Message parameter is an existing string of key/value pairs. Cannot be combined with the 'Basic' or 'Wrap' parameters
 
 	.PARAMETER Wrap
-	Switch parameter to prepend the current datetime and calling function or script to the message parameter as key/value pairs. Prepends the the Message parameter with 'message=' and wraps the message in double quotes to create a single key/value pair for the Message parameter. Cannot be combined with the 'Basic' or 'Wrap' parameters
+	Switch parameter to prefix the message parameter with the values of the Datetime and Command parameters as key/value pairs then creates a key/value pair using the value of the Message parameter wrapped double quotes. Cannot be combined with the 'Basic' or 'Collection' parameters
 	
 	.PARAMETER Command
-	A string containing the name of the command that originated the message. Defaults to the calling function or script.
+	The name of the command that originated the message. The default value is the name of the calling function or script.
 
 	.PARAMETER Datetime
-	A string containing a formatted datetime. Defaults to the current time in ISO 8601 format.
+	A string containing a formatted datetime. The default value is the current time in ISO 8601 format.
 
 	.INPUTS
 	None.
@@ -401,19 +401,19 @@ Function Write-WarningToTranscriptWithHostAndDate {
 	The string containing a warning to be written to the console and transcript.
 
 	.PARAMETER Basic
-	Switch parameter to append the current datetime to the message parameter. Cannot be combined with the 'Collection' or 'Wrap' parameters
+	Switch parameter to prefix the message parameter with the value of the Datetime parameter. Cannot be combined with the 'Collection' or 'Wrap' parameters
 
 	.PARAMETER Collection
-	Switch parameter to prepend the current datetime and calling function or script to the message parameter as key/value pairs. Assumes the Message parameter is an existing string of key/value pairs. Cannot be combined with the 'Basic' or 'Wrap' parameters
+	Switch parameter to prefix the message parameter with the values of the Datetime and Command parameters as key/value pairs and assumes the value of the Message parameter is an existing string of key/value pairs. Cannot be combined with the 'Basic' or 'Wrap' parameters
 
 	.PARAMETER Wrap
-	Switch parameter to prepend the current datetime and calling function or script to the message parameter as key/value pairs. Prepends the the Message parameter with 'message=' and wraps the message in double quotes to create a single key/value pair for the Message parameter. Cannot be combined with the 'Basic' or 'Wrap' parameters
+	Switch parameter to prefix the message parameter with the values of the Datetime and Command parameters as key/value pairs then creates a key/value pair using the value of the Message parameter wrapped double quotes. Cannot be combined with the 'Basic' or 'Collection' parameters
 	
 	.PARAMETER Command
-	A string containing the name of the command that originated the message. Defaults to the calling function or script.
+	The name of the command that originated the message. The default value is the name of the calling function or script.
 
 	.PARAMETER Datetime
-	A string containing a formatted datetime. Defaults to the current time in ISO 8601 format.
+	A string containing a formatted datetime. The default value is the current time in ISO 8601 format.
 
 	.INPUTS
 	None.
