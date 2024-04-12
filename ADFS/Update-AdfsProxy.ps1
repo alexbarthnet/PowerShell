@@ -91,7 +91,7 @@ Begin {
 	}
 
 	Function Start-WebApplicationProxyServices {
-		# start services in forward order:
+		# start services in forward order if :
 		#  1. proxy controller (retrieves configuration from ADFS for proxy service)
 		#  2. proxy service (proxies requests to destination)
 		#  3. "ADFS" service (extends proxy service to support tokens)
