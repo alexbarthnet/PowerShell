@@ -204,103 +204,158 @@ Begin {
 			[string]$AllUsers = ([System.Environment]::GetEnvironmentVariable('ProgramFiles'), 'WindowsPowerShell\Modules' -join '\')
 		)
 
-		# if source module exists...
-		If (Test-Path -Path $Path -PathType Leaf) {
-			# get source module file
+		# define list for filenames
+		$FilenameList = [System.Collections.Generic.List[string]]::new()
+
+		# if path is a folder...
+		If (Test-Path -Path $Path -PathType Container) {
+			# get source folder
 			Try {
-				$SourceModule = Get-Item -Path $Path -ErrorAction Stop
+				$SourceFolder = Get-Item -Path $Path -ErrorAction Stop
 			}
 			Catch {
-				Write-Output "`nERROR: could not get source module file: $Path"
+				Write-Warning "could not get source module folder: $Path"
 				Return $_
 			}
-			# get base and file names from source module
-			$BaseName = $SourceModule.BaseName
-			$FileName = $SourceModule.Name
+
+			# get child path from source folder base name
+			$ChildPath = $SourceFolder.BaseName
+
+			# get path to source folder
+			$SourcePath = $SourceFolder.FullName
+
+			# get files in source folder
+			$SourceFiles = Get-ChildItem -Path $SourcePath -File
+
+			# if no files found in source folder...
+			If ($null -eq $SourceFiles) {
+				Write-Warning "could not locate any files in path: $SourcePath"
+				Return
+			}
+
+			# add files to list
+			ForEach ($SourceFile in $SourceFiles) {
+				$FilenameList.Add($SourceFile.Name)
+			}
+		}
+		# if path is a file...
+		ElseIf (Test-Path -Path $Path -PathType Leaf) {
+			# get source file
+			Try {
+				$SourceFile = Get-Item -Path $Path -ErrorAction Stop
+			}
+			Catch {
+				Write-Warning "could not get source module file: $Path"
+				Return $_
+			}
+
+			# get child path from source file base name
+			$ChildPath = $SourceFile.BaseName
+
+			# get path to source file
+			$SourcePath = $SourceFile.DirectoryName
+
+			# add files to list
+			$FilenameList.Add($SourceFile.Name)
 		}
 		Else {
-			Write-Output "`nERROR: could not find source module file: $Path"
+			Write-Warning "`could not find source module path: $Path"
 			Return
 		}
 
 		# build target module folder path
 		Try {
-			$ModulePath = Join-Path -Path $AllUsers -ChildPath $BaseName
+			$TargetPath = Join-Path -Path $AllUsers -ChildPath $ChildPath
 		}
 		Catch {
-			Write-Output "`nERROR: could not build target module path"
+			Write-Warning 'could not build target module path'
 			Return $_
 		}
 
 		# if target module folder not found...
-		If (!(Test-Path -Path $ModulePath -PathType Container)) {
+		If (!(Test-Path -Path $TargetPath -PathType Container)) {
 			# create target module folder
 			Try {
-				$null = New-Item -Path $ModulePath -ItemType Directory -ErrorAction Stop
+				$null = New-Item -Path $TargetPath -ItemType Directory -ErrorAction Stop
 			}
 			Catch {
-				Write-Output "`nERROR: could not create target module path: $ModulePath"
+				Write-Warning "could not create target module path: $TargetPath"
 				Return $_
 			}
 		}
 
-		# build target file path
-		Try {
-			$Destination = Join-Path -Path $ModulePath -ChildPath $FileName
-		}
-		Catch {
-			Write-Output "`nERROR: could not build target file path"
-			Return $_
-		}
-
-		# if target module found...
-		If (Test-Path -Path $Destination -PathType Leaf) {
-			# get source module hash
+		# process file names
+		ForEach ($Filename in $FilenameList) {
+			# build source file path
 			Try {
-				$SourceHash = Get-FileHash -Path $Path | Select-Object -ExpandProperty Hash
+				$Source = Join-Path -Path $SourcePath -ChildPath $Filename -ErrorAction Stop
 			}
 			Catch {
-				Write-Output "`nERROR: could not get hash of source module: '$Path'"
+				Write-Warning "could not build source file path from '$SourcePath' and '$Filename'"
 				Return $_
 			}
 
-			# get target module hash
+			# build target file path
 			Try {
-				$TargetHash = Get-FileHash -Path $Destination | Select-Object -ExpandProperty Hash
+				$Target = Join-Path -Path $TargetPath -ChildPath $Filename -ErrorAction Stop
 			}
 			Catch {
-				Write-Output "`nERROR: could not get hash of target module: '$Destination'"
+				Write-Warning "could not build target file path from '$TargetPath' and '$Filename'"
 				Return $_
 			}
 
-			# if hashes match...
-			If ($TargetHash -eq $SourceHash) {
-				# report and return
-				Write-Output "Verified module '$Destination' against '$Path'"
-				Return
-			}
-			# if hashes do not match...
-			Else {
-				# remove target module
+			# if source and target exist...
+			If (Test-Path -Path $Target) {
+				# get source file hash
 				Try {
-					Remove-Item -Path $Destination -Force -ErrorAction Stop
-					Write-Output "Removed module '$Destination'"
+					$SourceHash = Get-FileHash -Path $Source | Select-Object -ExpandProperty Hash
 				}
 				Catch {
-					Write-Output "`nERROR: could not remove old module: '$Destination'"
+					Write-Warning "could not get hash of source file: '$Source'"
 					Return $_
 				}
-			}
-		}
 
-		# install module
-		Try {
-			Copy-Item -Path $Path -Destination $Destination -ErrorAction Stop
-			Write-Output "Installed module '$Destination' from '$Path'"
-		}
-		Catch {
-			Write-Output "`nERROR: could not write module: '$Destination'"
-			Return $_
+				# get target file hash
+				Try {
+					$TargetHash = Get-FileHash -Path $Target | Select-Object -ExpandProperty Hash
+				}
+				Catch {
+					Write-Warning "could not get hash of target file: '$Target'"
+					Return $_
+				}
+
+				# if hashes match...
+				If ($TargetHash -eq $SourceHash) {
+					# report and continue to next file
+					Write-Output "Verified file '$Target' against '$Source'"
+					Continue
+				}
+				# if hashes do not match...
+				Else {
+					# remove target file
+					Try {
+						Remove-Item -Path $Target -Force -ErrorAction Stop
+					}
+					Catch {
+						Write-Warning "could not remove old file: '$Target'"
+						Return $_
+					}
+					# report target file removed
+					Write-Output "Removed file '$Target'"
+				}
+			}
+
+			# copy source file
+			Try {
+				Copy-Item -Path $Source -Destination $Target -ErrorAction Stop
+			}
+			Catch {
+				Write-Warning "could not write file: '$Target'"
+				Return $_
+			}
+
+			# report source file copied
+			Write-Output "Copied file '$Target' from '$Source'"
 		}
 	}
 
