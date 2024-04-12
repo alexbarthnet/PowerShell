@@ -1,3 +1,4 @@
+#Requires -module TranscriptWithHostAndDate
 <#
 .SYNOPSIS
 Template for writing PowerShell transcripts for a script.
@@ -368,9 +369,13 @@ Process {
 	# example try/catch block
 	Try {
 		# insert commands here
-		$null = Get-PSCallStack
+		$PSCallStack = Get-PSCallStack
 		# write to transcript example
 		Write-TranscriptWithHostAndDate -Message 'retrieved PSCallStack'
+		# write verbose to transcript example
+		If ($VerbosePreference -eq 'Continue') {
+			Write-VerboseToTranscriptWithHostAndDate -Message $PSCallStack.ToString()
+		}
 	}
 	Catch {
 		# write to transcript example for warning
