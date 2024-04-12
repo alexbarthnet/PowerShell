@@ -105,7 +105,7 @@ Function New-CmsCredentialCertificate {
 		[Parameter(Position = 2)]
 		[datetime]$NotAfter = $NotBefore.AddYears(100),
 		[Parameter(Position = 1)]
-		[datetime]$CertStoreLocation = 'Cert:\LocalMachine\CmsCredentials',
+		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
 		[Parameter(Position = 3)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
@@ -139,20 +139,20 @@ Function New-CmsCredentialCertificate {
 	switch ([System.Environment]::OSVersion.Platform) {
 		'Win32NT' {
 			# create self-signed certificate
-			$Certificate = New-SelfSignedCertificate @SelfSignedCertificate
+			Try {
+				$Certificate = New-SelfSignedCertificate @SelfSignedCertificate
+			}
+			Catch {
+				Throw $_
+			}
+			# return certificate
+			Return $Certificate
 		}
 		Default {
-			# declare 
+			# declare and return null
 			Write-Warning 'CmsCredentials cannot create self-signed certificates on non-Windows platforms'
+			Return $null
 		}
-	}
-
-	# move certificate to certificate store
-	Try {
-		Move-Item -Path $Certificate.PSPath -Destination $CertStoreLocation -ErrorAction Stop
-	}
-	Catch {
-		Throw $_
 	}
 }
 
@@ -651,7 +651,7 @@ Function Protect-CmsCredentials {
 	PS> Protect-CmsCredentials -Identity "testcredential" -Prefix "private"
 
 	.EXAMPLE
-	PS> Protect-CmsCredentials -Identity "testcredential" AsPlainText
+	PS> Protect-CmsCredentials -Identity "testcredential" -AsPlainText
 
 	.EXAMPLE
 	PS> Protect-CmsCredentials -Identity "testcredential" -Prefix "private" -AsPlainText
@@ -747,16 +747,16 @@ Function Protect-CmsCredentials {
 		}
 		Else {
 			# define functions for remote computer
-			$MakeCertFunction = "function New-CmsCredentialCertificate {${function:New-CmsCredentialCertificate}}"
-			$ProtectFunction = "function Protect-CmsCredentialSecret {${function:Protect-CmsCredentialSecret}}"
-			$RemoveFunction = "function Remove-CmsCredentialSecret {${function:Remove-CmsCredentialSecret}}"
+			$NewCmsCredentialCertificate = "function New-CmsCredentialCertificate {${function:New-CmsCredentialCertificate}}"
+			$ProtectCmsCredentialSecret = "function Protect-CmsCredentialSecret {${function:Protect-CmsCredentialSecret}}"
+			$RemoveCmsCredentialSecret = "function Remove-CmsCredentialSecret {${function:Remove-CmsCredentialSecret}}"
 			# protect credentials on remote computer
 			Try {
 				Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
 					# import functions on remote computer
-					. ([ScriptBlock]::Create($using:MakeCertFunction))
-					. ([ScriptBlock]::Create($using:ProtectFunction))
-					. ([ScriptBlock]::Create($using:RemoveFunction))
+					. ([ScriptBlock]::Create($using:NewCmsCredentialCertificate))
+					. ([ScriptBlock]::Create($using:ProtectCmsCredentialSecret))
+					. ([ScriptBlock]::Create($using:RemoveCmsCredentialSecret))
 
 					# call functions on remote computer
 					Protect-CmsCredentialSecret @using:ProtectParameters
@@ -922,12 +922,12 @@ Function Remove-CmsCredentials {
 		}
 		Else {
 			# define functions for remote computer
-			$RemoveFunction = "function Remove-CmsCredentialSecret {${function:Remove-CmsCredentialSecret}}"
+			$RemoveCmsCredentialSecret = "function Remove-CmsCredentialSecret {${function:Remove-CmsCredentialSecret}}"
 			# remove credentials on remote computer
 			Try {
 				Invoke-Command -ComputerName $CmsComputer -ScriptBlock {
 					# import functions on remote computer
-					. ([ScriptBlock]::Create($using:RemoveFunction))
+					. ([ScriptBlock]::Create($using:RemoveCmsCredentialSecret))
 					# call functions on remote computer
 					Remove-CmsCredentialSecret @using:RemoveParameters
 				}
