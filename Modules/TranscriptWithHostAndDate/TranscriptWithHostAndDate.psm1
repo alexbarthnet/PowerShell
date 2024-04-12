@@ -307,7 +307,7 @@ Function Write-TranscriptWithHostAndDate {
 
 	# address known issue in PowerShell 5 with transcripts and Write-Information
 	If ($PSVersionTable.PSVersion.Major -lt 6) {
-		Write-Information -MessageData $Message -InformationAction SilentlyContinue
+		Microsoft.PowerShell.Utility\Write-Information -MessageData $Message -InformationAction SilentlyContinue
 	}
 
 	# prefix message after addressing known issue in PowerShell 5 
