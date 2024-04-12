@@ -86,17 +86,23 @@ Function Get-RandomAlpha {
 	Param(
 		[Parameter(Position = 0, Mandatory = $True)][ValidateRange(1, 65535)]
 		[uint16]$Length,
+		[Parameter(ParameterSetName = 'Defined')]
 		[switch]$LowerCase,
+		[Parameter(ParameterSetName = 'Defined')]
 		[switch]$UpperCase,
+		[Parameter(ParameterSetName = 'Defined')]
 		[switch]$Numbers,
+		[Parameter(ParameterSetName = 'Defined')]
 		[switch]$Symbols,
+		[Parameter(ParameterSetName = 'Default')]
 		[switch]$All,
+		[switch]$AsSecureString,
 		[char[]]$ExcludeCharacters,
 		[string[]]$ExcludeStrings
 	)
 
 	# check parameters
-	If (-not $LowerCase -and -not $UpperCase -and -not $Numbers -and -not $Symbols) { $All = $true }
+	If ($PSCmdlet.ParameterSetName -eq 'Default') { $All = $true }
 
 	# build list of characters
 	$List = [System.Collections.Generic.List[char]]::new()
@@ -137,8 +143,15 @@ Function Get-RandomAlpha {
 		ForEach ($String in $ExcludeStrings) { $null = $StringBuilder.Replace($String,$null) }
 	}
 
-	# return random string
-	Return $StringBuilder.ToString()
+	# if secure string requested...
+	If ($AsSecureString) {
+		# return random string converted to secure string
+		Return (ConvertTo-SecureString -String $StringBuilder.ToString() -AsPlainText -Force)
+	}
+	Else {
+		# return random string
+		Return $StringBuilder.ToString()
+	}
 }
 
 Function Get-RandomHex {
