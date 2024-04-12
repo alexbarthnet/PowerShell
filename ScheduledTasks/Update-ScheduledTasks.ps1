@@ -195,7 +195,7 @@ Param(
 )
 
 Begin {
-	Function Install-ModuleFromJson {
+	Function Install-ModuleFromPath {
 		[CmdletBinding()]
 		Param(
 			[Parameter(DontShow)]
@@ -204,59 +204,64 @@ Begin {
 			[string]$AllUsers = ([System.Environment]::GetEnvironmentVariable('ProgramFiles'), 'WindowsPowerShell\Modules' -join '\')
 		)
 
-		# define list for filenames
+		# define lists
+		$PathnameList = [System.Collections.Generic.List[string]]::new()
 		$FilenameList = [System.Collections.Generic.List[string]]::new()
 
 		# if path is a folder...
 		If (Test-Path -Path $Path -PathType Container) {
 			# get source folder
 			Try {
-				$SourceFolder = Get-Item -Path $Path -ErrorAction Stop
+				$SourceItem = Get-Item -Path $Path -ErrorAction Stop
 			}
 			Catch {
 				Write-Warning "could not get source module folder: $Path"
 				Return $_
 			}
 
-			# get child path from source folder base name
-			$ChildPath = $SourceFolder.BaseName
-
-			# get path to source folder
-			$SourcePath = $SourceFolder.FullName
+			# get path to source item
+			$SourcePath = $SourceItem.FullName
 
 			# get files in source folder
-			$SourceFiles = Get-ChildItem -Path $SourcePath -File
+			$SourceFiles = Get-ChildItem -Path $SourceItem -Recurse -File
 
 			# if no files found in source folder...
 			If ($null -eq $SourceFiles) {
-				Write-Warning "could not locate any files in path: $SourcePath"
+				Write-Warning "could not locate any files in path: $Path"
 				Return
 			}
 
-			# add files to list
+			# for each file found...
 			ForEach ($SourceFile in $SourceFiles) {
-				$FilenameList.Add($SourceFile.Name)
+				# add full path of file to list
+				$FilenameList.Add($SourceFile.FullName)
+			}
+
+			# get folders in source item
+			$SourceFolders = Get-ChildItem -Path $SourceItem -Recurse -Directory
+
+			# for each folder found...
+			ForEach ($SourceFolder in $SourceFolders) {
+				# add full path of folder to list
+				$PathnameList.Add($SourceFolder.FullName)
 			}
 		}
 		# if path is a file...
 		ElseIf (Test-Path -Path $Path -PathType Leaf) {
-			# get source file
+			# get source item
 			Try {
-				$SourceFile = Get-Item -Path $Path -ErrorAction Stop
+				$SourceItem = Get-Item -Path $Path -ErrorAction Stop
 			}
 			Catch {
 				Write-Warning "could not get source module file: $Path"
 				Return $_
 			}
 
-			# get child path from source file base name
-			$ChildPath = $SourceFile.BaseName
+			# get path to source item
+			$SourcePath = $SourceItem.DirectoryName
 
-			# get path to source file
-			$SourcePath = $SourceFile.DirectoryName
-
-			# add files to list
-			$FilenameList.Add($SourceFile.Name)
+			# add full path of file to list
+			$FilenameList.Add($SourceItem.FullName)
 		}
 		Else {
 			Write-Warning "`could not find source module path: $Path"
@@ -265,7 +270,7 @@ Begin {
 
 		# build target module folder path
 		Try {
-			$TargetPath = Join-Path -Path $AllUsers -ChildPath $ChildPath
+			$TargetPath = Join-Path -Path $AllUsers -ChildPath $SourceItem.BaseName
 		}
 		Catch {
 			Write-Warning 'could not build target module path'
@@ -284,34 +289,47 @@ Begin {
 			}
 		}
 
+		# process path names
+		ForEach ($Source in $PathnameList) {
+			# build target folder path
+			$Target = $Source.Replace($SourcePath, $TargetPath)
+
+			# report target folder path
+			Write-Verbose -Verbose -Message "Checking source folder: $Source"
+
+			# if target folder found...
+			If (Test-Path -Path $TargetPath -PathType Container) {
+				Write-Verbose -Verbose -Message "Verified folder: $Target"
+			}
+			# if target folder not found...
+			Else {
+				Try {
+					$null = New-Item -Path $Target -ItemType Directory -ErrorAction Stop
+					Write-Verbose -Verbose -Message "Created folder: $Target"
+				}
+				Catch {
+					Write-Warning "could not create folder: $Target"
+					Return $_
+				}
+			}
+		}
+
 		# process file names
-		ForEach ($Filename in $FilenameList) {
-			# build source file path
-			Try {
-				$Source = Join-Path -Path $SourcePath -ChildPath $Filename -ErrorAction Stop
-			}
-			Catch {
-				Write-Warning "could not build source file path from '$SourcePath' and '$Filename'"
-				Return $_
-			}
-
+		ForEach ($Source in $FilenameList) {
 			# build target file path
-			Try {
-				$Target = Join-Path -Path $TargetPath -ChildPath $Filename -ErrorAction Stop
-			}
-			Catch {
-				Write-Warning "could not build target file path from '$TargetPath' and '$Filename'"
-				Return $_
-			}
+			$Target = $Source.Replace($SourcePath, $TargetPath)
 
-			# if source and target exist...
-			If (Test-Path -Path $Target) {
+			# report target file path
+			Write-Verbose -Verbose -Message "Checking source file: $Source"
+
+			# if target file found...
+			If (Test-Path -Path $Target -PathType Leaf) {
 				# get source file hash
 				Try {
 					$SourceHash = Get-FileHash -Path $Source | Select-Object -ExpandProperty Hash
 				}
 				Catch {
-					Write-Warning "could not get hash of source file: '$Source'"
+					Write-Warning "could not get hash of source file: $Source"
 					Return $_
 				}
 
@@ -320,14 +338,14 @@ Begin {
 					$TargetHash = Get-FileHash -Path $Target | Select-Object -ExpandProperty Hash
 				}
 				Catch {
-					Write-Warning "could not get hash of target file: '$Target'"
+					Write-Warning "could not get hash of target file: $Target"
 					Return $_
 				}
 
 				# if hashes match...
 				If ($TargetHash -eq $SourceHash) {
 					# report and continue to next file
-					Write-Output "Verified file '$Target' against '$Source'"
+					Write-Verbose -Verbose -Message "Verified target file: $Target"
 					Continue
 				}
 				# if hashes do not match...
@@ -337,11 +355,11 @@ Begin {
 						Remove-Item -Path $Target -Force -ErrorAction Stop
 					}
 					Catch {
-						Write-Warning "could not remove old file: '$Target'"
+						Write-Warning "could not remove old file: $Target"
 						Return $_
 					}
 					# report target file removed
-					Write-Output "Removed file '$Target'"
+					Write-Verbose -Verbose -Message "Removed invalid file: $Target"
 				}
 			}
 
@@ -350,12 +368,12 @@ Begin {
 				Copy-Item -Path $Source -Destination $Target -ErrorAction Stop
 			}
 			Catch {
-				Write-Warning "could not write file: '$Target'"
+				Write-Warning "could not write file: $Target"
 				Return $_
 			}
 
 			# report source file copied
-			Write-Output "Copied file '$Target' from '$Source'"
+			Write-Verbose -Verbose -Message "Installed target file: $Target"
 		}
 	}
 
@@ -501,7 +519,7 @@ Begin {
 			$Existing = Get-ScheduledTask | Where-Object { $_.TaskPath -eq $TaskPath -and $_.TaskName -eq $TaskName }
 		}
 		Catch {
-			Write-Output "`nERROR: could not retrieve scheduled tasks with filter for task '$TaskName' at path '$TaskPath'"
+			Write-Warning "could not retrieve scheduled tasks with filter for task '$TaskName' at path '$TaskPath'"
 			Return $_
 		}
 
@@ -514,11 +532,11 @@ Begin {
 			# ...verify task action
 			If ($FixExecute -or $FixArguments) {
 				Try {
-					Write-Output "Updating action for existing scheduled task '$TaskName' at path '$TaskPath'"
+					Write-Verbose -Verbose -Message "Updating action for existing scheduled task '$TaskName' at path '$TaskPath'"
 					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Action $Action
 				}
 				Catch {
-					Write-Output "`nERROR: could not update action for existing scheduled task '$TaskName' at path '$TaskPath'"
+					Write-Warning "could not update action for existing scheduled task '$TaskName' at path '$TaskPath'"
 					Return $_
 				}
 			}
@@ -535,11 +553,11 @@ Begin {
 			# ...verify task trigger
 			If ($FixStartBoundary -or $FixRandomDelay -or $FixRepetitionInterval) {
 				Try {
-					Write-Output "Updating trigger for existing scheduled task '$TaskName' at path '$TaskPath'"
+					Write-Verbose -Verbose -Message "Updating trigger for existing scheduled task '$TaskName' at path '$TaskPath'"
 					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Trigger $Trigger
 				}
 				Catch {
-					Write-Output "`nERROR: could not update trigger for existing scheduled task '$TaskName' at path '$TaskPath'"
+					Write-Warning "could not update trigger for existing scheduled task '$TaskName' at path '$TaskPath'"
 					Return $_
 				}
 			}
@@ -554,11 +572,11 @@ Begin {
 			# ...verify task settings
 			If ($FixEnabled -or $FixStartOnBattery -or $FixStopIfOnBattery -or $FixExecutionTimeLimit) {
 				Try {
-					Write-Output "Updating settings for existing scheduled task '$TaskName' at path '$TaskPath'"
+					Write-Verbose -Verbose -Message "Updating settings for existing scheduled task '$TaskName' at path '$TaskPath'"
 					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Settings $Settings
 				}
 				Catch {
-					Write-Output "`nERROR: could not update settings for existing scheduled task '$TaskName' at path '$TaskPath'"
+					Write-Warning "could not update settings for existing scheduled task '$TaskName' at path '$TaskPath'"
 					Return $_
 				}
 			}
@@ -580,17 +598,17 @@ Begin {
 			# ...verify task principal
 			If ($FixUserId -or $FixLogonType -or $FixRunLevel) {
 				Try {
-					Write-Output "Updating principal for existing scheduled task '$TaskName' at path '$TaskPath'"
+					Write-Verbose -Verbose -Message "Updating principal for existing scheduled task '$TaskName' at path '$TaskPath'"
 					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Principal $Principal
 				}
 				Catch {
-					Write-Output "`nERROR: could not update principal for existing scheduled task '$TaskName' at path '$TaskPath'"
+					Write-Warning "could not update principal for existing scheduled task '$TaskName' at path '$TaskPath'"
 					Return $_
 				}
 			}
 
 			# report then return
-			Write-Output "Verified existing scheduled task '$TaskName' at path '$TaskPath'"
+			Write-Verbose -Verbose -Message "Verified existing scheduled task '$TaskName' at path '$TaskPath'"
 			Return
 		}
 		# if scheduled task does not exist...
@@ -613,7 +631,7 @@ Begin {
 				Return $_
 			}
 			# ...then return and move to next tasks
-			Write-Output "Registered new scheduled task '$TaskName' at path '$TaskPath'"
+			Write-Verbose -Verbose -Message "Registered new scheduled task '$TaskName' at path '$TaskPath'"
 			Return
 		}
 	}
@@ -824,7 +842,7 @@ Process {
 		}
 
 		# report and return
-		Write-Output "`nInstalled Update-ScheduledTasks"
+		Write-Verbose -Verbose -Message "`nInstalled Update-ScheduledTasks"
 		Return
 	}
 
@@ -857,7 +875,7 @@ Process {
 			$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 		}
 		Catch {
-			Write-Output "`nERROR: could not read configuration file: '$Json'"
+			Write-Warning "could not read configuration file: '$Json'"
 			Return $_
 		}
 	}
@@ -870,7 +888,7 @@ Process {
 				$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
 			}
 			Catch {
-				Write-Output "`nERROR: could not create configuration file: '$Json'"
+				Write-Warning "could not create configuration file: '$Json'"
 				Return $_
 			}
 			# ...create JSON data object as empty array
@@ -879,7 +897,7 @@ Process {
 		# ...and Add not set...
 		Else {
 			# ...report and return
-			Write-Output "`nERROR: could not find configuration file: '$Json'"
+			Write-Warning "could not find configuration file: '$Json'"
 			Return
 		}
 	}
@@ -888,17 +906,17 @@ Process {
 	switch ($true) {
 		# show configuration file
 		$Show {
-			Write-Output "`nDisplaying '$Json'"
+			Write-Verbose -Verbose -Message "`nDisplaying '$Json'"
 			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 		# clear configuration file
 		$Clear {
 			Try {
 				[string]::Empty | Set-Content -Path $Json
-				Write-Output "`nCleared configuration file: '$Json'"
+				Write-Verbose -Verbose -Message "`nCleared configuration file: '$Json'"
 			}
 			Catch {
-				Write-Output "`nERROR: could not clear configuration file: '$Json'"
+				Write-Warning "could not clear configuration file: '$Json'"
 				Return $_
 			}
 		}
@@ -911,17 +929,17 @@ Process {
 				If ($null -eq $JsonData) {
 					# clear JSON data
 					[string]::Empty | Set-Content -Path $Json
-					Write-Output "`nRemoved '$TaskName' at '$Taskpath' from configuration file: '$Json'"
+					Write-Verbose -Verbose -Message "`nRemoved '$TaskName' at '$Taskpath' from configuration file: '$Json'"
 				}
 				Else {
 					# export JSON data
 					$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-					Write-Output "`nRemoved '$TaskName' at '$Taskpath' from configuration file: '$Json'"
+					Write-Verbose -Verbose -Message "`nRemoved '$TaskName' at '$Taskpath' from configuration file: '$Json'"
 					$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 				}
 			}
 			Catch {
-				Write-Output "`nERROR: could not update configuration file: '$Json'"
+				Write-Warning "could not update configuration file: '$Json'"
 				Return $_
 			}
 		}
@@ -930,7 +948,7 @@ Process {
 			Try {
 				# validate task path when task name not 'Update-ScheduledTasks'
 				If ($TaskName -ne 'Update-ScheduledTasks' -and -not (Test-ScheduledTaskPath -TaskPath $TaskPath)) {
-					Write-Output "`nERROR: the path defined is not permitted: '$TaskPath'"
+					Write-Warning "the path defined is not permitted: '$TaskPath'"
 					Return
 				}
 
@@ -999,11 +1017,11 @@ Process {
 
 				# export JSON data
 				$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-				Write-Output "`nAdded '$TaskName' at '$Taskpath' to configuration file: '$Json'"
+				Write-Verbose -Verbose -Message "`nAdded '$TaskName' at '$Taskpath' to configuration file: '$Json'"
 				$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			Catch {
-				Write-Output "`nERROR: could not update configuration file: '$Json'"
+				Write-Warning "could not update configuration file: '$Json'"
 				Return $_
 			}
 		}
@@ -1014,43 +1032,37 @@ Process {
 
 			# check entry count in configuration file
 			If ($JsonData.Count -eq 0) {
-				Write-Output "ERROR: no entries found in configuration file: $Json"
+				Write-Warning "no entries found in configuration file: $Json"
 				Return
 			}
 
 			# create hashtable for cleanup
-			Try {
-				$ExpectedTasks = @{}
-			}
-			Catch {
-				Write-Output 'ERROR: could not create hashtable for tasks'
-				Return $_
-			}
+			$ExpectedTasks = @{}
 
 			# process configuration file
 			:JsonEntry ForEach ($JsonEntry in $JsonData) {
 				# validate values in JSON file
 				Switch ($true) {
 					([string]::IsNullOrEmpty($JsonEntry.TaskName)) {
-						Write-Output "`nERROR: required entry (TaskName) not found in configuration file: $Json"; Continue JsonEntry
+						Write-Warning "required entry (TaskName) not found in configuration file: $Json"; Continue JsonEntry
 					}
 					([string]::IsNullOrEmpty($JsonEntry.TaskPath)) {
-						Write-Output "`nERROR: required value (TaskPath) not found in configuration file: $Json"; Continue JsonEntry
+						Write-Warning "required value (TaskPath) not found in configuration file: $Json"; Continue JsonEntry
 					}
 					([string]::IsNullOrEmpty($JsonEntry.Execute)) {
-						Write-Output "`nERROR: required value (Execute) not found in configuration file: $Json"; Continue JsonEntry
+						Write-Warning "required value (Execute) not found in configuration file: $Json"; Continue JsonEntry
 					}
 					([string]::IsNullOrEmpty($JsonEntry.Argument)) {
-						Write-Output "`nERROR: required value (Argument) not found in configuration file: $Json"; Continue JsonEntry
+						Write-Warning "required value (Argument) not found in configuration file: $Json"; Continue JsonEntry
 					}
 					([string]::IsNullOrEmpty($JsonEntry.UserId)) {
-						Write-Output "`nERROR: required value (UserId) not found in configuration file: $Json"; Continue JsonEntry
+						Write-Warning "required value (UserId) not found in configuration file: $Json"; Continue JsonEntry
 					}
 					([string]::IsNullOrEmpty($JsonEntry.LogonType)) {
-						Write-Output "`nERROR: required value (LogonType) not found in configuration file: $Json"; Continue JsonEntry
+						Write-Warning "required value (LogonType) not found in configuration file: $Json"; Continue JsonEntry
 					}
 					($JsonEntry.TriggerAt -isnot [datetime]) {
-						Write-Output "`nERROR: invalid entry (TriggerAt) found in configuration file: $Json"; Continue JsonEntry
+						Write-Warning "invalid entry (TriggerAt) found in configuration file: $Json"; Continue JsonEntry
 					}
 					Default {
 						# if valid task path provided...
@@ -1061,13 +1073,7 @@ Process {
 							}
 
 							# update expected tasks hashtable with task name
-							Try {
-								$ExpectedTasks[$JsonEntry.TaskPath].Add($JsonEntry.TaskName)
-							}
-							Catch {
-								Write-Output "ERROR: adding task to hashtable: '$($JsonEntry.TaskName)'"
-								Continue JsonEntry
-							}
+							$ExpectedTasks[$JsonEntry.TaskPath].Add($JsonEntry.TaskName)
 						}
 
 						# define hashtable for function
@@ -1095,7 +1101,7 @@ Process {
 								$UpdateScheduledTaskFromJson['TriggerAt'] = [datetime]$JsonEntry.TriggerAt
 							}
 							Else {
-								Write-Output "ERROR: could not cast TriggerAt to [datetime] in task: '$($JsonEntry.TaskName)'"
+								Write-Warning "could not cast TriggerAt to [datetime] in task: '$($JsonEntry.TaskName)'"
 								Continue JsonData
 							}
 
@@ -1109,12 +1115,12 @@ Process {
 										$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonEntry.RandomDelayTime - $JsonEntry.TriggerAt)
 									}
 									Else {
-										Write-Output "ERROR: RandomDelayTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
+										Write-Warning "RandomDelayTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
 										Continue JsonData
 									}
 								}
 								Else {
-									Write-Output "ERROR: could not cast RandomDelayTime to [datetime] in task: '$($JsonEntry.TaskName)'"
+									Write-Warning "could not cast RandomDelayTime to [datetime] in task: '$($JsonEntry.TaskName)'"
 									Continue JsonData
 								}
 							}
@@ -1129,12 +1135,12 @@ Process {
 										$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonEntry.RepetitionIntervalTime - $JsonEntry.TriggerAt)
 									}
 									Else {
-										Write-Output "ERROR: RepetitionIntervalTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
+										Write-Warning "RepetitionIntervalTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
 										Continue JsonData
 									}
 								}
 								Else {
-									Write-Output "ERROR: could not cast RepetitionIntervalTime to [datetime] in task: '$($JsonEntry.TaskName)'"
+									Write-Warning "could not cast RepetitionIntervalTime to [datetime] in task: '$($JsonEntry.TaskName)'"
 									Continue JsonData
 								}
 							}
@@ -1149,12 +1155,12 @@ Process {
 										$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonEntry.ExecutionTimeLimitTime - $JsonEntry.TriggerAt)
 									}
 									Else {
-										Write-Output "ERROR: ExecutionTimeLimitTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
+										Write-Warning "ExecutionTimeLimitTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
 										Continue JsonData
 									}
 								}
 								Else {
-									Write-Output "ERROR: could not cast ExecutionTimeLimitTime to [datetime] in task: '$($JsonEntry.TaskName)'"
+									Write-Warning "could not cast ExecutionTimeLimitTime to [datetime] in task: '$($JsonEntry.TaskName)'"
 									Continue JsonData
 								}
 							}
@@ -1169,10 +1175,10 @@ Process {
 						}
 
 						# if Modules defined in JSON...
-						ForEach ($Module in $JsonEntry.Modules) {
+						ForEach ($Path in $JsonEntry.Modules) {
 							# install module
 							Try {
-								Install-ModuleFromJson -Path $Module
+								Install-ModuleFromPath -Path $Path
 							}
 							Catch {
 								Return $_
@@ -1186,7 +1192,7 @@ Process {
 			:TaskPath ForEach ($TaskPath in $ExpectedTasks.Keys) {
 				# check if any bad path values have been snuck in
 				If (-not (Test-ScheduledTaskPath -TaskPath $TaskPath)) {
-					Write-Output "`nERROR: the path defined is not permitted: '$TaskPath' for '$($ExpectedTasks[$TaskPath])'"
+					Write-Warning "the path defined is not permitted: '$TaskPath' for '$($ExpectedTasks[$TaskPath])'"
 					Continue TaskPath
 				}
 
@@ -1195,7 +1201,7 @@ Process {
 					$TasksInPath = Get-ScheduledTask | Where-Object { $_.TaskPath -eq $TaskPath } | Select-Object -ExpandProperty 'TaskName'
 				}
 				Catch {
-					Write-Output "`nERROR: could not retrieve tasks from path: '$TaskPath'"
+					Write-Warning "could not retrieve tasks from path: '$TaskPath'"
 					Return $_
 				}
 
@@ -1203,11 +1209,11 @@ Process {
 				ForEach ($TaskName in $TasksInPath) {
 					If ($TaskName -notin $ExpectedTasks[$TaskPath]) {
 						Try {
-							Write-Output "WARNING: the task '$TaskName' should not exist in path '$TaskPath'"
+							Write-Verbose -Verbose -Message "the task '$TaskName' should not exist in path '$TaskPath'"
 							# Unregister-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath
 						}
 						Catch {
-							Write-Output "`nERROR: could not unregister task '$TaskName' from path '$TaskPath'"
+							Write-Warning "could not unregister task '$TaskName' from path '$TaskPath'"
 							Return $_
 						}
 					}
