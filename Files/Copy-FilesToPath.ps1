@@ -205,7 +205,7 @@ If (-not (Test-Path -Path $Json)) {
 
 # import JSON data
 $json_data = @()
-$json_data += Get-Content -Path $Json | ConvertFrom-Json
+$json_data += Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json
 
 # evaluate parameters
 switch ($true) {

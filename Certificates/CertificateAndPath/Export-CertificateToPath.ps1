@@ -520,7 +520,7 @@ Process {
 	If (Test-Path -Path $Json) {
 		# ...create JSON data object as array of PSCustomObjects from JSON file content
 		Try {
-			$JsonData = [array](Get-Content -Path $Json | ConvertFrom-Json)
+			$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 		}
 		Catch {
 			Write-Output "`nERROR: could not read configuration file: '$Json'"

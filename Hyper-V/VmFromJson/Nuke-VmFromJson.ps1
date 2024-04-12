@@ -1630,7 +1630,7 @@ Begin {
 Process {
 	# import JSON data
 	Try {
-		$JsonData = Get-Content -Path $Json | ConvertFrom-Json
+		$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 	}
 	Catch {
 		Write-Host "`nERROR: could not read configuration file: '$Json'"
