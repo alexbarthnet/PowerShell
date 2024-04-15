@@ -75,16 +75,22 @@ Function Get-ComputersFromParams {
 Function New-CmsCredentialCertificate {
 	<#
 	.SYNOPSIS
-	Internal function for creating a self-signed certificate.
+	Creates a certificate for protecting credentials with CMS.
 
 	.DESCRIPTION
-	Internal function for creating a self-signed certificate. This function is called by Protect-CmsCredentialSecret.
+	Creates a self-signed certificate for protecting one or more credentials with CMS.
 
 	.PARAMETER Identity
 	Specifies the identity for the CMS credential.
 
-	.PARAMETER Hostname
-	Specifies the hostname in the CMS credential. Set to the local hostname by default.
+	.PARAMETER Exportable
+	Switch parameter to allow the certificate to be exported.
+
+	.PARAMETER FilePath
+	Specifies the path for the exported PFX file.
+
+	.PARAMETER Principals
+	Specifies the principals to permit to access
 
 	.INPUTS
 	None.
@@ -96,32 +102,27 @@ Function New-CmsCredentialCertificate {
 
 	[CmdletBinding()]
 	Param (
-		[Parameter(Position = 0, Mandatory = $true)]
+		[Parameter(Mandatory = $true, Position = 0)]
 		[string]$Identity,
-		[Parameter(Position = 1)]
+		[Parameter(Mandatory = $false)]
 		[switch]$Exportable,
-		[Parameter(Position = 1)]
+		[Parameter(DontShow)]
 		[datetime]$NotBefore = [datetime]::Now,
-		[Parameter(Position = 2)]
+		[Parameter(DontShow)]
 		[datetime]$NotAfter = $NotBefore.AddYears(100),
-		[Parameter(Position = 1)]
+		[Parameter(DontShow)]
 		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
-		[Parameter(Position = 3)]
+		[Parameter(DontShow)]
+		[string]$Subject = "cms-$Identity",
+		[Parameter(DontShow)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
-	# define datetimes
+	# define datetime string
 	$NotBeforeString = $NotBefore.ToUniversalTime().ToString('yyyyMMddTHHmmssffffZ')
 
-	# if certificate should be exportable...
-	If ($Exportable) {
-		$Subject = "CN=$Identity", $NotBeforeString -join '_'
-		$KeyExportPolicy = 'ExportableEncrypted'
-	}
-	Else {
-		$Subject = "CN=$Identity", $Hostname, $NotBeforeString -join '_'
-		$KeyExportPolicy = 'NonExportable'
-	}
+	# update subject string
+	$Subject = "CN=$Subject-$NotBeforeString"
 
 	# define certificate values
 	$SelfSignedCertificate = @{
@@ -135,6 +136,14 @@ Function New-CmsCredentialCertificate {
 		CertStoreLocation = $CertStoreLocation
 	}
 
+	# if certificate should be exportable...
+	If ($PSBoundParameters.ContainsKey('Exportable')) {
+		$SelfSignedCertificate['KeyExportPolicy'] = 'ExportableEncrypted'
+	}
+	Else {
+		$SelfSignedCertificate['KeyExportPolicy'] = 'NonExportable'
+	}
+
 	# check operating system
 	switch ([System.Environment]::OSVersion.Platform) {
 		'Win32NT' {
@@ -145,8 +154,6 @@ Function New-CmsCredentialCertificate {
 			Catch {
 				Throw $_
 			}
-			# return certificate
-			Return $Certificate
 		}
 		Default {
 			# declare and return null
@@ -154,36 +161,63 @@ Function New-CmsCredentialCertificate {
 			Return $null
 		}
 	}
+
+	# if certificate should be exported...
+	If ($PSBoundParameters.ContainsKey('FilePath')) {
+		# create hashtable for .pfx file
+		$ExportPfxCertificate = @{
+			Cert                  = $Certificate
+			FilePath              = $FilePath
+			ChainOption           = 'EndEntityCertOnly'
+			CryptoAlgorithmOption = 'AES256_SHA256'
+		}
+
+		# add principals to hashtable
+		If ($null -ne $Principals) {
+			$ExportPfxCertificate['ProtectTo'] = $Principals
+		}
+
+		# export certificate as .pfx
+		Try {
+			$null = Export-PfxCertificate @ExportPfxCertificate
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
+	# return certificate
+	Return $Certificate
 }
 
-Function Protect-CmsCredentialSecret {
+Function Protect-CmsCredential {
 	<#
 	.SYNOPSIS
-	Internal function for protecting a credential with CMS.
+	Protects a credential with CMS.
 
 	.DESCRIPTION
-	Internal function for protecting a credential with CMS. This function is called by Protect-CmsCredentials.
+	Protects a credential by encrypting it with a certificate using CMS. The calling user must have read access to the public key of the certificate that will protect the credential.
 
 	.PARAMETER Identity
 	Specifies the identity for the CMS credential.
 
-	.PARAMETER Cred
+	.PARAMETER Credential
 	Specifies the PSCredential object to protect with CMS.
 
-	.PARAMETER Template
-	Specifies the certificate template for the CMS certificate.
+	.PARAMETER Thumbprint
+	Specifies the thumbprint for an existing CMS certificate. Cannot be combined with the Reset or Cleanup parameters.
 
 	.PARAMETER Reset
-	Specifies that a new CMS certificate is required.
+	Specifies that a new CMS certificate is required. Cannot be combined with the Thumbprint parameter.
 
-	.PARAMETER Prefix
-	Specifies the prefix for the CMS credential file. Set to 'cms' by default.
+	.PARAMETER Cleanup
+	Specifies that old CMS certificates and credentials for the provided identity should be removed. Cannot be combined with the Thumbprint parameter.
 
-	.PARAMETER Hostname
-	Specifies the hostname in the CMS credential. Set to the local hostname by default.
+	.PARAMETER Path
+	Specifies the path to the folder where the store CMS credential file will be stored. The default value is 'C:\ProgramData\CmsCredentials' and the folder will be created if it does not exist.
 
-	.PARAMETER ParentPath
-	Specifies the parent path of the CMS credential folder. Set to the ProgramData folder by default.
+	.PARAMETER OutFile
+	Specifies the path for the CMS credential file. Providing this parameter will override the value created using Path and Identity parameters.
 
 	.INPUTS
 	None.
@@ -193,136 +227,149 @@ Function Protect-CmsCredentialSecret {
 
 	#>
 
-	[CmdletBinding()]
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param (
-		[Parameter(Position = 0)]
+		[Parameter(Mandatory = $true, Position = 0)]
 		[string]$Identity,
-		[Parameter(Position = 1)]
-		[pscredential]$Cred,
-		[Parameter(Position = 2)]
+		[Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+		[pscredential]$Credential,
+		[Parameter(ParameterSetName = 'Thumbprint')]
+		[string]$Thumbprint,
+		[Parameter(ParameterSetName = 'Default')]
 		[bool]$Reset,
-		[Parameter(Position = 3)]
-		[string]$Prefix = 'cms',
-		[Parameter(Position = 4)]
-		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
-		[Parameter(Position = 5)][ValidateScript({ Test-Path -Path $_ })]
-		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData'),
-		[Parameter(Position = 6)]
-		[bool]$Cleanup = $true
+		[Parameter(ParameterSetName = 'Default')]
+		[bool]$Cleanup = $true,
+		[Parameter(Mandatory = $false)]
+		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
+		[Parameter(Mandatory = $false)]
+		[string]$OutFile,
+		[Parameter(DontShow)]
+		[string]$Subject = "cms-$Identity",
+		[Parameter(DontShow)]
+		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
-	# define required objects
-	$cms_cert = $null
-	$cms_make = $true
-	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_').ToLowerInvariant()
-
-	# verify cms folder
-	If (-not (Test-Path -Path $cms_path -PathType Container)) {
+	# if thumbprint provided...
+	If ($PSBoundParameters.ContainsKey('Thumbprint') -eq $true) {
+		# retrieve certificate by thumbprint
 		Try {
-			$null = New-Item -ItemType Directory -Path $cms_path -Verbose
+			$Certificate = Get-Item -Path "Cert:\LocalMachine\My\$Thumbprint" -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning "could not locate certificate on '$Hostname' with thumbprint: $Thumbprint"
+			Return
+		}
+	}
+	# if thumbprint not provided and reset not requested...
+	ElseIf ($PSBoundParameters.ContainsKey('Reset') -eq $false) {
+		# retrieve latest certificate with matching subject
+		Try {
+			$Certificate = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject -match "^CN=$Subject-" } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
 		}
 		Catch {
 			Throw $_
 		}
 	}
 
-	# check a matching certificate already exists
-	If (-not $Reset) {
-		# define required strings
-		$cms_date_regex = '[0-9TZ]+'
-		$cms_cert_regex = ("CN=$Hostname", $Identity, $cms_date_regex) -join '-'
-
-		# retrieve any certificates matching regex
-		$cms_cert = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_cert_regex } | Sort-Object NotBefore | Select-Object -Last 1
-
-		# check certificates
-		If ($cms_cert) {
-			# skip creating certificate
-			$cms_make = $false
+	# if certificate not found...
+	If ($null -eq $local:Certificate) {
+		# create new certificate for identity
+		Try {
+			$Certificate = New-CmsCredentialCertificate -Identity $Identity
+		}
+		Catch {
+			Write-Warning "could not create certificate on '$Hostname' with identity: $Identity"
+			Return
 		}
 	}
 
-	# create the certificate
-	If ($cms_make) {
+	# if folder path not found...
+	If ((Test-Path -Path $Path -PathType Container) -eq $false) {
+		# create path
 		Try {
-			$cms_cert = New-CmsCredentialCertificate -Identity $Identity -Hostname $Hostname
+			$null = New-Item -ItemType Directory -Path $Path -Verbose -ErrorAction 'Stop'
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 	}
 
-	# if a CMS cert exists...
-	If ($cms_cert) {
-		# define required strings
-		$cms_name = $cms_cert.Subject.Replace('CN=', $null)
-		$cms_file = Join-Path -Path $cms_path -ChildPath "$cms_name.txt"
+	# define datetime string
+	$NotBeforeString = $Certificate.NotBefore.ToUniversalTime().ToString('yyyyMMddTHHmmssffffZ')
 
-		# verify cms file
-		If (-not (Test-Path -Path $cms_file -PathType Container)) {
-			Try {
-				$null = New-Item -ItemType File -Path $cms_file -Verbose
-			}
-			Catch {
-				Throw $_
-			}
-		}
+	# if OutFile not defined...
+	If ($PSBoundParameters.ContainsKey('OutFile') -eq $false) {
+		# define CMS file path
+		$OutFile = Join-Path -Path $Path -ChildPath "$Subject-$NotBeforeString.txt"
+	}
 
-		# create custom object for export
-		$cms_cred = $null
-		$cms_cred = [pscustomobject]@{
-			Username = $Cred.Username
-			Password = $Cred.GetNetworkCredential().Password
-		}
-
-		# encrypt credentials to local certificate
+	# if CMS file not found...
+	If ((Test-Path -Path $OutFile -PathType Leaf) -eq $false) {
+		# create CMS file
 		Try {
-			$cms_cred | ConvertTo-Json | Protect-CmsMessage -To $cms_cert.Thumbprint -OutFile $cms_file -ErrorAction Stop
+			$null = New-Item -ItemType File -Path $OutFile -Verbose -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Error 'could not encrypt the CMS file'
-			Return $_
+			Throw $_
+		}
+	}
+
+	# create custom object for export
+	$InputObject = [pscustomobject]@{
+		Username = $Credential.Username
+		Password = $Credential.GetNetworkCredential().Password
+	}
+
+	# convet custom object into JSON string
+	Try {
+		$Content = ConvertTo-Json -InputObject $InputObject -ErrorAction 'Stop'
+	}
+	Catch {
+		Throw $_
+	}
+
+	# encrypt credentials to local certificate
+	Try {
+		Protect-CmsMessage -To $Certificate.Thumbprint -Content $Content -OutFile $OutFile -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning 'could not encrypt the CMS file'
+		Throw $_
+	}
+
+	# if cleanup requested...
+	If ($Cleanup) {
+		# define parameters for Remove-CmsCredential
+		$RemoveCmsCredential = @{
+			Identity = $Identity
+			Path     = $Path
+			SkipLast = 1
 		}
 
-		# if CMS was made, clean up files and certificates
-		If ($Cleanup) {
-			Write-Verbose 'Removing old CMS certificates and credentials...'
-			$RemoveCmsCredentialSecret = @{
-				Identity   = $Identity
-				Prefix     = $Prefix
-				Hostname   = $Hostname
-				ParentPath = $ParentPath
-				SkipLast   = 1
-			}
-			Try {
-				Remove-CmsCredentialSecret @RemoveCmsCredentialSecret
-			}
-			Catch {
-				Write-Error 'could not remove old CMS certificates and files'
-			}
+		# remove old CMS certificate and files
+		Try {
+			Remove-CmsCredential @RemoveCmsCredential
+		}
+		Catch {
+			Write-Warning 'could not remove old CMS certificates and files'
+			Return $_
 		}
 	}
 }
 
-Function Remove-CmsCredentialSecret {
+Function Remove-CmsCredential {
 	<#
 	.SYNOPSIS
-	Internal function for removing a CMS credential.
+	Removes a credential protected by CMS.
 
 	.DESCRIPTION
-	Internal function for removing a CMS credential. This function is called by Remove-CmsCredentials.
+	Removes the certificate and encrypted file for a credential protected by CMS.
 
 	.PARAMETER Identity
 	Specifies the identity of a CMS credential.
 
-	.PARAMETER Prefix
-	Specifies the prefix for the CMS credential file. Set to 'cms' by default.
-
-	.PARAMETER Hostname
-	Specifies the hostname in the CMS credential. Set to the local hostname by default.
-
-	.PARAMETER ParentPath
-	Specifies the parent path of the CMS credential folder. Set to the ProgramData folder by default.
+	.PARAMETER Path
+	Specifies the path to a folder containing CMS credential files. The default value is 'C:\ProgramData\CmsCredentials'
 
 	.PARAMETER SkipLast
 	Specifies the number of objects to skip when removing CMS credential certificates and files. Set to 0 by default.
@@ -333,67 +380,80 @@ Function Remove-CmsCredentialSecret {
 	.OUTPUTS
 	None.
 
+	.EXAMPLE
+	PS> Remove-CmsCredential -Identity "testcredential"
+
+	.EXAMPLE
+	PS> Remove-CmsCredential -Identity "testcredential" -Path "C:\Content\CmsCredentials"
+
+	.EXAMPLE
+	PS> Remove-CmsCredential -Identity "testcredential" -SkipLast 1
+
+	.EXAMPLE
+	PS> Remove-CmsCredential -Identity "testcredential" -Path "C:\Content\CmsCredentials" -SkipLast 1
+
 	#>
 
 	[CmdletBinding()]
 	Param (
-		[Parameter(Position = 0, Mandatory = $true)]
+		[Parameter(Mandatory = $true, Position = 0)]
 		[string]$Identity,
-		[Parameter(Position = 1)]
-		[string]$Prefix = 'cms',
-		[Parameter(Position = 2)]
-		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
-		[Parameter(Position = 3)][ValidateScript({ Test-Path -Path $_ })]
-		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData'),
-		[Parameter(Position = 4)]
-		[uint16]$SkipLast = 0
+		[Parameter(Mandatory = $false)]
+		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
+		[Parameter(Mandatory = $false)]
+		[uint16]$SkipLast = 0,
+		[Parameter(DontShow)]
+		[string]$Subject = "cms-$Identity",
+		[Parameter(DontShow)]
+		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
-	# define strings
-	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_').ToLowerInvariant()
-	$cms_date_regex = '[0-9TZ]+'
-	$cms_name_regex = ($Hostname, $Identity, $cms_date_regex) -join '-'
-
 	# if credential files path found...
-	If (Test-Path -Path $cms_path -PathType Container) {
-		# retrieve and remove credential files
-		$cms_file_old = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $cms_name_regex }
-		$cms_file_old | Sort-Object -Property 'BaseName' | Select-Object -SkipLast $SkipLast | ForEach-Object {
-			Remove-Item -Path $_.PSPath -Force -Verbose
+	If ((Test-Path -Path $Path -PathType Container) -eq $false) {
+		Write-Warning "could not locate path to credential files: $Path"
+		Return
+	}
+
+	# retrieve old credential files
+	$OldFiles = Get-ChildItem -Path $Path -Filter '*.txt' -ErrorAction 'Stop' | Where-Object { $_.BaseName -match "^$Subject-" } | Sort-Object -Property 'LastWriteTime' | Select-Object -SkipLast $SkipLast
+
+	# remove old credential files
+	ForEach ($InputObject in $OldFiles) {
+		Try {
+			Remove-Item -InputObject $InputObject -Force -Verbose -ErrorAction 'Stop'
+		}
+		Catch {
+			Throw $_
 		}
 	}
-	# if credential files path not found...
-	Else {
-		# inform user
-		Write-Warning "CMS credential folder not found: '$cms_path'"
-	}
 
-	# retrieve and remove certificates
-	$cms_cert_old = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_name_regex }
-	$cms_cert_old | Sort-Object -Property 'NotBefore' | Select-Object -SkipLast $SkipLast | ForEach-Object {
-		Remove-Item -Path $_.PSPath -Force -Verbose
+	# retrieve old certificates
+	$OldCertificates = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject -match "^CN=$Subject-" } | Sort-Object -Property 'NotBefore' | Select-Object -SkipLast $SkipLast
+
+	# remove old certificates
+	ForEach ($InputObject in $OldCertificates) {
+		Try {
+			Remove-Item -InputObject $InputObject -Force -Verbose -ErrorAction 'Stop'
+		}
+		Catch {
+			Throw $_
+		}
 	}
 }
 
-Function Show-CmsCredentialSecret {
+Function Show-CmsCredential {
 	<#
 	.SYNOPSIS
-	Internal function for retrieving a CMS credential.
+	Display the identity of one or more credentials protected by CMS.
 
 	.DESCRIPTION
-	Internal function for retrieving a CMS credential. This function is called by Show-CmsCredentials.
+	Display the certificate and encrypted file for one or more credentials protected by CMS.
 
 	.PARAMETER Identity
-	Specifies the identity of a CMS credential.
+	Specifies the identity of a specific CMS credential.
 
-	.PARAMETER Prefix
-	Specifies the prefix for the CMS credential file. Set to 'cms' by default.
-
-	.PARAMETER Hostname
-	Specifies the hostname in the CMS credential. Set to the local hostname by default.
-
-	.PARAMETER ParentPath
-	Specifies the parent path of the CMS credential folder. Set to the ProgramData folder by default.
+	.PARAMETER Path
+	Specifies the path to a folder containing CMS credential files. The default value is 'C:\ProgramData\CmsCredentials'
 
 	.INPUTS
 	None.
@@ -401,43 +461,217 @@ Function Show-CmsCredentialSecret {
 	.OUTPUTS
 	None.
 
+	.EXAMPLE
+	PS> Show-CmsCredential
+
+	.EXAMPLE
+	PS> Show-CmsCredential -Identity "testcredential"
+
 	#>
 
 	[CmdletBinding()]
 	Param (
-		[Parameter(Position = 0)]
+		[Parameter(Mandatory = $false, Position = 0)]
 		[string]$Identity,
-		[Parameter(Position = 1)]
-		[string]$Prefix = 'cms',
-		[Parameter(Position = 2)]
-		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
-		[Parameter(Position = 3)][ValidateScript({ Test-Path -Path $_ })]
-		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData')
+		[Parameter(Mandatory = $false)]
+		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
+		[Parameter(DontShow)]
+		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
-	# define identity for regex
-	If ([string]::IsNullOrEmpty($Identity)) { $Identity = '\w+' }
-
-	# define strings
-	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_').ToLowerInvariant()
-	$cms_date_regex = '[0-9TZ]+'
-	$cms_name_regex = ($Hostname, $Identity, $cms_date_regex) -join '-'
-
-	# if credential files path found...
-	If (Test-Path -Path $cms_path -PathType Container) {
-		# retrieve and display credential files
-		$cms_file_current = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $cms_name_regex }
-		$cms_file_current | Sort-Object -Property 'BaseName' | Format-Table Name, LastWriteTime
+	# if path to credential files not found...
+	If ((Test-Path -Path $Path -PathType Container) -eq $false) {
+		Write-Warning "could not locate path to credential files: $Path"
+		Return
 	}
-	# if credential files path not found...
+
+	# if identity not provided...
+	If ($PSBoundParameters.ContainsKey('Identity') -eq $false) {
+		# define identity as word character regex
+		$Identity = '\w+'
+	}
+
+	# define subject using prefix and identity
+	$Subject = "cms-$Identity"
+
+	# retrieve credential files
+	$CredentialFiles = Get-ChildItem -Path $Path -Filter '*.txt' -ErrorAction 'Stop' | Where-Object { $_.BaseName -match "^$Subject-" }
+
+	# display credential files
+	Write-Host "Found '$($CredentialFiles.Count)' credential files"
+	$CredentialFiles | Sort-Object -Property 'BaseName' | Format-Table Name, LastWriteTime
+
+	# retrieve credential certificates
+	$CredentialCerts = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject -match "^CN=$Subject-" }
+
+	# display credential certificates
+	Write-Host "Found '$($CredentialCerts.Count)' credential certificates"
+	$CredentialCerts | Sort-Object -Property 'Subject' | Format-Table Subject, NotBefore
+}
+
+Function Unprotect-CmsCredential {
+	<#
+	.SYNOPSIS
+	Retrieves a credential protected by CMS.
+
+	.DESCRIPTION
+	Retrieves a credential encrypted by a CMS certificate. The calling user must have read access to the private key of the certificate that protects the credential.
+
+	.PARAMETER Identity
+	Specifies the identity of the CMS credential.
+
+	.PARAMETER AsPlainText
+	Specifies the credential should be returned as a plain-text password. The credential will be returned a PSCustomObject with Username and Password properties.
+
+	.PARAMETER Thumbprint
+	Specifies the thumbprint of an existing CMS certificate.
+
+	.PARAMETER Path
+	Specifies the path to a folder containing CMS credential files or to a specific CMS credential file. The default value is the 'C:\ProgramData\CmsCredentials' folder.
+
+	.INPUTS
+	None.
+
+	.OUTPUTS
+	System.Management.Automation.PSCredential or System.Management.Automation.PSCustomObject.
+
+	.EXAMPLE
+	PS> Unprotect-CmsCredential -Identity "testcredential"
+
+	.EXAMPLE
+	PS> Unprotect-CmsCredential -Identity "testcredential" -AsPlainText
+
+	#>
+
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
+	Param(
+		[Parameter(Mandatory = $true, Position = 0)]
+		[string]$Identity,
+		[Parameter(Mandatory = $false)]
+		[switch]$AsPlainText,
+		[Parameter(Mandatory = $false)]
+		[string]$Thumbprint,
+		[Parameter(Mandatory = $false)]
+		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
+		[Parameter(DontShow)]
+		[string]$Subject = "cms-$Identity",
+		[Parameter(DontShow)]
+		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
+	)
+
+	# if thumbprint provided...
+	If ($PSBoundParameters.ContainsKey('Thumbprint') -eq $true) {
+		# retrieve certificate by thumbprint
+		Try {
+			$Certificate = Get-Item -Path "Cert:\LocalMachine\My\$Thumbprint" -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning "could not locate certificate on '$Hostname' with thumbprint: $Thumbprint"
+			Return
+		}
+	}
+	# if thumbprint not provided...
 	Else {
-		# inform user
-		Write-Warning "CMS credential folder not found: '$cms_path'"
+		# retrieve latest certificate with matching subject
+		Try {
+			$Certificate = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject -match "^CN=$Subject-" } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
+		}
+		Catch {
+			Throw $_
+		}
 	}
 
-	# retrieve and display certificates
-	$cms_cert_current = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_name_regex }
-	$cms_cert_current | Sort-Object -Property 'Subject' | Format-Table Subject, NotBefore
+	# if certificate not found...
+	If ($null -eq $local:Certificate) {
+		# declare and return
+		Write-Warning "could not locate certificate on '$Hostname' with identity: $Identity"
+		Throw [System.Management.Automation.ItemNotFoundException]
+	}
+
+	# if path is a folder...
+	If (Test-Path -Path $Path -PathType 'Container') {
+		# retrieve latest certificate file with matching subject
+		Try {
+			$FilePath = Get-ChildItem -Path $Path -Filter '*.txt' -ErrorAction 'Stop' | Where-Object { $_.BaseName -match "^$Subject-" } | Sort-Object -Property 'LastWriteTime' | Select-Object -Last 1 -ExpandProperty 'FullName'
+		}
+		Catch {
+			Throw $_
+		}
+	}
+	# if path is a file...
+	Else {
+		# retrieve credential file from path
+		Try {
+			$FilePath = Get-Item -Path $Path -ErrorAction 'Stop' | Select-Object -ExpandProperty 'FullName'
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
+	# if file not found...
+	If ($null -eq $local:FilePath) {
+		# declare and return
+		Write-Warning "could not locate file on '$Hostname' with identity: $Identity"
+		Throw [System.Management.Automation.ItemNotFoundException]
+	}
+
+	# decrypt content of credential file
+	Try {
+		$InputObject = Unprotect-CmsMessage -Path $FilePath -To $Certificate -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning "could not decrypt content on '$Hostname' using '$($Certificate.Thumbprint)' certificate from file: '$FilePath'"
+		Throw $_
+	}
+
+	# convert content from JSON string into custom object
+	Try {
+		$PSCustomObject = ConvertFrom-Json -InputObject $InputObject -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning "could not convert from JSON the decrypted content on '$Hostname' in file: '$FilePath'"
+		Throw $_
+	}
+
+	# verify username property
+	If ($null -eq $PSCustomObject.Username) {
+		Write-Warning "could not locate 'Username' property on '$Hostname' in file: '$FilePath'"
+		Throw [System.Management.Automation.ItemNotFoundException]
+	}
+
+	# verify password property
+	If ($null -eq $PSCustomObject.Password) {
+		Write-Warning "could not locate 'Password' property on '$Hostname' in file: '$FilePath'"
+		Throw [System.Management.Automation.ItemNotFoundException]
+	}
+
+	# if plain text requested...
+	If ($AsPlainText) {
+		# return the PSCustomObject as-is
+		Return $PSCustomObject
+	}
+
+	# convert password property into secure string
+	Try {
+		$SecureString = ConvertTo-SecureString -String $PSCustomObject.Password -AsPlainText -Force -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning "could not convert 'Password' property on '$Hostname' to a SecureString"
+		Throw $_
+	}
+
+	# create PSCredential object
+	Try {
+		$PSCredential = [System.Management.Automation.PSCredential]::new($PSCustomObject.Username, $SecureString)
+	}
+	Catch {
+		Write-Warning "could not create PSCredential object on '$Hostname' for identity: $Identity"
+		Throw $_
+	}
+
+	# return PSCredential object
+	Return $PSCredential
 }
 
 Function Update-CmsCredentialAccess {
@@ -448,17 +682,17 @@ Function Update-CmsCredentialAccess {
 	.DESCRIPTION
 	Internal function for updating access to a CMS credential. Utilized by Grant-CmsCredentialAccess, Revoke-CmsCredentialAccess, and Reset-CmsCredentialAccess.
 
-	.PARAMETER Mode
-	Specifies the mode for the function.
-
 	.PARAMETER Identity
-	Specifies the identity of a CMS credential.
+	Specifies the identity of the CMS credential.
+
+	.PARAMETER Mode
+	Specifies the mode for the function. Must be one of: Grant, Revoke, Reset
 
 	.PARAMETER Principals
-	Specifies one or more Active Directory principals.
+	Specifies one or more security principals.
 
-	.PARAMETER Hostname
-	Specifies the hostname in the CMS credential. Set to the local hostname by default.
+	.PARAMETER Thumbprint
+	Specifies the thumbprint of an existing CMS certificate.
 
 	.INPUTS
 	None.
@@ -470,142 +704,227 @@ Function Update-CmsCredentialAccess {
 
 	[CmdletBinding(SupportsShouldProcess)]
 	Param (
-		[Parameter(Position = 0)]
-		[string]$Mode,
-		[Parameter(Position = 1)]
+		[Parameter(Mandatory = $true, Position = 0)]
 		[string]$Identity,
-		[Parameter(Position = 2)]
-		[string[]]$Principals,
-		[Parameter(Position = 3)]
-		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
-		[Parameter(Position = 3)][ValidateScript({ Test-Path -Path $_ })]
-		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData')
+		[Parameter(Mandatory = $true, Position = 1)][ValidateSet('Grant', 'Revoke', 'Reset')]
+		[string]$Mode,
+		[Parameter(Mandatory = $false)]
+		[object[]]$Principals,
+		[Parameter(Mandatory = $false)]
+		[string]$Thumbprint,
+		[Parameter(DontShow)]
+		[string]$Subject = "cms-$Identity",
+		[Parameter(DontShow)]
+		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
-	# create regex to match expected CMS certificate name of machinename followed by the Identity name then either a simple date or a FileDateTimeUniversal
-	$cms_regx = "CN=$Hostname-$Identity-\d{8}"
+	# create list for SIDs
+	$SecurityIdentifiers = [System.Collections.Generic.List[System.Security.Principal.SecurityIdentifier]]::new()
 
 	# retrieve SIDs for principals
-	$cms_sids = @()
 	If ($Mode -eq 'Reset') {
-		$cms_sids += [System.Security.Principal.SecurityIdentifier]('S-1-5-18') # add NT AUTHORITY\SYSTEM
-		$cms_sids += [System.Security.Principal.SecurityIdentifier]('S-1-5-32-544') # add BUILTIN\Administrators
+		# add NT AUTHORITY\SYSTEM
+		$SecurityIdentifiers.Add([System.Security.Principal.SecurityIdentifier]::new('S-1-5-18'))
+		# add BUILTIN\Administrators
+		$SecurityIdentifiers.Add([System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
 	}
 	Else {
-		ForEach ($cms_principal in $Principals) {
-			# verify the input
-			If ($cms_principal -isnot [System.String] -and $cms_principal -is [System.Security.Principal.SecurityIdentifier]) {
-				$cms_sids += $cms_principal
+		:NextPrincipal ForEach ($Principal in $Principals) {
+			# if principal is SID object...
+			If ($Principal -is [System.Security.Principal.SecurityIdentifier]) {
+				$SecurityIdentifiers.Add($Principal)
+				Continue NextPrincipal
 			}
-			Else {
+
+			# if principal is a well-known built-in principal that only translates on a domain controller...
+			If ($Principal -eq 'Windows Authorization Access Group' -or $Principal -match '^w+\\Windows Authorization Access Group$') {
+				# create SID for well-known built-in principal
 				Try {
-					# check for specific well-known SIDs or translate the SID
-					switch ($cms_principal) {
-						# well-known built-in SID that only translates on a domain controller
-						{ ($_ -eq 'Windows Authorization Access Group') -or ($_ -eq "$([System.Environment]::UserDomainName)\Windows Authorization Access Group") } {
-							$cms_sids += [System.Security.Principal.SecurityIdentifier]('S-1-5-32-560')
-						}
-						# a SID in string format
-						{ ($_ -match 'S-1-\d{1,2}-\d+') } {
-							$cms_sids += [System.Security.Principal.SecurityIdentifier]($_)
-						}
-						# a principal with domain prefix or suffix
-						{ ($_ -match '^[\w\s\.-]+\\[\w\s\.-]+$') -or ($_ -match '^[\w\.-]+@[\w\.-]+$') } {
-							$cms_sids += ([System.Security.Principal.NTAccount]($_)).Translate([System.Security.Principal.SecurityIdentifier])
-						}
-						# any other username
-						Default {
-							$cms_sids += ([System.Security.Principal.NTAccount]("$([System.Environment]::UserDomainName)\$_")).Translate([System.Security.Principal.SecurityIdentifier])
-						}
-					}
+					$SecurityIdentifier = [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-560')
 				}
 				Catch {
-					Write-Output "Could not translate principal to SID: '$cms_principal'"
-					Return
+					Throw $_
+				}
+
+				# add SID to list and continue
+				$SecurityIdentifiers.Add($SecurityIdentifier)
+				Continue NextPrincipal
+			}
+
+			# if principal is a SID in string format...
+			If ($Principal -match '^S-1-\d{1,2}-\d+') {
+				# create SID from string
+				Try {
+					$SecurityIdentifier = [System.Security.Principal.SecurityIdentifier]::new($Principal)
+				}
+				Catch {
+					Throw $_
+				}
+
+				# add SID to list and continue
+				$SecurityIdentifiers.Add($SecurityIdentifier)
+				Continue NextPrincipal
+			}
+
+			# if principal is in NT Domain or User Principal Name format...
+			If ($Principal -match '^[\w\s\.-]+\\[\w\s\.-]+$' -or $Principal -match '^[\w\.-]+@[\w\.-]+$') {
+				# create NT account from principal
+				Try {
+					$NTAccount = [System.Security.Principal.NTAccount]::new($Principal)
+				}
+				Catch {
+					Throw $_
 				}
 			}
+			# if principal is any other format...
+			Else {
+				# create NT account for principal with user domain prefixed
+				Try {
+					$NTAccount = [System.Security.Principal.NTAccount]::new("$([System.Environment]::UserDomainName)\$Principal")
+				}
+				Catch {
+					Throw $_
+				}
+			}
+
+			# translate NT account to SID
+			Try {
+				$SecurityIdentifier = $NTAccount.Translate([System.Security.Principal.SecurityIdentifier])
+			}
+			Catch {
+				Throw $_
+			}
+
+			# add SID to list and continue
+			$SecurityIdentifiers.Add($SecurityIdentifier)
 		}
 	}
 
-	# check local machine store for existing certificate
-	$cms_cert = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert | Where-Object { $_.Subject -match $cms_regx -and $_.HasPrivateKey } | Sort-Object 'NotBefore' | Select-Object -Last 1
-
-	# if CMS certificate not found...
-	If ($null -eq $cms_cert) {
-		Write-Warning "CMS certificate not found: '$($cms_cert.Subject)'"
-		Return
+	# if thumbprint provided...
+	If ($PSBoundParameters.ContainsKey('Thumbprint') -eq $true) {
+		# retrieve certificate by thumbprint
+		Try {
+			$Certificate = Get-Item -Path "Cert:\LocalMachine\My\$Thumbprint" -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning "could not locate certificate on '$Hostname' with thumbprint: $Thumbprint"
+			Return
+		}
 	}
-
-	# if certificate has PrivateKey property...
-	If ($cms_cert.PrivateKey) {
-		# ...get path to legacy private keys
-		$Path = Join-Path -Path $ParentPath -ChildPath 'Microsoft\Crypto\RSA\MachineKeys'
-	}
-	# if certificate missing PrivateKey property...
+	# if thumbprint not provided...
 	Else {
-		# ...get path to modern private keys
-		$Path = Join-Path -Path $ParentPath -ChildPath 'Microsoft\Crypto\Keys'
+		# retrieve latest certificate with matching subject
+		Try {
+			$Certificate = Get-ChildItem -Path 'Cert:\LocalMachine\My' -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject -match "^CN=$Subject-" } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
+		}
+		Catch {
+			Throw $_
+		}
 	}
 
-	# retrieve private key file name
+	# if certificate not found...
+	If ($null -eq $local:Certificate) {
+		# declare and return
+		Write-Warning "could not locate certificate on '$Hostname' with identity: $Identity"
+		Throw [System.Management.Automation.ItemNotFoundException]
+	}
+
+	# if certificate is missing the private key...
+	If ($Certificate.HasPrivateKey -eq $false) {
+		Write-Warning -Message "could not locate certificate with private key on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
+		Return $null
+	}
+
+	# if certificate private key property is populated...
+	If ($Certificate.PrivateKey) {
+		# define parent path for legacy private keys
+		$ParentPath = Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'Microsoft\Crypto\RSA\MachineKeys'
+	}
+	Else {
+		# define parent path for modern private keys
+		$ParentPath = Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'Microsoft\Crypto\Keys'
+	}
+
+	# if certificate is missing algorithm friendly name...
+	If ([string]::IsNullOrEmpty($Certificate.PublicKey.Oid.FriendlyName)) {
+		Write-Warning -Message "could not retrieve algorithm for certificate on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
+		Return $null
+	}
+
+	# retrieve private key child path using algorithm-specific method
 	Try {
-		$ChildPath = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($cms_cert).Key.UniqueName
+		switch ($Certificate.PublicKey.Oid.FriendlyName) {
+			'DSA' {
+				$ChildPath = [System.Security.Cryptography.X509Certificates.DSACertificateExtensions]::GetDSAPrivateKey($Certificate).Key.UniqueName
+			}
+			'ECDsa' {
+				$ChildPath = [System.Security.Cryptography.X509Certificates.ECDsaCertificateExtensions]::GetECDsaPrivateKey($Certificate).Key.UniqueName
+			}
+			'RSA' {
+				$ChildPath = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($Certificate).Key.UniqueName
+			}
+		}
 	}
 	Catch {
-		Write-Warning 'Could not retrieve private key file name'
-		Return
+		Write-Warning -Message "could not retrieve private key unique name for certificate on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
+		Return $null
 	}
 
-	# retrieve private key
-	$cms_key = Join-Path -Path $Path -ChildPath $ChildPath
+	# if private key child path not found...
+	If ([string]::IsNullOrEmpty($ChildPath)) {
+		Write-Warning -Message "could not locate private key unique name for certificate on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
+		Return $null
+	}
+
+	# retrieve private key path
+	$PrivateKeyPath = Join-Path -Path $ParentPath -ChildPath $ChildPath
 
 	# retrieve private key permissions
-	$cms_acl = Get-Acl -Path $cms_key
+	Try {
+		$PrivateKeyAcl = Get-Acl -Path $PrivateKeyPath -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning -Message "could not retrieve private key ACL for certificate on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
+		Return $null
+	}
 
 	# process SIDs
 	switch ($Mode) {
 		'Grant' {
-			# create ACE then add to ACL
-			ForEach ($cms_sid in $cms_sids) {
-				$cms_ace = New-Object System.Security.AccessControl.FileSystemAccessRule @($cms_sid, 'Read', 'Allow')
-				$cms_acl.AddAccessRule($cms_ace)
+			ForEach ($SecurityIdentifier in $SecurityIdentifiers) {
+				# create 'Read' rule for SID
+				$AccessRule = [System.Security.AccessControl.FileSystemAccessRule]::new($SecurityIdentifier, 'Read', 'Allow')
+				# add rule to ACL
+				$PrivateKeyAcl.AddAccessRule($AccessRule)
 			}
-			# declare actions
-			Write-Host "Granting read access to $($cms_sids.Count) principals..."
 		}
 		'Revoke' {
-			# find ACEs with provided SIDs then remove from ACL
-			ForEach ($cms_sid in $cms_sids) {
-				$cms_ace = $cms_acl.Access | Where-Object { $_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]) -match $cms_sid }
-				$cms_ace | ForEach-Object { $cms_acl.RemoveAccessRule($_) } | Out-Null
+			ForEach ($SecurityIdentifier in $SecurityIdentifiers) {
+				# remove rule for SID
+				$PrivateKeyAcl.PurgeAccessRules($SecurityIdentifier)
 			}
-			# declare actions
-			Write-Host "Revoking read access for $($cms_sids.Count) principals..."
 		}
 		'Reset' {
-			# remove all ACEs from ACL
-			$cms_acl.Access | ForEach-Object { $cms_acl.RemoveAccessRule($_) } | Out-Null
-			# create ACEs then add to ACL
-			ForEach ($cms_sid in $cms_sids) {
-				$cms_ace = New-Object System.Security.AccessControl.FileSystemAccessRule @($cms_sid, 'FullControl', 'Allow')
-				$cms_acl.AddAccessRule($cms_ace)
+			ForEach ($IdentityReference in $PrivateKeyAcl.Access.IdentityReference) {
+				# remove rule for IdentityReference
+				$PrivateKeyAcl.PurgeAccessRules($IdentityReference)
 			}
-			# declare actions
-			Write-Host "Removing previous access and granting full control to: 'NT AUTHORITY\SYSTEM', 'BUILTIN\Administrators'"
+			ForEach ($SecurityIdentifier in $SecurityIdentifiers) {
+				# create 'FullControl' rule for SID
+				$AccessRule = [System.Security.AccessControl.FileSystemAccessRule]::new($SecurityIdentifier, 'FullControl', 'Allow')
+				# add rule to ACL
+				$PrivateKeyAcl.AddAccessRule($AccessRule)
+			}
 		}
 	}
 
 	# update ACL on private key
 	Try {
-		If ($PSCmdlet.ShouldProcess($cms_cert.Subject, "$cms_mode access to CMS certificate")) {
-			# update ACL on private key
-			Set-Acl -Path $cms_key -AclObject $cms_acl
-			# declare actions
-			Write-Host "CMS certificate permissions updated: '$($cms_cert.Subject)'"
-		}
+		Set-Acl -Path $PrivateKeyPath -AclObject $PrivateKeyAcl -ErrorAction 'Stop'
 	}
 	Catch {
-		Return $_
+		Write-Warning -Message "could not update private key ACL for certificate on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
+		Return $null
 	}
 }
 
@@ -617,17 +936,8 @@ Function Protect-CmsCredentials {
 	.DESCRIPTION
 	Creates a CMS certificate and encrypts the credential with the certificate using CMS. The calling user must have read access to the public key of the certificate that will protect the credential.
 
-	.PARAMETER Cred
-	Specifies a PSCredential object to be protected with CMS.
-
-	.PARAMETER Username
-	Specifies the username of a new credential to be protected with CMS.
-
-	.PARAMETER Password
-	Specifies the password of a new credential to be protected with CMS.
-
-	.PARAMETER Prefix
-	Specifies the prefix for the CMS credential file. Set to 'cms' by default.
+	.PARAMETER Credential
+	Specifies the PSCredential object to be protected with CMS.
 
 	.PARAMETER ComputerName
 	Specifies one or more remote computers.
@@ -658,40 +968,25 @@ Function Protect-CmsCredentials {
 
 	#>
 
-	[CmdletBinding(DefaultParameterSetName = 'Cred')]
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param(
-		[Parameter(Position = 0, Mandatory = $True)]
+		[Parameter(Mandatory = $True, Position = 0)]
 		[string]$Identity,
-		[Parameter(Mandatory = $True, ParameterSetName = 'Cred', ValueFromPipeline = $true)]
-		[pscredential]$Cred,
-		[Parameter(Mandatory = $True, ParameterSetName = 'Pass')]
-		[string]$Username,
-		[Parameter(Mandatory = $True, ParameterSetName = 'Pass')]
-		[securestring]$Password,
-		[Parameter()]
-		[string]$Prefix = 'cms',
-		[Parameter()]
+		[Parameter(Mandatory = $True, ValueFromPipeline = $true)]
+		[pscredential]$Credential,
+		[Parameter(ParameterSetName = 'Path')]
+		[string]$Path,
+		[Parameter(ParameterSetName = 'Default')]
 		[string[]]$ComputerName,
-		[Parameter()]
+		[Parameter(ParameterSetName = 'Default')]
 		[string[]]$ClusterName,
-		[Parameter()]
+		[Parameter(ParameterSetName = 'Default')]
 		[switch]$Cluster,
-		[Parameter()]
+		[Parameter(ParameterSetName = 'Default')]
 		[switch]$Reset,
 		[Parameter(DontShow)]
 		[string]$HostName = ([System.Environment]::Machinename).ToLowerInvariant()
 	)
-
-	# check credentials
-	If ($null -eq $Cred) {
-		Try {
-			$Cred = New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $Password
-		}
-		Catch {
-			Write-Error 'could not create credential from username and password'
-			Return
-		}
-	}
 
 	# if parameters for computer name provided...
 	If ($PSBoundParameters.ContainsKey('Cluster') -or $PSBoundParameters.ContainsKey('ClusterName') -or $PSBoundParameters.ContainsKey('ComputerName')) {
@@ -708,7 +1003,6 @@ Function Protect-CmsCredentials {
 	$ProtectParameters = @{
 		Identity = $Identity
 		Cred     = $Cred
-		Prefix   = $Prefix
 		Reset    = $Reset
 	}
 
@@ -1067,106 +1361,6 @@ Function Show-CmsCredentials {
 				Write-Error "could not display credentials on '$CmsComputer'"
 			}
 		}
-	}
-}
-
-Function Unprotect-CmsCredentials {
-	<#
-	.SYNOPSIS
-	Retrieves a credential protected by CMS.
-
-	.DESCRIPTION
-	Retrieves a credential encrypted by a CMS certificate. The calling user must have read access to the private key of the certificate that protects the credential.
-
-	.PARAMETER Identity
-	Specifies the identity of a CMS credential.
-
-	.PARAMETER AsPlainText
-	Specifies the credential should be returned as a plain-text password. This changes the output to a PSCustomObject with Username and Password properties.
-
-	.PARAMETER Prefix
-	Specifies the prefix for the CMS credential file. Set to 'cms' by default.
-
-	.PARAMETER Hostname
-	Specifies the hostname in the CMS credential. Set to the local hostname by default.
-
-	.PARAMETER ParentPath
-	Specifies the parent path of the CMS credential folder. Set to the ProgramData folder by default.
-
-	.INPUTS
-	None.
-
-	.OUTPUTS
-	System.Management.Automation.PSCredential or System.Management.Automation.PSCustomObject.
-
-	.EXAMPLE
-	PS> Unprotect-CmsCredentials -Identity "testcredential"
-
-	.EXAMPLE
-	PS> Unprotect-CmsCredentials -Identity "testcredential" -Prefix "private"
-
-	.EXAMPLE
-	PS> Unprotect-CmsCredentials -Identity "testcredential" AsPlainText
-
-	.EXAMPLE
-	PS> Unprotect-CmsCredentials -Identity "testcredential" -Prefix "private" -AsPlainText
-
-	#>
-
-	[CmdletBinding()]
-	Param(
-		[Parameter(Position = 0, Mandatory = $True)]
-		[string]$Identity,
-		[Parameter(Position = 1)]
-		[switch]$AsPlainText,
-		[Parameter(Position = 2)]
-		[string]$Prefix = 'cms',
-		[Parameter(Position = 3)]
-		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
-		[Parameter(Position = 4)][ValidateScript({ Test-Path -Path $_ })]
-		[string]$ParentPath = [System.Environment]::GetFolderPath('CommonApplicationData')
-	)
-
-	# define required strings
-	$cms_path = Join-Path -Path $ParentPath -ChildPath ($Prefix, $Hostname -join '_').ToLowerInvariant()
-
-	# verify cms folder
-	If (Test-Path -Path $cms_path) {
-		# get cms file matching the host and Identity
-		$cms_file = Get-ChildItem -Path $cms_path | Where-Object { $_.BaseName -match $Identity -and $_.BaseName -match $Hostname } | Sort-Object BaseName | Select-Object -Last 1
-		If ($cms_file) {
-			# convert the encrypted file into an object
-			Try {
-				$cms_object = Get-Content -Path $cms_file.FullName | Unprotect-CmsMessage | ConvertFrom-Json
-			}
-			Catch {
-				Write-Host 'ERROR: could not decrypt the CMS file'
-				Throw $_
-			}
-			# return the credentials based upon the params
-			If ($cms_object.Username -and $cms_object.Password) {
-				If ($AsPlainText) {
-					# return a PSCustomObject with username and password
-					[PSCustomObject]@{Username = $cms_object.Username; Password = $cms_object.Password }
-				}
-				Else {
-					# return a PSCredential
-					New-Object 'System.Management.Automation.PSCredential' -ArgumentList $cms_object.Username, ($cms_object.Password | ConvertTo-SecureString -AsPlainText -Force)
-				}
-			}
-			Else {
-				Write-Host 'could not find required objects in CMS file'
-				Throw [System.Management.Automation.ItemNotFoundException]
-			}
-		}
-		Else {
-			Write-Host "could not find a CMS file for Identity: $Identity"
-			Throw [System.Management.Automation.ItemNotFoundException]
-		}
-	}
-	Else {
-		Write-Host "could not find the CMS folder: $cms_path"
-		Throw [System.Management.Automation.ItemNotFoundException]
 	}
 }
 
@@ -1630,19 +1824,21 @@ Function Revoke-CmsCredentialAccess {
 }
 
 # define functions to export
-$functions_to_export = @()
-$functions_to_export += 'New-CmsCredentialCertificate'
-$functions_to_export += 'Protect-CmsCredentialSecret'
-$functions_to_export += 'Remove-CmsCredentialSecret'
-$functions_to_export += 'Show-CmsCredentialSecret'
-$functions_to_export += 'Protect-CmsCredentials'
-$functions_to_export += 'Remove-CmsCredentials'
-$functions_to_export += 'Show-CmsCredentials'
-$functions_to_export += 'Unprotect-CmsCredentials'
-$functions_to_export += 'Grant-CmsCredentialAccess'
-$functions_to_export += 'Reset-CmsCredentialAccess'
-$functions_to_export += 'Revoke-CmsCredentialAccess'
-$functions_to_export += 'Update-CmsCredentialAccess'
+$FunctionsToExport = @(
+	'New-CmsCredentialCertificate'
+	'Protect-CmsCredential'
+	'Remove-CmsCredential'
+	'Show-CmsCredential'
+	'Unprotect-CmsCredential'
+	'Protect-CmsCredentials'
+	'Remove-CmsCredentials'
+	'Show-CmsCredentials'
+	'Unprotect-CmsCredentials'
+	'Grant-CmsCredentialAccess'
+	'Reset-CmsCredentialAccess'
+	'Revoke-CmsCredentialAccess'
+	'Update-CmsCredentialAccess'
+)
 
 # export module members
-Export-ModuleMember -Function $functions_to_export
+Export-ModuleMember -Function $FunctionsToExport

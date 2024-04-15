@@ -12,7 +12,7 @@
 RootModule = '.\CmsCredentials.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.0.0.0'
+ModuleVersion = '2.0.0.0'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -69,15 +69,20 @@ Description = 'CmsCredentials provides functions to store and retrieve credentia
 # NestedModules = @()
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-FunctionsToExport = 'Grant-CmsCredentialAccess', 'Protect-CmsCredentials', 
-               'Remove-CmsCredentials', 'Reset-CmsCredentialAccess', 
-               'Revoke-CmsCredentialAccess', 'Unprotect-CmsCredentials', 
-               'Grant-CmsCredentialAccess', 'New-CmsCredentialCertificate', 
-               'Protect-CmsCredentials', 'Protect-CmsCredentialSecret', 
-               'Remove-CmsCredentials', 'Remove-CmsCredentialSecret', 
-               'Reset-CmsCredentialAccess', 'Revoke-CmsCredentialAccess', 
-               'Show-CmsCredentials', 'Show-CmsCredentialSecret', 
-               'Unprotect-CmsCredentials', 'Update-CmsCredentialAccess'
+FunctionsToExport = 'New-CmsCredentialCertificate',
+    'Protect-CmsCredential',
+    'Remove-CmsCredential',
+    'Show-CmsCredential',
+    'Unprotect-CmsCredential',
+    'Protect-CmsCredentials',
+    'Remove-CmsCredentials',
+    'Show-CmsCredentials',
+    'Unprotect-CmsCredentials',
+    'Grant-CmsCredentialAccess',
+    'Reset-CmsCredentialAccess',
+    'Revoke-CmsCredentialAccess',
+    'Update-CmsCredentialAccess'
+
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()
