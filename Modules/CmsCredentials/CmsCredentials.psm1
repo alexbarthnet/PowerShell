@@ -446,7 +446,7 @@ Function Protect-CmsCredential {
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
-	# if computer names provided...
+	# if computername provided...
 	If ($PSBoundParameters.ContainsKey('ComputerName')) {
 		# remove ComputerName parameter from bound parameters
 		$null = $PSBoundParameters.Remove('ComputerName')
@@ -623,7 +623,7 @@ Function Remove-CmsCredential {
 	Specifies the identity of a CMS credential.
 
 	.PARAMETER Path
-	Specifies the path to a folder containing CMS credential files. The default value is 'C:\ProgramData\CmsCredentials'
+	Specifies the path to a folder containing CMS credential files. The default value is 'C:\ProgramData\CmsCredentials'.
 
 	.PARAMETER SkipLast
 	Specifies the number of objects to skip when removing CMS credential certificates and files. Set to 0 by default.
@@ -669,7 +669,7 @@ Function Remove-CmsCredential {
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
-	# if computer names provided...
+	# if computername provided...
 	If ($PSBoundParameters.ContainsKey('ComputerName')) {
 		# remove ComputerName parameter from bound parameters
 		$null = $PSBoundParameters.Remove('ComputerName')
@@ -713,7 +713,7 @@ Function Remove-CmsCredential {
 
 	# retrieve old credential files
 	Try {
-		$OldFiles = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop' | Where-Object { $_.BaseName -match "^$Subject-" } | Sort-Object -Property 'LastWriteTime' | Select-Object -SkipLast $SkipLast
+		$Files = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop' | Where-Object { $_.BaseName -match "^$Subject-" } | Sort-Object -Property 'LastWriteTime' | Select-Object -SkipLast $SkipLast
 	}
 	Catch {
 		Write-Warning "could not search for credential files on '$Hostname' in path: $Path"
@@ -721,27 +721,7 @@ Function Remove-CmsCredential {
 	}
 
 	# remove old credential files
-	ForEach ($Item in $OldFiles) {
-		Try {
-			Remove-Item -Path $Item.PSPath -Force -Verbose -ErrorAction 'Stop'
-		}
-		Catch {
-			Write-Warning -Message "could not remove certificate on '$Hostname' with path: $($Item.PSPath)"
-			Throw $_
-		}
-	}
-
-	# retrieve old certificates
-	Try {
-		$OldCertificates = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject -match "^CN=$Subject-" } | Sort-Object -Property 'NotBefore' | Select-Object -SkipLast $SkipLast
-	}
-	Catch {
-		Write-Warning "could not search for credential certificates on '$Hostname' in path: $CertStoreLocation"
-		Throw $_
-	}
-
-	# remove old certificates
-	ForEach ($Item in $OldCertificates) {
+	ForEach ($Item in $Files) {
 		Try {
 			Remove-Item -Path $Item.PSPath -Force -Verbose -ErrorAction 'Stop'
 		}
@@ -750,21 +730,41 @@ Function Remove-CmsCredential {
 			Throw $_
 		}
 	}
+
+	# retrieve old certificates
+	Try {
+		$Certificates = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject -match "^CN=$Subject-" } | Sort-Object -Property 'NotBefore' | Select-Object -SkipLast $SkipLast
+	}
+	Catch {
+		Write-Warning "could not search for credential certificates on '$Hostname' in path: $CertStoreLocation"
+		Throw $_
+	}
+
+	# remove old certificates
+	ForEach ($Item in $Certificates) {
+		Try {
+			Remove-Item -Path $Item.PSPath -Force -Verbose -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not remove certificate on '$Hostname' with path: $($Item.PSPath)"
+			Throw $_
+		}
+	}
 }
 
 Function Show-CmsCredential {
 	<#
 	.SYNOPSIS
-	Display the identity of one or more credentials protected by CMS.
+	Displays information about one or more credentials protected by CMS.
 
 	.DESCRIPTION
-	Display the certificate and encrypted file for one or more credentials protected by CMS.
+	Displays the identity, GUID, certificate and encrypted file for one or more credentials protected by CMS.
 
 	.PARAMETER Identity
 	Specifies the identity of a specific CMS credential.
 
 	.PARAMETER Path
-	Specifies the path to a folder containing CMS credential files. The default value is 'C:\ProgramData\CmsCredentials'
+	Specifies the path to a folder containing CMS credential files. The default value is 'C:\ProgramData\CmsCredentials'.
 
 	.PARAMETER ComputerName
 	Specifies the name of one or more remote computers.
@@ -797,7 +797,7 @@ Function Show-CmsCredential {
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
-	# if computer names provided...
+	# if computername provided...
 	If ($PSBoundParameters.ContainsKey('ComputerName')) {
 		# remove ComputerName parameter from bound parameters
 		$null = $PSBoundParameters.Remove('ComputerName')
@@ -929,22 +929,22 @@ Function Show-CmsCredential {
 Function Update-CmsCredentialAccess {
 	<#
 	.SYNOPSIS
-	Internal function for updating access to a CMS credential.
+	Internal function for updating access to the private key protecting a CMS credential
 
 	.DESCRIPTION
-	Internal function for updating access to a CMS credential. Utilized by Grant-CmsCredentialAccess, Revoke-CmsCredentialAccess, and Reset-CmsCredentialAccess.
+	Internal function for updating access to the private key protecting a CMS credential. Utilized by Grant-CmsCredentialAccess, Revoke-CmsCredentialAccess, and Reset-CmsCredentialAccess.
 
 	.PARAMETER Identity
-	Specifies the identity of the CMS credential.
+	Specifies the identity of a CMS credential. Cannot be combined with the Thumbprint parameter.
+
+	.PARAMETER Thumbprint
+	Specifies the thumbprint of a certificate protecting a CMS credential. Cannot be combined with the Identity parameter.
 
 	.PARAMETER Mode
 	Specifies the mode for the function. Must be one of: Grant, Revoke, Reset
 
 	.PARAMETER Principals
 	Specifies one or more security principals.
-
-	.PARAMETER Thumbprint
-	Specifies the thumbprint of an existing CMS certificate.
 
 	.INPUTS
 	None.
