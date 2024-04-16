@@ -69,20 +69,16 @@ Description = 'CmsCredentials provides functions to store and retrieve credentia
 # NestedModules = @()
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-FunctionsToExport = 'New-CmsCredentialCertificate',
-    'Protect-CmsCredential',
-    'Remove-CmsCredential',
-    'Show-CmsCredential',
-    'Unprotect-CmsCredential',
-    'Protect-CmsCredentials',
-    'Remove-CmsCredentials',
-    'Show-CmsCredentials',
-    'Unprotect-CmsCredentials',
-    'Grant-CmsCredentialAccess',
-    'Reset-CmsCredentialAccess',
-    'Revoke-CmsCredentialAccess',
-    'Update-CmsCredentialAccess'
-
+FunctionsToExport = @(
+	'New-CmsCredentialCertificate'
+	'Get-CmsCredential'
+	'Protect-CmsCredential'
+	'Remove-CmsCredential'
+	'Show-CmsCredential'
+	'Grant-CmsCredentialAccess'
+	'Reset-CmsCredentialAccess'
+	'Revoke-CmsCredentialAccess'
+)
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()
