@@ -1236,7 +1236,7 @@ Function Show-CmsCredential {
 		$null = $PSBoundParameters.Remove('ComputerName')
 
 		# define required functions
-		$FunctionNames = 'Test-CmsInvalidSubject', 'Show-CmsCredential'
+		$FunctionNames = 'Test-CmsInvalidIdentity', 'Test-CmsInvalidSubject', 'Show-CmsCredential'
 
 		# define list for function script blocks
 		$FunctionScriptBlocks = [System.Collections.Generic.List[System.String]]::new()
