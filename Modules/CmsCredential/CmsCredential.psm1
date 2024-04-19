@@ -812,7 +812,7 @@ Function Protect-CmsCredential {
 			Write-Warning -Message "the subject of the certificate on '$Hostname' with '$($Certificate.Thumbprint)' thumbprint contains one or more of the following invalid characters: '\' (backslash)"
 			Return
 		}
-		
+
 	}
 	# if thumbprint not provided and reset not requested...
 	Else {
