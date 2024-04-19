@@ -467,7 +467,7 @@ Function Get-CmsCredential {
 		[Parameter(ParameterSetName = 'Identity', Position = 0, Mandatory)]
 		[string]$Identity,
 		[Parameter(ParameterSetName = 'Identity', Position = 1)]
-		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
+		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredential'),
 		[Parameter(ParameterSetName = 'Identity', DontShow)]
 		[string]$Subject = "cms-$Identity",
 		[Parameter(Mandatory = $false)]
@@ -941,7 +941,7 @@ Function Remove-CmsCredential {
 		[Parameter(ParameterSetName = 'Identity', Mandatory = $true, Position = 0)]
 		[string]$Identity,
 		[Parameter(Mandatory = $false)]
-		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
+		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredential'),
 		[Parameter(Mandatory = $false)]
 		[uint16]$SkipLast = 0,
 		[Parameter(Mandatory = $false)]
@@ -1108,7 +1108,7 @@ Function Show-CmsCredential {
 		[Parameter(ParameterSetName = 'Identity', Mandatory = $false, Position = 0)]
 		[string]$Identity,
 		[Parameter(Mandatory = $false)]
-		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
+		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredential'),
 		[Parameter(Mandatory = $false)]
 		[string[]]$ComputerName,
 		[Parameter(DontShow)]
