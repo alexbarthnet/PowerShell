@@ -798,6 +798,21 @@ Function Protect-CmsCredential {
 			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
 			Throw $_
 		}
+
+		# if certificate subject is an empty string...
+		If ([string]::IsNullOrEmpty($Certificate.Subject)) {
+			# warn and return
+			Write-Warning -Message "the subject of the certificate on '$Hostname' with '$($Certificate.Thumbprint)' thumbprint is null or an empty string"
+			Return
+		}
+
+		# if certificate subject contains invalid characters...
+		If (Test-CmsInvalidSubject -Subject $Certificate.Subject) {
+			# warn and return
+			Write-Warning -Message "the subject of the certificate on '$Hostname' with '$($Certificate.Thumbprint)' thumbprint contains one or more of the following invalid characters: '\' (backslash)"
+			Return
+		}
+		
 	}
 	# if thumbprint not provided and reset not requested...
 	Else {
@@ -1284,6 +1299,13 @@ Function Show-CmsCredential {
 		Catch {
 			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
 			Throw $_
+		}
+
+		# if certificate subject is an empty string...
+		If ([string]::IsNullOrEmpty($Certificate.Subject)) {
+			# warn and return
+			Write-Warning -Message "the subject of the certificate on '$Hostname' with '$($Certificate.Thumbprint)' thumbprint is null or an empty string"
+			Return
 		}
 
 		# if certificate subject contains invalid characters...
