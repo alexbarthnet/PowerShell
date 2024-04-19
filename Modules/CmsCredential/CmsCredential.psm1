@@ -56,7 +56,7 @@ Function Get-CertificatePrivateKeyPath {
 	}
 
 	# if certificate does not have a private key...
-	If ($Certificate.HasPrivateKey -eq $false) {
+	If (!$Certificate.HasPrivateKey) {
 		Write-Warning -Message "could not locate private key on '$Hostname' for certificate with thumbprint: $($Certificate.Thumbprint)"
 		Return $null
 	}
@@ -82,7 +82,7 @@ Function Get-CertificatePrivateKeyPath {
 	}
 
 	# if private key was not retrieved...
-	If ($null -eq $PrivateKey) {
+	If ($null -eq $local:PrivateKey) {
 		Write-Verbose -Message "could not retrieve private key on '$Hostname' for certificate with thumbprint: $($Certificate.Thumbprint)"
 		Return $null
 	}
@@ -245,7 +245,7 @@ Function Export-CmsCredentialCertificate {
 	}
 
 	# if thumbprint provided...
-	If ($PSBoundParameters.ContainsKey('Thumbprint') -eq $true) {
+	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
 		# create path for certificate by thumbprint
 		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
 		# retrieve certificate by thumbprint
@@ -787,7 +787,7 @@ Function Protect-CmsCredential {
 	}
 
 	# if thumbprint provided...
-	If ($PSBoundParameters.ContainsKey('Thumbprint') -eq $true) {
+	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
 		# create path for certificate by thumbprint
 		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
 		# retrieve certificate by thumbprint
@@ -802,7 +802,7 @@ Function Protect-CmsCredential {
 	# if thumbprint not provided and reset not requested...
 	Else {
 		# if reset not requested...
-		If ($PSBoundParameters.ContainsKey('Reset') -eq $false) {
+		If (!$PSBoundParameters.ContainsKey('Reset')) {
 			# define pattern as organizational unit of Identity followed by organization of CmsCredential
 			$Pattern = "OU=$Identity, O=CmsCredential$"
 			# retrieve latest certificate where subject matches pattern
@@ -1075,7 +1075,7 @@ Function Remove-CmsCredential {
 	}
 
 	# if thumbprint provided...
-	If ($PSBoundParameters.ContainsKey('Thumbprint') -eq $true) {
+	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
 		# create path for certificate by thumbprint
 		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
 		# retrieve certificate by thumbprint
@@ -1289,7 +1289,7 @@ Function Show-CmsCredential {
 		# if certificate subject contains invalid characters...
 		If (Test-CmsInvalidSubject -Subject $Certificate.Subject) {
 			# warn and return
-			Write-Warning -Message "found invalid characters in subject of certificate on '$Hostname' with thumbprint: $Thumbprint"
+			Write-Warning -Message "the subject of the certificate on '$Hostname' with '$($Certificate.Thumbprint)' thumbprint contains one or more of the following invalid characters: '\' (backslash)"
 			Return
 		}
 
@@ -1349,7 +1349,7 @@ Function Show-CmsCredential {
 		# if subject contains invalid characters...
 		If (Test-CmsInvalidSubject -Subject $Subject) {
 			# warn and continue
-			Write-Warning -Message "found invalid characters in subject of credential file on '$Hostname' with path: $($CredentialFile.FullName)"
+			Write-Warning -Message "the subject in the certificate file on '$Hostname' with '$($CredentialFile.FullName)' path contains one or more of the following invalid characters: '\' (backslash)"
 			Continue
 		}
 		# retrieve CommonName from subject in credential file
@@ -1385,7 +1385,7 @@ Function Show-CmsCredential {
 		# if subject contains invalid characters...
 		If (Test-CmsInvalidSubject -Subject $Subject) {
 			# warn and continue
-			Write-Warning -Message "found invalid characters in subject of certificate on '$Hostname' with thumbprint: $($CredentialCert.Thumbprint)"
+			Write-Warning -Message "the subject of the certificate on '$Hostname' with '$($CredentialCert.Thumbprint)' thumbprint contains one or more of the following invalid characters: '\' (backslash)"
 			Continue
 		}
 		# retrieve CommonName from subject in credential certificate
@@ -1529,7 +1529,7 @@ Function Update-CmsCredentialAccess {
 	}
 
 	# if thumbprint provided...
-	If ($PSBoundParameters.ContainsKey('Thumbprint') -eq $true) {
+	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
 		# create path for certificate by thumbprint
 		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
 		# retrieve certificate by thumbprint
