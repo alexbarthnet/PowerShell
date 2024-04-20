@@ -1,11 +1,11 @@
-#Requires -Modules CmsCredentials,WebApplicationProxy,TranscriptWithHostAndDate
+#Requires -Modules WebApplicationProxy,TranscriptWithHostAndDate,CmsCredential
 
 <#
 .SYNOPSIS
 Updates the Web Application Proxy configuration from ADFS.
 
 .DESCRIPTION
-Updates the Web Application Proxy configuration from ADFS. The CmsCredentials module is used to store credentials for connecting to the ADFS farm. A separate process must install any required certificates on each server in the farm.
+Updates the Web Application Proxy configuration from ADFS. The CmsCredential module is used to store credentials for connecting to the ADFS farm. A separate process must install any required certificates on each server in the farm.
 
 .PARAMETER Json
 The path to a JSON file containing the configuration for the ADFS service. The following values are required:
@@ -59,10 +59,10 @@ Begin {
 
 		# retrieve ADFS credentials from CMS
 		Try {
-			$FederationServiceTrustCredential = Unprotect-CmsCredentials -Identity $FederationServiceName
+			$FederationServiceTrustCredential = Get-CmsCredential -Identity $FederationServiceName
 		}
 		Catch {
-			Write-Warning "error retrieving CMS credentials: $($_.ToString())"
+			Write-Warning "error retrieving CMS credentials: $($_.Exception.Message)"
 			Return $_
 		}
 
