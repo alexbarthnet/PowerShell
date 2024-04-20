@@ -504,7 +504,7 @@ Function Get-CmsCredential {
 	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-CmsInvalidIdentity -Identity $Identity)) {
 		# warn and return
 		Write-Warning -Message "the value provided for the Identity parameter contains one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
-		Return
+		Return $null
 	}
 
 	# if computername provided...
@@ -588,8 +588,8 @@ Function Get-CmsCredential {
 	# if file not found...
 	If ([string]::IsNullOrEmpty($local:FilePath)) {
 		# declare and return
-		Write-Warning -Message "could not locate file for '$Identity' identity in path: $Path"
-		Throw [System.Management.Automation.ItemNotFoundException]
+		Write-Warning -Message "could not locate credential file for '$Identity' identity in path: $Path"
+		Return $null
 	}
 
 	# define parameters for Unprotect-CmsMessage
