@@ -298,7 +298,7 @@ Begin {
 
 		# if path is a folder...
 		If (Test-Path -Path $Path -PathType 'Container') {
-			# if files foun in immediate folder...
+			# if files found in immediate folder...
 			If (Get-ChildItem -Path $Path -File) {
 				# define target parent path as folder for file
 				$TargetParentPath = Join-Path -Path $AllUsers -ChildPath $SourceItem.BaseName
@@ -487,7 +487,7 @@ Begin {
 			}
 			# remove target file
 			Try {
-				Remove-Item -Path $Target -Force -ErrorAction 'Stop' -WhatIf
+				Remove-Item -Path $Target.FullName -Force -ErrorAction 'Stop'
 			}
 			Catch {
 				Write-Warning -Message "could not remove old file: $Target"
@@ -506,7 +506,7 @@ Begin {
 			}
 			# remove target path
 			Try {
-				Remove-Item -Path $Target -Force -ErrorAction 'Stop' -WhatIf
+				Remove-Item -Path $Target.FullName -Force -ErrorAction 'Stop'
 			}
 			Catch {
 				Write-Warning -Message "could not remove old folder: $Target"
