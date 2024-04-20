@@ -1,4 +1,4 @@
-#Requires -Modules CmsCredentials
+#Requires -Modules CmsCredential
 
 Function Start-TranscriptWithHostAndDate {
 	Param(
@@ -154,7 +154,7 @@ Function Copy-PathFromPSDirect {
 
 	# retrieve VM credentials
 	Try {
-		$Credential = Unprotect-CmsCredentials -Identity $VMName
+		$Credential = Get-CmsCredential -Identity $VMName
 	}
 	Catch {
 		Write-Output "Could not unprotect credentials for VM: '$VMName'"
@@ -258,7 +258,7 @@ Function Copy-PathToPSDirect {
 
 	# retrieve VM credentials
 	Try {
-		$Credential = Unprotect-CmsCredentials -Identity $VMName
+		$Credential = Get-CmsCredential -Identity $VMName
 	}
 	Catch {
 		Write-Output "Could not unprotect credentials for VM: '$VMName'"
