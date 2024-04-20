@@ -314,7 +314,7 @@ Begin {
 
 			# get files in source item
 			Try {
-				$SourceFiles = Get-ChildItem -Path $SourcePath -Recurse -File
+				$SourceFiles = Get-ChildItem -Path $SourceItem -Recurse -File
 			}
 			Catch {
 				Write-Warning -Message "could not search for files in path: $Path"
