@@ -42,7 +42,7 @@ Function Get-CertificatePrivateKeyPath {
 	)
 
 	# if thumbprint provided...
-	If ($PSCmdlet.ParameterSetName -eq 'Thumbprint') {
+	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
 		# create path for certificate by thumbprint
 		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
 		# retrieve certificate by thumbprint
@@ -103,7 +103,7 @@ Function Get-CertificatePrivateKeyPath {
 
 	# search key container for private key file
 	Try {
-		$PrivateKeyPath = Get-ChildItem -Path $Path -Recurse -Filter $UniqueName | Select-Object -First 1 -ExpandProperty FullName
+		$PrivateKeyPath = Get-ChildItem -Path $Path -Recurse -Filter $UniqueName | Select-Object -First 1 -ExpandProperty 'FullName'
 	}
 	Catch {
 		Write-Warning -Message "could not search '$Path' path on '$Hostname' for object with unique name: $UniqueName"
@@ -565,14 +565,14 @@ Function Get-CmsCredential {
 	}
 
 	# if file path provided and path is not a file...
-	If ($PSCmdLet.ParameterSetName -eq 'FilePath' -and -not (Test-Path -Path $FilePath -PathType 'Leaf')) {
+	If ($PSBoundParameters.ContainsKey('FilePath') -and -not (Test-Path -Path $FilePath -PathType 'Leaf')) {
 		# declare and return
-		Write-Warning -Message "could not locate file with path: $FilePath"
-		Throw [System.Management.Automation.ItemNotFoundException]
+		Write-Warning -Message "could not locate credential file with path: $FilePath"
+		Return $null
 	}
 
 	# if identity provided...
-	If ($PSCmdLet.ParameterSetName -eq 'Identity' -and (Test-Path -Path $Path -PathType 'Container')) {
+	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-Path -Path $Path -PathType 'Container')) {
 		# define pattern as organizational unit of Identity followed by organization of CmsCredential
 		$Pattern = "OU=$Identity, O=CmsCredential$"
 		# retrieve latest credential file with matching subject
@@ -592,15 +592,9 @@ Function Get-CmsCredential {
 		Return $null
 	}
 
-	# define parameters for Unprotect-CmsMessage
-	$UnprotectCmsMessage = @{
-		Path        = $FilePath
-		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-	}
-
 	# decrypt content of credential file
 	Try {
-		$InputObject = Unprotect-CmsMessage @UnprotectCmsMessage
+		$InputObject = Unprotect-CmsMessage -Path $FilePath -ErrorAction 'Stop'
 	}
 	Catch {
 		Write-Warning -Message "could not decrypt content in file: '$FilePath'"
