@@ -318,6 +318,7 @@ Begin {
 			}
 			Catch {
 				Write-Warning -Message "could not search for files in path: $Path"
+				Return $_
 			}
 
 			# get folders in source item
@@ -326,6 +327,7 @@ Begin {
 			}
 			Catch {
 				Write-Warning -Message "could not search for folders in path: $Path"
+				Return $_
 			}
 
 			# for each file found...
@@ -459,10 +461,30 @@ Begin {
 		}
 
 		# get files in target folder not in source file list
-		$TargetFiles = Get-ChildItem -Path $TargetParentPath -Recurse -File | Where-Object { !$SourceFileList.Contains($_.FullName) } | Sort-Object -Descending
+		Try {
+			$TargetFiles = Get-ChildItem -Path $TargetParentPath -Recurse -File | Sort-Object -Descending
+		}
+		Catch {
+			Write-Warning -Message "could not search for files in path: $TargetParentPath"
+			Return $_
+		}
+
+		# get paths in target folder not in source file list
+		Try {
+			$TargetPaths = Get-ChildItem -Path $TargetParentPath -Recurse -Directory | Sort-Object -Descending
+		}
+		Catch {
+			Write-Warning -Message "could not search for folders in path: $TargetParentPath"
+			Return $_
+		}
 
 		# process target file names
 		ForEach ($Target in $TargetFiles) {
+			# if source file list contains source file...
+			If ($SourceFileList.Contains($Target.FullName.Replace($TargetParentPath, $SourceParentPath))) {
+				# continue to next target file
+				Continue
+			}
 			# remove target file
 			Try {
 				Remove-Item -Path $Target -Force -ErrorAction 'Stop' -WhatIf
@@ -475,12 +497,14 @@ Begin {
 			Write-Verbose -Verbose -Message "Removed invalid file: $Target"
 		}
 
-		# get paths in target folder not in source file list
-		$TargetPaths = Get-ChildItem -Path $TargetParentPath -Recurse -Directory | Where-Object { !$SourcePathList.Contains($_.FullName) } | Sort-Object -Descending
-
 		# process target path names
 		ForEach ($Target in $TargetPaths) {
-			# remove target file
+			# if source path list contains source path...
+			If ($SourcePathList.Contains($Target.FullName.Replace($TargetParentPath, $SourceParentPath))) {
+				# continue to next target path
+				Continue
+			}
+			# remove target path
 			Try {
 				Remove-Item -Path $Target -Force -ErrorAction 'Stop' -WhatIf
 			}
@@ -488,7 +512,7 @@ Begin {
 				Write-Warning -Message "could not remove old folder: $Target"
 				Return $_
 			}
-			# report target file removed
+			# report target path removed
 			Write-Verbose -Verbose -Message "Removed invalid folder: $Target"
 		}
 	}
