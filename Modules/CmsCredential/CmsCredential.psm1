@@ -1109,7 +1109,7 @@ Function Remove-CmsCredential {
 	If (Test-Path -Path $CertStoreLocation -PathType 'Container') {
 		# retrieve credential certificates with matching subject
 		Try {
-			$CredentialCerts = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_.Subject -Pattern $Pattern -SimpleMatch:$SimpleMatch -Quiet }
+			$CredentialCerts = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_.Subject -Pattern $Pattern -SimpleMatch:$SimpleMatch -Quiet } | Sort-Object -Property 'NotBefore' | Select-Object -SkipLast $SkipLast
 		}
 		Catch {
 			Write-Warning -Message "could not retrieve credential certificates on '$Hostname'"
