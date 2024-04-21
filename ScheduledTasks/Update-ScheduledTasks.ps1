@@ -174,21 +174,9 @@ Param(
 	# switch to remove old tasks during run
 	[Parameter(ParameterSetName = 'Default')]
 	[switch]$RemoveOldTasks,
-	# switch to process JSON entries for previous versions of the script
-	[Parameter(ParameterSetName = 'Default')]
-	[switch]$Run,
-	# switch to process JSON entries for previous versions of the script
-	[Parameter(ParameterSetName = 'Default')]
-	[switch]$Update,
 	# switch to skip transcript logging
 	[Parameter(DontShow)]
 	[switch]$SkipTranscript,
-	# name in transcript files
-	[Parameter(DontShow)]
-	[string]$TranscriptName,
-	# path to transcript files
-	[Parameter(DontShow)]
-	[string]$TranscriptPath,
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -378,23 +366,19 @@ Begin {
 			# build target folder path
 			$Target = $Source.Replace($SourceParentPath, $TargetParentPath)
 
-			# report target folder path
-			Write-Verbose -Verbose -Message "Checking source folder: $Source"
-
 			# if target folder found...
 			If (Test-Path -Path $Target -PathType 'Container') {
-				Write-Verbose -Verbose -Message "Verified target folder: $Target"
+				# continue to next folder
+				Continue
 			}
-			# if target folder not found...
-			Else {
-				Try {
-					$null = New-Item -Path $Target -ItemType 'Directory' -ErrorAction 'Stop'
-					Write-Verbose -Verbose -Message "Created target folder: $Target"
-				}
-				Catch {
-					Write-Warning -Message "could not create target folder: $Target"
-					Return $_
-				}
+
+			# create target folder
+			Try {
+				$null = New-Item -Path $Target -ItemType 'Directory' -ErrorAction 'Stop'
+			}
+			Catch {
+				Write-Warning -Message "could not create target folder: $Target"
+				Return $_
 			}
 		}
 
@@ -402,9 +386,6 @@ Begin {
 		ForEach ($Source in $SourceFileList) {
 			# build target file path
 			$Target = $Source.Replace($SourceParentPath, $TargetParentPath)
-
-			# report target file path
-			Write-Verbose -Verbose -Message "Checking source file: $Source"
 
 			# if target file found...
 			If (Test-Path -Path $Target -PathType Leaf) {
@@ -428,8 +409,7 @@ Begin {
 
 				# if hashes match...
 				If ($TargetHash -eq $SourceHash) {
-					# report and continue to next file
-					Write-Verbose -Verbose -Message "Verified target file: $Target"
+					# continue to next file
 					Continue
 				}
 				# if hashes do not match...
@@ -447,7 +427,7 @@ Begin {
 				}
 			}
 
-			# copy source file
+			# create target file from source file
 			Try {
 				Copy-Item -Path $Source -Destination $Target -ErrorAction 'Stop'
 			}
@@ -515,6 +495,9 @@ Begin {
 			# report target path removed
 			Write-Verbose -Verbose -Message "Removed invalid folder: $Target"
 		}
+
+		# report then return
+		Write-Verbose -Verbose -Message "Verified module(s) from path: $Path"
 	}
 
 	Function Test-ScheduledTaskPath {
@@ -778,30 +761,29 @@ Begin {
 
 	Function Start-TranscriptWithHostAndDate {
 		Param(
-			# name for transcript file
-			[Parameter()]
-			[string]$TranscriptName,
-			# path for transcript file
-			[Parameter()]
-			[string]$TranscriptPath,
-			# log start time
+			# name for transcript items; default is sanitized name of calling script or function
+			[Parameter(Position = 0)]
+			[string]$TranscriptName = (Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$',
+			# root folder for transcript folders; default is common application data folder
 			[Parameter(DontShow)]
-			[string]$TranscriptTime = ([datetime]::Now.ToString('yyyyMMddHHmmss')),
-			# local hostname
+			[string]$TranscriptRoot = ([System.Environment]::GetFolderPath('CommonApplicationData')),
+			# leaf folder for transcript folders; default is 'PowerShell_transcript'
 			[Parameter(DontShow)]
-			[string]$TranscriptHost = ([System.Environment]::MachineName)
+			[string]$TranscriptLeaf = 'PowerShell_transcript',
+			# base folder for transcript folders; default is 'PowerShell_transcript' folder in common application data folder
+			[Parameter(DontShow)]
+			[string]$TranscriptBase = (Join-Path -Path $TranscriptRoot -ChildPath $TranscriptLeaf),
+			# path for transcript files; default is named folder under 'PowerShell_transcript' folder in common application data folder
+			[Parameter(DontShow)]
+			[string]$TranscriptPath = (Join-Path -Path $TranscriptBase -ChildPath $TranscriptName),
+			# host for transcript file name
+			[Parameter(DontShow)]
+			[string]$TranscriptHost = ([System.Environment]::MachineName),
+			# time for transcript file name
+			[Parameter(DontShow)]
+			[string]$TranscriptTime = ([datetime]::Now.ToString('yyyyMMddHHmmss'))
 		)
-
-		# define default transcript name as basename of running script
-		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
-			$TranscriptName = (Get-PSCallStack)[1].Command -replace '\.ps1$'
-		}
-
-		# define default transcript path as named folder under transcripts folder in common application data folder
-		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
-			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
-		}
-
+	
 		# verify transcript path
 		If (!(Test-Path -Path $TranscriptPath -PathType 'Container')) {
 			# define parameters for New-Item
@@ -810,7 +792,7 @@ Begin {
 				ItemType    = 'Directory'
 				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 			}
-
+	
 			# create transcript path
 			Try {
 				$null = New-Item @NewItem
@@ -819,17 +801,17 @@ Begin {
 				Throw $_
 			}
 		}
-
+	
 		# build transcript file name with defined prefix, hostname, transcript name and current datetime
 		$TranscriptFile = "PowerShell_transcript.$TranscriptHost.$TranscriptName.$TranscriptTime.txt"
-
+	
 		# define parameters for Start-Transcript
 		$StartTranscript = @{
 			Path        = Join-Path -Path $TranscriptPath -ChildPath $TranscriptFile
 			Force       = $true
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
-
+	
 		# start transcript
 		Try	{
 			$null = Start-Transcript @StartTranscript
@@ -841,85 +823,107 @@ Begin {
 
 	Function Stop-TranscriptWithHostAndDate {
 		Param(
-			# name for transcript file
+			# name for transcript items; default is sanitized name of calling script or function
 			[Parameter()]
-			[string]$TranscriptName,
-			# path of transcript files
+			[string]$TranscriptName = (Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$',
+			# root folder for transcript folders; default is common application data folder
 			[Parameter()]
-			[string]$TranscriptPath,
-			# minimum number of transcript files for removal
+			[string]$TranscriptRoot = ([System.Environment]::GetFolderPath('CommonApplicationData')),
+			# leaf folder for transcript folders; default is 'PowerShell_transcript'
+			[Parameter()]
+			[string]$TranscriptLeaf = 'PowerShell_transcript',
+			# base folder for transcript folders; default is 'PowerShell_transcript' folder in common application data folder
+			[Parameter()]
+			[string]$TranscriptBase = (Join-Path -Path $TranscriptRoot -ChildPath $TranscriptLeaf),
+			# path for transcript files; default is named folder under 'PowerShell_transcript' folder in common application data folder
+			[Parameter()]
+			[string]$TranscriptPath = (Join-Path -Path $TranscriptBase -ChildPath $TranscriptName),
+			# host for transcript file names
 			[Parameter(DontShow)]
-			[uint16]$TranscriptCount = 7,
-			# minimum age of transcript files for removal
+			[string]$TranscriptHost = ([System.Environment]::MachineName),
+			# units for transcript cleanup date
+			[Parameter(DontShow)][ValidateSet('Hours', 'Days', 'Weeks', 'Months', 'Years')]
+			[string]$TranscriptDateUnits = 'Days',
+			# value for transcript cleanup date
+			[Parameter(DontShow)][ValidateScript({ $_ -ge 1 })]
+			[uint16]$TranscriptDateValue = 7,
+			# count of files to remain after transcript cleanup
 			[Parameter(DontShow)]
-			[double]$TranscriptDays = 7,
-			# datetime for transcript files for removal
-			[Parameter(DontShow)]
-			[datetime]$TranscriptDate = ([datetime]::Now.AddDays(-$TranscriptDays)),
-			# local hostname
-			[Parameter(DontShow)]
-			[string]$TranscriptHost = ([System.Environment]::MachineName)
+			[uint16]$TranscriptFileCount = 7
 		)
-
-		# define default transcript name as basename of running script
-		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
-			$TranscriptName = (Get-PSCallStack)[1].Command -replace '\.ps1$'
-		}
-
-		# define default transcript path as named folder under transcripts folder in common application data folder
-		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
-			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
-			# LEGACY: re-define default transcript path as string array containing current path and original path in common application data folder
-			[string[]]$TranscriptPath = @([System.Environment]::GetFolderPath('CommonApplicationData'), $TranscriptPath)
-		}
-
+	
 		# define filter using default transcript prefix, hostname, and script name
 		$TranscriptFilter = "PowerShell_transcript.$TranscriptHost.$TranscriptName*"
-
+	
 		# get transcript files matching filter
-		$TranscriptFiles = Get-ChildItem -Path $TranscriptPath -Filter $TranscriptFilter -ErrorAction 'SilentlyContinue'
-
-		# split transcript files on transcript date
-		$NewFiles, $OldFiles = $TranscriptFiles.Where({ $_.LastWriteTime -ge $TranscriptDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
-		
-		# if count of files after transcript date is less than to cleanup threshold...
-		If ($NewFiles.Count -lt $TranscriptCount) {
-			# declare skip
-			Write-Verbose -Message "Skipping transcript file cleanup; count of transcripts ($($NewFiles.Count)) would be below minimum transcript count ($TranscriptCount)" -Verbose
+		Try {
+			$TranscriptFiles = Get-ChildItem -Path $TranscriptPath -Filter $TranscriptFilter -ErrorAction 'SilentlyContinue'
+		}
+		Catch {
+			Write-Warning -Message $_.ToString()
+		}
+	
+		# define transcript date
+		switch ($TranscriptDateUnits) {
+			'Hours' {
+				$TranscriptDate = [datetime]::Now.AddHours(-$TranscriptDateValue)
+			}
+			'Days' {
+				$TranscriptDate = [datetime]::Now.AddDays(-$TranscriptDateValue)
+			}
+			'Months' {
+				$TranscriptDate = [datetime]::Now.AddMonths(-$TranscriptDateValue)
+			}
+			'Years' {
+				$TranscriptDate = [datetime]::Now.AddYears(-$TranscriptDateValue)
+			}
+			Default {
+				$TranscriptDate = [datetime]::FromFileTime(0)
+			}
+		}
+	
+		# declare cleanup thresholds
+		Write-Verbose -Verbose -Message "Removing transcript files from '$TranscriptPath' matching '$TranscriptFilter' with a LastWriteTime before '$($TranscriptDate.ToString('s'))' provided that '$TranscriptFileCount' files remain"
+	
+		# split transcript files into files-to-remain and files-to-remove based upon LastWriteTime
+		Try {
+			$FilesToRemain, $FilesToRemove = $TranscriptFiles.Where({ $_.LastWriteTime -ge $TranscriptDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
+		}
+		Catch {
+			Write-Warning -Message $_.ToString()
+		}
+	
+		# if count of files-to-remain is than minimum file count...
+		If ($FilesToRemain.Count -lt $TranscriptFileCount) {
+			# declare skipping cleanup
+			Write-Verbose -Verbose -Message "Skipping transcript cleanup: only '$($FilesToRemain.Count)' files would remain"
 		}
 		Else {
-			# declare cleanup
-			Write-Verbose -Message "Removing any transcript files matching '$TranscriptFilter' that are older than '$TranscriptDays' days from: $TranscriptPath" -Verbose
-			# remove old transcript files
-			ForEach ($OldFile in ($OldFiles | Sort-Object -Property FullName)) {
+			# sort files-to-remove by name then remove
+			ForEach ($FileToRemove in ($FilesToRemove | Sort-Object -Property FullName)) {
 				Try {
-					Remove-Item -Path $OldFile.FullName -Force -Verbose -ErrorAction Stop
+					Remove-Item -Path $FileToRemove.FullName -Force -Verbose -ErrorAction 'Stop'
 				}
 				Catch {
-					$_
+					Write-Warning -Message $_.ToString()
 				}
 			}
 		}
-
+	
 		# stop transcript
 		Try {
-			$null = Stop-Transcript
+			Stop-Transcript
 		}
 		Catch {
 			Throw $_
 		}
 	}
 
-	# if running...
-	If ($PSCmdlet.ParameterSetName -eq 'Default') {
-		# define hashtable for transcript functions
-		$TranscriptWithHostAndDate = @{}
-		# define parameters for transcript functions
-		If ($PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptWithHostAndDate['TranscriptName'] = $PSBoundParameters['TranscriptName'] }
-		If ($PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptWithHostAndDate['TranscriptPath'] = $PSBoundParameters['TranscriptPath'] }
-		# start transcript with parameters
+	# if parameter set is Default and SkipTranscript not set...
+	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $PSBoundParameters.ContainsKey('SkipTranscript')) {
+		# start transcript with default parameters
 		Try {
-			Start-TranscriptWithHostAndDate @TranscriptWithHostAndDate
+			Start-TranscriptWithHostAndDate
 		}
 		Catch {
 			Throw $_
@@ -982,7 +986,7 @@ Process {
 		}
 
 		# report and return
-		Write-Verbose -Verbose -Message "`nInstalled Update-ScheduledTasks"
+		Write-Verbose -Verbose -Message 'Installed Update-ScheduledTasks'
 		Return
 	}
 
@@ -1046,14 +1050,14 @@ Process {
 	switch ($true) {
 		# show configuration file
 		$Show {
-			Write-Verbose -Verbose -Message "`nDisplaying '$Json'"
+			Write-Verbose -Verbose -Message "Displaying '$Json'"
 			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 		# clear configuration file
 		$Clear {
 			Try {
 				[string]::Empty | Set-Content -Path $Json
-				Write-Verbose -Verbose -Message "`nCleared configuration file: '$Json'"
+				Write-Verbose -Verbose -Message "Cleared configuration file: '$Json'"
 			}
 			Catch {
 				Write-Warning -Message "could not clear configuration file: '$Json'"
@@ -1069,13 +1073,13 @@ Process {
 				If ($null -eq $JsonData) {
 					# clear JSON data
 					[string]::Empty | Set-Content -Path $Json
-					Write-Verbose -Verbose -Message "`nRemoved '$TaskName' at '$Taskpath' from configuration file: '$Json'"
+					Write-Verbose -Verbose -Message "Removed '$TaskName' at '$Taskpath' from configuration file: '$Json'"
 				}
 				Else {
 					# export JSON data
-					$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-					Write-Verbose -Verbose -Message "`nRemoved '$TaskName' at '$Taskpath' from configuration file: '$Json'"
-					$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+					$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
+					Write-Verbose -Verbose -Message "Removed '$TaskName' at '$Taskpath' from configuration file: '$Json'"
+					$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 				}
 			}
 			Catch {
@@ -1152,7 +1156,7 @@ Process {
 				# if existing entry has same primary key(s)...
 				If ($JsonData | Where-Object { $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath }) {
 					# inquire before removing existing entry
-					Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
+					Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction 'Inquire'
 					# remove existing entry with same primary key(s)
 					$JsonData = $JsonData | Where-Object { -not ($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath) }
 				}
@@ -1161,9 +1165,9 @@ Process {
 				$JsonData += $JsonEntry
 
 				# export JSON data
-				$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-				Write-Verbose -Verbose -Message "`nAdded '$TaskName' at '$Taskpath' to configuration file: '$Json'"
-				$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+				$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
+				Write-Verbose -Verbose -Message "Added '$TaskName' at '$Taskpath' to configuration file: '$Json'"
+				$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			Catch {
 				Write-Warning -Message "could not update configuration file: '$Json'"
@@ -1173,7 +1177,7 @@ Process {
 		# process entries in configuration file
 		Default {
 			# declare start
-			Write-Host "`nUpdating scheduled tasks from '$Json'"
+			Write-Verbose -Verbose -Message "Updating scheduled tasks from '$Json'"
 
 			# check entry count in configuration file
 			If ($JsonData.Count -eq 0) {
@@ -1380,11 +1384,11 @@ Process {
 }
 
 End {
-	# if running...
-	If ($PSCmdlet.ParameterSetName -eq 'Default') {
-		# stop transcript with parameters
+	# if parameter set is Default and SkipTranscript not set...
+	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $PSBoundParameters.ContainsKey('SkipTranscript')) {
+		# stop transcript with default parameters
 		Try {
-			Stop-TranscriptWithHostAndDate @TranscriptWithHostAndDate
+			Stop-TranscriptWithHostAndDate
 		}
 		Catch {
 			Throw $_
