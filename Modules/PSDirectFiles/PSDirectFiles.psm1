@@ -378,7 +378,7 @@ Function Export-FilesWithPSDirect {
 			# process entries in configuration file
 			Default {
 				# declare start
-				Write-Verbose -Verbose -Message "`nExporting files from VM with PSDirect per '$Json'"
+				Write-Verbose -Verbose -Message "Exporting files from VM with PSDirect per '$Json'"
 
 				# check entry count in configuration file
 				If ($JsonData.Count -eq 0) {
@@ -533,14 +533,14 @@ Function Import-FilesWithPSDirect {
 		switch ($true) {
 			# show configuration file
 			$Show {
-				Write-Verbose -Verbose -Message "`nDisplaying '$Json'"
+				Write-Verbose -Verbose -Message "Displaying '$Json'"
 				$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			# clear configuration file
 			$Clear {
 				Try {
 					[string]::Empty | Set-Content -Path $Json
-					Write-Verbose -Verbose -Message "`nCleared configuration file: '$Json'"
+					Write-Verbose -Verbose -Message "Cleared configuration file: '$Json'"
 				}
 				Catch {
 					Write-Warning -Message "could not clear configuration file: '$Json'"
@@ -556,12 +556,12 @@ Function Import-FilesWithPSDirect {
 					If ($null -eq $JsonData) {
 						# clear JSON data
 						[string]::Empty | Set-Content -Path $Json
-						Write-Verbose -Verbose -Message "`nRemoved '$VMName' from configuration file: '$Json'"
+						Write-Verbose -Verbose -Message "Removed '$VMName' from configuration file: '$Json'"
 					}
 					Else {
 						# export JSON data
 						$JsonData | Sort-Object -Property 'VMName' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-						Write-Verbose -Verbose -Message "`nRemoved '$VMName' from configuration file: '$Json'"
+						Write-Verbose -Verbose -Message "Removed '$VMName' from configuration file: '$Json'"
 						$JsonData | Sort-Object -Property 'VMName' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 					}
 				}
@@ -597,7 +597,7 @@ Function Import-FilesWithPSDirect {
 
 					# export JSON data
 					$JsonData | Sort-Object -Property 'VMName' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-					Write-Verbose -Verbose -Message "`nAdded '$VMName' to configuration file: '$Json'"
+					Write-Verbose -Verbose -Message "Added '$VMName' to configuration file: '$Json'"
 					$JsonData | Sort-Object -Property 'VMName' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 				}
 				Catch {
@@ -607,7 +607,7 @@ Function Import-FilesWithPSDirect {
 			# process entries in configuration file
 			Default {
 				# declare start
-				Write-Verbose -Verbose -Message "`nmporting files to VM with PSDirect per '$Json'"
+				Write-Verbose -Verbose -Message "Importing files to VM with PSDirect per '$Json'"
 
 				# check entry count in configuration file
 				If ($JsonData.Count -eq 0) {
