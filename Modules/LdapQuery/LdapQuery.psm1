@@ -6,6 +6,8 @@ Function Format-LdapAttribute {
 		[Parameter(Mandatory = $true)]
 		[System.DirectoryServices.Protocols.DirectoryAttribute]$DirectoryAttribute,
 		[Parameter(DontShow)]
+		[System.Collections.Generic.List[object]]$ExistingValues,
+		[Parameter(DontShow)]
 		[System.Globalization.CultureInfo]$Culture = (Get-Culture)
 	)
 
@@ -25,6 +27,16 @@ Function Format-LdapAttribute {
 
 	# create a generic list to contain values
 	$List = [System.Collections.Generic.List[object]]::new()
+
+	# if existing values provided...
+	If ($PSBoundParameters.ContainsKey('ExistingValues')) {
+		If ($ExistingValues.Count -gt 1) {
+			$List.AddRange($ExistingValues)
+		}
+		Else {
+			$List.Add($ExistingValues)
+		}
+	}
 
 	# process each value in directory attribute by index
 	For ($Index = 0; $Index -lt $DirectoryAttribute.Count; $Index++) {
@@ -91,7 +103,7 @@ Function Format-LdapAttribute {
 		# when multiple values found...
 		Default {
 			# ...return list
-			Return $List
+			Return , $List
 		}
 	}
 }
@@ -200,9 +212,11 @@ Function Invoke-LdapQuery {
 			}
 			Catch [System.DirectoryServices.Protocols.DirectoryOperationException] {
 				Write-Host 'WARNING: caught DirectoryOperationException'
+				Return $_
 			}
 			Catch {
-				Write-Host "ERROR: caught unknown error: '$($Error[0].Exception)'"
+				Write-Host 'ERROR: caught unknown error'
+				Return $_
 			}
 
 			# process each entry in the search response
@@ -210,10 +224,51 @@ Function Invoke-LdapQuery {
 				# create sorted list for attributes
 				$SortedList = [System.Collections.Generic.SortedList[string, object]]::new()
 
-				# retrieve unsorted attributes from entry
-				ForEach ($Attribute in $Entry.Attributes.GetEnumerator()) {
-					# format attribute add to sorted list
-					$SortedList[$Attribute.Key] = Format-LdapAttribute -LdapDisplayName $Attribute.Key -DirectoryAttribute $Attribute.Value
+				# retrieve keys from entry
+				:Key ForEach ($Key in $Entry.Attributes.Keys) {
+					# retrieve attribute name and range from key
+					$LdapDisplayName, $AttributeDescription = $Key -split ';'
+
+					# if sorted list already contains attribute name...
+					If ($SortedList.ContainsKey($LdapDisplayName)) {
+						# ...format current attribute values then add to sorted list with existing attribute values
+						$SortedList[$LdapDisplayName] = Format-LdapAttribute -LdapDisplayName $LdapDisplayName -DirectoryAttribute $Entry.Attributes[$Key] -ExistingValues $SortedList[$LdapDisplayName]
+					}
+					# if sorted list does not contain attribute name...
+					Else {
+						# ...format current attribute values then add to sorted list
+						$SortedList[$LdapDisplayName] = Format-LdapAttribute -LdapDisplayName $LdapDisplayName -DirectoryAttribute $Entry.Attributes[$Key]
+					}
+
+					# if attribute description not found...
+					If ([System.String]::IsNullOrEmpty($AttributeDescription)) {
+						# continue to next key
+						Continue Key
+					}
+
+					# if attribute description matches ranged retrieval format...
+					If ($AttributeDescription -match 'range=(\d+)-(\d+|\*)') {
+						# if second match is '*'...
+						If ($Match[2] -eq '*') {
+							# continue to next key
+							Continue Key
+						}
+
+						# retrieve start and end ranges
+						$Range1 = [int32]$Match[1]
+						$Range2 = [int32]$Match[2]
+
+						
+						$RangeWidth = $Range2 - $Range1 + 1
+							
+							
+						
+						# TODO: range retrieval
+					}
+					# if range does not match regex...
+					Else {
+						Write-Warning "unrecognized attribute description: $Range"
+					}
 				}
 
 				# return processed entry

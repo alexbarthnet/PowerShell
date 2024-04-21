@@ -166,7 +166,6 @@ Begin {
 			Write-Host "Updated JSON hash with thumbprint: $($LatestServiceCertificate.Thumbprint)"
 		}
 
-
 		# if certificates were updated on the primary...
 		If ($Updated) {
 			# restart service on primary node

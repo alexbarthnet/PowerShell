@@ -161,8 +161,6 @@ Function Export-CmsCredentialCertificate {
 		[Parameter(DontShow)]
 		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
 		[Parameter(DontShow)]
-		[string]$Subject = "cms-$Identity",
-		[Parameter(DontShow)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
@@ -179,9 +177,11 @@ Function Export-CmsCredentialCertificate {
 	}
 	# if thumbprint not provided...
 	Else {
+		# define subject from identity
+		$Subject = "OU=$Identity,"
 		# retrieve latest certificate with matching subject
 		Try {
-			$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject -match "^CN=$Subject-" } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
+			$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject.Contains($Subject) } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
 		}
 		Catch {
 			Write-Warning -Message "could not search for certificate in '$CertStoreLocation' on '$Hostname' with identity: $Identity"
@@ -249,13 +249,15 @@ Function New-CmsCredentialCertificate {
 		[Parameter(Mandatory = $false)]
 		[string[]]$ComputerName,
 		[Parameter(DontShow)]
+		[guid]$Guid = [guid]::NewGuid(),
+		[Parameter(DontShow)]
 		[datetime]$NotBefore = [datetime]::Now,
 		[Parameter(DontShow)]
 		[datetime]$NotAfter = $NotBefore.AddYears(100),
 		[Parameter(DontShow)]
 		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
 		[Parameter(DontShow)]
-		[string]$Subject = "cms-$Identity",
+		[string]$Subject = "CN=$($Guid.Guid), OU=$Identity, O=CmsCredential",
 		[Parameter(DontShow)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
@@ -295,12 +297,6 @@ Function New-CmsCredentialCertificate {
 			Return
 		}
 	}
-
-	# create GUID
-	$GuidString = [Guid]::NewGuid().ToString()
-
-	# update subject string
-	$Subject = "CN=$Subject-$GuidString"
 
 	# define certificate values
 	$SelfSignedCertificate = @{
@@ -351,14 +347,14 @@ Function Get-CmsCredential {
 	.DESCRIPTION
 	Retrieves a credential encrypted by a CMS certificate. The calling user must have read access to the private key of the certificate that protects the credential.
 
+	.PARAMETER FilePath
+	Specifies the path to a CMS credential file. Cannot be combined with the Identity parameter.
+
 	.PARAMETER Identity
 	Specifies the identity of the CMS credential. Cannot be combined with the FilePath parameter.
 
 	.PARAMETER Path
 	Specifies the path to a folder containing CMS credential files. The default value is the 'C:\ProgramData\CmsCredentials' folder.
-
-	.PARAMETER FilePath
-	Specifies the path to a CMS credential file. Cannot be combined with the Identity parameter.
 
 	.PARAMETER AsPlainText
 	Specifies the credential should be returned as a plain-text password. The credential will be returned a PSCustomObject with Username and Password properties.
@@ -540,10 +536,10 @@ Function Protect-CmsCredential {
 	Specifies the PSCredential object to protect with CMS.
 
 	.PARAMETER Thumbprint
-	Specifies the thumbprint for an existing CMS certificate. Cannot be combined with the Identity parameters.
+	Specifies the thumbprint for an existing CMS certificate. Cannot be combined with the Identity parameter.
 
 	.PARAMETER Identity
-	Specifies the identity for the CMS credential. Cannot be combined with the Thumbprint parameters. A new CMS certificate will be created if an existing CMS certificate for the provided identify is not found.
+	Specifies the identity for the CMS credential. Cannot be combined with the Thumbprint parameter. A new CMS certificate will be created if an existing CMS certificate for the provided identify is not found.
 
 	.PARAMETER Reset
 	Switch to create a new CMS certificate and credential file for the provided identity. Requires the Identity parameter.
@@ -590,8 +586,6 @@ Function Protect-CmsCredential {
 		[switch]$Force,
 		[Parameter(DontShow)]
 		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
-		[Parameter(DontShow)]
-		[string]$Subject = "cms-$Identity",
 		[Parameter(DontShow)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
@@ -648,14 +642,19 @@ Function Protect-CmsCredential {
 		}
 	}
 	# if thumbprint not provided and reset not requested...
-	ElseIf ($PSBoundParameters.ContainsKey('Reset') -eq $false) {
-		# retrieve latest certificate with matching subject
-		Try {
-			$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject -match "^CN=$Subject-" } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
-		}
-		Catch {
-			Write-Warning -Message "could not search for certificate in '$CertStoreLocation' on '$Hostname' with identity: $Identity"
-			Throw $_
+	Else {
+		# define subject from identity
+		$Subject = "OU=$Identity,"
+		# if reset not requested...
+		If ($PSBoundParameters.ContainsKey('Reset') -eq $false) {
+			# retrieve latest certificate with matching subject
+			Try {
+				$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject.Contains($Subject) } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
+			}
+			Catch {
+				Write-Warning -Message "could not search for certificate in '$CertStoreLocation' on '$Hostname' with identity: $Identity"
+				Throw $_
+			}
 		}
 	}
 
@@ -685,9 +684,12 @@ Function Protect-CmsCredential {
 			}
 		}
 
-		# create child path from subject
+		# create child path from first element of certificate subject
 		Try {
-			$ChildPath = ($Certificate.Subject -replace '^CN=') + '.txt'
+			# split DN of subject on ',' to get RDNs
+			# split first RDN on '=' to get attribute value of first RDN
+			# append '.txt' to attribute value of first RDN
+			$ChildPath = "$($Certificate.Subject.Split(',')[0].Split('=')[1]).txt"
 		}
 		Catch {
 			Write-Warning -Message "could not create child path on '$Hostname' from certificate with subject: $($Certificate.Subject)"
@@ -741,8 +743,35 @@ Function Protect-CmsCredential {
 		Throw $_
 	}
 
-	# if skip cleanup not requested...
-	If (!$SkipCleanup) {
+	# retrieve content of credential file
+	Try {
+		$Content = Get-Content -Path $OutFile -Raw
+	}
+	Catch {
+		Write-Warning -Message "could not read credential file on '$Hostname' with path: $OutFile"
+		Throw $_
+	}
+
+	# insert subject line into content of credential file
+	Try {
+		$Value = $Content.Insert(0, "Subject: $($Certificate.Subject)`r`n")
+	}
+	Catch {
+		Write-Warning -Message "could not insert subject into content of encrypted file on '$Hostname' with path: $OutFile"
+		Throw $_
+	}
+
+	# save updated content to credential file
+	Try {
+		Set-Content -Path $OutFile -Value $Value -Encoding 'UTF8'
+	}
+	Catch {
+		Write-Warning -Message "could not update credential file on '$Hostname' with path: $OutFile"
+		Throw $_
+	}
+
+	# if identity provided and skip cleanup not requested...
+	If ($PSBoundParameters.ContainsKey('Identity') -and -not $SkipCleanup) {
 		# define parameters for Remove-CmsCredential
 		$RemoveCmsCredential = @{
 			Identity = $Identity
@@ -769,8 +798,11 @@ Function Remove-CmsCredential {
 	.DESCRIPTION
 	Removes the certificate and encrypted file for a credential protected by CMS.
 
+	.PARAMETER Thumbprint
+	Specifies the thumbprint for an existing CMS certificate. Cannot be combined with the Identity parameter.
+
 	.PARAMETER Identity
-	Specifies the identity of a CMS credential.
+	Specifies the identity of an existing CMS credential. Cannot be combined with the Thumbprint parameter.
 
 	.PARAMETER Path
 	Specifies the path to a folder containing CMS credential files. The default value is 'C:\ProgramData\CmsCredentials'.
@@ -801,9 +833,11 @@ Function Remove-CmsCredential {
 
 	#>
 
-	[CmdletBinding()]
+	[CmdletBinding(DefaultParameterSetName = 'Identity')]
 	Param (
-		[Parameter(Mandatory = $true, Position = 0)]
+		[Parameter(ParameterSetName = 'Thumbprint', Mandatory = $true, Position = 0)]
+		[string]$Thumbprint,
+		[Parameter(ParameterSetName = 'Identity', Mandatory = $true, Position = 0)]
 		[string]$Identity,
 		[Parameter(Mandatory = $false)]
 		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
@@ -813,8 +847,6 @@ Function Remove-CmsCredential {
 		[string[]]$ComputerName,
 		[Parameter(DontShow)]
 		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
-		[Parameter(DontShow)]
-		[string]$Subject = "cms-$Identity",
 		[Parameter(DontShow)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
@@ -855,35 +887,27 @@ Function Remove-CmsCredential {
 		}
 	}
 
-	# if credential files path found...
-	If ((Test-Path -Path $Path -PathType Container) -eq $false) {
-		Write-Warning -Message "could not locate path to credential files: $Path"
-		Return
-	}
-
-	# retrieve old credential files
-	Try {
-		$Files = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop' | Where-Object { $_.BaseName -match "^$Subject-" } | Sort-Object -Property 'LastWriteTime' | Select-Object -SkipLast $SkipLast
-	}
-	Catch {
-		Write-Warning -Message "could not search for credential files on '$Hostname' in path: $Path"
-		Throw $_
-	}
-
-	# remove old credential files
-	ForEach ($Item in $Files) {
+	# if thumbprint provided...
+	If ($PSBoundParameters.ContainsKey('Thumbprint') -eq $true) {
+		# retrieve certificate by thumbprint
 		Try {
-			Remove-Item -Path $Item.PSPath -Force -Verbose -ErrorAction 'Stop'
+			$Certificate = Get-Item -Path "$CertStoreLocation\$Thumbprint" -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not remove file on '$Hostname' with path: $($Item.PSPath)"
+			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
 			Throw $_
 		}
+		# retrieve subject from certificate
+		$Subject = $Certificate.Subject
+	}
+	Else {
+		# define subject from identity
+		$Subject = "OU=$Identity,"
 	}
 
-	# retrieve old certificates
+	# retrieve credential certificates with matching subject
 	Try {
-		$Certificates = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject -match "^CN=$Subject-" } | Sort-Object -Property 'NotBefore' | Select-Object -SkipLast $SkipLast
+		$CredentialCerts = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject.Contains($Subject) } | Sort-Object -Property 'NotBefore' | Select-Object -SkipLast $SkipLast
 	}
 	Catch {
 		Write-Warning -Message "could not search for credential certificates on '$Hostname' in path: $CertStoreLocation"
@@ -891,12 +915,38 @@ Function Remove-CmsCredential {
 	}
 
 	# remove old certificates
-	ForEach ($Item in $Certificates) {
+	ForEach ($Item in $CredentialCerts) {
 		Try {
 			Remove-Item -Path $Item.PSPath -Force -Verbose -ErrorAction 'Stop'
 		}
 		Catch {
 			Write-Warning -Message "could not remove certificate on '$Hostname' with path: $($Item.PSPath)"
+			Throw $_
+		}
+	}
+
+	# if credential files path found...
+	If ((Test-Path -Path $Path -PathType Container) -eq $false) {
+		Write-Warning -Message "could not locate path to credential files: $Path"
+		Return
+	}
+
+	# retrieve credential files where content contains matching subject
+	Try {
+		$CredentialFiles = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_ -Pattern $Subject -Quiet } | Sort-Object -Property 'LastWriteTime' | Select-Object -SkipLast $SkipLast
+	}
+	Catch {
+		Write-Warning -Message "could not search for credential files on '$Hostname' in path: $Path"
+		Throw $_
+	}
+
+	# remove old credential files
+	ForEach ($Item in $CredentialFiles) {
+		Try {
+			Remove-Item -Path $Item.PSPath -Force -Verbose -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not remove file on '$Hostname' with path: $($Item.PSPath)"
 			Throw $_
 		}
 	}
@@ -910,8 +960,11 @@ Function Show-CmsCredential {
 	.DESCRIPTION
 	Displays the identity, GUID, certificate and encrypted file for one or more credentials protected by CMS.
 
+	.PARAMETER Thumbprint
+	Specifies the thumbprint for an existing CMS certificate. Cannot be combined with the Identity parameter.
+
 	.PARAMETER Identity
-	Specifies the identity of a specific CMS credential.
+	Specifies the identity of existing CMS credential files and certificates. Cannot be combined with the Thumbprint parameters
 
 	.PARAMETER Path
 	Specifies the path to a folder containing CMS credential files. The default value is 'C:\ProgramData\CmsCredentials'.
@@ -992,27 +1045,28 @@ Function Show-CmsCredential {
 		Return
 	}
 
-	# if identity not provided...
-	If ($PSBoundParameters.ContainsKey('Identity') -eq $false) {
-		# define identity as word character regex
-		$Identity = '\w+'
+	# if identity provided...
+	If ($PSBoundParameters.ContainsKey('Identity')) {
+		# define subject as organizational unit of identity
+		$Subject = "OU=$Identity,"
+	}
+	Else {
+		# define subject as organization of CmsCredential
+		$Subject = 'O=CmsCredential'
 	}
 
-	# define subject using prefix and identity
-	$Subject = "cms-$Identity"
-
-	# retrieve credential files
+	# retrieve credential files where content contains matching subject
 	Try {
-		$CredentialFiles = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop' | Where-Object { $_.BaseName -match "^$Subject-" }
+		$CredentialFiles = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_ -Pattern $Subject -Quiet }
 	}
 	Catch {
 		Write-Warning -Message "could not retrieve credential files on '$Hostname' from path: $Path"
 		Return
 	}
 
-	# retrieve credential certificates
+	# retrieve credential certificates with matching subject
 	Try {
-		$CredentialCerts = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject -match "^CN=$Subject-" }
+		$CredentialCerts = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject.Contains($Subject) }
 	}
 	Catch {
 		Write-Warning -Message "could not retrieve credential certificates on '$Hostname'"
@@ -1024,8 +1078,10 @@ Function Show-CmsCredential {
 
 	# add credential files to list
 	ForEach ($CredentialFile in $CredentialFiles) {
-		# retrieve identity and datetime from credential file
-		$Identity, $Guid = $CredentialFile.BaseName -replace '^cms-' -split '-', 2
+		# retrieve subject from credential file
+		$SubjectFromFile = (Select-String -InputObject $CredentialFile -Pattern $Subject -List).Line.Replace('Subject: ', $null)
+		# retrieve guid and identity from subject in credential file
+		$Guid, $Identity, $Remainder = $SubjectFromFile -split ', ' -replace '^CN=|^OU=|^O='
 		# check list for existing entries
 		$Entry = $List | Where-Object { $_.Identity -eq $Identity -and $_.DateTime -eq $DateTime }
 		# if entry found...
@@ -1049,12 +1105,12 @@ Function Show-CmsCredential {
 		}
 	}
 
-	# add credential files to list
+	# add credential certificates to list
 	ForEach ($CredentialCert in $CredentialCerts) {
 		# retrieve identity and datetime from credential file
-		$Identity, $Guid = $CredentialCert.Subject -replace '^CN=cms-' -split '-', 2
+		$Guid, $Identity, $Remainder = $CredentialCert.Subject -split ', ' -replace '^CN=|^OU=|^O='
 		# check list for existing entries
-		$Entry = $List | Where-Object { $_.Identity -eq $Identity -and $_.DateTime -eq $DateTime }
+		$Entry = $List | Where-Object { $_.Identity -eq $Identity -and $_.Guid -eq $Guid }
 		# if entry found...
 		If ($null -ne $Entry) {
 			# update credential entry
@@ -1077,7 +1133,7 @@ Function Show-CmsCredential {
 	}
 
 	# display list entries
-	$List | Sort-Object -Property 'Identity', 'LastWriteTime' | Format-Table ComputerName,Identity, Guid, Thumbprint, Path
+	$List | Sort-Object -Property 'Identity', 'LastWriteTime' | Format-Table ComputerName, Identity, Guid, Thumbprint, Path
 }
 
 Function Update-CmsCredentialAccess {
@@ -1121,8 +1177,6 @@ Function Update-CmsCredentialAccess {
 		[Parameter(DontShow)]
 		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
 		[Parameter(DontShow)]
-		[string]$Subject = "cms-$Identity",
-		[Parameter(DontShow)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
@@ -1139,9 +1193,11 @@ Function Update-CmsCredentialAccess {
 	}
 	# if thumbprint not provided...
 	Else {
+		# define subject from identity
+		$Subject = "OU=$Identity,"
 		# retrieve latest certificate with matching subject
 		Try {
-			$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject -match "^CN=$Subject-" } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
+			$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject.Contains($Subject) } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
 		}
 		Catch {
 			Throw $_
@@ -1299,7 +1355,7 @@ Function Update-CmsCredentialAccess {
 				# display identity reference as principal
 				@{Name = 'Principal'; Expression = { $_.IdentityReference } }
 				# display file system rights as access but remove ', Synchronize' from read to avoid confusion
-				@{Name = 'Access'; Expression = { $_.FileSystemRights.ToString().Replace(', Synchronize',$null) } }
+				@{Name = 'Access'; Expression = { $_.FileSystemRights.ToString().Replace(', Synchronize', $null) } }
 			)
 			Return
 		}
