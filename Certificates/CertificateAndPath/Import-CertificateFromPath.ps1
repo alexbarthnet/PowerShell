@@ -416,12 +416,17 @@ Begin {
 			[string[]]$Principals
 		)
 
+		# remove common name identifier if present
+		If ($Subject.StartsWith('CN=',[System.StringComparison]::InvariantCultureIgnoreCase)) {
+			$Subject = $Subject -replace '^CN='
+		}
+
 		# create empty objects
 		$PFXFiles = Get-ChildItem -Path $Path | Where-Object { $_.Extension -match '(\.pfx|\.p12)' } | Sort-Object BaseName
 
 		# retrieve PKCS12 files matching $Subject
 		If ($Subject -ne '_default') {
-			$PFXFiles = $PFXFiles | Where-Object { $_.BaseName -match "^$Subject" -or $_.BaseName -match ($Subject -replace '^CN=') } | Select-Object -Last 1
+			$PFXFiles = $PFXFiles | Where-Object { $_.BaseName.StartsWith($Subject,[System.StringComparison]::InvariantCultureIgnoreCase) } | Select-Object -Last 1
 		}
 
 		# if no PFX files found...
@@ -609,7 +614,7 @@ Process {
 	If (Test-Path -Path $Json) {
 		# ...create JSON data object as array of PSCustomObjects from JSON file content
 		Try {
-			$JsonData = [array](Get-Content -Path $Json | ConvertFrom-Json)
+			$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 		}
 		Catch {
 			Write-Output "`nERROR: could not read configuration file: '$Json'"
@@ -742,7 +747,7 @@ Process {
 						$ImportPfxCertificateFromFolder = @{
 							Subject    = [string]$JsonDatum.Subject
 							Path       = [string]$JsonDatum.Path
-							Principals = [string]$JsonDatum.Principals
+							Principals = [string[]]$JsonDatum.Principals
 						}
 
 						# import PFX certificate from folder
