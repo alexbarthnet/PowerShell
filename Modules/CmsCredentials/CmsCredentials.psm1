@@ -259,8 +259,8 @@ Function Export-CmsCredentialCertificate {
 	}
 	# if thumbprint not provided...
 	Else {
-		# define pattern as organizational unit of Identity followed by organization of CmsCredential
-		$Pattern = "OU=$Identity, O=CmsCredential$"
+		# define pattern as organizational unit of Identity followed by organization of CmsCredentials
+		$Pattern = "OU=$Identity, O=CmsCredentials$"
 		# retrieve latest certificate with matching subject
 		Try {
 			$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_.Subject -Pattern $Pattern -Quiet } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
@@ -408,7 +408,7 @@ Function New-CmsCredentialCertificate {
 
 	# define certificate values
 	$SelfSignedCertificate = @{
-		Subject           = "CN=$($Guid.Guid), OU=$Identity, O=CmsCredential"
+		Subject           = "CN=$($Guid.Guid), OU=$Identity, O=CmsCredentials"
 		Type              = 'DocumentEncryptionCert'
 		HashAlgorithm     = 'SHA512'
 		KeyLength         = 4096
@@ -491,7 +491,7 @@ Function Get-CmsCredential {
 		[Parameter(ParameterSetName = 'Identity', Position = 0, Mandatory)]
 		[string]$Identity,
 		[Parameter(ParameterSetName = 'Identity', Position = 1)]
-		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredential'),
+		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
 		[Parameter(Mandatory = $false)]
 		[switch]$AsPlainText,
 		[Parameter(Mandatory = $false)]
@@ -573,8 +573,8 @@ Function Get-CmsCredential {
 
 	# if identity provided...
 	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-Path -Path $Path -PathType 'Container')) {
-		# define pattern as organizational unit of Identity followed by organization of CmsCredential
-		$Pattern = "OU=$Identity, O=CmsCredential$"
+		# define pattern as organizational unit of Identity followed by organization of CmsCredentials
+		$Pattern = "OU=$Identity, O=CmsCredentials$"
 		# retrieve latest credential file with matching subject
 		Try {
 			$FilePath = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_ -Pattern $Pattern -Quiet } | Sort-Object -Property 'LastWriteTime' | Select-Object -Last 1 -ExpandProperty 'FullName'
@@ -674,7 +674,7 @@ Function Protect-CmsCredential {
 	Switch to skip removal of old CMS certificates and credential files for the provided identity. Requires the Identity parameter.
 
 	.PARAMETER Path
-	Specifies the path to the folder where CMS credential files are be stored. The default value is 'C:\ProgramData\CmsCredential' and the folder will be created if it does not exist.
+	Specifies the path to the folder where CMS credential files are be stored. The default value is 'C:\ProgramData\CmsCredentials' and the folder will be created if it does not exist.
 
 	.PARAMETER OutFile
 	Specifies the path for the CMS credential file. This will override both the Path parameter and the file name derived from the Identity or Thumbprint parameters.
@@ -703,7 +703,7 @@ Function Protect-CmsCredential {
 		[Parameter(ParameterSetName = 'Identity')]
 		[switch]$SkipCleanup,
 		[Parameter(Mandatory = $false)]
-		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredential'),
+		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
 		[Parameter(Mandatory = $false)]
 		[string]$OutFile,
 		[Parameter(Mandatory = $false)]
@@ -812,8 +812,8 @@ Function Protect-CmsCredential {
 	Else {
 		# if reset not requested...
 		If (!$PSBoundParameters.ContainsKey('Reset')) {
-			# define pattern as organizational unit of Identity followed by organization of CmsCredential
-			$Pattern = "OU=$Identity, O=CmsCredential$"
+			# define pattern as organizational unit of Identity followed by organization of CmsCredentials
+			$Pattern = "OU=$Identity, O=CmsCredentials$"
 			# retrieve latest certificate where subject matches pattern
 			Try {
 				$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_.Subject -Pattern $Pattern -Quiet } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
@@ -973,7 +973,7 @@ Function Remove-CmsCredential {
 	Specifies the identity of an existing CMS credential. Cannot be combined with the Thumbprint parameter.
 
 	.PARAMETER Path
-	Specifies the path to a folder containing CMS credential files. The default value is 'C:\ProgramData\CmsCredential'.
+	Specifies the path to a folder containing CMS credential files. The default value is 'C:\ProgramData\CmsCredentials'.
 
 	.PARAMETER SkipLast
 	Specifies the number of objects to skip when removing CMS credential certificates and files. Set to 0 by default.
@@ -1008,7 +1008,7 @@ Function Remove-CmsCredential {
 		[Parameter(ParameterSetName = 'Identity', Mandatory = $true, Position = 0)]
 		[string]$Identity,
 		[Parameter(Mandatory = $false)]
-		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredential'),
+		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
 		[Parameter(Mandatory = $false)]
 		[uint16]$SkipLast = 0,
 		[Parameter(Mandatory = $false)]
@@ -1100,8 +1100,8 @@ Function Remove-CmsCredential {
 		$SimpleMatch = $true
 	}
 	Else {
-		# define pattern as organizational unit of Identity followed by organization of CmsCredential
-		$Pattern = "OU=$Identity, O=CmsCredential$"
+		# define pattern as organizational unit of Identity followed by organization of CmsCredentials
+		$Pattern = "OU=$Identity, O=CmsCredentials$"
 		$SimpleMatch = $false
 	}
 
@@ -1173,7 +1173,7 @@ Function Show-CmsCredential {
 	Specifies the identity of existing CMS credential files and certificates. Cannot be combined with the Thumbprint parameters
 
 	.PARAMETER Path
-	Specifies the path to a folder containing CMS credential files. The default value is 'C:\ProgramData\CmsCredential'.
+	Specifies the path to a folder containing CMS credential files. The default value is 'C:\ProgramData\CmsCredentials'.
 
 	.PARAMETER ComputerName
 	Specifies the name of one or more remote computers.
@@ -1208,7 +1208,7 @@ Function Show-CmsCredential {
 		[Parameter(ParameterSetName = 'Identity', Mandatory = $false, Position = 0)]
 		[string]$Identity,
 		[Parameter(Mandatory = $false)]
-		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredential'),
+		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
 		[Parameter(Mandatory = $false)]
 		[string[]]$ComputerName,
 		[Parameter(DontShow)]
@@ -1315,13 +1315,13 @@ Function Show-CmsCredential {
 	}
 	# if identity provided...
 	ElseIf ($PSBoundParameters.ContainsKey('Identity')) {
-		# define pattern as organizational unit of Identity followed by organization of CmsCredential
-		$Pattern = "OU=$Identity, O=CmsCredential$"
+		# define pattern as organizational unit of Identity followed by organization of CmsCredentials
+		$Pattern = "OU=$Identity, O=CmsCredentials$"
 		$SimpleMatch = $false
 	}
 	Else {
-		# define pattern as organization of CmsCredential
-		$Pattern = 'O=CmsCredential$'
+		# define pattern as organization of CmsCredentials
+		$Pattern = 'O=CmsCredentials$'
 		$SimpleMatch = $false
 	}
 
@@ -1559,8 +1559,8 @@ Function Update-CmsCredentialAccess {
 	}
 	# if thumbprint not provided...
 	Else {
-		# define pattern as organizational unit of Identity followed by organization of CmsCredential
-		$Pattern = "OU=$Identity, O=CmsCredential$"
+		# define pattern as organizational unit of Identity followed by organization of CmsCredentials
+		$Pattern = "OU=$Identity, O=CmsCredentials$"
 		# retrieve latest certificate with matching subject
 		Try {
 			$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_.Subject -Pattern $Pattern -Quiet } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
