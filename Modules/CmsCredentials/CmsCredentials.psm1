@@ -42,18 +42,21 @@ Function Get-CertificatePrivateKeyPath {
 	)
 
 	# if thumbprint provided...
-	If ($PSCmdlet.ParameterSetName -eq 'Thumbprint') {
+	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
+		# create path for certificate by thumbprint
+		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
+		# retrieve certificate by thumbprint
 		Try {
-			$Certificate = Get-Item -Path "$CertStoreLocation\$Thumbprint"
+			$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' for provided thumbprint: $Thumbprint"
-			Return $null
+			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
+			Throw $_
 		}
 	}
 
 	# if certificate does not have a private key...
-	If ($Certificate.HasPrivateKey -eq $false) {
+	If (!$Certificate.HasPrivateKey) {
 		Write-Warning -Message "could not locate private key on '$Hostname' for certificate with thumbprint: $($Certificate.Thumbprint)"
 		Return $null
 	}
@@ -79,7 +82,7 @@ Function Get-CertificatePrivateKeyPath {
 	}
 
 	# if private key was not retrieved...
-	If ($null -eq $PrivateKey) {
+	If ($null -eq $local:PrivateKey) {
 		Write-Verbose -Message "could not retrieve private key on '$Hostname' for certificate with thumbprint: $($Certificate.Thumbprint)"
 		Return $null
 	}
@@ -100,7 +103,7 @@ Function Get-CertificatePrivateKeyPath {
 
 	# search key container for private key file
 	Try {
-		$PrivateKeyPath = Get-ChildItem -Path $Path -Recurse -Filter $UniqueName | Select-Object -First 1 -ExpandProperty FullName
+		$PrivateKeyPath = Get-ChildItem -Path $Path -Recurse -Filter $UniqueName | Select-Object -First 1 -ExpandProperty 'FullName'
 	}
 	Catch {
 		Write-Warning -Message "could not search '$Path' path on '$Hostname' for object with unique name: $UniqueName"
@@ -114,6 +117,76 @@ Function Get-CertificatePrivateKeyPath {
 	Else {
 		Write-Warning -Message "could not find path to private key on '$Hostname' for certificate with thumbprint: $($Certificate.Thumbprint)"
 		Return $null
+	}
+}
+
+Function Test-CmsInvalidIdentity {
+	<#
+	.SYNOPSIS
+	Tests a string for characters not permited in the Identity of a CMS credential.
+
+	.DESCRIPTION
+	Tests a string for characters not permited in the Identity of a CMS credential.
+
+	.PARAMETER Identity
+	Specifies the identity of a CMS credential.
+
+	.INPUTS
+	System.String.
+
+	.OUTPUTS
+	System.Boolean.
+
+	#>
+	[CmdletBinding()]
+	Param (
+		[Parameter(Mandatory = $true, Position = 0)]
+		[string]$Identity,
+		[Parameter(Mandatory = $false)]
+		[string]$Pattern = '[\\,="]' # '[^\w\s\.\-]'
+	)
+
+	# test pattern against identity
+	If (Select-String -InputObject $Identity -Pattern $Pattern -Quiet) {
+		Return $true
+	}
+	Else {
+		Return $false
+	}
+}
+
+Function Test-CmsInvalidSubject {
+	<#
+	.SYNOPSIS
+	Tests a string for characters not permited in the subject of a CMS credential certificate.
+
+	.DESCRIPTION
+	Tests a string for characters not permited in the subject of a CMS credential certificate.
+
+	.PARAMETER Subject
+	Specifies the subject of a CMS credential certificate.
+
+	.INPUTS
+	System.String.
+
+	.OUTPUTS
+	System.Boolean.
+
+	#>
+	[CmdletBinding()]
+	Param (
+		[Parameter(Mandatory = $true, Position = 0)]
+		[string]$Subject,
+		[Parameter(Mandatory = $false)]
+		[string]$Pattern = '[\\"]'
+	)
+
+	# test pattern against identity
+	If (Select-String -InputObject $Subject -Pattern $Pattern -Quiet) {
+		Return $true
+	}
+	Else {
+		Return $false
 	}
 }
 
@@ -164,11 +237,20 @@ Function Export-CmsCredentialCertificate {
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
+	# if identity contains invalid characters...
+	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-CmsInvalidIdentity -Identity $Identity)) {
+		# warn and return
+		Write-Warning -Message "the value provided for the Identity parameter contains one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
+		Return
+	}
+
 	# if thumbprint provided...
-	If ($PSBoundParameters.ContainsKey('Thumbprint') -eq $true) {
+	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
+		# create path for certificate by thumbprint
+		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
 		# retrieve certificate by thumbprint
 		Try {
-			$Certificate = Get-Item -Path "$CertStoreLocation\$Thumbprint" -ErrorAction 'Stop'
+			$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
 		}
 		Catch {
 			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
@@ -177,11 +259,11 @@ Function Export-CmsCredentialCertificate {
 	}
 	# if thumbprint not provided...
 	Else {
-		# define subject from identity
-		$Subject = "OU=$Identity,"
+		# define pattern as organizational unit of Identity followed by organization of CmsCredential
+		$Pattern = "OU=$Identity, O=CmsCredential$"
 		# retrieve latest certificate with matching subject
 		Try {
-			$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject.Contains($Subject) } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
+			$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_.Subject -Pattern $Pattern -Quiet } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
 		}
 		Catch {
 			Write-Warning -Message "could not search for certificate in '$CertStoreLocation' on '$Hostname' with identity: $Identity"
@@ -257,23 +339,45 @@ Function New-CmsCredentialCertificate {
 		[Parameter(DontShow)]
 		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
 		[Parameter(DontShow)]
-		[string]$Subject = "CN=$($Guid.Guid), OU=$Identity, O=CmsCredential",
-		[Parameter(DontShow)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
+
+	# if identity contains invalid characters...
+	If (Test-CmsInvalidIdentity -Identity $Identity) {
+		# warn and return
+		Write-Warning -Message "the value provided for the Identity parameter contains one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
+		Return
+	}
 
 	# if computername provided...
 	If ($PSBoundParameters.ContainsKey('ComputerName')) {
 		# remove ComputerName parameter from bound parameters
 		$null = $PSBoundParameters.Remove('ComputerName')
 
-		# define functions for remote computers
-		$CertificateFunction = "function New-CmsCredentialCertificate {${function:New-CmsCredentialCertificate}}"
+		# define required functions
+		$FunctionNames = 'Test-CmsInvalidIdentity', 'New-CmsCredentialCertificate'
+
+		# define list for function script blocks
+		$FunctionScriptBlocks = [System.Collections.Generic.List[System.String]]::new()
+
+		# add script block for required functions to list
+		ForEach ($FunctionName in $FunctionNames) {
+			# get function definition
+			Try {
+				$FunctionDefinition = (Get-Command -Name $FunctionName -ErrorAction 'Stop').Definition
+			}
+			Catch {
+				Write-Warning -Message "could not retrieve definition on '$Hostname' for function: $FunctionName"
+				Throw $_
+			}
+			# create function script block and add to list
+			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
+		}
 
 		# show credentials on remote computer
 		ForEach ($RemoteComputerName in $ComputerName) {
 			# if remote computer name is local computer name...
-			If ($RemoteComputerName -match "^$Hostname$" -or $RemoteComputerName -match "^$Hostname\..+") {
+			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
 				# set include local computer then continue
 				$local:IncludeLocalComputer = $true
 				Continue
@@ -281,13 +385,17 @@ Function New-CmsCredentialCertificate {
 			# run function on remote computer
 			Try {
 				Invoke-Command -ComputerName $RemoteComputerName -ScriptBlock {
-					. ([ScriptBlock]::Create($using:CertificateFunction))
+					# import functions
+					ForEach ($FunctionScriptBlock in $using:FunctionScriptBlocks) {
+						. ([ScriptBlock]::Create($FunctionScriptBlock))
+					}
+					# run functions
 					New-CmsCredentialCertificate @using:PSBoundParameters
 				}
 			}
 			Catch {
-				Write-Warning -Message "could not remove CMS credential on '$RemoteComputerName' computer: $($_.Exception.Message)"
-				Return
+				Write-Warning -Message "could not invoke function(s) on '$RemoteComputerName' computer: $($_.Exception.Message)"
+				Throw $_
 			}
 		}
 
@@ -300,7 +408,7 @@ Function New-CmsCredentialCertificate {
 
 	# define certificate values
 	$SelfSignedCertificate = @{
-		Subject           = $Subject
+		Subject           = "CN=$($Guid.Guid), OU=$Identity, O=CmsCredential"
 		Type              = 'DocumentEncryptionCert'
 		HashAlgorithm     = 'SHA512'
 		KeyLength         = 4096
@@ -369,23 +477,21 @@ Function Get-CmsCredential {
 	System.Management.Automation.PSCredential or System.Management.Automation.PSCustomObject.
 
 	.EXAMPLE
-	PS> Unprotect-CmsCredential -Identity "testcredential"
+	PS> Get-CmsCredential -Identity "testcredential"
 
 	.EXAMPLE
-	PS> Unprotect-CmsCredential -Identity "testcredential" -AsPlainText
+	PS> Get-CmsCredential -Identity "testcredential" -AsPlainText
 
 	#>
 
-	[CmdletBinding(DefaultParameterSetName = 'Default')]
+	[CmdletBinding(DefaultParameterSetName = 'Identity')]
 	Param(
 		[Parameter(ParameterSetName = 'FilePath', Position = 0, Mandatory)]
 		[string]$FilePath,
-		[Parameter(ParameterSetName = 'Default', Position = 0, Mandatory)]
+		[Parameter(ParameterSetName = 'Identity', Position = 0, Mandatory)]
 		[string]$Identity,
-		[Parameter(ParameterSetName = 'Default', Position = 1)]
-		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
-		[Parameter(ParameterSetName = 'Default', DontShow)]
-		[string]$Subject = "cms-$Identity",
+		[Parameter(ParameterSetName = 'Identity', Position = 1)]
+		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredential'),
 		[Parameter(Mandatory = $false)]
 		[switch]$AsPlainText,
 		[Parameter(Mandatory = $false)]
@@ -394,18 +500,42 @@ Function Get-CmsCredential {
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
+	# if identity contains invalid characters...
+	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-CmsInvalidIdentity -Identity $Identity)) {
+		# warn and return
+		Write-Warning -Message "the value provided for the Identity parameter contains one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
+		Return $null
+	}
+
 	# if computername provided...
 	If ($PSBoundParameters.ContainsKey('ComputerName')) {
 		# remove ComputerName parameter from bound parameters
 		$null = $PSBoundParameters.Remove('ComputerName')
 
-		# define functions for remote computers
-		$GetFunction = "function Get-CmsCredential {${function:Get-CmsCredential}}"
+		# define required functions
+		$FunctionNames = 'Test-CmsInvalidIdentity', 'Get-CmsCredential'
+
+		# define list for function script blocks
+		$FunctionScriptBlocks = [System.Collections.Generic.List[System.String]]::new()
+
+		# add script block for required functions to list
+		ForEach ($FunctionName in $FunctionNames) {
+			# get function definition
+			Try {
+				$FunctionDefinition = (Get-Command -Name $FunctionName -ErrorAction 'Stop').Definition
+			}
+			Catch {
+				Write-Warning -Message "could not retrieve definition on '$Hostname' for function: $FunctionName"
+				Throw $_
+			}
+			# create function script block and add to list
+			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
+		}
 
 		# show credentials on remote computer
 		ForEach ($RemoteComputerName in $ComputerName) {
 			# if remote computer name is local computer name...
-			If ($RemoteComputerName -match "^$Hostname$" -or $RemoteComputerName -match "^$Hostname\..+") {
+			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
 				# set include local computer then continue
 				$local:IncludeLocalComputer = $true
 				Continue
@@ -413,7 +543,11 @@ Function Get-CmsCredential {
 			# run function on remote computer
 			Try {
 				Invoke-Command -ComputerName $RemoteComputerName -ScriptBlock {
-					. ([ScriptBlock]::Create($using:GetFunction))
+					# import functions
+					ForEach ($FunctionScriptBlock in $using:FunctionScriptBlocks) {
+						. ([ScriptBlock]::Create($FunctionScriptBlock))
+					}
+					# run functions
 					Get-CmsCredential @using:PSBoundParameters
 				}
 			}
@@ -431,19 +565,22 @@ Function Get-CmsCredential {
 	}
 
 	# if file path provided and path is not a file...
-	If ($PSCmdLet.ParameterSetName -eq 'FilePath' -and (Test-Path -Path $FilePath -PathType 'Leaf') -eq $false) {
+	If ($PSBoundParameters.ContainsKey('FilePath') -and -not (Test-Path -Path $FilePath -PathType 'Leaf')) {
 		# declare and return
-		Write-Warning -Message "could not locate file with path: $FilePath"
-		Throw [System.Management.Automation.ItemNotFoundException]
+		Write-Warning -Message "could not locate credential file with path: $FilePath"
+		Return $null
 	}
 
 	# if identity provided...
-	If ($PSCmdLet.ParameterSetName -eq 'Default' -and (Test-Path -Path $Path -PathType 'Container') -eq $true) {
+	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-Path -Path $Path -PathType 'Container')) {
+		# define pattern as organizational unit of Identity followed by organization of CmsCredential
+		$Pattern = "OU=$Identity, O=CmsCredential$"
 		# retrieve latest credential file with matching subject
 		Try {
-			$FilePath = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop' | Where-Object { $_.BaseName -match "^$Subject-" } | Sort-Object -Property 'LastWriteTime' | Select-Object -Last 1 -ExpandProperty 'FullName'
+			$FilePath = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_ -Pattern $Pattern -Quiet } | Sort-Object -Property 'LastWriteTime' | Select-Object -Last 1 -ExpandProperty 'FullName'
 		}
 		Catch {
+			Write-Warning -Message "could not search for files for '$Identity' identity in path: $Path"
 			Throw $_
 		}
 	}
@@ -451,24 +588,13 @@ Function Get-CmsCredential {
 	# if file not found...
 	If ([string]::IsNullOrEmpty($local:FilePath)) {
 		# declare and return
-		Write-Warning -Message "could not locate file for '$Identity' identity in path: $Path"
-		Throw [System.Management.Automation.ItemNotFoundException]
-	}
-
-	# define parameters for Unprotect-CmsMessage
-	$UnprotectCmsMessage = @{
-		Path        = $FilePath
-		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-	}
-
-	# define optional parameters for Unprotect-CmsMessage
-	If ($null -ne $local:Certificate) {
-		$UnprotectCmsMessage['To'] = $Certificate
+		Write-Warning -Message "could not locate credential file for '$Identity' identity in path: $Path"
+		Return $null
 	}
 
 	# decrypt content of credential file
 	Try {
-		$InputObject = Unprotect-CmsMessage @UnprotectCmsMessage
+		$InputObject = Unprotect-CmsMessage -Path $FilePath -ErrorAction 'Stop'
 	}
 	Catch {
 		Write-Warning -Message "could not decrypt content in file: '$FilePath'"
@@ -497,7 +623,7 @@ Function Get-CmsCredential {
 	}
 
 	# if plain text requested...
-	If ($AsPlainText) {
+	If ($local:AsPlainText) {
 		# return the PSCustomObject as-is
 		Return $PSCustomObject
 	}
@@ -548,7 +674,7 @@ Function Protect-CmsCredential {
 	Switch to skip removal of old CMS certificates and credential files for the provided identity. Requires the Identity parameter.
 
 	.PARAMETER Path
-	Specifies the path to the folder where CMS credential files are be stored. The default value is 'C:\ProgramData\CmsCredentials' and the folder will be created if it does not exist.
+	Specifies the path to the folder where CMS credential files are be stored. The default value is 'C:\ProgramData\CmsCredential' and the folder will be created if it does not exist.
 
 	.PARAMETER OutFile
 	Specifies the path for the CMS credential file. This will override both the Path parameter and the file name derived from the Identity or Thumbprint parameters.
@@ -577,7 +703,7 @@ Function Protect-CmsCredential {
 		[Parameter(ParameterSetName = 'Identity')]
 		[switch]$SkipCleanup,
 		[Parameter(Mandatory = $false)]
-		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
+		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredential'),
 		[Parameter(Mandatory = $false)]
 		[string]$OutFile,
 		[Parameter(Mandatory = $false)]
@@ -590,20 +716,42 @@ Function Protect-CmsCredential {
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
+	# if identity contains invalid characters...
+	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-CmsInvalidIdentity -Identity $Identity)) {
+		# warn and return
+		Write-Warning -Message "the value provided for the Identity parameter contains one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
+		Return
+	}
+
 	# if computername provided...
 	If ($PSBoundParameters.ContainsKey('ComputerName')) {
 		# remove ComputerName parameter from bound parameters
 		$null = $PSBoundParameters.Remove('ComputerName')
 
-		# define functions for remote computers
-		$CertificateFunction = "function New-CmsCredentialCertificate {${function:New-CmsCredentialCertificate}}"
-		$ProtectFunction = "function Protect-CmsCredential {${function:Protect-CmsCredential}}"
-		$RemoveFunction = "function Remove-CmsCredential {${function:Remove-CmsCredential}}"
+		# define required functions
+		$FunctionNames = 'Test-CmsInvalidIdentity', 'Test-CmsInvalidSubject', 'New-CmsCredentialCertificate', 'Protect-CmsCredential', 'Remove-CmsCredential'
+
+		# define list for function script blocks
+		$FunctionScriptBlocks = [System.Collections.Generic.List[System.String]]::new()
+
+		# add script block for required functions to list
+		ForEach ($FunctionName in $FunctionNames) {
+			# get function definition
+			Try {
+				$FunctionDefinition = (Get-Command -Name $FunctionName -ErrorAction 'Stop').Definition
+			}
+			Catch {
+				Write-Warning -Message "could not retrieve definition on '$Hostname' for function: $FunctionName"
+				Throw $_
+			}
+			# create function script block and add to list
+			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
+		}
 
 		# show credentials on remote computer
 		ForEach ($RemoteComputerName in $ComputerName) {
 			# if remote computer name is local computer name...
-			If ($RemoteComputerName -match "^$Hostname$" -or $RemoteComputerName -match "^$Hostname\..+") {
+			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
 				# set include local computer then continue
 				$local:IncludeLocalComputer = $true
 				Continue
@@ -611,9 +759,11 @@ Function Protect-CmsCredential {
 			# run function on remote computer
 			Try {
 				Invoke-Command -ComputerName $RemoteComputerName -ScriptBlock {
-					. ([ScriptBlock]::Create($using:CertificateFunction))
-					. ([ScriptBlock]::Create($using:ProtectFunction))
-					. ([ScriptBlock]::Create($using:RemoveFunction))
+					# import functions
+					ForEach ($FunctionScriptBlock in $using:FunctionScriptBlocks) {
+						. ([ScriptBlock]::Create($FunctionScriptBlock))
+					}
+					# run functions
 					Protect-CmsCredential @using:PSBoundParameters
 				}
 			}
@@ -631,25 +781,42 @@ Function Protect-CmsCredential {
 	}
 
 	# if thumbprint provided...
-	If ($PSBoundParameters.ContainsKey('Thumbprint') -eq $true) {
+	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
+		# create path for certificate by thumbprint
+		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
 		# retrieve certificate by thumbprint
 		Try {
-			$Certificate = Get-Item -Path "$CertStoreLocation\$Thumbprint" -ErrorAction 'Stop'
+			$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
 		}
 		Catch {
 			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
 			Throw $_
 		}
+
+		# if certificate subject is an empty string...
+		If ([string]::IsNullOrEmpty($Certificate.Subject)) {
+			# warn and return
+			Write-Warning -Message "the subject of the certificate on '$Hostname' with '$($Certificate.Thumbprint)' thumbprint is null or an empty string"
+			Return
+		}
+
+		# if certificate subject contains invalid characters...
+		If (Test-CmsInvalidSubject -Subject $Certificate.Subject) {
+			# warn and return
+			Write-Warning -Message "the subject of the certificate on '$Hostname' with '$($Certificate.Thumbprint)' thumbprint contains one or more of the following invalid characters: '\' (backslash)"
+			Return
+		}
+
 	}
 	# if thumbprint not provided and reset not requested...
 	Else {
-		# define subject from identity
-		$Subject = "OU=$Identity,"
 		# if reset not requested...
-		If ($PSBoundParameters.ContainsKey('Reset') -eq $false) {
-			# retrieve latest certificate with matching subject
+		If (!$PSBoundParameters.ContainsKey('Reset')) {
+			# define pattern as organizational unit of Identity followed by organization of CmsCredential
+			$Pattern = "OU=$Identity, O=CmsCredential$"
+			# retrieve latest certificate where subject matches pattern
 			Try {
-				$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject.Contains($Subject) } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
+				$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_.Subject -Pattern $Pattern -Quiet } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
 			}
 			Catch {
 				Write-Warning -Message "could not search for certificate in '$CertStoreLocation' on '$Hostname' with identity: $Identity"
@@ -671,9 +838,9 @@ Function Protect-CmsCredential {
 	}
 
 	# if OutFile not provided...
-	If ($PSBoundParameters.ContainsKey('OutFile') -eq $false) {
+	If (!($PSBoundParameters.ContainsKey('OutFile'))) {
 		# if folder path not found...
-		If ((Test-Path -Path $Path -PathType 'Container') -eq $false) {
+		If (!(Test-Path -Path $Path -PathType 'Container')) {
 			# create path
 			Try {
 				$null = New-Item -ItemType Directory -Path $Path -Verbose -ErrorAction 'Stop'
@@ -686,10 +853,11 @@ Function Protect-CmsCredential {
 
 		# create child path from first element of certificate subject
 		Try {
-			# split DN of subject on ',' to get RDNs
-			# split first RDN on '=' to get attribute value of first RDN
-			# append '.txt' to attribute value of first RDN
-			$ChildPath = "$($Certificate.Subject.Split(',')[0].Split('=')[1]).txt"
+			# 1. split DN of subject on ', ' to get RDNs
+			# 2. get first RDN that starts with 'CN='
+			# 3. remove 'CN=' from to get attribute value of RDN
+			# 4. append '.txt' to attribute value of RDN
+			$ChildPath = "$($Certificate.Subject.Split(', ',[System.StringSplitOptions]::RemoveEmptyEntries).Where({ $_.StartsWith('CN=')})[0].Replace('CN=',$null)).txt"
 		}
 		Catch {
 			Write-Warning -Message "could not create child path on '$Hostname' from certificate with subject: $($Certificate.Subject)"
@@ -703,7 +871,7 @@ Function Protect-CmsCredential {
 	# if CMS file found...
 	If (Test-Path -Path $OutFile -PathType 'Leaf') {
 		# if force not set...
-		If (!$Force) {
+		If (!$local:Force) {
 			Write-Warning -Message "existing credential file found; continue to overwrite file on '$Hostname' with path: $OutFile" -WarningAction Inquire
 		}
 	}
@@ -725,7 +893,7 @@ Function Protect-CmsCredential {
 		Password = $Credential.GetNetworkCredential().Password
 	}
 
-	# convet custom object into JSON string
+	# convert custom object into JSON string
 	Try {
 		$Content = ConvertTo-Json -InputObject $InputObject -ErrorAction 'Stop'
 	}
@@ -734,7 +902,7 @@ Function Protect-CmsCredential {
 		Throw $_
 	}
 
-	# encrypt credentials to local certificate
+	# encrypt credentials to certificate
 	Try {
 		Protect-CmsMessage -To $Certificate.Thumbprint -Content $Content -OutFile $OutFile -ErrorAction 'Stop'
 	}
@@ -745,7 +913,7 @@ Function Protect-CmsCredential {
 
 	# retrieve content of credential file
 	Try {
-		$Content = Get-Content -Path $OutFile -Raw
+		$Content = Get-Content -Path $OutFile -Raw -ErrorAction 'Stop'
 	}
 	Catch {
 		Write-Warning -Message "could not read credential file on '$Hostname' with path: $OutFile"
@@ -805,7 +973,7 @@ Function Remove-CmsCredential {
 	Specifies the identity of an existing CMS credential. Cannot be combined with the Thumbprint parameter.
 
 	.PARAMETER Path
-	Specifies the path to a folder containing CMS credential files. The default value is 'C:\ProgramData\CmsCredentials'.
+	Specifies the path to a folder containing CMS credential files. The default value is 'C:\ProgramData\CmsCredential'.
 
 	.PARAMETER SkipLast
 	Specifies the number of objects to skip when removing CMS credential certificates and files. Set to 0 by default.
@@ -823,13 +991,13 @@ Function Remove-CmsCredential {
 	PS> Remove-CmsCredential -Identity "testcredential"
 
 	.EXAMPLE
-	PS> Remove-CmsCredential -Identity "testcredential" -Path "C:\Content\CmsCredentials"
-
-	.EXAMPLE
 	PS> Remove-CmsCredential -Identity "testcredential" -SkipLast 1
 
 	.EXAMPLE
-	PS> Remove-CmsCredential -Identity "testcredential" -Path "C:\Content\CmsCredentials" -SkipLast 1
+	PS> Remove-CmsCredential -Identity "testcredential" -Path "C:\Content\CmsCredentialFiles"
+
+	.EXAMPLE
+	PS> Remove-CmsCredential -Identity "testcredential" -Path "C:\Content\CmsCredentialFiles" -SkipLast 1
 
 	#>
 
@@ -840,7 +1008,7 @@ Function Remove-CmsCredential {
 		[Parameter(ParameterSetName = 'Identity', Mandatory = $true, Position = 0)]
 		[string]$Identity,
 		[Parameter(Mandatory = $false)]
-		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
+		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredential'),
 		[Parameter(Mandatory = $false)]
 		[uint16]$SkipLast = 0,
 		[Parameter(Mandatory = $false)]
@@ -851,18 +1019,42 @@ Function Remove-CmsCredential {
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
+	# if identity contains invalid characters...
+	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-CmsInvalidIdentity -Identity $Identity)) {
+		# warn and return
+		Write-Warning -Message "the value provided for the Identity parameter contains one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
+		Return
+	}
+
 	# if computername provided...
 	If ($PSBoundParameters.ContainsKey('ComputerName')) {
 		# remove ComputerName parameter from bound parameters
 		$null = $PSBoundParameters.Remove('ComputerName')
 
-		# define functions for remote computers
-		$RemoveFunction = "function Remove-CmsCredential {${function:Remove-CmsCredential}}"
+		# define required functions
+		$FunctionNames = 'Test-CmsInvalidIdentity', 'Remove-CmsCredential'
+
+		# define list for function script blocks
+		$FunctionScriptBlocks = [System.Collections.Generic.List[System.String]]::new()
+
+		# add script block for required functions to list
+		ForEach ($FunctionName in $FunctionNames) {
+			# get function definition
+			Try {
+				$FunctionDefinition = (Get-Command -Name $FunctionName -ErrorAction 'Stop').Definition
+			}
+			Catch {
+				Write-Warning -Message "could not retrieve definition on '$Hostname' for function: $FunctionName"
+				Throw $_
+			}
+			# create function script block and add to list
+			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
+		}
 
 		# show credentials on remote computer
 		ForEach ($RemoteComputerName in $ComputerName) {
 			# if remote computer name is local computer name...
-			If ($RemoteComputerName -match "^$Hostname$" -or $RemoteComputerName -match "^$Hostname\..+") {
+			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
 				# set include local computer then continue
 				$local:IncludeLocalComputer = $true
 				Continue
@@ -870,7 +1062,11 @@ Function Remove-CmsCredential {
 			# run function on remote computer
 			Try {
 				Invoke-Command -ComputerName $RemoteComputerName -ScriptBlock {
-					. ([ScriptBlock]::Create($using:RemoveFunction))
+					# import functions
+					ForEach ($FunctionScriptBlock in $using:FunctionScriptBlocks) {
+						. ([ScriptBlock]::Create($FunctionScriptBlock))
+					}
+					# run functions
 					Remove-CmsCredential @using:PSBoundParameters
 				}
 			}
@@ -888,34 +1084,59 @@ Function Remove-CmsCredential {
 	}
 
 	# if thumbprint provided...
-	If ($PSBoundParameters.ContainsKey('Thumbprint') -eq $true) {
+	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
+		# create path for certificate by thumbprint
+		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
 		# retrieve certificate by thumbprint
 		Try {
-			$Certificate = Get-Item -Path "$CertStoreLocation\$Thumbprint" -ErrorAction 'Stop'
+			$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
 		}
 		Catch {
 			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
 			Throw $_
 		}
-		# retrieve subject from certificate
-		$Subject = $Certificate.Subject
+		# retrieve pattern as subject of certificate
+		$Pattern = $Certificate.Subject
+		$SimpleMatch = $true
 	}
 	Else {
-		# define subject from identity
-		$Subject = "OU=$Identity,"
+		# define pattern as organizational unit of Identity followed by organization of CmsCredential
+		$Pattern = "OU=$Identity, O=CmsCredential$"
+		$SimpleMatch = $false
 	}
 
-	# retrieve credential certificates with matching subject
-	Try {
-		$CredentialCerts = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject.Contains($Subject) } | Sort-Object -Property 'NotBefore' | Select-Object -SkipLast $SkipLast
+	# if path to credential certificates found...
+	If (Test-Path -Path $CertStoreLocation -PathType 'Container') {
+		# retrieve credential certificates with matching subject
+		Try {
+			$CredentialCerts = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_.Subject -Pattern $Pattern -SimpleMatch:$SimpleMatch -Quiet } | Sort-Object -Property 'NotBefore' | Select-Object -SkipLast $SkipLast
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve credential certificates on '$Hostname'"
+			Return
+		}
 	}
-	Catch {
-		Write-Warning -Message "could not search for credential certificates on '$Hostname' in path: $CertStoreLocation"
-		Throw $_
+	Else {
+		Write-Warning -Message "could not locate store for credential certificates on '$Hostname' with path: $CertStoreLocation"
 	}
 
-	# remove old certificates
-	ForEach ($Item in $CredentialCerts) {
+	# if path to credential files found...
+	If (Test-Path -Path $Path -PathType 'Container') {
+		# retrieve credential files where content contains matching subject
+		Try {
+			$CredentialFiles = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_ -Pattern $Pattern -SimpleMatch:$SimpleMatch -Quiet } | Sort-Object -Property 'LastWriteTime' | Select-Object -SkipLast $SkipLast
+		}
+		Catch {
+			Write-Warning -Message "could not search for credential files on '$Hostname' in path: $Path"
+			Throw $_
+		}
+	}
+	Else {
+		Write-Warning -Message "could not locate folder for credential files on '$Hostname' with path: $Path"
+	}
+
+	# remove old credential certificates
+	ForEach ($Item in $local:CredentialCerts) {
 		Try {
 			Remove-Item -Path $Item.PSPath -Force -Verbose -ErrorAction 'Stop'
 		}
@@ -925,23 +1146,8 @@ Function Remove-CmsCredential {
 		}
 	}
 
-	# if credential files path found...
-	If ((Test-Path -Path $Path -PathType Container) -eq $false) {
-		Write-Warning -Message "could not locate path to credential files: $Path"
-		Return
-	}
-
-	# retrieve credential files where content contains matching subject
-	Try {
-		$CredentialFiles = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_ -Pattern $Subject -Quiet } | Sort-Object -Property 'LastWriteTime' | Select-Object -SkipLast $SkipLast
-	}
-	Catch {
-		Write-Warning -Message "could not search for credential files on '$Hostname' in path: $Path"
-		Throw $_
-	}
-
 	# remove old credential files
-	ForEach ($Item in $CredentialFiles) {
+	ForEach ($Item in $local:CredentialFiles) {
 		Try {
 			Remove-Item -Path $Item.PSPath -Force -Verbose -ErrorAction 'Stop'
 		}
@@ -967,7 +1173,7 @@ Function Show-CmsCredential {
 	Specifies the identity of existing CMS credential files and certificates. Cannot be combined with the Thumbprint parameters
 
 	.PARAMETER Path
-	Specifies the path to a folder containing CMS credential files. The default value is 'C:\ProgramData\CmsCredentials'.
+	Specifies the path to a folder containing CMS credential files. The default value is 'C:\ProgramData\CmsCredential'.
 
 	.PARAMETER ComputerName
 	Specifies the name of one or more remote computers.
@@ -987,14 +1193,22 @@ Function Show-CmsCredential {
 	.EXAMPLE
 	PS> Show-CmsCredential -Identity "testcredential" -ComputerName "server1", "server2"
 
+	.EXAMPLE
+	PS> Show-CmsCredential -Identity "testcredential" -Path "C:\Content\CmsCredentialFiles"
+
+	.EXAMPLE
+	PS> Show-CmsCredential -Identity "testcredential" -Path "C:\Content\CmsCredentialFiles" -ComputerName "server1", "server2"
+
 	#>
 
-	[CmdletBinding()]
+	[CmdletBinding(DefaultParameterSetName = 'Identity')]
 	Param (
-		[Parameter(Mandatory = $false, Position = 0)]
+		[Parameter(ParameterSetName = 'Thumbprint', Mandatory = $false, Position = 0)]
+		[string]$Thumbprint,
+		[Parameter(ParameterSetName = 'Identity', Mandatory = $false, Position = 0)]
 		[string]$Identity,
 		[Parameter(Mandatory = $false)]
-		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
+		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredential'),
 		[Parameter(Mandatory = $false)]
 		[string[]]$ComputerName,
 		[Parameter(DontShow)]
@@ -1003,18 +1217,42 @@ Function Show-CmsCredential {
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
+	# if identity contains invalid characters...
+	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-CmsInvalidIdentity -Identity $Identity)) {
+		# warn and return
+		Write-Warning -Message "the value provided for the Identity parameter contains one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
+		Return
+	}
+
 	# if computername provided...
 	If ($PSBoundParameters.ContainsKey('ComputerName')) {
 		# remove ComputerName parameter from bound parameters
 		$null = $PSBoundParameters.Remove('ComputerName')
 
-		# define functions for remote computers
-		$ShowFunction = "function Show-CmsCredential {${function:Show-CmsCredential}}"
+		# define required functions
+		$FunctionNames = 'Test-CmsInvalidIdentity', 'Test-CmsInvalidSubject', 'Show-CmsCredential'
+
+		# define list for function script blocks
+		$FunctionScriptBlocks = [System.Collections.Generic.List[System.String]]::new()
+
+		# add script block for required functions to list
+		ForEach ($FunctionName in $FunctionNames) {
+			# get function definition
+			Try {
+				$FunctionDefinition = (Get-Command -Name $FunctionName -ErrorAction 'Stop').Definition
+			}
+			Catch {
+				Write-Warning -Message "could not retrieve definition on '$Hostname' for function: $FunctionName"
+				Throw $_
+			}
+			# create function script block and add to list
+			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
+		}
 
 		# show credentials on remote computer
 		ForEach ($RemoteComputerName in $ComputerName) {
 			# if remote computer name is local computer name...
-			If ($RemoteComputerName -match "^$Hostname$" -or $RemoteComputerName -match "^$Hostname\..+") {
+			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
 				# set include local computer then continue
 				$local:IncludeLocalComputer = $true
 				Continue
@@ -1022,7 +1260,11 @@ Function Show-CmsCredential {
 			# run function on remote computer
 			Try {
 				Invoke-Command -ComputerName $RemoteComputerName -ScriptBlock {
-					. ([ScriptBlock]::Create($using:ShowFunction))
+					# import functions
+					ForEach ($FunctionScriptBlock in $using:FunctionScriptBlocks) {
+						. ([ScriptBlock]::Create($FunctionScriptBlock))
+					}
+					# run functions
 					Show-CmsCredential @using:PSBoundParameters
 				}
 			}
@@ -1039,51 +1281,99 @@ Function Show-CmsCredential {
 		}
 	}
 
-	# if path to credential files not found...
-	If ((Test-Path -Path $Path -PathType Container) -eq $false) {
-		Write-Warning -Message "could not locate path to credential files: $Path"
-		Return
-	}
+	# if thumbprint provided...
+	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
+		# create path for certificate by thumbprint
+		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
 
+		# retrieve certificate by thumbprint
+		Try {
+			$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
+			Throw $_
+		}
+
+		# if certificate subject is an empty string...
+		If ([string]::IsNullOrEmpty($Certificate.Subject)) {
+			# warn and return
+			Write-Warning -Message "the subject of the certificate on '$Hostname' with '$($Certificate.Thumbprint)' thumbprint is null or an empty string"
+			Return
+		}
+
+		# if certificate subject contains invalid characters...
+		If (Test-CmsInvalidSubject -Subject $Certificate.Subject) {
+			# warn and return
+			Write-Warning -Message "the subject of the certificate on '$Hostname' with '$($Certificate.Thumbprint)' thumbprint contains one or more of the following invalid characters: '\' (backslash)"
+			Return
+		}
+
+		# define pattern as subject label followed by subject of certificate
+		$Pattern = "Subject: $($Certificate.Subject)"
+		$SimpleMatch = $true
+	}
 	# if identity provided...
-	If ($PSBoundParameters.ContainsKey('Identity')) {
-		# define subject as organizational unit of identity
-		$Subject = "OU=$Identity,"
+	ElseIf ($PSBoundParameters.ContainsKey('Identity')) {
+		# define pattern as organizational unit of Identity followed by organization of CmsCredential
+		$Pattern = "OU=$Identity, O=CmsCredential$"
+		$SimpleMatch = $false
 	}
 	Else {
-		# define subject as organization of CmsCredential
-		$Subject = 'O=CmsCredential'
+		# define pattern as organization of CmsCredential
+		$Pattern = 'O=CmsCredential$'
+		$SimpleMatch = $false
 	}
 
-	# retrieve credential files where content contains matching subject
-	Try {
-		$CredentialFiles = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_ -Pattern $Subject -Quiet }
+	# if path to credential certificates found...
+	If (Test-Path -Path $CertStoreLocation -PathType 'Container') {
+		# retrieve credential certificates with matching subject
+		Try {
+			$CredentialCerts = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_.Subject -Pattern $Pattern -SimpleMatch:$SimpleMatch -Quiet }
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve credential certificates on '$Hostname'"
+			Return
+		}
 	}
-	Catch {
-		Write-Warning -Message "could not retrieve credential files on '$Hostname' from path: $Path"
-		Return
+	Else {
+		Write-Warning -Message "could not locate store for credential certificates on '$Hostname' with path: $CertStoreLocation"
 	}
 
-	# retrieve credential certificates with matching subject
-	Try {
-		$CredentialCerts = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject.Contains($Subject) }
+	# if path to credential files found...
+	If (Test-Path -Path $Path -PathType 'Container') {
+		# retrieve credential files where content contains matching subject
+		Try {
+			$CredentialFiles = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_ -Pattern $Pattern -SimpleMatch:$SimpleMatch -Quiet }
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve credential files on '$Hostname' from path: $Path"
+			Return
+		}
 	}
-	Catch {
-		Write-Warning -Message "could not retrieve credential certificates on '$Hostname'"
-		Return
+	Else {
+		Write-Warning -Message "could not locate folder for credential files on '$Hostname' with path: $Path"
 	}
 
 	# create list for credential details
 	$List = [System.Collections.Generic.List[System.Object]]::new()
 
 	# add credential files to list
-	ForEach ($CredentialFile in $CredentialFiles) {
+	ForEach ($CredentialFile in $local:CredentialFiles) {
 		# retrieve subject from credential file
-		$SubjectFromFile = (Select-String -InputObject $CredentialFile -Pattern $Subject -List).Line.Replace('Subject: ', $null)
-		# retrieve guid and identity from subject in credential file
-		$Guid, $Identity, $Remainder = $SubjectFromFile -split ', ' -replace '^CN=|^OU=|^O='
+		$Subject = (Select-String -InputObject $CredentialFile -Pattern $Pattern -SimpleMatch:$SimpleMatch -List).Line.Replace('Subject: ', $null)
+		# if subject contains invalid characters...
+		If (Test-CmsInvalidSubject -Subject $Subject) {
+			# warn and continue
+			Write-Warning -Message "the subject in the certificate file on '$Hostname' with '$($CredentialFile.FullName)' path contains one or more of the following invalid characters: '\' (backslash)"
+			Continue
+		}
+		# retrieve CommonName from subject in credential file
+		$CommonName = $Subject.Split(', ', [System.StringSplitOptions]::RemoveEmptyEntries).Where({ $_.StartsWith('CN=') }).Replace('CN=', $null)
+		# retrieve Identity from subject in credential file
+		$Identity = $Subject.Split(', ', [System.StringSplitOptions]::RemoveEmptyEntries).Where({ $_.StartsWith('OU=') }).Replace('OU=', $null)
 		# check list for existing entries
-		$Entry = $List | Where-Object { $_.Identity -eq $Identity -and $_.DateTime -eq $DateTime }
+		$Entry = $List | Where-Object { $_.Identity -eq $Identity -and $_.CommonName -eq $CommonName }
 		# if entry found...
 		If ($null -ne $Entry) {
 			# update credential entry
@@ -1093,12 +1383,11 @@ Function Show-CmsCredential {
 		Else {
 			# create credential entry
 			$ListEntry = [PSCustomObject]@{
-				ComputerName  = $HostName
-				Identity      = $Identity
-				Guid          = $Guid
-				Thumbprint    = [string]::Empty
-				Path          = $CredentialFile.FullName
-				LastWriteTime = $CredentialFile.LastWriteTime
+				ComputerName = $HostName
+				Identity     = $Identity
+				CommonName   = $CommonName
+				Thumbprint   = [string]::Empty
+				Path         = $CredentialFile.FullName
 			}
 			# add new credential entry to list
 			$List.Add($ListEntry)
@@ -1106,11 +1395,21 @@ Function Show-CmsCredential {
 	}
 
 	# add credential certificates to list
-	ForEach ($CredentialCert in $CredentialCerts) {
-		# retrieve identity and datetime from credential file
-		$Guid, $Identity, $Remainder = $CredentialCert.Subject -split ', ' -replace '^CN=|^OU=|^O='
+	ForEach ($CredentialCert in $local:CredentialCerts) {
+		# retrieve subject from certificate
+		$Subject = $CredentialCert.Subject
+		# if subject contains invalid characters...
+		If (Test-CmsInvalidSubject -Subject $Subject) {
+			# warn and continue
+			Write-Warning -Message "the subject of the certificate on '$Hostname' with '$($CredentialCert.Thumbprint)' thumbprint contains one or more of the following invalid characters: '\' (backslash)"
+			Continue
+		}
+		# retrieve CommonName from subject in credential certificate
+		$CommonName = $Subject.Split(', ', [System.StringSplitOptions]::RemoveEmptyEntries).Where({ $_.StartsWith('CN=') }).Replace('CN=', $null)
+		# retrieve Identity from subject in credential certificate
+		$Identity = $Subject.Split(', ', [System.StringSplitOptions]::RemoveEmptyEntries).Where({ $_.StartsWith('OU=') }).Replace('OU=', $null)
 		# check list for existing entries
-		$Entry = $List | Where-Object { $_.Identity -eq $Identity -and $_.Guid -eq $Guid }
+		$Entry = $List | Where-Object { $_.Identity -eq $Identity -and $_.CommonName -eq $CommonName }
 		# if entry found...
 		If ($null -ne $Entry) {
 			# update credential entry
@@ -1120,12 +1419,11 @@ Function Show-CmsCredential {
 		Else {
 			# create credential entry
 			$ListEntry = [PSCustomObject]@{
-				ComputerName  = $HostName
-				Identity      = $Identity
-				Guid          = $Guid
-				Thumbprint    = $CredentialCert.Thumbprint
-				Path          = [string]::Empty
-				LastWriteTime = $CredentialCert.NotBefore
+				ComputerName = $HostName
+				Identity     = $Identity
+				CommonName   = $CommonName
+				Thumbprint   = $CredentialCert.Thumbprint
+				Path         = [string]::Empty
 			}
 			# add new credential entry to list
 			$List.Add($ListEntry)
@@ -1133,7 +1431,7 @@ Function Show-CmsCredential {
 	}
 
 	# display list entries
-	$List | Sort-Object -Property 'Identity', 'LastWriteTime' | Format-Table ComputerName, Identity, Guid, Thumbprint, Path
+	$List | Sort-Object -Property 'Identity', 'CommonName' | Format-Table ComputerName, Identity, CommonName, Thumbprint, Path
 }
 
 Function Update-CmsCredentialAccess {
@@ -1164,7 +1462,7 @@ Function Update-CmsCredentialAccess {
 
 	#>
 
-	[CmdletBinding(SupportsShouldProcess)]
+	[CmdletBinding(DefaultParameterSetName = 'Identity')]
 	Param (
 		[Parameter(ParameterSetName = 'Thumbprint', Mandatory = $true, Position = 0)]
 		[string]$Thumbprint,
@@ -1174,17 +1472,85 @@ Function Update-CmsCredentialAccess {
 		[string]$Mode,
 		[Parameter(Mandatory = $false)]
 		[object[]]$Principals,
+		[Parameter(Mandatory = $false)]
+		[string[]]$ComputerName,
 		[Parameter(DontShow)]
 		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
 		[Parameter(DontShow)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
+	# if identity contains invalid characters...
+	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-CmsInvalidIdentity -Identity $Identity)) {
+		# warn and return
+		Write-Warning -Message "the value provided for the Identity parameter contains one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
+		Return
+	}
+
+	# if computername provided...
+	If ($PSBoundParameters.ContainsKey('ComputerName')) {
+		# remove ComputerName parameter from bound parameters
+		$null = $PSBoundParameters.Remove('ComputerName')
+
+		# define required functions
+		$FunctionNames = 'Test-CmsInvalidIdentity', 'Get-CertificatePrivateKeyPath', 'Update-CmsCredentialAccess'
+
+		# define list for function script blocks
+		$FunctionScriptBlocks = [System.Collections.Generic.List[System.String]]::new()
+
+		# add script block for required functions to list
+		ForEach ($FunctionName in $FunctionNames) {
+			# get function definition
+			Try {
+				$FunctionDefinition = (Get-Command -Name $FunctionName -ErrorAction 'Stop').Definition
+			}
+			Catch {
+				Write-Warning -Message "could not retrieve definition on '$Hostname' for function: $FunctionName"
+				Throw $_
+			}
+			# create function script block and add to list
+			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
+		}
+
+		# show credentials on remote computer
+		ForEach ($RemoteComputerName in $ComputerName) {
+			# if remote computer name is local computer name...
+			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
+				# set include local computer then continue
+				$local:IncludeLocalComputer = $true
+				Continue
+			}
+			# run function on remote computer
+			Try {
+				Invoke-Command -ComputerName $RemoteComputerName -ScriptBlock {
+					# import functions
+					ForEach ($FunctionScriptBlock in $using:FunctionScriptBlocks) {
+						. ([ScriptBlock]::Create($FunctionScriptBlock))
+					}
+					# run functions
+					Update-CmsCredentialAccess @using:PSBoundParameters
+				}
+			}
+			Catch {
+				Write-Warning -Message "could not invoke function(s) on '$RemoteComputerName' computer: $($_.Exception.Message)"
+				Throw $_
+			}
+		}
+
+		# if include local computer not set...
+		If ($null -eq $local:IncludeLocalComputer) {
+			# return after running function on remote computers
+			Return
+		}
+	}
+
 	# if thumbprint provided...
-	If ($PSBoundParameters.ContainsKey('Thumbprint') -eq $true) {
+	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
+		# create path for certificate by thumbprint
+		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
 		# retrieve certificate by thumbprint
 		Try {
-			$Certificate = Get-Item -Path "$CertStoreLocation\$Thumbprint" -ErrorAction 'Stop'
+			$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
 		}
 		Catch {
 			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
@@ -1193,11 +1559,11 @@ Function Update-CmsCredentialAccess {
 	}
 	# if thumbprint not provided...
 	Else {
-		# define subject from identity
-		$Subject = "OU=$Identity,"
+		# define pattern as organizational unit of Identity followed by organization of CmsCredential
+		$Pattern = "OU=$Identity, O=CmsCredential$"
 		# retrieve latest certificate with matching subject
 		Try {
-			$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { $_.Subject.Contains($Subject) } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
+			$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_.Subject -Pattern $Pattern -Quiet } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
 		}
 		Catch {
 			Throw $_
@@ -1422,50 +1788,12 @@ Function Grant-CmsCredentialAccess {
 	# add mode to bound parameters
 	$PSBoundParameters.Add('Mode', 'Grant')
 
-	# if computer names provided...
-	If ($PSBoundParameters.ContainsKey('ComputerName')) {
-		# remove ComputerName parameter from bound parameters
-		$null = $PSBoundParameters.Remove('ComputerName')
-
-		# define functions for remote computers
-		$GetPathFunction = "function Get-CertificatePrivateKeyPath {${function:Get-CertificatePrivateKeyPath}}"
-		$UpdateFunction = "function Update-CmsCredentialAccess {${function:Update-CmsCredentialAccess}}"
-
-		# show credentials on remote computer
-		ForEach ($RemoteComputerName in $ComputerName) {
-			# if remote computer name is local computer name...
-			If ($RemoteComputerName -match "^$Hostname$" -or $RemoteComputerName -match "^$Hostname\..+") {
-				# set include local computer then continue
-				$local:IncludeLocalComputer = $true
-				Continue
-			}
-			# run function on remote computer
-			Try {
-				Invoke-Command -ComputerName $RemoteComputerName -ScriptBlock {
-					. ([ScriptBlock]::Create($using:GetPathFunction))
-					. ([ScriptBlock]::Create($using:UpdateFunction))
-					Update-CmsCredentialAccess @using:PSBoundParameters
-				}
-			}
-			Catch {
-				Write-Warning -Message "could not invoke function(s) on '$RemoteComputerName' computer: $($_.Exception.Message)"
-				Throw $_
-			}
-		}
-
-		# if include local computer not set...
-		If ($null -eq $local:IncludeLocalComputer) {
-			# return after running function on remote computers
-			Return
-		}
-	}
-
 	# grant access to credential on local computer
 	Try {
 		Update-CmsCredentialAccess @PSBoundParameters
 	}
 	Catch {
-		Write-Warning -Message "could not grant access to CMS credential on '$Hostname' computer: $($_.Exception.Message)"
+		Write-Warning -Message "could not call Update-CmsCredentialAccess function on '$Hostname' computer: $($_.Exception.Message)"
 		Throw $_
 	}
 }
@@ -1521,50 +1849,12 @@ Function Revoke-CmsCredentialAccess {
 	# add mode to bound parameters
 	$PSBoundParameters.Add('Mode', 'Revoke')
 
-	# if computer names provided...
-	If ($PSBoundParameters.ContainsKey('ComputerName')) {
-		# remove ComputerName parameter from bound parameters
-		$null = $PSBoundParameters.Remove('ComputerName')
-
-		# define functions for remote computers
-		$GetPathFunction = "function Get-CertificatePrivateKeyPath {${function:Get-CertificatePrivateKeyPath}}"
-		$UpdateFunction = "function Update-CmsCredentialAccess {${function:Update-CmsCredentialAccess}}"
-
-		# show credentials on remote computer
-		ForEach ($RemoteComputerName in $ComputerName) {
-			# if remote computer name is local computer name...
-			If ($RemoteComputerName -match "^$Hostname$" -or $RemoteComputerName -match "^$Hostname\..+") {
-				# set include local computer then continue
-				$local:IncludeLocalComputer = $true
-				Continue
-			}
-			# run function on remote computer
-			Try {
-				Invoke-Command -ComputerName $RemoteComputerName -ScriptBlock {
-					. ([ScriptBlock]::Create($using:GetPathFunction))
-					. ([ScriptBlock]::Create($using:UpdateFunction))
-					Update-CmsCredentialAccess @using:PSBoundParameters
-				}
-			}
-			Catch {
-				Write-Warning -Message "could not invoke function(s) on '$RemoteComputerName' computer: $($_.Exception.Message)"
-				Throw $_
-			}
-		}
-
-		# if include local computer not set...
-		If ($null -eq $local:IncludeLocalComputer) {
-			# return after running function on remote computers
-			Return
-		}
-	}
-
-	# revoke access to credential on local computer
+	# grant access to credential on local computer
 	Try {
 		Update-CmsCredentialAccess @PSBoundParameters
 	}
 	Catch {
-		Write-Warning -Message "could not revoke access to CMS credential on '$Hostname' computer: $($_.Exception.Message)"
+		Write-Warning -Message "could not call Update-CmsCredentialAccess function on '$Hostname' computer: $($_.Exception.Message)"
 		Throw $_
 	}
 }
@@ -1615,50 +1905,12 @@ Function Reset-CmsCredentialAccess {
 	# add mode to bound parameters
 	$PSBoundParameters.Add('Mode', 'Reset')
 
-	# if computer names provided...
-	If ($PSBoundParameters.ContainsKey('ComputerName')) {
-		# remove ComputerName parameter from bound parameters
-		$null = $PSBoundParameters.Remove('ComputerName')
-
-		# define functions for remote computers
-		$GetPathFunction = "function Get-CertificatePrivateKeyPath {${function:Get-CertificatePrivateKeyPath}}"
-		$UpdateFunction = "function Update-CmsCredentialAccess {${function:Update-CmsCredentialAccess}}"
-
-		# show credentials on remote computer
-		ForEach ($RemoteComputerName in $ComputerName) {
-			# if remote computer name is local computer name...
-			If ($RemoteComputerName -match "^$Hostname$" -or $RemoteComputerName -match "^$Hostname\..+") {
-				# set include local computer then continue
-				$local:IncludeLocalComputer = $true
-				Continue
-			}
-			# run function on remote computer
-			Try {
-				Invoke-Command -ComputerName $RemoteComputerName -ScriptBlock {
-					. ([ScriptBlock]::Create($using:GetPathFunction))
-					. ([ScriptBlock]::Create($using:UpdateFunction))
-					Update-CmsCredentialAccess @using:PSBoundParameters
-				}
-			}
-			Catch {
-				Write-Warning -Message "could not invoke function(s) on '$RemoteComputerName' computer: $($_.Exception.Message)"
-				Throw $_
-			}
-		}
-
-		# if include local computer not set...
-		If ($null -eq $local:IncludeLocalComputer) {
-			# return after running function on remote computers
-			Return
-		}
-	}
-
-	# reset access to credential on local computer
+	# grant access to credential on local computer
 	Try {
 		Update-CmsCredentialAccess @PSBoundParameters
 	}
 	Catch {
-		Write-Warning -Message "could not reset access to CMS credential on '$Hostname' computer: $($_.Exception.Message)"
+		Write-Warning -Message "could not call Update-CmsCredentialAccess function on '$Hostname' computer: $($_.Exception.Message)"
 		Throw $_
 	}
 }
@@ -1709,50 +1961,12 @@ Function Show-CmsCredentialAccess {
 	# add mode to bound parameters
 	$PSBoundParameters.Add('Mode', 'Show')
 
-	# if computer names provided...
-	If ($PSBoundParameters.ContainsKey('ComputerName')) {
-		# remove ComputerName parameter from bound parameters
-		$null = $PSBoundParameters.Remove('ComputerName')
-
-		# define functions for remote computers
-		$GetPathFunction = "function Get-CertificatePrivateKeyPath {${function:Get-CertificatePrivateKeyPath}}"
-		$UpdateFunction = "function Update-CmsCredentialAccess {${function:Update-CmsCredentialAccess}}"
-
-		# show credentials on remote computer
-		ForEach ($RemoteComputerName in $ComputerName) {
-			# if remote computer name is local computer name...
-			If ($RemoteComputerName -match "^$Hostname$" -or $RemoteComputerName -match "^$Hostname\..+") {
-				# set include local computer then continue
-				$local:IncludeLocalComputer = $true
-				Continue
-			}
-			# run function on remote computer
-			Try {
-				Invoke-Command -ComputerName $RemoteComputerName -ScriptBlock {
-					. ([ScriptBlock]::Create($using:GetPathFunction))
-					. ([ScriptBlock]::Create($using:UpdateFunction))
-					Update-CmsCredentialAccess @using:PSBoundParameters
-				}
-			}
-			Catch {
-				Write-Warning -Message "could not invoke function(s) on '$RemoteComputerName' computer: $($_.Exception.Message)"
-				Throw $_
-			}
-		}
-
-		# if include local computer not set...
-		If ($null -eq $local:IncludeLocalComputer) {
-			# return after running function on remote computers
-			Return
-		}
-	}
-
-	# revoke access to credential on local computer
+	# grant access to credential on local computer
 	Try {
 		Update-CmsCredentialAccess @PSBoundParameters
 	}
 	Catch {
-		Write-Warning -Message "could not show access to CMS credential on '$Hostname' computer: $($_.Exception.Message)"
+		Write-Warning -Message "could not call Update-CmsCredentialAccess function on '$Hostname' computer: $($_.Exception.Message)"
 		Throw $_
 	}
 }

@@ -27,7 +27,7 @@ Author = 'Alex Barth'
 CompanyName = 'Alex Barth'
 
 # Copyright statement for this module
-Copyright = '(c) 2023 Alex Barth. All rights reserved.'
+Copyright = '(c) Alex Barth. All rights reserved.'
 
 # Description of the functionality provided by this module
 Description = 'CmsCredentials provides functions to store and retrieve credentials using the Cryptographic Message Syntax (CMS) standard.'
