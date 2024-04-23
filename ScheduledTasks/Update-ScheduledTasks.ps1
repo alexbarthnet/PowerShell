@@ -189,7 +189,7 @@ Param(
 )
 
 Begin {
-	Function Install-CertificateFromPath {
+	Function Import-CertificateFromPath {
 		[CmdletBinding()]
 		Param(
 			[Parameter(Mandatory = $true)]
@@ -199,8 +199,8 @@ Begin {
 		)
 
 		# if path not found...
-		If (!(Test-Path -Path $Path -PathType 'Container')) {
-			Write-Warning -Message "could not find item at path: $Path"
+		If (!(Test-Path -Path $Path -PathType 'Leaf')) {
+			Write-Warning -Message "could not find file at path: $Path"
 			Return
 		}
 
@@ -209,51 +209,56 @@ Begin {
 			$PfxData = Get-PfxData -FilePath $Path -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not retrieve PFX data from file at path: $Path"
+			Write-Warning -Message "could not retrieve PFX data from '$Path' file: $($_.Exception.Message)"
 			Return $_
 		}
 
-		# get thumbprint from PFX 
+		# get thumbprints from PFX 
 		Try {
-			$Thumbprint = $PfxData.EndEntityCertificates | Select-Object -First 1 -ExpandProperty 'Thumbprint'
+			$Thumbprints = $PfxData.EndEntityCertificates | Select-Object -First 1 -ExpandProperty 'Thumbprint'
 		}
 		Catch {
-			Write-Warning -Message "could not retrieve thumbprint from PFX data of file at path: $Path"
+			Write-Warning -Message "could not retrieve thumbprint from PFX data of '$Path' file: $($_.Exception.Message)"
 			Return $_
 		}
 
-		# define path to certificate
-		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
+		# process thumbprints
+		ForEach ($Thumbprint in $Thumbprints) {
+			# declare thumbprint
+			Write-Verbose -Verbose -Message "Found '$Thumbprint' thumbprint in PFX file at path: $Path"
 
-		# check for certificate by thumbprint
-		If (Test-Path -Path $CertificatePath -PathType 'Leaf') {
-			# get certificate by path
+			# define path to certificate
+			$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
+
+			# check for certificate by thumbprint
+			If (Test-Path -Path $CertificatePath -PathType 'Leaf') {
+				# get certificate by path
+				Try {
+					$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
+				}
+				Catch {
+					Write-Warning -Message "could not retrieve certificate at '$Path' file: $($_.Exception.Message)"
+					Continue
+				}
+				# if certificate has a private key...
+				If ($Certificate.HasPrivateKey) {
+					Write-Verbose -Verbose -Message "Verified PFX certificate imported from path: $Path"
+					Continue
+				}
+			}
+
+			# import certificate
 			Try {
-				$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
+				$null = Import-PfxCertificate -CertStoreLocation $CertStoreLocation -FilePath $Path
 			}
 			Catch {
-				Write-Warning -Message "could not retrieve certificate at path: $CertificatePath"
-				Return
+				Write-Warning -Message "could not import PFX certificate from file at '$Path' file: $($_.Exception.Message)"
+				Continue
 			}
-			# if certificate has a private key...
-			If ($Certificate.HasPrivateKey) {
-				Write-Verbose -Verbose -Message "Verified PFX certificate imported from path: $Path"
-				Return
-			}
-		}
 
-		# import certificate
-		Try {
-			$null = Import-PfxCertificate -CertStoreLocation $CertStoreLocation -FilePath $Path
+			# report imported and return
+			Write-Verbose -Verbose -Message "Imported PFX certificate from file at path: $Path"
 		}
-		Catch {
-			Write-Warning -Message "could not import PFX certificate from file at path: $Path"
-			Return $_
-		}
-
-		# report imported and return
-		Write-Verbose -Verbose -Message "Imported PFX certificate from file at path: $Path"
-		Return
 	}
 
 	Function Install-ModuleFromPath {
@@ -1338,7 +1343,7 @@ Process {
 						ForEach ($Path in $JsonEntry.Certificates) {
 							# install module
 							Try {
-								Install-CertificateFromPath -Path $Path
+								Import-CertificateFromPath -Path $Path
 							}
 							Catch {
 								Return $_
