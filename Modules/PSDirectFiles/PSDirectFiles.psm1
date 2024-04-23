@@ -1,4 +1,4 @@
-#Requires -Modules TranscriptWithHostAndDate,CmsCredential
+#Requires -Modules TranscriptWithHostAndDate,CmsCredentials
 
 Function Copy-PathFromPSDirect {
 	[CmdletBinding()]
