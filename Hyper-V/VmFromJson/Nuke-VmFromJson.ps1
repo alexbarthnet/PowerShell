@@ -1923,8 +1923,8 @@ Process {
 			$VMPaths.Add($VM.Path)
 
 			# add known child paths
-			$VMPaths.Add((Join-Path -Path $VM.Path -ChildPath 'Virtual Machines'))
-			$VMPaths.Add((Join-Path -Path $VM.Path -ChildPath 'Virtual Hard Disks'))
+			$VMPaths.Add(($VM.Path, 'Virtual Machines' -join '\'))
+			$VMPaths.Add(($VM.Path, 'Virtual Hard Disks' -join '\'))
 
 			# get GUID
 			$VMid = $VM.id
