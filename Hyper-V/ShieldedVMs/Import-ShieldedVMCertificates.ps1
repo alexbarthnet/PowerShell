@@ -2,11 +2,17 @@
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	# path for PFX files to import
-	[Parameter(Position = 0, Mandatory = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
+	# path to JSON file with parameters
+	[Parameter(ParameterSetName = 'Json', Mandatory = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
+	[string]$ParametersFromJson,
+	# optional parameter set to load from JSON file
+	[Parameter(ParameterSetName = 'Json')]
+	[string]$ParameterSetName,
+	# path to folder with PFX files to import
+	[Parameter(ParameterSetName = 'Default', Mandatory = $true, Position = 0)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
 	[string]$Path,
 	# overwrite existing certificates
-	[Parameter(Position = 1)]
+	[Parameter(Mandatory = $false)]
 	[switch]$Force,
 	# switch to skip transcript logging
 	[Parameter(DontShow)]
@@ -26,17 +32,59 @@ Begin {
 	Function Import-PfxCertificateWithDpapi {
 		[CmdletBinding()]
 		Param(
-			[Parameter(Mandatory = $true)]
+			[Parameter(Mandatory = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
 			[string]$FilePath,
+			[Parameter(Mandatory = $false)]
+			[switch]$Force,
 			[Parameter(DontShow)]
 			[string]$CertStoreLocation = 'Cert:\LocalMachine\My'
 		)
 
-		# if path not found...
-		If (!(Test-Path -Path $FilePath -PathType 'Leaf')) {
-			Write-Warning -Message "could not find file at path: $Path"
-			Return
+		# if force not set...
+		If (!$local:Force) {
+			# test PFX file matches certificate
+			Try {
+				$PfxCertificateAlreadyImported = Test-PfxFileAgainstStore -FilePath $FilePath -CertStoreLocation $CertStoreLocation
+			}
+			Catch {
+				Return $_
+			}
+
+			# if PFX certificate already exported...
+			If ($PfxCertificateAlreadyImported) {
+				Return
+			}
 		}
+
+		# define required parameters for Import-PfxCertificate
+		$ImportPfxCertificate = @{
+			FilePath          = $FilePath
+			CertStoreLocation = $CertStoreLocation
+			ErrorAction       = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# import certificate
+		Try {
+			$null = Import-PfxCertificate @ImportPfxCertificate
+		}
+		Catch {
+			Write-Warning -Message "could not import certificate to '$CertStoreLocation' store from '$FilePath' file: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# report imported and return
+		Write-Verbose -Verbose -Message "Imported certificates to '$CertStoreLocation' store from PFX file at path: $FilePath"
+	}
+
+	Function Test-PfxFileAgainstStore {
+		Param(
+			[Parameter(Mandatory = $true)]
+			[string]$FilePath,
+			[Parameter(Mandatory = $false)]
+			[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
+			[Parameter(DontShow)]
+			[boolean]$CertificateFound = $false
+		)
 
 		# get PFX data from certificate
 		Try {
@@ -47,63 +95,46 @@ Begin {
 			Return $_
 		}
 
-		# get thumbprints from PFX 
+		# get thumbprints from PFX
 		Try {
-			$Thumbprints = $PfxData.EndEntityCertificates | Select-Object -ExpandProperty 'Thumbprint'
+			$EndEntityCertificates = $PfxData.EndEntityCertificates
 		}
 		Catch {
 			Write-Warning -Message "could not retrieve thumbprint from PFX data of '$FilePath' file: $($_.Exception.Message)"
 			Return $_
 		}
 
-		# process thumbprints
-		ForEach ($Thumbprint in $Thumbprints) {
-			# declare thumbprint
-			Write-Verbose -Verbose -Message "Found certificate with '$Thumbprint' thumbprint in PFX file at path: $FilePath"
-
-			# define path to certificate
-			$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
-
-			# check for certificate by thumbprint
-			If (Test-Path -Path $CertificatePath -PathType 'Leaf') {
-				# get certificate by path
-				Try {
-					$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
-				}
-				Catch {
-					Write-Warning -Message "could not retrieve certificate from '$FilePath' file: $($_.Exception.Message)"
-					Continue
-				}
-				# if certificate has a private key...
-				If ($Certificate.HasPrivateKey) {
-					Write-Verbose -Verbose -Message "Verified certificate with '$Thumbprint' thumbprint imported from PFX file at path: $FilePath"
-					Continue
-				}
-			}
-
-			# define required parameters for Import-PfxCertificate
-			$ImportPfxCertificate = @{
-				FilePath          = $FilePath
-				CertStoreLocation = $CertStoreLocation
-				ErrorAction       = [System.Management.Automation.ActionPreference]::Stop
-			}
-
-			# import certificate
-			Try {
-				$null = Import-PfxCertificate @ImportPfxCertificate
-			}
-			Catch {
-				Write-Warning -Message "could not import certificate from '$FilePath' file: $($_.Exception.Message)"
-				Continue
-			}
-
-			# report imported and return
-			Write-Verbose -Verbose -Message "Imported certificate from PFX file at path: $FilePath"
+		# get certificates with private keys in store
+		Try {
+			$Certificates = Get-ChildItem -Path $CertStoreLocation -ErrorAction 'Stop' | Where-Object { $_.HasPrivateKey }
 		}
+		Catch {
+			Write-Warning -Message "could not retrieve certificates from '$CertStoreLocation' path: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# process thumbprints
+		ForEach ($EndEntityCertificate in $EndEntityCertificates) {
+			# if thumbprint found in thumbprints of certificates with private keys in store...
+			If ($EndEntityCertificate.Thumbprint -in $Certificates.Thumbprint) {
+				# declare verified and record found
+				Write-Verbose -Verbose -Message "Found '$CertStoreLocation' store contains certificate with '$($EndEntityCertificate.Thumbprint)' thumbprint and subject: $($EndEntityCertificate.Subject)"
+				$CertificateFound = $true
+			}
+			# if thumbprint not found in thumbprints of certificates with private keys in store...
+			Else {
+				# immediately return false
+				Write-Verbose -Verbose -Message "Found '$CertStoreLocation' store missing certificate with '$($EndEntityCertificate.Thumbprint)' thumbprint and subject: $($EndEntityCertificate.Subject)"
+				Return $false
+			}
+		}
+
+		# if certificate found...
+		Return $CertificateFound
 	}
 
-	# if parameter set is default and SkipTranscript not set...
-	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $SkipTranscript) {
+	# if SkipTranscript not set...
+	If (!$SkipTranscript) {
 		# start transcript with default parameters
 		Try {
 			Start-TranscriptWithHostAndDate
@@ -115,6 +146,61 @@ Begin {
 }
 
 Process {
+	# if parameter from JSON file provided...
+	If ($PSBoundParameters.ContainsKey('ParametersFromJson')) {
+		# retrieve content of JSON file as PSCustomObject
+		Try {
+			$ParametersFromJsonObject = Get-Content -Path $ParametersFromJson -ErrorAction 'Stop' | ConvertFrom-Json -ErrorAction 'Stop'
+		}
+		Catch {
+			Return $_
+		}
+
+		# retrieve parameter sets for command
+		Try {
+			$ParameterSets = (Get-Command -Name $PSCommandPath).ParameterSets
+		}
+		Catch {
+			Return $_
+		}
+
+		# if named parameter set name defined...
+		If ($PSBoundParameters.ContainsKey('ParameterSetNameForJson')) {
+			# get parameters available in named parameter set
+			$Parameters = $ParameterSets.Where({ $_.Name -eq $ParameterSetNameForJson }).Parameters
+		}
+		# if default parameter set name defined...
+		ElseIf ($ParameterSets.IsDefault) {
+			# get parameters in default parameter set
+			$Parameters = $ParameterSets.Where({ $_.IsDefault }).Parameters
+		}
+		Else {
+			# get parameters
+			$Parameters = $ParameterSets.Parameters
+		}
+
+		# get parameter names from property names in PSCustomObject for parameters not defined at runtime
+		$ParameterNames = $Parameters.Where({ $ParametersFromJsonObject.PSObject.Properties.Name.Contains($_.Name) -and -not $PSBoundParameters.ContainsKey($_.Name) }).Name
+
+		# define parameters from JSON
+		ForEach ($ParameterName in $ParameterNames) {
+			# add parameter to bound parameters
+			Try {
+				$PSBoundParameters.Add($ParameterName, $ParametersFromJsonObject.$ParameterName)
+			}
+			Catch {
+				Return $_
+			}
+			# create variable from parameter
+			Try {
+				Set-Variable -Name $ParameterName -Value $ParametersFromJsonObject.$ParameterName -Scope 'Script'
+			}
+			Catch {
+				Return $_
+			}
+		}
+	}
+
 	# define certificate store
 	$CertStoreLocation = 'Cert:\LocalMachine\Shielded VM Local Certificates'
 
@@ -128,20 +214,17 @@ Process {
 		}
 	}
 
-	# get PFX files from path
+	# retrieve PFX files from path
 	Try {
-		$PfxFiles = Get-ChildItem -Path $Path -Filter 'untrustedguardian*' | Where-Object { $_.Extension -in @('.pfx', '.p12') }
+		$PfxFiles = Get-ChildItem -Path $Path -Filter 'untrustedguardian*' | Where-Object { $_.Extension -match '^\.p(fx|12)$' }
 	}
 	Catch {
 		Write-Warning "could not search '$Path' for PFX files: $($_.Exception.Message)"
 		Return $_
 	}
 
-	# process each PFX file found
+	# import PFX files to store
 	ForEach ($PfxFile in $PfxFiles) {
-		# declare file found
-		Write-Verbose "Found PFX file: $($PfxFile.FullName)"
-
 		# define required paramters for Import-PfxCertificateFromPath
 		$ImportPfxCertificateWithDpapi = @{
 			FilePath          = $PfxFile.FullName
@@ -160,8 +243,8 @@ Process {
 }
 
 End {
-	# if parameter set is default and SkipTranscript not set...
-	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $SkipTranscript) {
+	# if SkipTranscript not set...
+	If (!$SkipTranscript) {
 		# stop transcript with default parameters
 		Try {
 			Stop-TranscriptWithHostAndDate

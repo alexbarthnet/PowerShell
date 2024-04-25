@@ -2,21 +2,21 @@
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	# path for exported PFX files
-	[Parameter(Position = 0, Mandatory = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
-	[string]$Path,
-	# prinicpals that can access exported PFX files
-	[Parameter(Position = 1, Mandatory = $true)]
-	[string[]]$Principals,
-	# overwrite existing PFX file to reset security
-	[Parameter(Position = 2)]
-	[switch]$Force,
-	# switch to create any missing parameters from JSON file
-	[Parameter(DontShow)]
-	[switch]$ParametersFromJson,
 	# path to JSON file with parameters
-	[Parameter(DontShow)]
-	[string]$ParametersFromJsonPath,
+	[Parameter(ParameterSetName = 'Json', Mandatory = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
+	[string]$ParametersFromJson,
+	# optional parameter set to load from JSON file
+	[Parameter(ParameterSetName = 'Json')]
+	[string]$ParameterSetName,
+	# path to folder for exported PFX files
+	[Parameter(ParameterSetName = 'Default', Mandatory = $true, Position = 0)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
+	[string]$Path,
+	# one or more Windows domain prinicpals granted access to exported PFX files
+	[Parameter(ParameterSetName = 'Default', Mandatory = $true, Position = 1)]
+	[string[]]$ProtectTo,
+	# overwrite existing PFX files
+	[Parameter(Mandatory = $false)]
+	[switch]$Force,
 	# switch to skip transcript logging
 	[Parameter(DontShow)]
 	[switch]$SkipTranscript,
@@ -32,87 +32,36 @@ Param(
 )
 
 Begin {
-	# load missing parameters from JSON file
-	If ($ParametersFromJson) {
-		# retrieve all parameters
-		$Parameters = (Get-Command -Name $PSCommandPath).Parameters.Values
-
-		# filter parameters to parameter set
-		If ($PSCmdlet.ParameterSetName) {
-			$Parameters = $Parameters | Where-Object { $_.ParameterSets[$PSCmdlet.ParameterSetName] -or $_.ParameterSets['__AllParameterSets'] }
-		}
-
-		# define unbound parameters
-		$PSUnboundParameters = @{}
-		ForEach ($ParameterName in $Parameters.Name) {
-			If (-not $PSBoundParameters.ContainsKey($ParameterName)) {
-				$PSUnboundParameters[$ParameterName] = $null
-			}
-		}
-
-		# if ParametersFromJsonPath was not defined...
-		If (-not $PSBoundParameters.ContainsKey('ParametersFromJsonPath')) {
-			$ParametersFromJsonPath = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
-		}
-
-		# get data in JSON file
-		Try {
-			$Json = Get-Content -Path $ParametersFromJsonPath -ErrorAction Stop | ConvertFrom-Json
-		}
-		Catch {
-			Throw $_
-		}
-
-		# create parameters from data in JSON file
-		ForEach ($ParameterName in $PSUnboundParameters.Keys) {
-			If ($ParameterName -in ($Json.PSObject.Properties.Name)) {
-				Set-Variable -Name $ParameterName -Value $Json.$ParameterName -Scope 'Script'
-			}
-		}
-	}
-
 	Function Export-PfxCertificateWithDpapi {
 		[CmdletBinding()]
 		Param(
 			[Parameter(Mandatory = $true)]
 			[string]$FilePath,
 			[Parameter(Mandatory = $true)]
-			[string]$Certificate,
+			[object]$Certificate,
 			[Parameter(Mandatory = $true)]
-			[string]$ProtectTo
+			[string[]]$ProtectTo,
+			[Parameter(Mandatory = $false)]
+			[switch]$Force
 		)
 
-		# if FilePath found...
-		If (Test-Path -Path $FilePath -PathType 'Leaf') {
-			# get PFX data from certificate
+		# if FilePath found and Force not set...
+		If ((Test-Path -Path $FilePath -PathType 'Leaf') -and -not $local:Force) {
+			# test PFX certificate matches certificate
 			Try {
-				$PfxData = Get-PfxData -FilePath $FilePath -ErrorAction 'Stop'
+				$PfxCertificateAlreadyExported = Test-PfxCertificate -FilePath $FilePath -Certificate $Certificate
 			}
 			Catch {
-				Write-Warning -Message "could not retrieve PFX data from '$FilePath' file: $($_.Exception.Message)"
 				Return $_
 			}
 
-			# get thumbprints from PFX 
-			Try {
-				$Thumbprints = $PfxData.EndEntityCertificates | Select-Object -ExpandProperty 'Thumbprint'
-			}
-			Catch {
-				Write-Warning -Message "could not retrieve thumbprint from PFX data of '$Path' file: $($_.Exception.Message)"
-				Return $_
-			}
-
-			# process thumbprints
-			ForEach ($Thumbprint in $Thumbprints) {
-				# check for certificate by thumbprint
-				If ($Certificate.Thumbprint -eq $Thumbprint) {
-					Write-Verbose -Verbose -Message "Verified certificate with '$Thumbprint' thumbprint exported to PFX file at path: $Path"
-					Continue
-				}
+			# if PFX certificate already exported...
+			If ($PfxCertificateAlreadyExported) {
+				Return
 			}
 		}
 
-		# define parameters for Export-PfxCertificate
+		# define required parameters for Export-PfxCertificate
 		$ExportPfxCertificate = @{
 			Cert                  = $Certificate
 			FilePath              = $FilePath
@@ -121,18 +70,104 @@ Begin {
 			CryptoAlgorithmOption = 'AES256_SHA256'
 		}
 
+		# define optional parameters for Export-PfxCertificate
+		If ($PSBoundParameters.ContainsKey('Force')) {
+			$ExportPfxCertificate['Force'] = $Force
+		}
+
 		# export certificate as .pfx
 		Try {
 			$null = Export-PfxCertificate @ExportPfxCertificate
-			Write-Verbose -Verbose -Message "Exported certificate with '$Thumbprint' thumbprint to PFX file at path: $Path"
+			Write-Verbose -Verbose -Message "Exported certificate with '$($Certificate.Subject)' subject to PFX file at path: $FilePath"
 		}
 		Catch {
 			Throw $_
 		}
 	}
 
-	# if parameter set is default and SkipTranscript not set...
-	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $SkipTranscript) {
+	Function Test-PfxCertificate {
+		[CmdletBinding()]
+		Param(
+			[Parameter(Mandatory = $true)]
+			[string]$FilePath,
+			[Parameter(Mandatory = $true)]
+			[object]$Certificate,
+			[Parameter(Mandatory = $false)]
+			[switch]$IsBundle
+		)
+
+		# get PFX data from certificate
+		Try {
+			$PfxData = Get-PfxData -FilePath $FilePath -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve PFX data from '$FilePath' file: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# get thumbprints from PFX
+		Try {
+			$Thumbprints = $PfxData.EndEntityCertificates | Select-Object -ExpandProperty 'Thumbprint'
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve thumbprint from PFX data of '$Path' file: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# if certificate thumbprint found in PFX file and PFX file is not a bundle...
+		If ($Certificate.Thumbprint -eq $Thumbprints -and -not $IsBundle) {
+			# declare verified and return true
+			Write-Verbose -Verbose -Message "Found '$FilePath' PFX file contains certificate with '$($Certificate.Thumbprint)' thumbprint and subject: $($Certificate.Subject)"
+			Return $true
+		}
+
+		# if certificate thumbprint found in PFX file and PFX file is bundle...
+		If ($Certificate.Thumbprint -in $Thumbprints -and $IsBundle) {
+			# declare verified and return true
+			Write-Verbose -Verbose -Message "Found '$FilePath' PFX file contains certificate with '$($Certificate.Thumbprint)' thumbprint and subject: $($Certificate.Subject)"
+			Return $true
+		}
+
+		# declare not found and return false
+		Write-Verbose -Verbose -Message "Found '$FilePath' PFX file missing certificate with '$($Certificate.Thumbprint)' thumbprint and subject: $($Certificate.Subject)"
+		Return $false
+	}
+
+	Function Get-GroupsFromWindowsIdentity {
+		Param(
+			[Parameter(Mandatory = $true)]
+			[System.Security.Principal.WindowsIdentity]$WindowsIdentity
+		)
+
+		# if windows identity is system...
+		If ($WindowsIdentity.IsSystem) {
+			# get computer DN
+			$DistinguishedName = Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Group Policy\State\Machine' -Name 'Distinguished-Name'
+
+			# get directory entry
+			$DirectoryEntry = [System.DirectoryServices.DirectoryEntry]::New("LDAP://$DistinguishedName")
+
+			# add token groups to directory entry
+			$DirectoryEntry.RefreshCache('tokenGroups')
+
+			# get token groups from directory entry
+			$TokenGroups = $DirectoryEntry.Properties['tokenGroups'].Value
+
+			# translate token groups into windows groups
+			$Groups = $TokenGroups | ForEach-Object { [System.Security.Principal.SecurityIdentifier]::new($_, 0).Translate([System.Security.Principal.NTAccount]).Value }
+		}
+		# if windows identity is not system...
+		Else {
+			# get groups directly from windows identity object
+			$Groups = $WindowsIdentity.Groups.Where({ $_.AccountDomainSid }).Translate([System.Security.Principal.NTAccount]).Where({ !$_.Value.StartsWith('NT AUTHORITY') }).Value
+		}
+
+		# return groups
+		Return $Groups
+	}
+
+	# if SkipTranscript not set...
+	If (!$SkipTranscript) {
 		# start transcript with default parameters
 		Try {
 			Start-TranscriptWithHostAndDate
@@ -144,6 +179,61 @@ Begin {
 }
 
 Process {
+	# if parameter from JSON file provided...
+	If ($PSBoundParameters.ContainsKey('ParametersFromJson')) {
+		# retrieve content of JSON file as PSCustomObject
+		Try {
+			$ParametersFromJsonObject = Get-Content -Path $ParametersFromJson -ErrorAction 'Stop' | ConvertFrom-Json -ErrorAction 'Stop'
+		}
+		Catch {
+			Return $_
+		}
+
+		# retrieve parameter sets for command
+		Try {
+			$ParameterSets = (Get-Command -Name $PSCommandPath).ParameterSets
+		}
+		Catch {
+			Return $_
+		}
+
+		# if named parameter set name defined...
+		If ($PSBoundParameters.ContainsKey('ParameterSetName')) {
+			# get parameters available in named parameter set
+			$Parameters = $ParameterSets.Where({ $_.Name -eq $ParameterSetName }).Parameters
+		}
+		# if default parameter set name defined...
+		ElseIf ($ParameterSets.IsDefault) {
+			# get parameters in default parameter set
+			$Parameters = $ParameterSets.Where({ $_.IsDefault }).Parameters
+		}
+		Else {
+			# get parameters
+			$Parameters = $ParameterSets.Parameters
+		}
+
+		# get parameter names from property names in PSCustomObject for parameters not defined at runtime
+		$ParameterNames = $Parameters.Where({ $ParametersFromJsonObject.PSObject.Properties.Name.Contains($_.Name) -and -not $PSBoundParameters.ContainsKey($_.Name) }).Name
+
+		# define parameters from JSON
+		ForEach ($ParameterName in $ParameterNames) {
+			# add parameter to bound parameters
+			Try {
+				$PSBoundParameters.Add($ParameterName, $ParametersFromJsonObject.$ParameterName)
+			}
+			Catch {
+				Return $_
+			}
+			# create variable from parameter
+			Try {
+				Set-Variable -Name $ParameterName -Value $ParametersFromJsonObject.$ParameterName -Scope 'Script'
+			}
+			Catch {
+				Return $_
+			}
+		}
+	}
+
 	# define certificate store
 	$CertStoreLocation = 'Cert:\LocalMachine\Shielded VM Local Certificates'
 
@@ -157,54 +247,79 @@ Process {
 		}
 	}
 
-	# retrieve all shielded VM certificates
-	$ShieldedVMCertificates = Get-ChildItem -Path $CertStoreLocation | Where-Object { $_.Subject -match $Hostname }
+	# get windows identity of current user
+	Try {
+		$WindowsIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+	}
+	Catch {
+		Return $_
+	}
 
-	# retrieve signing certificates
-	$SigningCertificates = $ShieldedVMCertificates | Where-Object { $_.Subject.StartsWith('CN=Shielded VM Signing Certificate (UntrustedGuardian)') }
+	# get groups from windows identity
+	Try {
+		$Groups = Get-GroupsFromWindowsIdentity -WindowsIdentity $WindowsIdentity
+	}
+	Catch {
+		Return $_
+	}
 
-	# retrieve encryption certificates
-	$EncryptCertificates = $ShieldedVMCertificates | Where-Object { $_.Subject.StartsWith('CN=Shielded VM Encryption Certificate (UntrustedGuardian)') }
-
-	# export signing certificates
-	ForEach ($Certificate in $EncryptCertificates) {
-		# define base name
-		$BaseName = 'untrustedguardian', $HostName, 'encrypt', $Certificate.NotBefore.ToUniversalTime().ToString('yyyyMMddThhmmssZ') -join '_'
-
-		# define file path
-		$FilePath = Join-Path -Path $Path -ChildPath "$BaseName.pfx"
-
-		# define required paramters for Export-PfxCertificateWithDpapi
-		$ExportPfxCertificateWithDpapi = @{
-			FilePath           = $FilePath
-			ProtectTo          = $ProtectTo
-			Certificate        = $Certificate
-			ErrorAction        = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# export certificate to PFX file
-		Try {
-			Export-PfxCertificateWithDpapi @ExportPfxCertificateWithDpapi
-		}
-		Catch {
-			Write-Warning "could not export '$($Certificate.Subject)' certificate to '$FilePath' path: $($_.Exception.Message)"
+	# validate ProtectTo
+	ForEach ($Group in $Groups) {
+		# if ProtectTo includes a current group...
+		If ($ProtectTo.Contains($Group)) {
+			# declare ProtectTo is valid
+			$script:ProtectToValid = $true
 		}
 	}
 
-	# export signing certificates
-	ForEach ($Certificate in $SigningCertificates) {
+	# if ProtectTo is not valid and force not set...
+	If (!$script:ProtectToValid -and -not $Force) {
+		Write-Warning -Message "current user is not a member of any of the provided groups: $ProtectTo"
+		Return
+	}
+
+	# retrieve shielded VM certificates from certificate store
+	Try {
+		$ShieldedVMCertificates = Get-ChildItem -Path $CertStoreLocation | Where-Object { $_.Subject -match $Hostname }
+	}
+	Catch {
+		Write-Warning -Message "could not search '$CertStoreLocation' for certificates: $($_.Exception.Message)"
+		Return $_
+	}
+
+	# export shielded VM certificates to path
+	:NextCertificate ForEach ($Certificate in $ShieldedVMCertificates) {
+		# determine certificate type
+		switch ($Certificate.Subject) {
+			{ $_.StartsWith('CN=Shielded VM Encryption Certificate (UntrustedGuardian)') } {
+				$MidFix = 'encrypt'
+			}
+			{ $_.StartsWith('CN=Shielded VM Signing Certificate (UntrustedGuardian)') } {
+				$MidFix = 'signing'
+			}
+			Default {
+				Write-Warning -Message "could not determine certificate type from subject: $($Certificate.Subject)"
+				Continue NextCertificate
+			}
+		}
+
 		# define base name
-		$BaseName = 'untrustedguardian', $HostName, 'signing', $Certificate.NotBefore.ToUniversalTime().ToString('yyyyMMddThhmmssZ') -join '_'
+		$BaseName = 'untrustedguardian', $HostName, $MidFix, $Certificate.NotBefore.ToUniversalTime().ToString('yyyyMMddThhmmssZ') -join '_'
 
 		# define file path
 		$FilePath = Join-Path -Path $Path -ChildPath "$BaseName.pfx"
 
 		# define required paramters for Export-PfxCertificateWithDpapi
 		$ExportPfxCertificateWithDpapi = @{
-			FilePath           = $FilePath
-			ProtectTo          = $ProtectTo
-			Certificate        = $Certificate
-			ErrorAction        = [System.Management.Automation.ActionPreference]::Stop
+			FilePath    = $FilePath
+			Certificate = $Certificate
+			ProtectTo   = $script:ProtectTo
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# define optional parameters for Export-PfxCertificateWithDpapi
+		If ($local:Force) {
+			$ExportPfxCertificateWithDpapi['Force'] = $local:Force
 		}
 
 		# export certificate to PFX file
@@ -218,8 +333,8 @@ Process {
 }
 
 End {
-	# if parameter set is default and SkipTranscript not set...
-	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $SkipTranscript) {
+	# if SkipTranscript not set...
+	If (!$SkipTranscript) {
 		# stop transcript with default parameters
 		Try {
 			Stop-TranscriptWithHostAndDate
