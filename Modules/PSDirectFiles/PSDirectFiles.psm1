@@ -9,12 +9,24 @@ Function Copy-PathFromPSDirect {
 		[switch]$Purge
 	)
 
-	# check for VM on local system
+	# retrieve VMs on local system
 	Try {
-		$null = Get-VM -VMName $VMName -ErrorAction 'Stop'
+		$VMs = Get-VM -ErrorAction 'Stop' | Where-Object { $_.Name -eq 'root1' }
 	}
 	Catch {
-		Write-Warning -Message "could not locate VM: '$VMName'"
+		Write-Warning -Message "could call Get-VM: '$VMName'"
+		Return $_
+	}
+
+	# if multiple VMs found...
+	If ( $VMs.Count -gt 1) {
+		Write-Warning -Message "multiple VMs found by name: '$VMName'"
+		Return
+	}
+
+	# if no VMs found...
+	If ($null -eq $VMs) {
+		Write-Warning -Message "could not locate VM by name: '$VMName'"
 		Return
 	}
 
@@ -113,12 +125,24 @@ Function Copy-PathToPSDirect {
 		[switch]$Purge
 	)
 
-	# check for VM on local system
+	# retrieve VMs on local system
 	Try {
-		$null = Get-VM -VMName $VMName -ErrorAction 'Stop'
+		$VMs = Get-VM -ErrorAction 'Stop' | Where-Object { $_.Name -eq 'root1' }
 	}
 	Catch {
-		Write-Warning -Message "could not locate VM: '$VMName'"
+		Write-Warning -Message "could call Get-VM: '$VMName'"
+		Return $_
+	}
+
+	# if multiple VMs found...
+	If ( $VMs.Count -gt 1) {
+		Write-Warning -Message "multiple VMs found by name: '$VMName'"
+		Return
+	}
+
+	# if no VMs found...
+	If ($null -eq $VMs) {
+		Write-Warning -Message "could not locate VM by name: '$VMName'"
 		Return
 	}
 
