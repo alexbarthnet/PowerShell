@@ -67,6 +67,7 @@ Process {
 
 	# creat empty objects
 	$DnsZonesOnPdcRole = 0
+	$DnsRecordsLocated = 0
 	$DnsRecordsRemoved = 0
 	$DnsRecordsErrored = 0
 	$DnsRecordsInTotal = 0
@@ -104,7 +105,7 @@ Process {
 		}
 
 		# process DNS records
-		ForEach ($DnsServerResourceRecord in $DnsServerResourceRecords) {
+		:NextDnsServerResourceRecord ForEach ($DnsServerResourceRecord in $DnsServerResourceRecords) {
 			# increment total DNS records
 			$DnsRecordsInTotal++
 
@@ -122,28 +123,43 @@ Process {
 				'SRV' {
 					$RecordData = "[$($DnsServerResourceRecord.RecordData.Priority)][$($DnsServerResourceRecord.RecordData.Weight)][$($DnsServerResourceRecord.RecordData.Port)][$($DnsServerResourceRecord.RecordData.DomainName)]"
 				}
+				Default {
+					Write-TranscriptWithHostAndDate "Located unexpected $($DnsServerResourceRecord.RecordType) record from $($DnsServerZone.ZoneName) created on $($DnsServerResourceRecord.TimeStamp): $($DnsServerResourceRecord.HostName)"
+					Continue NextDnsServerResourceRecord
+				}
 			}
 
 			# if remove attempt should be attempting
 			If ($PSCmdlet.ShouldProcess("$($DnsServerResourceRecord.HostName).$($DnsServerResourceRecord.ZoneName)", 'Remove-DnsServerResourceRecord')) {
+				# remove record
 				Try {
 					Remove-DnsServerResourceRecord -ComputerName $PdcRoleOwner -ZoneName $DnsServerZone.ZoneName -InputObject $DnsServerResourceRecord -Force
-					$DnsRecordsRemoved++
 				}
 				Catch {
+					Write-WarningToTranscriptWithHostAndDate "could not remove record: $($_.ToString())"
 					$DnsRecordsErrored++
-					Write-WarningToTranscriptWithHostAndDate "could not remove record: $($_.Exeception.Message)"
+					Continue NextDnsServerResourceRecord
 				}
-			}
 
-			# declare removed
-			Write-TranscriptWithHostAndDate "Removed $($DnsServerResourceRecord.RecordType) record from $($DnsServerZone.ZoneName) created on $($DnsServerResourceRecord.TimeStamp): $($DnsServerResourceRecord.HostName); $RecordData"
+				# declare removed
+				Write-TranscriptWithHostAndDate "Removed $($DnsServerResourceRecord.RecordType) record from $($DnsServerZone.ZoneName) created on $($DnsServerResourceRecord.TimeStamp): $($DnsServerResourceRecord.HostName); $RecordData"
+				$DnsRecordsRemoved++
+			}
+			Else {
+				# declare found
+				Write-TranscriptWithHostAndDate "Located $($DnsServerResourceRecord.RecordType) record from $($DnsServerZone.ZoneName) created on $($DnsServerResourceRecord.TimeStamp): $($DnsServerResourceRecord.HostName); $RecordData"
+				$DnsRecordsLocated++
+			}
 		}
 	}
 
 	# report DNS records removed
 	Write-TranscriptWithHostAndDate "Found '$DnsRecordsInTotal' records(s) in '$DnsZonesOnPdcRole' zones"
+	
 	Write-TranscriptWithHostAndDate "Removed '$DnsRecordsRemoved' records(s)"
+	If ($DnsRecordsLocated -gt 0) {
+		Write-TranscriptWithHostAndDate "Located '$DnsRecordsLocated' records(s) to delete"
+	}
 	If ($DnsRecordsErrored -gt 0) {
 		Write-TranscriptWithHostAndDate "Could not remove '$DnsRecordsErrored' records(s)"
 	}
