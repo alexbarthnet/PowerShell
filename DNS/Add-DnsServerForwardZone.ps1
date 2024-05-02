@@ -27,19 +27,22 @@ None.
 [CmdletBinding()]
 Param(
 	# zone name for new forward zone
-	[Parameter(Mandatory)]
+	[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 	[string]$ZoneName,
 	# zone name for existing forward zone
-	[Parameter()]
+	[Parameter(Position = 1)]
 	[string]$SourceZoneName,
-	# computer name of DNS server, default value is PDC emulator
+	# domain name; default value is current domain name
+	[Parameter(Position = 2)]
+	[string]$Domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().Name,
+	# computer name of the DNS server; default value is current PDC role owner
 	[Parameter(DontShow)]
 	[string]$ComputerName = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
 )
 
 Function Add-DnsServerResourceRecordToList {
 	Param(
-		[Parameter(Mandatory)][ValidateScript({ $_ -is [Microsoft.Management.Infrastructure.CimInstance] -and $_.CimClass.CimClassName -eq 'DnsServerResourceRecord' })]
+		[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.Management.Infrastructure.CimInstance] -and $_.CimClass.CimClassName -eq 'DnsServerResourceRecord' })]
 		[object]$DnsServerResourceRecord
 	)
 
@@ -103,7 +106,7 @@ switch ($ZoneName) {
 	# if zone name is a fully qualified DNS domain...
 	{ $_.EndsWith('.') } {
 		# redefine zone name without the trailing dot
-		$ZoneName = $ZoneName.TrimEnd('.')	
+		$ZoneName = $ZoneName.TrimEnd('.')
 	}
 }
 
