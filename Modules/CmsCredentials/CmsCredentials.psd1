@@ -72,13 +72,13 @@ Description = 'CmsCredentials provides functions to store and retrieve credentia
 FunctionsToExport = @(
     'Export-CmsCredentialCertificate'
     'New-CmsCredentialCertificate'
-	'Get-CmsCredential'
-	'Protect-CmsCredential'
-	'Remove-CmsCredential'
-	'Show-CmsCredential'
-	'Grant-CmsCredentialAccess'
-	'Reset-CmsCredentialAccess'
-	'Revoke-CmsCredentialAccess'
+    'Get-CmsCredential'
+    'Protect-CmsCredential'
+    'Remove-CmsCredential'
+    'Show-CmsCredential'
+    'Grant-CmsCredentialAccess'
+    'Reset-CmsCredentialAccess'
+    'Revoke-CmsCredentialAccess'
     'Show-CmsCredentialAccess'
 )
 
