@@ -9,7 +9,7 @@
 @{
 
 # Script module or binary module file associated with this manifest.
-RootModule = 'C:\Users\Alex\Documents\Code\alexbarthnet\PowerShell\Modules\ZenossCloudFunctions\ZenossCloudFunctions.psm1'
+RootModule = 'ZenossCloudFunctions.psm1'
 
 # Version number of this module.
 ModuleVersion = '1.0.0.0'
@@ -27,7 +27,7 @@ Author = 'Alex Barth'
 CompanyName = 'Alex Barth'
 
 # Copyright statement for this module
-Copyright = '(c) 2023 Alex Barth. All rights reserved.'
+Copyright = '(c) Alex Barth. All rights reserved.'
 
 # Description of the functionality provided by this module
 Description = 'ZenossCloudFunctions'
@@ -81,7 +81,7 @@ FunctionsToExport = @(
 CmdletsToExport = @()
 
 # Variables to export from this module
-VariablesToExport = @()
+# VariablesToExport = @()
 
 # Aliases to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no aliases to export.
 AliasesToExport = @()
