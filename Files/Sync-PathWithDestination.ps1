@@ -295,7 +295,7 @@ Begin {
 			# create folders in Destination missing from Path
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
 				# retrieve folders that are missing from Destination
-				$paths_to_create_on_target += [array][System.Linq.Enumerable]::Except([string[]]$new_paths_on_source_relative, [string[]]$new_paths_on_target_relative)
+				$paths_to_create_on_target = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$new_paths_on_source_relative, [string[]]$new_paths_on_target_relative))
 
 				# create folders that are missing from Destination
 				ForEach ($folder_to_create in $paths_to_create_on_target) {
@@ -313,7 +313,7 @@ Begin {
 			# create folders in Path missing from Destination
 			If ($Direction -eq 'Both') {
 				# retrieve folders that are missing from Path
-				$paths_to_create_on_source += [array][System.Linq.Enumerable]::Except([string[]]$new_paths_on_target_relative, [string[]]$new_paths_on_source_relative)
+				$paths_to_create_on_source = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$new_paths_on_target_relative, [string[]]$new_paths_on_source_relative))
 
 				# create folders that are missing from Path
 				ForEach ($folder_to_create in $paths_to_create_on_source) {
@@ -346,7 +346,7 @@ Begin {
 			# copy new files from Path to Destination
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
 				# retrieve files that are missing from Destination
-				$files_to_copy_to_target += [array][System.Linq.Enumerable]::Except([string[]]$new_files_on_source_relative, [string[]]$new_files_on_target_relative)
+				$files_to_copy_to_target = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$new_files_on_source_relative, [string[]]$new_files_on_target_relative))
 
 				# copy files that are missing from Destination
 				ForEach ($file_to_copy in $files_to_copy_to_target) {
@@ -364,7 +364,7 @@ Begin {
 			# copy new files from Destination to Path
 			If ($Direction -eq 'Both') {
 				# retrieve files that are missing from Path
-				$files_to_copy_to_source += [array][System.Linq.Enumerable]::Except([string[]]$new_files_on_target_relative, [string[]]$new_files_on_source_relative)
+				$files_to_copy_to_source = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$new_files_on_target_relative, [string[]]$new_files_on_source_relative))
 
 				# copy files that are missing from Path
 				ForEach ($file_to_copy in $files_to_copy_to_source) {
@@ -391,7 +391,7 @@ Begin {
 			If ($all_files_on_target.Count) { $all_files_on_target_relative = $all_files_on_target.Replace($target_path, $null) } Else { $all_files_on_target_relative = @() }
 
 			# retrieve files in both Path and Destination
-			$files_present += [array][System.Linq.Enumerable]::Intersect([string[]]$all_files_on_source_relative, [string[]]$all_files_on_target_relative)
+			$files_present = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$all_files_on_source_relative, [string[]]$all_files_on_target_relative))
 
 			# copy any present files when hash or lastwritetime are different
 			ForEach ($file_present in $files_present) {
@@ -455,12 +455,12 @@ Begin {
 			If ($old_files_on_target.Count) { $old_files_on_target_relative = $old_files_on_target.Replace($target_path, $null) } Else { $old_files_on_target_relative = @() }
 
 			# retrieve files in both Path and Destination
-			$files_in_both_paths += [array][System.Linq.Enumerable]::Intersect([string[]]$all_files_on_source_relative, [string[]]$all_files_on_target_relative)
+			$files_in_both_paths = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$all_files_on_source_relative, [string[]]$all_files_on_target_relative))
 
 			# remove old files from Destination
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
 				# retrieve old files that are only in Destination
-				$files_to_remove_from_target += [array][System.Linq.Enumerable]::Except([string[]]$old_files_on_target_relative, [string[]]$files_in_both_paths)
+				$files_to_remove_from_target = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$old_files_on_target_relative, $files_in_both_paths))
 
 				# remove old files that are only in Destination
 				ForEach ($file_to_remove in $files_to_remove_from_target) {
@@ -477,7 +477,7 @@ Begin {
 			# remove old files from Path
 			If ($Direction -eq 'Reverse' -or $Direction -eq 'Both') {
 				# retrieve old files that are only in Path
-				$files_to_remove_from_source += [array][System.Linq.Enumerable]::Except([string[]]$old_files_on_source_relative, [string[]]$files_in_both_paths)
+				$files_to_remove_from_source = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$old_files_on_source_relative, $files_in_both_paths))
 
 				# remove old files that are only in Path
 				ForEach ($file_to_remove in $files_to_remove_from_source) {
@@ -511,12 +511,12 @@ Begin {
 			If ($old_folders_on_target.Count) { $old_folders_on_target_relative = $old_folders_on_target.Replace($target_path, $null) } Else { $old_folders_on_target_relative = @() }
 
 			# retrieve paths in both Path and Destination
-			$folders_in_both_paths += [array][System.Linq.Enumerable]::Intersect([string[]]$all_folders_on_source_relative, [string[]]$all_folders_on_target_relative)
+			$folders_in_both_paths = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$all_folders_on_source_relative, [string[]]$all_folders_on_target_relative))
 
 			# remove old paths from Destination
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
 				# retrieve old paths only in Destination
-				$paths_to_remove_from_target += [array][System.Linq.Enumerable]::Except([string[]]$old_folders_on_target_relative, [string[]]$folders_in_both_paths)
+				$paths_to_remove_from_target = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$old_folders_on_target_relative, $folders_in_both_paths))
 
 				# remove old paths only in Destination
 				ForEach ($folder_to_remove in $paths_to_remove_from_target) {
@@ -533,7 +533,7 @@ Begin {
 			# remove old paths from Path
 			If ($Direction -eq 'Reverse' -or $Direction -eq 'Both') {
 				# retrieve old paths only in Path
-				$paths_to_remove_from_source += [array][System.Linq.Enumerable]::Except([string[]]$old_folders_on_source_relative, [string[]]$folders_in_both_paths)
+				$paths_to_remove_from_source = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$old_folders_on_source_relative, $folders_in_both_paths))
 
 				# remove old paths only in Path
 				ForEach ($folder_to_remove in $paths_to_remove_from_source) {
@@ -947,7 +947,7 @@ Process {
 						Write-Host "ERROR: required entry (Destination) not found in configuration file: $Json"; Continue :JsonDatum
 					}
 					([string]::IsNullOrEmpty($JsonDatum.Direction)) {
-						Write-Host "ERROR: required entry (Destination) not found in configuration file: $Json"; Continue :JsonDatum
+						Write-Host "ERROR: required entry (Direction) not found in configuration file: $Json"; Continue :JsonDatum
 					}
 					Default {
 						# define required parameters for Sync-ItemsInPathWithDestination

@@ -86,7 +86,7 @@ Function Start-TranscriptWithHostAndDate {
 		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 	}
 
-	# start transcript
+	# start transcript quietly
 	Try	{
 		$null = Start-Transcript @StartTranscript
 	}
@@ -228,9 +228,9 @@ Function Stop-TranscriptWithHostAndDate {
 		}
 	}
 
-	# stop transcript
+	# stop transcript quietly
 	Try {
-		Stop-Transcript
+		$null = Stop-Transcript
 	}
 	Catch {
 		Throw $_

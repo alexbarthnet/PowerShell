@@ -66,7 +66,13 @@ The logon type for the scheduled task. The accepted values are 'ServiceAccount' 
 The run level for the scheduled task. The accepted values are 'Highest' and 'Limited'. The default value is 'Highest'.
 
 .PARAMETER Modules
-String or array of string representing the name or path to PowerShell modules required the scheduled task. Modules are installed to the AllUsers location.
+String or string array representing the path to one or more PowerShell modules required by the scheduled task. Each module will be installed to the AllUsers location. The path may be one of the following:
+ - A PowerShell module file (.psm1)
+ - A folder containing a PowerShell module file
+ - A folder containing folders containing PowerShell modules
+
+.PARAMETER Certificates
+String or string array representing the path to one or more PFX certificate files. Each certificate will be installed in the local machine personal store.
 
 .PARAMETER RemoveOldTasks
 Switch parameter to remove any scheduled task that is not defined in the JSON file and located in any of the task paths defined on the entries in the JSON configuration file.
@@ -152,37 +158,25 @@ Param(
 	[timespan]$ExecutionTimeLimit = (New-TimeSpan -Minutes 30),
 	# scheduled task parameter - principal
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Install')]
 	[string]$UserId = 'SYSTEM',
 	# scheduled task parameter - principal
 	[Parameter(ParameterSetName = 'Add')][ValidateSet('ServiceAccount', 'Password')]
-	[Parameter(ParameterSetName = 'Install')]
 	[string]$LogonType = 'ServiceAccount',
 	# scheduled task parameter - principal
 	[Parameter(ParameterSetName = 'Add')][ValidateSet('Highest', 'Limited')]
-	[Parameter(ParameterSetName = 'Install')]
 	[string]$RunLevel = 'Highest',
 	# scheduled task parameter - modules
 	[Parameter(ParameterSetName = 'Add')]
 	[string[]]$Modules,
+	# scheduled task parameter - modules
+	[Parameter(ParameterSetName = 'Add')]
+	[string[]]$Certificates,
 	# switch to remove old tasks during run
 	[Parameter(ParameterSetName = 'Default')]
 	[switch]$RemoveOldTasks,
-	# switch to process JSON entries for previous versions of the script
-	[Parameter(ParameterSetName = 'Default')]
-	[switch]$Run,
-	# switch to process JSON entries for previous versions of the script
-	[Parameter(ParameterSetName = 'Default')]
-	[switch]$Update,
 	# switch to skip transcript logging
 	[Parameter(DontShow)]
 	[switch]$SkipTranscript,
-	# name in transcript files
-	[Parameter(DontShow)]
-	[string]$TranscriptName,
-	# path to transcript files
-	[Parameter(DontShow)]
-	[string]$TranscriptPath,
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -195,167 +189,242 @@ Param(
 )
 
 Begin {
+	Function Import-CertificateFromPath {
+		[CmdletBinding()]
+		Param(
+			[Parameter(Mandatory = $true)]
+			[string]$Path,
+			[Parameter(DontShow)]
+			[string]$CertStoreLocation = 'Cert:\LocalMachine\My'
+		)
+
+		# if path not found...
+		If (!(Test-Path -Path $Path -PathType 'Leaf')) {
+			Write-Warning -Message "could not find file at path: $Path"
+			Return
+		}
+
+		# get PFX data from certificate
+		Try {
+			$PfxData = Get-PfxData -FilePath $Path -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve PFX data from '$Path' file: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# get thumbprints from PFX 
+		Try {
+			$Thumbprints = $PfxData.EndEntityCertificates | Select-Object -First 1 -ExpandProperty 'Thumbprint'
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve thumbprint from PFX data of '$Path' file: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# process thumbprints
+		ForEach ($Thumbprint in $Thumbprints) {
+			# declare thumbprint
+			Write-Verbose -Verbose -Message "Found '$Thumbprint' thumbprint in PFX file at path: $Path"
+
+			# define path to certificate
+			$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
+
+			# check for certificate by thumbprint
+			If (Test-Path -Path $CertificatePath -PathType 'Leaf') {
+				# get certificate by path
+				Try {
+					$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
+				}
+				Catch {
+					Write-Warning -Message "could not retrieve certificate at '$Path' file: $($_.Exception.Message)"
+					Continue
+				}
+				# if certificate has a private key...
+				If ($Certificate.HasPrivateKey) {
+					Write-Verbose -Verbose -Message "Verified PFX certificate imported from path: $Path"
+					Continue
+				}
+			}
+
+			# import certificate
+			Try {
+				$null = Import-PfxCertificate -CertStoreLocation $CertStoreLocation -FilePath $Path
+			}
+			Catch {
+				Write-Warning -Message "could not import PFX certificate from file at '$Path' file: $($_.Exception.Message)"
+				Continue
+			}
+
+			# report imported and return
+			Write-Verbose -Verbose -Message "Imported PFX certificate from file at path: $Path"
+		}
+	}
+
 	Function Install-ModuleFromPath {
 		[CmdletBinding()]
 		Param(
-			[Parameter(DontShow)]
+			[Parameter(Mandatory = $true)]
 			[string]$Path,
 			[Parameter(DontShow)]
-			[string]$AllUsers = ([System.Environment]::GetEnvironmentVariable('ProgramFiles'), 'WindowsPowerShell\Modules' -join '\')
+			[string]$AllUsers = (Join-Path -Path ([System.Environment]::GetEnvironmentVariable('ProgramFiles')) -ChildPath 'WindowsPowerShell\Modules')
 		)
 
+		# if path not found...
+		If (!(Test-Path -Path $Path)) {
+			Write-Warning -Message "could not find item at path: $Path"
+			Return
+		}
+
+		# get item for path
+		Try {
+			$SourceItem = Get-Item -Path $Path -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not get item for path: $Path"
+			Return $_
+		}
+
 		# define lists
-		$PathnameList = [System.Collections.Generic.List[string]]::new()
-		$FilenameList = [System.Collections.Generic.List[string]]::new()
+		$SourceFileList = [System.Collections.Generic.List[string]]::new()
+		$SourcePathList = [System.Collections.Generic.List[string]]::new()
 
 		# if path is a folder...
-		If (Test-Path -Path $Path -PathType Container) {
-			# get source folder
+		If (Test-Path -Path $Path -PathType 'Container') {
+			# if files found in immediate folder...
+			If (Get-ChildItem -Path $Path -File) {
+				# define target parent path as folder for file
+				$TargetParentPath = Join-Path -Path $AllUsers -ChildPath $SourceItem.BaseName
+			}
+			# if files not found in immediate folder...
+			Else {
+				# define target parent path as AllUsers path
+				$TargetParentPath = $AllUsers
+			}
+
+			# get path to parent of source item
+			$SourceParentPath = $SourceItem.FullName
+
+			# get files in source item
 			Try {
-				$SourceItem = Get-Item -Path $Path -ErrorAction Stop
+				$SourceFiles = Get-ChildItem -Path $SourceItem -Recurse -File
 			}
 			Catch {
-				Write-Warning "could not get source module folder: $Path"
+				Write-Warning -Message "could not search for files in path: $Path"
 				Return $_
 			}
 
-			# get path to source item
-			$SourcePath = $SourceItem.FullName
-
-			# get files in source folder
-			$SourceFiles = Get-ChildItem -Path $SourceItem -Recurse -File
-
-			# if no files found in source folder...
-			If ($null -eq $SourceFiles) {
-				Write-Warning "could not locate any files in path: $Path"
-				Return
+			# get folders in source item
+			Try {
+				$SourcePaths = Get-ChildItem -Path $SourceItem -Recurse -Directory
+			}
+			Catch {
+				Write-Warning -Message "could not search for folders in path: $Path"
+				Return $_
 			}
 
 			# for each file found...
 			ForEach ($SourceFile in $SourceFiles) {
 				# add full path of file to list
-				$FilenameList.Add($SourceFile.FullName)
+				$SourceFileList.Add($SourceFile.FullName)
 			}
-
-			# get folders in source item
-			$SourceFolders = Get-ChildItem -Path $SourceItem -Recurse -Directory
 
 			# for each folder found...
-			ForEach ($SourceFolder in $SourceFolders) {
+			ForEach ($SourcePath in $SourcePaths) {
 				# add full path of folder to list
-				$PathnameList.Add($SourceFolder.FullName)
-			}
-		}
-		# if path is a file...
-		ElseIf (Test-Path -Path $Path -PathType Leaf) {
-			# get source item
-			Try {
-				$SourceItem = Get-Item -Path $Path -ErrorAction Stop
-			}
-			Catch {
-				Write-Warning "could not get source module file: $Path"
-				Return $_
+				$SourcePathList.Add($SourcePath.FullName)
 			}
 
-			# get path to source item
-			$SourcePath = $SourceItem.DirectoryName
+			# if no files found...
+			If ($SourceFileList.Count -eq 0) {
+				Write-Warning -Message "could not locate any files in path: $Path"
+				Return
+			}
+		}
+
+		# if path is a file...
+		If (Test-Path -Path $Path -PathType 'Leaf') {
+			# define target parent path as folder for file
+			$TargetParentPath = Join-Path -Path $AllUsers -ChildPath $SourceItem.BaseName
+
+			# get path to parent of source item
+			$SourceParentPath = $SourceItem.DirectoryName
 
 			# add full path of file to list
-			$FilenameList.Add($SourceItem.FullName)
-		}
-		Else {
-			Write-Warning "`could not find source module path: $Path"
-			Return
-		}
-
-		# build target module folder path
-		Try {
-			$TargetPath = Join-Path -Path $AllUsers -ChildPath $SourceItem.BaseName
-		}
-		Catch {
-			Write-Warning 'could not build target module path'
-			Return $_
+			$SourceFileList.Add($SourceItem.FullName)
 		}
 
 		# if target module folder not found...
-		If (!(Test-Path -Path $TargetPath -PathType Container)) {
+		If (!(Test-Path -Path $TargetParentPath -PathType 'Container')) {
 			# create target module folder
 			Try {
-				$null = New-Item -Path $TargetPath -ItemType Directory -ErrorAction Stop
+				$null = New-Item -Path $TargetParentPath -ItemType 'Directory' -ErrorAction 'Stop'
 			}
 			Catch {
-				Write-Warning "could not create target module path: $TargetPath"
+				Write-Warning -Message "could not create target module path: $TargetParentPath"
 				Return $_
 			}
 		}
 
-		# process path names
-		ForEach ($Source in $PathnameList) {
+		# process source path names
+		ForEach ($Source in $SourcePathList) {
 			# build target folder path
-			$Target = $Source.Replace($SourcePath, $TargetPath)
-
-			# report target folder path
-			Write-Verbose -Verbose -Message "Checking source folder: $Source"
+			$Target = $Source.Replace($SourceParentPath, $TargetParentPath)
 
 			# if target folder found...
-			If (Test-Path -Path $TargetPath -PathType Container) {
-				Write-Verbose -Verbose -Message "Verified folder: $Target"
+			If (Test-Path -Path $Target -PathType 'Container') {
+				# continue to next folder
+				Continue
 			}
-			# if target folder not found...
-			Else {
-				Try {
-					$null = New-Item -Path $Target -ItemType Directory -ErrorAction Stop
-					Write-Verbose -Verbose -Message "Created folder: $Target"
-				}
-				Catch {
-					Write-Warning "could not create folder: $Target"
-					Return $_
-				}
+
+			# create target folder
+			Try {
+				$null = New-Item -Path $Target -ItemType 'Directory' -ErrorAction 'Stop'
+			}
+			Catch {
+				Write-Warning -Message "could not create target folder: $Target"
+				Return $_
 			}
 		}
 
-		# process file names
-		ForEach ($Source in $FilenameList) {
+		# process source file names
+		ForEach ($Source in $SourceFileList) {
 			# build target file path
-			$Target = $Source.Replace($SourcePath, $TargetPath)
-
-			# report target file path
-			Write-Verbose -Verbose -Message "Checking source file: $Source"
+			$Target = $Source.Replace($SourceParentPath, $TargetParentPath)
 
 			# if target file found...
 			If (Test-Path -Path $Target -PathType Leaf) {
 				# get source file hash
 				Try {
-					$SourceHash = Get-FileHash -Path $Source | Select-Object -ExpandProperty Hash
+					$SourceHash = Get-FileHash -Path $Source | Select-Object -ExpandProperty 'Hash'
 				}
 				Catch {
-					Write-Warning "could not get hash of source file: $Source"
+					Write-Warning -Message "could not get hash of source file: $Source"
 					Return $_
 				}
 
 				# get target file hash
 				Try {
-					$TargetHash = Get-FileHash -Path $Target | Select-Object -ExpandProperty Hash
+					$TargetHash = Get-FileHash -Path $Target | Select-Object -ExpandProperty 'Hash'
 				}
 				Catch {
-					Write-Warning "could not get hash of target file: $Target"
+					Write-Warning -Message "could not get hash of target file: $Target"
 					Return $_
 				}
 
 				# if hashes match...
 				If ($TargetHash -eq $SourceHash) {
-					# report and continue to next file
-					Write-Verbose -Verbose -Message "Verified target file: $Target"
+					# continue to next file
 					Continue
 				}
 				# if hashes do not match...
 				Else {
 					# remove target file
 					Try {
-						Remove-Item -Path $Target -Force -ErrorAction Stop
+						Remove-Item -Path $Target -Force -ErrorAction 'Stop'
 					}
 					Catch {
-						Write-Warning "could not remove old file: $Target"
+						Write-Warning -Message "could not remove old file: $Target"
 						Return $_
 					}
 					# report target file removed
@@ -363,18 +432,77 @@ Begin {
 				}
 			}
 
-			# copy source file
+			# create target file from source file
 			Try {
-				Copy-Item -Path $Source -Destination $Target -ErrorAction Stop
+				Copy-Item -Path $Source -Destination $Target -ErrorAction 'Stop'
 			}
 			Catch {
-				Write-Warning "could not write file: $Target"
+				Write-Warning -Message "could not write file: $Target"
 				Return $_
 			}
 
 			# report source file copied
 			Write-Verbose -Verbose -Message "Installed target file: $Target"
 		}
+
+		# get files in target folder not in source file list
+		Try {
+			$TargetFiles = Get-ChildItem -Path $TargetParentPath -Recurse -File | Sort-Object -Descending
+		}
+		Catch {
+			Write-Warning -Message "could not search for files in path: $TargetParentPath"
+			Return $_
+		}
+
+		# get paths in target folder not in source file list
+		Try {
+			$TargetPaths = Get-ChildItem -Path $TargetParentPath -Recurse -Directory | Sort-Object -Descending
+		}
+		Catch {
+			Write-Warning -Message "could not search for folders in path: $TargetParentPath"
+			Return $_
+		}
+
+		# process target file names
+		ForEach ($Target in $TargetFiles) {
+			# if source file list contains source file...
+			If ($SourceFileList.Contains($Target.FullName.Replace($TargetParentPath, $SourceParentPath))) {
+				# continue to next target file
+				Continue
+			}
+			# remove target file
+			Try {
+				Remove-Item -Path $Target.FullName -Force -ErrorAction 'Stop'
+			}
+			Catch {
+				Write-Warning -Message "could not remove old file: $Target"
+				Return $_
+			}
+			# report target file removed
+			Write-Verbose -Verbose -Message "Removed invalid file: $Target"
+		}
+
+		# process target path names
+		ForEach ($Target in $TargetPaths) {
+			# if source path list contains source path...
+			If ($SourcePathList.Contains($Target.FullName.Replace($TargetParentPath, $SourceParentPath))) {
+				# continue to next target path
+				Continue
+			}
+			# remove target path
+			Try {
+				Remove-Item -Path $Target.FullName -Force -ErrorAction 'Stop'
+			}
+			Catch {
+				Write-Warning -Message "could not remove old folder: $Target"
+				Return $_
+			}
+			# report target path removed
+			Write-Verbose -Verbose -Message "Removed invalid folder: $Target"
+		}
+
+		# report then return
+		Write-Verbose -Verbose -Message "Verified module(s) from path: $Path"
 	}
 
 	Function Test-ScheduledTaskPath {
@@ -519,7 +647,7 @@ Begin {
 			$Existing = Get-ScheduledTask | Where-Object { $_.TaskPath -eq $TaskPath -and $_.TaskName -eq $TaskName }
 		}
 		Catch {
-			Write-Warning "could not retrieve scheduled tasks with filter for task '$TaskName' at path '$TaskPath'"
+			Write-Warning -Message "could not retrieve scheduled tasks with filter for task '$TaskName' at path '$TaskPath'"
 			Return $_
 		}
 
@@ -536,7 +664,7 @@ Begin {
 					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Action $Action
 				}
 				Catch {
-					Write-Warning "could not update action for existing scheduled task '$TaskName' at path '$TaskPath'"
+					Write-Warning -Message "could not update action for existing scheduled task '$TaskName' at path '$TaskPath'"
 					Return $_
 				}
 			}
@@ -557,7 +685,7 @@ Begin {
 					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Trigger $Trigger
 				}
 				Catch {
-					Write-Warning "could not update trigger for existing scheduled task '$TaskName' at path '$TaskPath'"
+					Write-Warning -Message "could not update trigger for existing scheduled task '$TaskName' at path '$TaskPath'"
 					Return $_
 				}
 			}
@@ -576,7 +704,7 @@ Begin {
 					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Settings $Settings
 				}
 				Catch {
-					Write-Warning "could not update settings for existing scheduled task '$TaskName' at path '$TaskPath'"
+					Write-Warning -Message "could not update settings for existing scheduled task '$TaskName' at path '$TaskPath'"
 					Return $_
 				}
 			}
@@ -602,7 +730,7 @@ Begin {
 					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Principal $Principal
 				}
 				Catch {
-					Write-Warning "could not update principal for existing scheduled task '$TaskName' at path '$TaskPath'"
+					Write-Warning -Message "could not update principal for existing scheduled task '$TaskName' at path '$TaskPath'"
 					Return $_
 				}
 			}
@@ -638,30 +766,29 @@ Begin {
 
 	Function Start-TranscriptWithHostAndDate {
 		Param(
-			# name for transcript file
-			[Parameter()]
-			[string]$TranscriptName,
-			# path for transcript file
-			[Parameter()]
-			[string]$TranscriptPath,
-			# log start time
+			# name for transcript items; default is sanitized name of calling script or function
+			[Parameter(Position = 0)]
+			[string]$TranscriptName = (Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$',
+			# root folder for transcript folders; default is common application data folder
 			[Parameter(DontShow)]
-			[string]$TranscriptTime = ([datetime]::Now.ToString('yyyyMMddHHmmss')),
-			# local hostname
+			[string]$TranscriptRoot = ([System.Environment]::GetFolderPath('CommonApplicationData')),
+			# leaf folder for transcript folders; default is 'PowerShell_transcript'
 			[Parameter(DontShow)]
-			[string]$TranscriptHost = ([System.Environment]::MachineName)
+			[string]$TranscriptLeaf = 'PowerShell_transcript',
+			# base folder for transcript folders; default is 'PowerShell_transcript' folder in common application data folder
+			[Parameter(DontShow)]
+			[string]$TranscriptBase = (Join-Path -Path $TranscriptRoot -ChildPath $TranscriptLeaf),
+			# path for transcript files; default is named folder under 'PowerShell_transcript' folder in common application data folder
+			[Parameter(DontShow)]
+			[string]$TranscriptPath = (Join-Path -Path $TranscriptBase -ChildPath $TranscriptName),
+			# host for transcript file name
+			[Parameter(DontShow)]
+			[string]$TranscriptHost = ([System.Environment]::MachineName),
+			# time for transcript file name
+			[Parameter(DontShow)]
+			[string]$TranscriptTime = ([datetime]::Now.ToString('yyyyMMddHHmmss'))
 		)
-
-		# define default transcript name as basename of running script
-		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
-			$TranscriptName = (Get-PSCallStack)[1].Command -replace '\.ps1$'
-		}
-
-		# define default transcript path as named folder under transcripts folder in common application data folder
-		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
-			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
-		}
-
+	
 		# verify transcript path
 		If (!(Test-Path -Path $TranscriptPath -PathType 'Container')) {
 			# define parameters for New-Item
@@ -670,7 +797,7 @@ Begin {
 				ItemType    = 'Directory'
 				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 			}
-
+	
 			# create transcript path
 			Try {
 				$null = New-Item @NewItem
@@ -679,17 +806,17 @@ Begin {
 				Throw $_
 			}
 		}
-
+	
 		# build transcript file name with defined prefix, hostname, transcript name and current datetime
 		$TranscriptFile = "PowerShell_transcript.$TranscriptHost.$TranscriptName.$TranscriptTime.txt"
-
+	
 		# define parameters for Start-Transcript
 		$StartTranscript = @{
 			Path        = Join-Path -Path $TranscriptPath -ChildPath $TranscriptFile
 			Force       = $true
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
-
+	
 		# start transcript
 		Try	{
 			$null = Start-Transcript @StartTranscript
@@ -701,85 +828,107 @@ Begin {
 
 	Function Stop-TranscriptWithHostAndDate {
 		Param(
-			# name for transcript file
+			# name for transcript items; default is sanitized name of calling script or function
 			[Parameter()]
-			[string]$TranscriptName,
-			# path of transcript files
+			[string]$TranscriptName = (Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$',
+			# root folder for transcript folders; default is common application data folder
 			[Parameter()]
-			[string]$TranscriptPath,
-			# minimum number of transcript files for removal
+			[string]$TranscriptRoot = ([System.Environment]::GetFolderPath('CommonApplicationData')),
+			# leaf folder for transcript folders; default is 'PowerShell_transcript'
+			[Parameter()]
+			[string]$TranscriptLeaf = 'PowerShell_transcript',
+			# base folder for transcript folders; default is 'PowerShell_transcript' folder in common application data folder
+			[Parameter()]
+			[string]$TranscriptBase = (Join-Path -Path $TranscriptRoot -ChildPath $TranscriptLeaf),
+			# path for transcript files; default is named folder under 'PowerShell_transcript' folder in common application data folder
+			[Parameter()]
+			[string]$TranscriptPath = (Join-Path -Path $TranscriptBase -ChildPath $TranscriptName),
+			# host for transcript file names
 			[Parameter(DontShow)]
-			[uint16]$TranscriptCount = 7,
-			# minimum age of transcript files for removal
+			[string]$TranscriptHost = ([System.Environment]::MachineName),
+			# units for transcript cleanup date
+			[Parameter(DontShow)][ValidateSet('Hours', 'Days', 'Weeks', 'Months', 'Years')]
+			[string]$TranscriptDateUnits = 'Days',
+			# value for transcript cleanup date
+			[Parameter(DontShow)][ValidateScript({ $_ -ge 1 })]
+			[uint16]$TranscriptDateValue = 7,
+			# count of files to remain after transcript cleanup
 			[Parameter(DontShow)]
-			[double]$TranscriptDays = 7,
-			# datetime for transcript files for removal
-			[Parameter(DontShow)]
-			[datetime]$TranscriptDate = ([datetime]::Now.AddDays(-$TranscriptDays)),
-			# local hostname
-			[Parameter(DontShow)]
-			[string]$TranscriptHost = ([System.Environment]::MachineName)
+			[uint16]$TranscriptFileCount = 7
 		)
-
-		# define default transcript name as basename of running script
-		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
-			$TranscriptName = (Get-PSCallStack)[1].Command -replace '\.ps1$'
-		}
-
-		# define default transcript path as named folder under transcripts folder in common application data folder
-		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
-			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
-			# LEGACY: re-define default transcript path as string array containing current path and original path in common application data folder
-			[string[]]$TranscriptPath = @([System.Environment]::GetFolderPath('CommonApplicationData'), $TranscriptPath)
-		}
-
+	
 		# define filter using default transcript prefix, hostname, and script name
 		$TranscriptFilter = "PowerShell_transcript.$TranscriptHost.$TranscriptName*"
-
+	
 		# get transcript files matching filter
-		$TranscriptFiles = Get-ChildItem -Path $TranscriptPath -Filter $TranscriptFilter -ErrorAction 'SilentlyContinue'
-
-		# split transcript files on transcript date
-		$NewFiles, $OldFiles = $TranscriptFiles.Where({ $_.LastWriteTime -ge $TranscriptDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
-		
-		# if count of files after transcript date is less than to cleanup threshold...
-		If ($NewFiles.Count -lt $TranscriptCount) {
-			# declare skip
-			Write-Verbose -Message "Skipping transcript file cleanup; count of transcripts ($($NewFiles.Count)) would be below minimum transcript count ($TranscriptCount)" -Verbose
+		Try {
+			$TranscriptFiles = Get-ChildItem -Path $TranscriptPath -Filter $TranscriptFilter -ErrorAction 'SilentlyContinue'
+		}
+		Catch {
+			Write-Warning -Message $_.ToString()
+		}
+	
+		# define transcript date
+		switch ($TranscriptDateUnits) {
+			'Hours' {
+				$TranscriptDate = [datetime]::Now.AddHours(-$TranscriptDateValue)
+			}
+			'Days' {
+				$TranscriptDate = [datetime]::Now.AddDays(-$TranscriptDateValue)
+			}
+			'Months' {
+				$TranscriptDate = [datetime]::Now.AddMonths(-$TranscriptDateValue)
+			}
+			'Years' {
+				$TranscriptDate = [datetime]::Now.AddYears(-$TranscriptDateValue)
+			}
+			Default {
+				$TranscriptDate = [datetime]::FromFileTime(0)
+			}
+		}
+	
+		# declare cleanup thresholds
+		Write-Verbose -Verbose -Message "Removing transcript files from '$TranscriptPath' matching '$TranscriptFilter' with a LastWriteTime before '$($TranscriptDate.ToString('s'))' provided that '$TranscriptFileCount' files remain"
+	
+		# split transcript files into files-to-remain and files-to-remove based upon LastWriteTime
+		Try {
+			$FilesToRemain, $FilesToRemove = $TranscriptFiles.Where({ $_.LastWriteTime -ge $TranscriptDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
+		}
+		Catch {
+			Write-Warning -Message $_.ToString()
+		}
+	
+		# if count of files-to-remain is than minimum file count...
+		If ($FilesToRemain.Count -lt $TranscriptFileCount) {
+			# declare skipping cleanup
+			Write-Verbose -Verbose -Message "Skipping transcript cleanup: only '$($FilesToRemain.Count)' files would remain"
 		}
 		Else {
-			# declare cleanup
-			Write-Verbose -Message "Removing any transcript files matching '$TranscriptFilter' that are older than '$TranscriptDays' days from: $TranscriptPath" -Verbose
-			# remove old transcript files
-			ForEach ($OldFile in ($OldFiles | Sort-Object -Property FullName)) {
+			# sort files-to-remove by name then remove
+			ForEach ($FileToRemove in ($FilesToRemove | Sort-Object -Property FullName)) {
 				Try {
-					Remove-Item -Path $OldFile.FullName -Force -Verbose -ErrorAction Stop
+					Remove-Item -Path $FileToRemove.FullName -Force -Verbose -ErrorAction 'Stop'
 				}
 				Catch {
-					$_
+					Write-Warning -Message $_.ToString()
 				}
 			}
 		}
-
+	
 		# stop transcript
 		Try {
-			$null = Stop-Transcript
+			Stop-Transcript
 		}
 		Catch {
 			Throw $_
 		}
 	}
 
-	# if running...
-	If ($PSCmdlet.ParameterSetName -eq 'Default') {
-		# define hashtable for transcript functions
-		$TranscriptWithHostAndDate = @{}
-		# define parameters for transcript functions
-		If ($PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptWithHostAndDate['TranscriptName'] = $PSBoundParameters['TranscriptName'] }
-		If ($PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptWithHostAndDate['TranscriptPath'] = $PSBoundParameters['TranscriptPath'] }
-		# start transcript with parameters
+	# if parameter set is Default and SkipTranscript not set...
+	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $PSBoundParameters.ContainsKey('SkipTranscript')) {
+		# start transcript with default parameters
 		Try {
-			Start-TranscriptWithHostAndDate @TranscriptWithHostAndDate
+			Start-TranscriptWithHostAndDate
 		}
 		Catch {
 			Throw $_
@@ -842,7 +991,7 @@ Process {
 		}
 
 		# report and return
-		Write-Verbose -Verbose -Message "`nInstalled Update-ScheduledTasks"
+		Write-Verbose -Verbose -Message 'Installed Update-ScheduledTasks'
 		Return
 	}
 
@@ -872,10 +1021,10 @@ Process {
 	If (Test-Path -Path $Json) {
 		# ...create JSON data object as array of PSCustomObjects from JSON file content
 		Try {
-			$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
+			$JsonData = [array](Get-Content -Path $Json -ErrorAction 'Stop' | ConvertFrom-Json -ErrorAction 'Stop')
 		}
 		Catch {
-			Write-Warning "could not read configuration file: '$Json'"
+			Write-Warning -Message "could not read configuration file: '$Json'"
 			Return $_
 		}
 	}
@@ -885,10 +1034,10 @@ Process {
 		If ($Add) {
 			# ...try to create the JSON file
 			Try {
-				$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
+				$null = New-Item -ItemType 'File' -Path $Json -ErrorAction 'Stop'
 			}
 			Catch {
-				Write-Warning "could not create configuration file: '$Json'"
+				Write-Warning -Message "could not create configuration file: '$Json'"
 				Return $_
 			}
 			# ...create JSON data object as empty array
@@ -897,7 +1046,7 @@ Process {
 		# ...and Add not set...
 		Else {
 			# ...report and return
-			Write-Warning "could not find configuration file: '$Json'"
+			Write-Warning -Message "could not find configuration file: '$Json'"
 			Return
 		}
 	}
@@ -906,17 +1055,17 @@ Process {
 	switch ($true) {
 		# show configuration file
 		$Show {
-			Write-Verbose -Verbose -Message "`nDisplaying '$Json'"
+			Write-Verbose -Verbose -Message "Displaying '$Json'"
 			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 		# clear configuration file
 		$Clear {
 			Try {
 				[string]::Empty | Set-Content -Path $Json
-				Write-Verbose -Verbose -Message "`nCleared configuration file: '$Json'"
+				Write-Verbose -Verbose -Message "Cleared configuration file: '$Json'"
 			}
 			Catch {
-				Write-Warning "could not clear configuration file: '$Json'"
+				Write-Warning -Message "could not clear configuration file: '$Json'"
 				Return $_
 			}
 		}
@@ -929,17 +1078,17 @@ Process {
 				If ($null -eq $JsonData) {
 					# clear JSON data
 					[string]::Empty | Set-Content -Path $Json
-					Write-Verbose -Verbose -Message "`nRemoved '$TaskName' at '$Taskpath' from configuration file: '$Json'"
+					Write-Verbose -Verbose -Message "Removed '$TaskName' at '$Taskpath' from configuration file: '$Json'"
 				}
 				Else {
 					# export JSON data
-					$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-					Write-Verbose -Verbose -Message "`nRemoved '$TaskName' at '$Taskpath' from configuration file: '$Json'"
-					$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+					$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
+					Write-Verbose -Verbose -Message "Removed '$TaskName' at '$Taskpath' from configuration file: '$Json'"
+					$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 				}
 			}
 			Catch {
-				Write-Warning "could not update configuration file: '$Json'"
+				Write-Warning -Message "could not update configuration file: '$Json'"
 				Return $_
 			}
 		}
@@ -948,7 +1097,7 @@ Process {
 			Try {
 				# validate task path when task name not 'Update-ScheduledTasks'
 				If ($TaskName -ne 'Update-ScheduledTasks' -and -not (Test-ScheduledTaskPath -TaskPath $TaskPath)) {
-					Write-Warning "the path defined is not permitted: '$TaskPath'"
+					Write-Warning -Message "the path defined is not permitted: '$TaskPath'"
 					Return
 				}
 
@@ -974,28 +1123,33 @@ Process {
 				}
 
 				# add RandomDelay if provided as datetime value
-				If ($null -ne $RandomDelay) {
+				If ($PSBoundParameters.ContainsKey('RandomDelay')) {
 					$JsonParameters['RandomDelayTime'] = [datetime]($TriggerAt + $RandomDelay)
 				}
 
 				# add ExecutionTimeLimitTime1 if provided as datetime value
-				If ($null -ne $ExecutionTimeLimit) {
+				If ($PSBoundParameters.ContainsKey('ExecutionTimeLimit')) {
 					$JsonParameters['ExecutionTimeLimitTime'] = [datetime]($TriggerAt + $ExecutionTimeLimit)
 				}
 
 				# add RepetitionInterval if provided as datetime value
-				If ($null -ne $RepetitionInterval) {
+				If ($PSBoundParameters.ContainsKey('RepetitionInterval')) {
 					$JsonParameters['RepetitionIntervalTime'] = [datetime]($TriggerAt + $RepetitionInterval)
 				}
 
 				# add RunLevel if provided
-				If ($null -ne $RunLevel) {
+				If ($PSBoundParameters.ContainsKey('RunLevel')) {
 					$JsonParameters['RunLevel'] = $RunLevel
 				}
 
 				# add Modules if provided
-				If ($null -ne $Modules) {
+				If ($PSBoundParameters.ContainsKey('Modules')) {
 					$JsonParameters['Modules'] = $Modules
+				}
+
+				# add Certificates if provided
+				If ($PSBoundParameters.ContainsKey('Certificates')) {
+					$JsonParameters['Certificates'] = $Certificates
 				}
 
 				# add current time as FileDateTimeUniversal
@@ -1007,7 +1161,7 @@ Process {
 				# if existing entry has same primary key(s)...
 				If ($JsonData | Where-Object { $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath }) {
 					# inquire before removing existing entry
-					Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
+					Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction 'Inquire'
 					# remove existing entry with same primary key(s)
 					$JsonData = $JsonData | Where-Object { -not ($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath) }
 				}
@@ -1016,23 +1170,23 @@ Process {
 				$JsonData += $JsonEntry
 
 				# export JSON data
-				$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-				Write-Verbose -Verbose -Message "`nAdded '$TaskName' at '$Taskpath' to configuration file: '$Json'"
-				$JsonData | Sort-Object -Property TaskPath, TaskName | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+				$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
+				Write-Verbose -Verbose -Message "Added '$TaskName' at '$Taskpath' to configuration file: '$Json'"
+				$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			Catch {
-				Write-Warning "could not update configuration file: '$Json'"
+				Write-Warning -Message "could not update configuration file: '$Json'"
 				Return $_
 			}
 		}
 		# process entries in configuration file
 		Default {
 			# declare start
-			Write-Host "`nUpdating scheduled tasks from '$Json'"
+			Write-Verbose -Verbose -Message "Updating scheduled tasks from '$Json'"
 
 			# check entry count in configuration file
 			If ($JsonData.Count -eq 0) {
-				Write-Warning "no entries found in configuration file: $Json"
+				Write-Warning -Message "no entries found in configuration file: $Json"
 				Return
 			}
 
@@ -1044,25 +1198,25 @@ Process {
 				# validate values in JSON file
 				Switch ($true) {
 					([string]::IsNullOrEmpty($JsonEntry.TaskName)) {
-						Write-Warning "required entry (TaskName) not found in configuration file: $Json"; Continue JsonEntry
+						Write-Warning -Message "required entry (TaskName) not found in configuration file: $Json"; Continue JsonEntry
 					}
 					([string]::IsNullOrEmpty($JsonEntry.TaskPath)) {
-						Write-Warning "required value (TaskPath) not found in configuration file: $Json"; Continue JsonEntry
+						Write-Warning -Message "required value (TaskPath) not found in configuration file: $Json"; Continue JsonEntry
 					}
 					([string]::IsNullOrEmpty($JsonEntry.Execute)) {
-						Write-Warning "required value (Execute) not found in configuration file: $Json"; Continue JsonEntry
+						Write-Warning -Message "required value (Execute) not found in configuration file: $Json"; Continue JsonEntry
 					}
 					([string]::IsNullOrEmpty($JsonEntry.Argument)) {
-						Write-Warning "required value (Argument) not found in configuration file: $Json"; Continue JsonEntry
+						Write-Warning -Message "required value (Argument) not found in configuration file: $Json"; Continue JsonEntry
 					}
 					([string]::IsNullOrEmpty($JsonEntry.UserId)) {
-						Write-Warning "required value (UserId) not found in configuration file: $Json"; Continue JsonEntry
+						Write-Warning -Message "required value (UserId) not found in configuration file: $Json"; Continue JsonEntry
 					}
 					([string]::IsNullOrEmpty($JsonEntry.LogonType)) {
-						Write-Warning "required value (LogonType) not found in configuration file: $Json"; Continue JsonEntry
+						Write-Warning -Message "required value (LogonType) not found in configuration file: $Json"; Continue JsonEntry
 					}
 					($JsonEntry.TriggerAt -isnot [datetime]) {
-						Write-Warning "invalid entry (TriggerAt) found in configuration file: $Json"; Continue JsonEntry
+						Write-Warning -Message "invalid entry (TriggerAt) found in configuration file: $Json"; Continue JsonEntry
 					}
 					Default {
 						# if valid task path provided...
@@ -1101,7 +1255,7 @@ Process {
 								$UpdateScheduledTaskFromJson['TriggerAt'] = [datetime]$JsonEntry.TriggerAt
 							}
 							Else {
-								Write-Warning "could not cast TriggerAt to [datetime] in task: '$($JsonEntry.TaskName)'"
+								Write-Warning -Message "could not cast TriggerAt to [datetime] in task: '$($JsonEntry.TaskName)'"
 								Continue JsonData
 							}
 
@@ -1115,12 +1269,12 @@ Process {
 										$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonEntry.RandomDelayTime - $JsonEntry.TriggerAt)
 									}
 									Else {
-										Write-Warning "RandomDelayTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
+										Write-Warning -Message "RandomDelayTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
 										Continue JsonData
 									}
 								}
 								Else {
-									Write-Warning "could not cast RandomDelayTime to [datetime] in task: '$($JsonEntry.TaskName)'"
+									Write-Warning -Message "could not cast RandomDelayTime to [datetime] in task: '$($JsonEntry.TaskName)'"
 									Continue JsonData
 								}
 							}
@@ -1135,12 +1289,12 @@ Process {
 										$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonEntry.RepetitionIntervalTime - $JsonEntry.TriggerAt)
 									}
 									Else {
-										Write-Warning "RepetitionIntervalTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
+										Write-Warning -Message "RepetitionIntervalTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
 										Continue JsonData
 									}
 								}
 								Else {
-									Write-Warning "could not cast RepetitionIntervalTime to [datetime] in task: '$($JsonEntry.TaskName)'"
+									Write-Warning -Message "could not cast RepetitionIntervalTime to [datetime] in task: '$($JsonEntry.TaskName)'"
 									Continue JsonData
 								}
 							}
@@ -1155,12 +1309,12 @@ Process {
 										$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonEntry.ExecutionTimeLimitTime - $JsonEntry.TriggerAt)
 									}
 									Else {
-										Write-Warning "ExecutionTimeLimitTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
+										Write-Warning -Message "ExecutionTimeLimitTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
 										Continue JsonData
 									}
 								}
 								Else {
-									Write-Warning "could not cast ExecutionTimeLimitTime to [datetime] in task: '$($JsonEntry.TaskName)'"
+									Write-Warning -Message "could not cast ExecutionTimeLimitTime to [datetime] in task: '$($JsonEntry.TaskName)'"
 									Continue JsonData
 								}
 							}
@@ -1184,6 +1338,17 @@ Process {
 								Return $_
 							}
 						}
+
+						# if Certificates defined in JSON...
+						ForEach ($Path in $JsonEntry.Certificates) {
+							# install module
+							Try {
+								Import-CertificateFromPath -Path $Path
+							}
+							Catch {
+								Return $_
+							}
+						}
 					}
 				}
 			}
@@ -1192,7 +1357,7 @@ Process {
 			:TaskPath ForEach ($TaskPath in $ExpectedTasks.Keys) {
 				# check if any bad path values have been snuck in
 				If (-not (Test-ScheduledTaskPath -TaskPath $TaskPath)) {
-					Write-Warning "the path defined is not permitted: '$TaskPath' for '$($ExpectedTasks[$TaskPath])'"
+					Write-Warning -Message "the path defined is not permitted: '$TaskPath' for '$($ExpectedTasks[$TaskPath])'"
 					Continue TaskPath
 				}
 
@@ -1201,7 +1366,7 @@ Process {
 					$TasksInPath = Get-ScheduledTask | Where-Object { $_.TaskPath -eq $TaskPath } | Select-Object -ExpandProperty 'TaskName'
 				}
 				Catch {
-					Write-Warning "could not retrieve tasks from path: '$TaskPath'"
+					Write-Warning -Message "could not retrieve tasks from path: '$TaskPath'"
 					Return $_
 				}
 
@@ -1213,7 +1378,7 @@ Process {
 							# Unregister-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath
 						}
 						Catch {
-							Write-Warning "could not unregister task '$TaskName' from path '$TaskPath'"
+							Write-Warning -Message "could not unregister task '$TaskName' from path '$TaskPath'"
 							Return $_
 						}
 					}
@@ -1224,11 +1389,11 @@ Process {
 }
 
 End {
-	# if running...
-	If ($PSCmdlet.ParameterSetName -eq 'Default') {
-		# stop transcript with parameters
+	# if parameter set is Default and SkipTranscript not set...
+	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $PSBoundParameters.ContainsKey('SkipTranscript')) {
+		# stop transcript with default parameters
 		Try {
-			Stop-TranscriptWithHostAndDate @TranscriptWithHostAndDate
+			Stop-TranscriptWithHostAndDate
 		}
 		Catch {
 			Throw $_

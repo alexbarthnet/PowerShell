@@ -9,7 +9,7 @@
 @{
 
 # Script module or binary module file associated with this manifest.
-RootModule = '.\CmsCredentials.psm1'
+RootModule = 'CmsCredentials.psm1'
 
 # Version number of this module.
 ModuleVersion = '2.0.0.0'
@@ -27,7 +27,7 @@ Author = 'Alex Barth'
 CompanyName = 'Alex Barth'
 
 # Copyright statement for this module
-Copyright = '(c) 2023 Alex Barth. All rights reserved.'
+Copyright = '(c) Alex Barth. All rights reserved.'
 
 # Description of the functionality provided by this module
 Description = 'CmsCredentials provides functions to store and retrieve credentials using the Cryptographic Message Syntax (CMS) standard.'
@@ -69,20 +69,18 @@ Description = 'CmsCredentials provides functions to store and retrieve credentia
 # NestedModules = @()
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-FunctionsToExport = 'New-CmsCredentialCertificate',
-    'Protect-CmsCredential',
-    'Remove-CmsCredential',
-    'Show-CmsCredential',
-    'Unprotect-CmsCredential',
-    'Protect-CmsCredentials',
-    'Remove-CmsCredentials',
-    'Show-CmsCredentials',
-    'Unprotect-CmsCredentials',
-    'Grant-CmsCredentialAccess',
-    'Reset-CmsCredentialAccess',
-    'Revoke-CmsCredentialAccess',
-    'Update-CmsCredentialAccess'
-
+FunctionsToExport = @(
+    'Export-CmsCredentialCertificate'
+    'New-CmsCredentialCertificate'
+	'Get-CmsCredential'
+	'Protect-CmsCredential'
+	'Remove-CmsCredential'
+	'Show-CmsCredential'
+	'Grant-CmsCredentialAccess'
+	'Reset-CmsCredentialAccess'
+	'Revoke-CmsCredentialAccess'
+    'Show-CmsCredentialAccess'
+)
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()
@@ -126,7 +124,7 @@ PrivateData = @{
         # ExternalModuleDependencies = ''
 
     } # End of PSData hashtable
-    
+
  } # End of PrivateData hashtable
 
 # HelpInfo URI of this module
