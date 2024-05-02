@@ -462,13 +462,14 @@ Function Update-ADSecurity {
 Get-ADSecurityObjects -Force
 
 # define functions to export
-$functions_to_export = @()
-$functions_to_export += 'Get-ADSecurityIdentifier'
-$functions_to_export += 'Get-ADSecurityObjects'
-$functions_to_export += 'New-ADCustomPSDrive'
-$functions_to_export += 'Remove-ADCustomPSDrive'
-$functions_to_export += 'Reset-ADSecurity'
-$functions_to_export += 'Update-ADSecurity'
+$FunctionsToExport = @(
+	'Get-ADSecurityIdentifier'
+	'Get-ADSecurityObjects'
+	'New-ADCustomPSDrive'
+	'Remove-ADCustomPSDrive'
+	'Reset-ADSecurity'
+	'Update-ADSecurity'
+)
 
 # export module members
-Export-ModuleMember -Function $functions_to_export
+Export-ModuleMember -Function $FunctionsToExport

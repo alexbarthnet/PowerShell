@@ -726,16 +726,17 @@ Function Set-ADAttribute {
 }
 
 # define functions to export
-$functions_to_export = @()
-$functions_to_export += 'Add-ADSchemaAttributes'
-$functions_to_export += 'Add-ADSchemaAttributesToClass'
-$functions_to_export += 'Add-ADSchemaClassToParent'
-$functions_to_export += 'Add-ADSchemaClass'
-$functions_to_export += 'Get-ADSchemaClass'
-$functions_to_export += 'Get-ADSchemaClassAncestry'
-$functions_to_export += 'Get-ADSchemaClassAttributes'
-$functions_to_export += 'Get-ADSchemaAttribute'
-$functions_to_export += 'Set-ADAttribute'
+$FunctionsToExport = @(
+	'Add-ADSchemaAttributes'
+	'Add-ADSchemaAttributesToClass'
+	'Add-ADSchemaClassToParent'
+	'Add-ADSchemaClass'
+	'Get-ADSchemaClass'
+	'Get-ADSchemaClassAncestry'
+	'Get-ADSchemaClassAttributes'
+	'Get-ADSchemaAttribute'
+	'Set-ADAttribute'
+)
 
 # export module members
-Export-ModuleMember -Function $functions_to_export
+Export-ModuleMember -Function $FunctionsToExport

@@ -200,12 +200,13 @@ Function Get-StringHash {
 }
 
 # define functions to export
-$functions_to_export = @()
-$functions_to_export += 'ConvertFrom-SecurityIdentifier'
-$functions_to_export += 'ConvertTo-SecurityIdentifier'
-$functions_to_export += 'Get-RandomAlpha'
-$functions_to_export += 'Get-RandomHex'
-$functions_to_export += 'Get-StringHash'
+$FunctionsToExport = @(
+	'ConvertFrom-SecurityIdentifier'
+	'ConvertTo-SecurityIdentifier'
+	'Get-RandomAlpha'
+	'Get-RandomHex'
+	'Get-StringHash'
+)
 
 # export module members
-Export-ModuleMember -Function $functions_to_export
+Export-ModuleMember -Function $FunctionsToExport

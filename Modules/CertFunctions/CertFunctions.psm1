@@ -1156,19 +1156,20 @@ Function Test-Thumbprint {
 }
 
 # define functions to export
-$functions_to_export = @()
-$functions_to_export += 'ConvertTo-X509Certificate'
-$functions_to_export += 'Format-ReversedDistinguishedName'
-$functions_to_export += 'Format-ReversedString'
-$functions_to_export += 'Get-CertificateAltSecurityIdentity'
-$functions_to_export += 'Get-CertificateBundle'
-$functions_to_export += 'Get-CertificateChain'
-$functions_to_export += 'Get-CertificateFromAD'
-$functions_to_export += 'Get-CertificateFromUri'
-$functions_to_export += 'Get-CertificatePrivateKeyPath'
-$functions_to_export += 'Grant-CertificatePermissions'
-$functions_to_export += 'Revoke-CertificatePermissions'
-$functions_to_export += 'Test-Thumbprint'
+$FunctionsToExport = @(
+	'ConvertTo-X509Certificate'
+	'Format-ReversedDistinguishedName'
+	'Format-ReversedString'
+	'Get-CertificateAltSecurityIdentity'
+	'Get-CertificateBundle'
+	'Get-CertificateChain'
+	'Get-CertificateFromAD'
+	'Get-CertificateFromUri'
+	'Get-CertificatePrivateKeyPath'
+	'Grant-CertificatePermissions'
+	'Revoke-CertificatePermissions'
+	'Test-Thumbprint'
+)
 
 # export module members
-Export-ModuleMember -Function $functions_to_export
+Export-ModuleMember -Function $FunctionsToExport

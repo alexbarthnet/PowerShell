@@ -461,12 +461,13 @@ Function Update-ADMembersOf {
 }
 
 # define functions to export
-$functions_to_export = @()
-$functions_to_export += 'Find-ADGroup'
-$functions_to_export += 'Get-ADGroupsFromGroup'
-$functions_to_export += 'Get-ADGroupsFromQuery'
-$functions_to_export += 'Update-ADMembers'
-$functions_to_export += 'Update-ADMembersOf'
+$FunctionsToExport = @(
+	'Find-ADGroup'
+	'Get-ADGroupsFromGroup'
+	'Get-ADGroupsFromQuery'
+	'Update-ADMembers'
+	'Update-ADMembersOf'
+)
 
 # export module members
-Export-ModuleMember -Function $functions_to_export
+Export-ModuleMember -Function $FunctionsToExport
