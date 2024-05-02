@@ -1,3 +1,5 @@
+#requires -Modules TranscriptWithHostAndDate
+
 <#
 .SYNOPSIS
 Removes files and empty directories based upon values in a JSON configuration file.
@@ -84,12 +86,6 @@ Param(
 	# switch to skip transcript logging
 	[Parameter(DontShow)]
 	[switch]$SkipTranscript,
-	# name in transcript files
-	[Parameter(DontShow)]
-	[string]$TranscriptName,
-	# path to transcript files
-	[Parameter(DontShow)]
-	[string]$TranscriptPath,
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -142,20 +138,20 @@ Begin {
 		$Files = [System.Collections.Generic.List[System.Object]]::new()
 
 		# retrieve old files first
-		Write-Output "Retrieving files written before '$Date' from '$Path'"
+		Write-Verbose -Verbose -Message  "Retrieving files written before '$Date' from '$Path'"
 		Get-ChildItem -Path $Path -Recurse -Force -Attributes '!Directory' | Where-Object { $_.LastWriteTime -lt $Date } | ForEach-Object {
 			$Files.Add($_.FullName)
 		}
 
 		# remove old files first
-		Write-Output "Removing files written before '$Date' from '$Path'"
+		Write-Verbose -Verbose -Message  "Removing files written before '$Date' from '$Path'"
 		ForEach ($File in $Files) {
 			If ($PSCmdlet.ShouldProcess($File, 'Remove File')) {
 				Try {
 					Remove-Item -Path $File -Force -Verbose -ErrorAction Stop
 				}
 				Catch {
-					Write-Warning "Could not perform `"Remove File`" on target `"$File`": $($_.ToString())"
+					Write-Warning -Message "could not perform `"Remove File`" on target `"$File`": $($_.ToString())"
 				}
 			}
 		}
@@ -164,7 +160,7 @@ Begin {
 		$Directories = [System.Collections.Generic.List[System.Object]]::new()
 
 		# retrieve old directories
-		Write-Output "Retrieving directories written before '$Date' from '$Path'"
+		Write-Verbose -Verbose -Message  "Retrieving directories written before '$Date' from '$Path'"
 		Get-ChildItem -Path $Path -Recurse -Force -Attributes 'Directory' | Where-Object { $_.LastWriteTime -lt $Date } | Sort-Object -Property FullName -Descending | ForEach-Object {
 			$Directories.Add($_.FullName)
 		}
@@ -173,10 +169,10 @@ Begin {
 		$DirectoriesToExclude = [System.Collections.Generic.List[System.Object]]::new()
 
 		# checking directories
-		Write-Output "Checking directories for child objects in '$Path'"
+		Write-Verbose -Verbose -Message  "Checking directories for child objects in '$Path'"
 		ForEach ($Directory in $Directories) {
 			If ($null -ne (Get-ChildItem -Path $Directory -Recurse -Force -Attributes '!Directory')) {
-				Write-Warning "Will not perform `"Remove Directory`" on target `"$Directory`": has children that are not directories"
+				Write-Warning -Message "will not perform `"Remove Directory`" on target `"$Directory`": has children that are not directories"
 				$DirectoriesToExclude.Add($Directory)
 			}
 		}
@@ -187,163 +183,24 @@ Begin {
 		}
 
 		# remove old directories last
-		Write-Output "Removing directories written before '$Date' from '$Path'"
+		Write-Verbose -Verbose -Message  "Removing directories written before '$Date' from '$Path'"
 		ForEach ($Directory in $Directories) {
 			If ($PSCmdlet.ShouldProcess($Directory, 'Remove Directory')) {
 				Try {
 					Remove-Item -Path $Directory -Force -Verbose -ErrorAction Stop
 				}
 				Catch {
-					Write-Warning "Could not perform `"Remove Directory`" on target `"$Directory`": $($_.ToString())"
+					Write-Warning -Message "could not perform `"Remove Directory`" on target `"$Directory`": $($_.ToString())"
 				}
 			}
 		}
 	}
 
-	Function Start-TranscriptWithHostAndDate {
-		Param(
-			# name for transcript file
-			[Parameter()]
-			[string]$TranscriptName,
-			# path for transcript file
-			[Parameter()]
-			[string]$TranscriptPath,
-			# log start time
-			[Parameter(DontShow)]
-			[string]$TranscriptTime = ([datetime]::Now.ToString('yyyyMMddHHmmss')),
-			# local hostname
-			[Parameter(DontShow)]
-			[string]$TranscriptHost = ([System.Environment]::MachineName)
-		)
-
-		# define default transcript name as basename of running script
-		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
-			$TranscriptName = (Get-PSCallStack)[1].Command -replace '\.ps1$'
-		}
-
-		# define default transcript path as named folder under transcripts folder in common application data folder
-		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
-			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
-		}
-
-		# verify transcript path
-		If (!(Test-Path -Path $TranscriptPath -PathType 'Container')) {
-			# define parameters for New-Item
-			$NewItem = @{
-				Path        = $TranscriptPath
-				ItemType    = 'Directory'
-				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-			}
-
-			# create transcript path
-			Try {
-				$null = New-Item @NewItem
-			}
-			Catch {
-				Throw $_
-			}
-		}
-
-		# build transcript file name with defined prefix, hostname, transcript name and current datetime
-		$TranscriptFile = "PowerShell_transcript.$TranscriptHost.$TranscriptName.$TranscriptTime.txt"
-
-		# define parameters for Start-Transcript
-		$StartTranscript = @{
-			Path        = Join-Path -Path $TranscriptPath -ChildPath $TranscriptFile
-			Force       = $true
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# start transcript
-		Try	{
-			$null = Start-Transcript @StartTranscript
-		}
-		Catch {
-			Throw $_
-		}
-	}
-
-	Function Stop-TranscriptWithHostAndDate {
-		Param(
-			# name for transcript file
-			[Parameter()]
-			[string]$TranscriptName,
-			# path of transcript files
-			[Parameter()]
-			[string]$TranscriptPath,
-			# minimum number of transcript files for removal
-			[Parameter(DontShow)]
-			[uint16]$TranscriptCount = 7,
-			# minimum age of transcript files for removal
-			[Parameter(DontShow)]
-			[double]$TranscriptDays = 7,
-			# datetime for transcript files for removal
-			[Parameter(DontShow)]
-			[datetime]$TranscriptDate = ([datetime]::Now.AddDays(-$TranscriptDays)),
-			# local hostname
-			[Parameter(DontShow)]
-			[string]$TranscriptHost = ([System.Environment]::MachineName)
-		)
-
-		# define default transcript name as basename of running script
-		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
-			$TranscriptName = (Get-PSCallStack)[1].Command -replace '\.ps1$'
-		}
-
-		# define default transcript path as named folder under transcripts folder in common application data folder
-		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
-			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
-			# LEGACY: re-define default transcript path as string array containing current path and original path in common application data folder
-			[string[]]$TranscriptPath = @([System.Environment]::GetFolderPath('CommonApplicationData'), $TranscriptPath)
-		}
-
-		# define filter using default transcript prefix, hostname, and script name
-		$TranscriptFilter = "PowerShell_transcript.$TranscriptHost.$TranscriptName*"
-
-		# get transcript files matching filter
-		$TranscriptFiles = Get-ChildItem -Path $TranscriptPath -Filter $TranscriptFilter -ErrorAction 'SilentlyContinue'
-
-		# split transcript files on transcript date
-		$NewFiles, $OldFiles = $TranscriptFiles.Where({ $_.LastWriteTime -ge $TranscriptDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
-		
-		# if count of files after transcript date is less than to cleanup threshold...
-		If ($NewFiles.Count -lt $TranscriptCount) {
-			# declare skip
-			Write-Verbose -Message "Skipping transcript file cleanup; count of transcripts ($($NewFiles.Count)) would be below minimum transcript count ($TranscriptCount)" -Verbose
-		}
-		Else {
-			# declare cleanup
-			Write-Verbose -Message "Removing any transcript files matching '$TranscriptFilter' that are older than '$TranscriptDays' days from: $TranscriptPath" -Verbose
-			# remove old transcript files
-			ForEach ($OldFile in ($OldFiles | Sort-Object -Property FullName)) {
-				Try {
-					Remove-Item -Path $OldFile.FullName -Force -Verbose -ErrorAction Stop
-				}
-				Catch {
-					$_
-				}
-			}
-		}
-
-		# stop transcript
+	# if skip transcript not requested...
+	If (!$SkipTranscript) {
+		# start transcript with default parameters
 		Try {
-			$null = Stop-Transcript
-		}
-		Catch {
-			Throw $_
-		}
-	}
-
-	# if running...
-	If ($PSCmdlet.ParameterSetName -in 'Default', 'Run') {
-		# define hashtable for transcript functions
-		$TranscriptWithHostAndDate = @{}
-		# define parameters for transcript functions
-		If ($PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptWithHostAndDate['TranscriptName'] = $PSBoundParameters['TranscriptName'] }
-		If ($PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptWithHostAndDate['TranscriptPath'] = $PSBoundParameters['TranscriptPath'] }
-		# start transcript with parameters
-		Try {
-			Start-TranscriptWithHostAndDate @TranscriptWithHostAndDate
+			Start-TranscriptWithHostAndDate
 		}
 		Catch {
 			Throw $_
@@ -359,7 +216,7 @@ Process {
 			$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 		}
 		Catch {
-			Write-Output "`nERROR: could not read configuration file: '$Json'"
+			Write-Warning -Message "could not read configuration file: '$Json'"
 			Return $_
 		}
 	}
@@ -372,7 +229,7 @@ Process {
 				$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
 			}
 			Catch {
-				Write-Output "`nERROR: could not create configuration file: '$Json'"
+				Write-Warning -Message "could not create configuration file: '$Json'"
 				Return $_
 			}
 			# ...create JSON data object as empty array
@@ -381,7 +238,7 @@ Process {
 		# ...and Add not set...
 		Else {
 			# ...report and return
-			Write-Output "`nERROR: could not find configuration file: '$Json'"
+			Write-Warning -Message "could not find configuration file: '$Json'"
 			Return
 		}
 	}
@@ -390,17 +247,17 @@ Process {
 	switch ($true) {
 		# show configuration file
 		$Show {
-			Write-Output "`nDisplaying '$Json'"
+			Write-Verbose -Verbose -Message  "Displaying '$Json'"
 			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 		# clear configuration file
 		$Clear {
 			Try {
 				[string]::Empty | Set-Content -Path $Json
-				Write-Output "`nCleared configuration file: '$Json'"
+				Write-Verbose -Verbose -Message  "Cleared configuration file: '$Json'"
 			}
 			Catch {
-				Write-Output "`nERROR: could not clear configuration file: '$Json'"
+				Write-Warning -Message "could not clear configuration file: '$Json'"
 				Return $_
 			}
 		}
@@ -413,18 +270,18 @@ Process {
 				If ($null -eq $JsonData) {
 					# clear JSON data
 					[string]::Empty | Set-Content -Path $Json
-					Write-Output "`nRemoved '$Path' from configuration file: '$Json'"
+					Write-Verbose -Verbose -Message  "Removed '$Path' from configuration file: '$Json'"
 				}
 				Else {
 					# export JSON data
 					$JsonData | Sort-Object -Property Path | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-					Write-Output "`nRemoved '$Path' from configuration file: '$Json'"
+					Write-Verbose -Verbose -Message  "Removed '$Path' from configuration file: '$Json'"
 					$JsonData | Sort-Object -Property Path | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 				}
 				$JsonData | Format-List
 			}
 			Catch {
-				Write-Output "`nERROR: could not update configuration file: '$Json'"
+				Write-Warning -Message "could not update configuration file: '$Json'"
 				Return $_
 			}
 		}
@@ -456,12 +313,12 @@ Process {
 				$JsonData += $JsonEntry
 
 				# export JSON data
-				$JsonData | Sort-Object -Property Path | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-				Write-Output "`nAdded '$Path' to configuration file: '$Json'"
-				$JsonData | Sort-Object -Property Path | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+				$JsonData | Sort-Object -Property 'Path' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
+				Write-Verbose -Verbose -Message  "Added '$Path' to configuration file: '$Json'"
+				$JsonData | Sort-Object -Property 'Path' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			Catch {
-				Write-Output "`nERROR: could not update configuration file: '$Json'"
+				Write-Warning -Message "could not update configuration file: '$Json'"
 				Return $_
 			}
 		}
@@ -472,27 +329,27 @@ Process {
 				$Date = Get-PreviousDate -OlderThanUnits $OlderThanUnits -OlderThanType $OlderThanType
 			}
 			Catch {
-				Write-Host "ERROR: could not create date from '$OlderThanUnits $OlderThanType'"
+				Write-Warning -Message "could not create date from '$OlderThanUnits $OlderThanType'"
 				Throw $_
 			}
-			
+
 			# define required parameters for Remove-ItemsFromPathBeforeDate
 			$RemoveItemsFromPathBeforeDate = @{
 				Path = [string]$Path
 				Date = [datetime]$Date
 			}
-			
+
 			# define optional parameters for Remove-ItemsFromPathBeforeDate
 			If ($WhatIfPreference.IsPresent) {
 				$RemoveItemsFromPathBeforeDate['WhatIf'] = $true
 			}
-			
+
 			# remove items from path before date
 			Try {
 				Remove-ItemsFromPathBeforeDate @RemoveItemsFromPathBeforeDate
 			}
 			Catch {
-				Write-Host 'ERROR: could not remove items'
+				Write-Warning -Message "could not remove items: $($JsonEntry.Path)"
 				Throw $_
 			}
 		}
@@ -500,7 +357,7 @@ Process {
 		Default {
 			# check entry count in configuration file
 			If ($JsonData.Count -eq 0) {
-				Write-Host "ERROR: no entries found in configuration file: $Json"
+				Write-Warning -Message "no entries found in configuration file: $Json"
 				Return
 			}
 
@@ -508,13 +365,13 @@ Process {
 			:JsonEntry ForEach ($JsonEntry in $JsonData) {
 				switch ($true) {
 					([string]::IsNullOrEmpty($JsonEntry.Path)) {
-						Write-Host "ERROR: required entry (Path) not found in configuration file: $Json"; Continue :JsonEntry
+						Write-Warning -Message "required entry (Path) not found in configuration file: $Json"; Continue :JsonEntry
 					}
 					([string]::IsNullOrEmpty($JsonEntry.OlderThanUnits)) {
-						Write-Host "ERROR: required entry (OlderThanUnits) not found in configuration file: $Json"; Continue :JsonEntry
+						Write-Warning -Message "required entry (OlderThanUnits) not found in configuration file: $Json"; Continue :JsonEntry
 					}
 					([string]::IsNullOrEmpty($JsonEntry.OlderThanType)) {
-						Write-Host "ERROR: required entry (OlderThanType) not found in configuration file: $Json"; Continue :JsonEntry
+						Write-Warning -Message "required entry (OlderThanType) not found in configuration file: $Json"; Continue :JsonEntry
 					}
 					Default {
 						# get previous date from input
@@ -522,7 +379,7 @@ Process {
 							$Date = Get-PreviousDate -OlderThanUnits ($JsonEntry.OlderThanUnits) -OlderThanType ($JsonEntry.OlderThanType)
 						}
 						Catch {
-							Write-Host "ERROR: could not create date from '$($JsonEntry.OlderThanUnits) $($JsonEntry.OlderThanType)'"
+							Write-Warning -Message "could not create date from '$($JsonEntry.OlderThanUnits) $($JsonEntry.OlderThanType)'"
 							Continue :JsonEntry
 						}
 
@@ -542,7 +399,7 @@ Process {
 							Remove-ItemsFromPathBeforeDate @RemoveItemsFromPathBeforeDate
 						}
 						Catch {
-							Write-Host 'ERROR: could not remove items'
+							Write-Warning -Message "could not remove items from path: $($JsonEntry.Path)"
 							Continue :JsonEntry
 						}
 					}
@@ -553,11 +410,11 @@ Process {
 }
 
 End {
-	# if running...
-	If ($PSCmdlet.ParameterSetName -in 'Default', 'Run') {
-		# stop transcript with parameters
+	# if skip transcript not requested...
+	If (!$SkipTranscript) {
+		# stop transcript with default parameters
 		Try {
-			Stop-TranscriptWithHostAndDate @TranscriptWithHostAndDate
+			Stop-TranscriptWithHostAndDate
 		}
 		Catch {
 			Throw $_
