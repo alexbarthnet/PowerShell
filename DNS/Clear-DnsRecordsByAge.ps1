@@ -1,22 +1,19 @@
-#Requires -Modules TranscriptWithHostAndDate
+#Requires -Modules DnsServer,TranscriptWithHostAndDate
 
 [CmdletBinding(SupportsShouldProcess)]
 Param (
-	[Parameter(Position = 0)]
-	[string]$ZoneName = '*',
-	[Parameter(Position = 1)][ValidateRange(1, 65535)]
+	# first part of time for DNS record cleanup
+	[Parameter(Position = 0)][ValidateRange(1, 65535)]
 	[uint16]$OlderThanUnits = 30,
-	[Parameter(Position = 2)][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
+	# second part of time for DNS record cleanup
+	[Parameter(Position = 1)][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
 	[string]$OlderThanType = 'Days',
-	# PDC emulator of domain
+	# domains for DNS record cleanup
+	[Parameter(Position = 2)]
+	[string]$Domain = '*',
+	# infrastructure master of domain
 	[Parameter(DontShow)]
 	[string]$PdcRoleOwner = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
-	# check if current host is permitted to run scripts
-	[Parameter(DontShow)]
-	[switch]$HostCheck,
-	# full path to host check files
-	[Parameter(DontShow)]
-	[string]$HostCheckPath = 'C:\Content\adfs\host',
 	# switch to skip transcript logging
 	[Parameter(DontShow)]
 	[switch]$SkipTranscript,
@@ -51,8 +48,8 @@ Begin {
 	}
 	
 	# if skip transcript not requested...
-	If ($SkipTranscript -ne $true) {
-		# start transcript with parameters
+	If (!$SkipTranscript) {
+		# start transcript with default parameters
 		Try {
 			Start-TranscriptWithHostAndDate
 		}
@@ -63,28 +60,9 @@ Begin {
 }
 
 Process {
-	# check active host
-	If ($HostCheck) {
-		# define url to check and declare start
-		Write-Output "host-check-path: '$HostCheckPath'"
-
-		# retrieving value from host check URI
-		Try {
-			$HostCheckText = Get-ChildItem -Path $HostCheckPath | Sort-Object -Property 'LastWriteTimeUtc' | Select-Object -Last 1 | Get-Content
-		}
-		Catch {
-			Write-Output 'host-check-failed-connection'
-			Return
-		}
-
-		# check value against hostname
-		If ($HostCheckText -match $HostName) {
-			Write-Output 'host-check-passed-hostname'
-		}
-		Else {
-			Write-Output 'host-check-failed-hostname'
-			Return
-		}
+	# check for PDC role
+	If ($DnsHostName -ne $PdcRoleOwner) {
+		Write-TranscriptWithHostAndDate 'Skipping DNS record cleanup: current server is not PDC role owner'
 	}
 
 	# creat empty objects
@@ -95,11 +73,13 @@ Process {
 
 	# get date from inputs
 	$PreviousDate = Get-PreviousDate -OlderThanUnits $OlderThanUnits -OlderThanType $OlderThanType
+
+	# declare date
 	Write-TranscriptWithHostAndDate "Checking for records older than $OlderThanUnits $OlderThanType ($($PreviousDate.ToString()))"
 
 	# get DNS zones
 	Try {
-		$DnsServerZones = Get-DnsServerZone -ComputerName $PdcRoleOwner | Where-Object { $_.ZoneName -like $ZoneName -and $_.ZoneName -notlike '_msdcs.*' -and $_.ZoneType -eq 'Primary' -and $_.DynamicUpdate -eq 'Secure' -and $_.IsDsIntegrated }
+		$DnsServerZones = Get-DnsServerZone -ComputerName $PdcRoleOwner | Where-Object { $_.ZoneName -like $Domain -and $_.ZoneName -notlike '_msdcs.*' -and $_.ZoneType -eq 'Primary' -and $_.DynamicUpdate -eq 'Secure' -and $_.IsDsIntegrated }
 	}
 	Catch {
 		Write-WarningToTranscriptWithHostAndDate "could not retrieve DNS zones: $($_.Exeception.Message)"
@@ -116,11 +96,11 @@ Process {
 	
 		# get DNS records
 		Try {
-			$DnsServerResourceRecords = Get-DnsServerResourceRecord -ComputerName $PdcRoleOwner -ZoneName $DnsServerZone.ZoneName | Where-Object { $_.TimeStamp -gt 0 -and $_.Timestamp -lt $PreviousDate } | Sort-Object -Property RecordType,HostName
+			$DnsServerResourceRecords = Get-DnsServerResourceRecord -ComputerName $PdcRoleOwner -ZoneName $DnsServerZone.ZoneName | Where-Object { $_.TimeStamp -gt 0 -and $_.Timestamp -lt $PreviousDate } | Sort-Object -Property RecordType, HostName
 		}
 		Catch {
 			Write-WarningToTranscriptWithHostAndDate "could not retrieve DNS records: $($_.Exeception.Message)"
-			Return $_
+			Return $_	
 		}
 
 		# process DNS records
@@ -147,8 +127,8 @@ Process {
 			# if remove attempt should be attempting
 			If ($PSCmdlet.ShouldProcess("$($DnsServerResourceRecord.HostName).$($DnsServerResourceRecord.ZoneName)", 'Remove-DnsServerResourceRecord')) {
 				Try {
-					# Remove-DnsServerResourceRecord -ComputerName $PdcRoleOwner -ZoneName $DnsServerZone.ZoneName -Name $DnsServerResourceRecord.HostName -Confirm:$false
-					# $DnsRecordsRemoved++
+					Remove-DnsServerResourceRecord -ComputerName $PdcRoleOwner -ZoneName $DnsServerZone.ZoneName -InputObject $DnsServerResourceRecord -Force
+					$DnsRecordsRemoved++
 				}
 				Catch {
 					$DnsRecordsErrored++
@@ -171,8 +151,8 @@ Process {
 
 End {
 	# if skip transcript not requested...
-	If ($SkipTranscript -ne $true) {
-		# stop transcript with parameters
+	If (!$SkipTranscript) {
+		# stop transcript with default parameters
 		Try {
 			Stop-TranscriptWithHostAndDate
 		}
