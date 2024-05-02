@@ -46,7 +46,7 @@ Begin {
 			'Years' { Return (Get-Date).AddYears(-1 * $OlderThanUnits) }
 		}
 	}
-	
+
 	# if skip transcript not requested...
 	If (!$SkipTranscript) {
 		# start transcript with default parameters
@@ -94,14 +94,14 @@ Process {
 
 		# declare zone
 		Write-TranscriptWithHostAndDate "Checking for records in '$($DnsServerZone.ZoneName)'"
-	
+
 		# get DNS records
 		Try {
 			$DnsServerResourceRecords = Get-DnsServerResourceRecord -ComputerName $PdcRoleOwner -ZoneName $DnsServerZone.ZoneName | Where-Object { $_.TimeStamp -gt 0 -and $_.Timestamp -lt $PreviousDate } | Sort-Object -Property RecordType, HostName
 		}
 		Catch {
 			Write-WarningToTranscriptWithHostAndDate "could not retrieve DNS records: $($_.Exeception.Message)"
-			Return $_	
+			Return $_
 		}
 
 		# process DNS records
@@ -111,7 +111,7 @@ Process {
 
 			# get DNS record data
 			switch ($DnsServerResourceRecord.RecordType) {
-				'A' { 
+				'A' {
 					$RecordData = $DnsServerResourceRecord.RecordData.IPv4Address.IPAddressToString
 				}
 				'AAAA' {
@@ -155,7 +155,7 @@ Process {
 
 	# report DNS records removed
 	Write-TranscriptWithHostAndDate "Found '$DnsRecordsInTotal' records(s) in '$DnsZonesOnPdcRole' zones"
-	
+
 	Write-TranscriptWithHostAndDate "Removed '$DnsRecordsRemoved' records(s)"
 	If ($DnsRecordsLocated -gt 0) {
 		Write-TranscriptWithHostAndDate "Located '$DnsRecordsLocated' records(s) to delete"
