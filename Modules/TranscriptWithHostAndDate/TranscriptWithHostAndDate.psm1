@@ -17,7 +17,7 @@ Function Start-TranscriptWithHostAndDate {
 
 	.PARAMETER TranscriptBase
 	The path to the folder where folders will created for each distinct calling function or script  The default value is the 'C:\ProgramData\PowerShell_transcript' folder on Windows and the '/usr/share/PowerShell_transcript' folder on macOS and Linux.
-	
+
 	.PARAMETER TranscriptPath
 	The path to a folder for saving PowerShell transcript files. The default is the $TranscriptName folder under the $TranscriptBase folder.
 
@@ -114,7 +114,7 @@ Function Stop-TranscriptWithHostAndDate {
 
 	.PARAMETER TranscriptBase
 	The path to the folder where folders will created for each distinct calling function or script  The default value is the 'C:\ProgramData\PowerShell_transcript' folder on Windows and the '/usr/share/PowerShell_transcript' folder on macOS and Linux.
-	
+
 	.PARAMETER TranscriptPath
 	The path to a folder for saving PowerShell transcript files. The default is the $TranscriptName folder under the $TranscriptBase folder.
 
@@ -256,7 +256,7 @@ Function Write-TranscriptWithHostAndDate {
 
 	.PARAMETER Wrap
 	Switch parameter to prefix the message parameter with the values of the Datetime and Command parameters as key/value pairs then creates a key/value pair using the value of the Message parameter wrapped double quotes. Cannot be combined with the 'Basic' or 'Collection' parameters
-	
+
 	.PARAMETER Command
 	The name of the command that originated the message. The default value is the name of the calling function or script.
 
@@ -310,7 +310,7 @@ Function Write-TranscriptWithHostAndDate {
 		Microsoft.PowerShell.Utility\Write-Information -MessageData $Message -InformationAction SilentlyContinue
 	}
 
-	# prefix message after addressing known issue in PowerShell 5 
+	# prefix message after addressing known issue in PowerShell 5
 	$Message = "INFO: $Message"
 
 	# write information message
@@ -336,7 +336,7 @@ Function Write-VerboseToTranscriptWithHostAndDate {
 
 	.PARAMETER Wrap
 	Switch parameter to prefix the message parameter with the values of the Datetime and Command parameters as key/value pairs then creates a key/value pair using the value of the Message parameter wrapped double quotes. Cannot be combined with the 'Basic' or 'Collection' parameters
-	
+
 	.PARAMETER Command
 	The name of the command that originated the message. The default value is the name of the calling function or script.
 
@@ -408,7 +408,7 @@ Function Write-WarningToTranscriptWithHostAndDate {
 
 	.PARAMETER Wrap
 	Switch parameter to prefix the message parameter with the values of the Datetime and Command parameters as key/value pairs then creates a key/value pair using the value of the Message parameter wrapped double quotes. Cannot be combined with the 'Basic' or 'Collection' parameters
-	
+
 	.PARAMETER Command
 	The name of the command that originated the message. The default value is the name of the calling function or script.
 
