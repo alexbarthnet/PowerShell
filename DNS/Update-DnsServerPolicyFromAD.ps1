@@ -1,12 +1,37 @@
 #requires -Modules ActiveDirectory,DnsServer,TranscriptWithHostAndDate
 
-Param(  
+<#
+.SYNOPSIS
+Configures DNS Policy to enable a DNS server to act as a recursive DNS resolver for approved DNS clients and an authoritative name server for all other DNS clients.
+
+.DESCRIPTION
+Creates and updates DNS Policy client subnet and query resolution policy objects using information from Active Directory subnets and Active Directory integrated DNS zones, respectively. See the Note section for more details.
+
+.PARAMETER Location
+String parameter to match against the location attribute of Active Directory subnet objects. The default value is 'Default'.
+
+.INPUTS
+None.
+
+.OUTPUTS
+None. The script reports the actions taken and does not provide any actionable output.
+
+.EXAMPLE
+.\Update-DnsServerPolicyFromAD.ps1
+
+.EXAMPLE
+.\Update-DnsServerPolicyFromAD.ps1 -Location 'AD'
+
+.NOTES
+This script creates and updates two DNS Policy objects on a DNS server:
+ - A client subnet object containing from subnets in Active Directory Sites and Services where the Location attribute matches the value provided for the Location parameter.
+ - A query resolution policy that blocks queries which do not originate from an IP address in the client subnet object and that are not for records in a DS-integrated DNS zone.
+#>
+
+Param(
 	# string for AD subnet location
-	[Parameter(Position = 0)]
+	[Parameter(Position = 0, ValueFromPipeline = $true)]
 	[string]$Location = 'Default',
-	# switch to force DNS policy update
-	[Parameter(Position = 1)]
-	[switch]$Force,
 	# domain role
 	[Parameter(DontShow)]
 	[uint16]$DomainRole = (Get-CimInstance -ClassName Win32_ComputerSystem -Property DomainRole).DomainRole,
@@ -209,7 +234,7 @@ Process {
 	}
 
 	# if update to IPv4 subnets required...
-	If ($UpdateIPv4 -or $Force) {
+	If ($UpdateIPv4) {
 		Try {
 			Set-DnsServerClientSubnet -Name $DnsSubnetName -IPv4Subnet $IPv4Subnets -Action 'REPLACE'
 		}
@@ -220,7 +245,7 @@ Process {
 	}
 
 	# if update to IPv6 subnets required...
-	If ($UpdateIPv6 -or $Force) {
+	If ($UpdateIPv6) {
 		Try {
 			Set-DnsServerClientSubnet -Name $DnsSubnetName -IPv6Subnet $IPv6Subnets -Action 'REPLACE'
 		}
@@ -292,7 +317,7 @@ Process {
 	}
 
 	# if update to policy required...
-	If ($UpdatePolicy -or $RemakePolicy -or $Force) {
+	If ($UpdatePolicy -or $RemakePolicy) {
 		# define parameters for DnsServerQueryResolutionPolicy
 		$DnsServerQueryResolutionPolicy = @{
 			Name            = $DnsPolicyName
@@ -303,8 +328,8 @@ Process {
 			ErrorAction     = [System.Management.Automation.ActionPreference]::Stop
 		}
 
-		# if remake required or force requested...
-		If ($RemakePolicy -or $Force) {
+		# if remake required requested...
+		If ($RemakePolicy) {
 			# remove existing DNS server policy
 			Try {
 				Remove-DnsServerQueryResolutionPolicy -Name $DnsPolicyName -Force
