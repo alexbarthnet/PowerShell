@@ -186,9 +186,10 @@ Function Install-LocalModule {
 }
 
 # define functions to export
-$functions_to_export = @()
-$functions_to_export += 'Import-LocalModule'
-$functions_to_export += 'Install-LocalModule'
+$FunctionsToExport = @(
+	'Import-LocalModule'
+	'Install-LocalModule'
+)
 
 # export module members
-Export-ModuleMember -Function $functions_to_export
+Export-ModuleMember -Function $FunctionsToExport
