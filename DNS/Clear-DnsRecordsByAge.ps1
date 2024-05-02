@@ -11,9 +11,9 @@ Param (
 	# domains for DNS record cleanup
 	[Parameter(Position = 2)]
 	[string]$Domain = '*',
-	# infrastructure master of domain
+	# infrastructure master for current domain
 	[Parameter(DontShow)]
-	[string]$PdcRoleOwner = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
+	[string]$InfrastructureRoleOwner = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().InfrastructureRoleOwner.Name,
 	# switch to skip transcript logging
 	[Parameter(DontShow)]
 	[switch]$SkipTranscript,
@@ -29,6 +29,11 @@ Param (
 )
 
 Begin {
+	Function Assert-NonInteractiveSession {
+		# if user session is not interactive or if any of the command line arguments start with -NonI...
+		![System.Environment]::UserInteractive -or [System.Environment]::GetCommandLineArgs().StartsWith('-NonI', [System.StringComparison]::InvariantCultureIgnoreCase).Contains($true)
+	}
+
 	Function Get-PreviousDate {
 		Param (
 			[Parameter(Mandatory = $true, Position = 0)][ValidateRange(1, 65535)]
@@ -61,8 +66,9 @@ Begin {
 
 Process {
 	# check for PDC role
-	If ($DnsHostName -ne $PdcRoleOwner) {
-		Write-TranscriptWithHostAndDate 'Skipping DNS record cleanup: current server is not PDC role owner'
+	If (Assert-NonInteractiveSession -and $DnsHostName -ne $InfrastructureRoleOwner) {
+		Write-TranscriptWithHostAndDate 'Skipping DNS record cleanup: running non-interactively and the current system does not hold the Infrastructure Master role'
+		Return
 	}
 
 	# creat empty objects
@@ -80,7 +86,7 @@ Process {
 
 	# get DNS zones
 	Try {
-		$DnsServerZones = Get-DnsServerZone -ComputerName $PdcRoleOwner | Where-Object { $_.ZoneName -like $Domain -and $_.ZoneName -notlike '_msdcs.*' -and $_.ZoneType -eq 'Primary' -and $_.DynamicUpdate -eq 'Secure' -and $_.IsDsIntegrated }
+		$DnsServerZones = Get-DnsServerZone -ComputerName $InfrastructureRoleOwner | Where-Object { $_.ZoneName -like $Domain -and $_.ZoneName -notlike '_msdcs.*' -and $_.ZoneType -eq 'Primary' -and $_.DynamicUpdate -eq 'Secure' -and $_.IsDsIntegrated }
 	}
 	Catch {
 		Write-WarningToTranscriptWithHostAndDate "could not retrieve DNS zones: $($_.Exeception.Message)"
@@ -97,7 +103,7 @@ Process {
 
 		# get DNS records
 		Try {
-			$DnsServerResourceRecords = Get-DnsServerResourceRecord -ComputerName $PdcRoleOwner -ZoneName $DnsServerZone.ZoneName | Where-Object { $_.TimeStamp -gt 0 -and $_.Timestamp -lt $PreviousDate } | Sort-Object -Property RecordType, HostName
+			$DnsServerResourceRecords = Get-DnsServerResourceRecord -ComputerName $InfrastructureRoleOwner -ZoneName $DnsServerZone.ZoneName | Where-Object { $_.TimeStamp -gt 0 -and $_.Timestamp -lt $PreviousDate } | Sort-Object -Property RecordType, HostName
 		}
 		Catch {
 			Write-WarningToTranscriptWithHostAndDate "could not retrieve DNS records: $($_.Exeception.Message)"
@@ -133,7 +139,7 @@ Process {
 			If ($PSCmdlet.ShouldProcess("$($DnsServerResourceRecord.HostName).$($DnsServerResourceRecord.ZoneName)", 'Remove-DnsServerResourceRecord')) {
 				# remove record
 				Try {
-					Remove-DnsServerResourceRecord -ComputerName $PdcRoleOwner -ZoneName $DnsServerZone.ZoneName -InputObject $DnsServerResourceRecord -Force
+					Remove-DnsServerResourceRecord -ComputerName $InfrastructureRoleOwner -ZoneName $DnsServerZone.ZoneName -InputObject $DnsServerResourceRecord -Force
 				}
 				Catch {
 					Write-WarningToTranscriptWithHostAndDate "could not remove record: $($_.ToString())"
