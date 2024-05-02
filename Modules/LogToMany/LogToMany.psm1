@@ -410,11 +410,12 @@ Function Initialize-LogToMany {
 }
 
 # define functions to export
-$functions_to_export = @()
-$functions_to_export += 'Write-LogToMany'
-$functions_to_export += 'Start-LogToMany'
-$functions_to_export += 'Remove-LogToMany'
-$functions_to_export += 'Initialize-LogToMany'
+$FunctionsToExport = @(
+	'Write-LogToMany'
+	'Start-LogToMany'
+	'Remove-LogToMany'
+	'Initialize-LogToMany'
+)
 
 # export module members
-Export-ModuleMember -Function $functions_to_export
+Export-ModuleMember -Function $FunctionsToExport
