@@ -116,19 +116,17 @@ Process {
 		Write-Verbose -Verbose -Message "Created '$($DnsSubnet.Name)' DNS policy with default values"
 	}
 
-	# define required parameters for Get-ADReplicationSubnet
-	$GetADReplicationSubnet = @{
-		Filter = "Location -eq '$Location'"
-	}
-
-	# define Server for Get-DnsServerZone
+	# define domain controller for subnets and DNS zones
 	If ($DomainRole -lt 4) {
-		$GetADReplicationSubnet['Server'] = $PdcRoleOwner
+		$DomainController = $PdcRoleOwner
+	}
+	Else {
+		$DomainController = $Hostname
 	}
 
 	# get subnets from AD
 	Try {
-		$ADReplicationSubnets = Get-ADReplicationSubnet @GetADReplicationSubnet | Sort-Object -Property 'Name'
+		$ADReplicationSubnets = Get-ADReplicationSubnet -Server $DomainController | Where-Object { $_.Location -eq $Location } | Sort-Object -Property 'Name'
 	}
 	Catch {
 		Write-Warning 'could not retrieve AD replication subnets'
@@ -141,20 +139,9 @@ Process {
 		Return
 	}
 
-	# define required parameters for Get-DnsServerZone
-	$GetDnsServerZone = @{}
-
-	# define ComputerName for Get-DnsServerZone
-	If ($DomainRole -lt 4) {
-		$GetDnsServerZone['ComputerName'] = $PdcRoleOwner
-	}
-	Else {
-		$GetDnsServerZone['ComputerName'] = $Hostname
-	}
-
 	# get primary DNS zones from AD
 	Try {
-		$DnsServerZones = Get-DnsServerZone @GetDnsServerZone | Where-Object { $_.ZoneType -eq 'Primary' -and $_.IsDsIntegrated -and -not $_.IsAutoCreated } | Sort-Object -Property 'IsReverseLookupZone', 'ZoneName'
+		$DnsServerZones = Get-DnsServerZone -ComputerName $DomainController | Where-Object { $_.ZoneType -eq 'Primary' -and $_.IsDsIntegrated -and -not $_.IsAutoCreated } | Sort-Object -Property 'IsReverseLookupZone', 'ZoneName'
 	}
 	Catch {
 		Write-Warning "could not retrieve DNS server zones from server: $($GetDnsServerZone['ComputerName'])"
