@@ -1144,12 +1144,12 @@ Process {
 
 				# add Modules if provided
 				If ($PSBoundParameters.ContainsKey('Modules')) {
-					$JsonParameters['Modules'] = $Modules
+					$JsonParameters['Modules'] = [string[]]$Modules
 				}
 
 				# add Certificates if provided
 				If ($PSBoundParameters.ContainsKey('Certificates')) {
-					$JsonParameters['Certificates'] = $Certificates
+					$JsonParameters['Certificates'] = [string[]]$Certificates
 				}
 
 				# add current time as FileDateTimeUniversal
