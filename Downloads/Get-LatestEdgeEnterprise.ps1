@@ -1,58 +1,89 @@
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = 'Default')]
 Param (
-	[Parameter(Position = 0)][ValidateScript({Test-Path -Path $_})]
+	[Parameter(ParameterSetName = 'Default')][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Destination = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path,
-	[Parameter(Position = 1)]
+	[Parameter(Mandatory = $false)]
 	[switch]$Force,
 	[Parameter(DontShow)]
-	[string]$Uri = 'https://aka.ms/edge-msi',
-	[Parameter(DontShow)]
-	[string]$FileName = 'MicrosoftEdgeEnterpriseX64.msi'
+	[string]$Uri = 'https://edgeupdates.microsoft.com/api/products?view=enterprise'
 )
 
 # get JSON
-$edge_json = Invoke-RestMethod -Uri "https://edgeupdates.microsoft.com/api/products?view=enterprise"
+Try {
+	$JsonFromRest = Invoke-RestMethod -Uri $Uri
+}
+Catch { 
+	Return $_
+}
 
-# get and set browser information
-$edge_msi_down = $false
-$edge_msi_file = Join-Path -Path $Destination -ChildPath "MicrosoftEdgeEnterpriseX64.msi"
-$edge_msi_size = ($edge_json | Where-Object {$_.Product -eq "Stable"} | Select-Object -ExpandProperty 'Releases' | Where-Object {$_.Architecture -eq "x64" -and $_.Platform -eq "Windows" -and $_.Artifacts -ne $null} | Sort-Object -Property 'ProductVersion' -Descending | Select-Object -First 1 | Select-Object -ExpandProperty 'Artifacts' | Where-Object {$_.ArtifactName -eq 'msi'}).SizeInBytes
-$edge_msi_path = ($edge_json | Where-Object {$_.Product -eq "Stable"} | Select-Object -ExpandProperty 'Releases' | Where-Object {$_.Architecture -eq "x64" -and $_.Platform -eq "Windows" -and $_.Artifacts -ne $null} | Sort-Object -Property 'ProductVersion' -Descending | Select-Object -First 1 | Select-Object -ExpandProperty 'Artifacts' | Where-Object {$_.ArtifactName -eq 'msi'}).Location
+# filter JSON
+$EdgeMsi = $JsonFromRest.Where({ $_.Product -eq 'Stable' }).Releases | Sort-Object -Property 'ProductVersion' | Where-Object { $_.Architecture -eq 'x64' -and $_.Platform -eq 'Windows' -and $_.Artifacts } | Select-Object -Last 1
+$EdgeCab = $JsonFromRest.Where({ $_.Product -eq 'Policy' }).Releases | Sort-Object -Property 'ProductVersion' | Where-Object { $_.Architecture -eq 'any' -and $_.Platform -eq 'Any' -and $_.Artifacts } | Select-Object -Last 1
 
-# get and set policy information
-$edge_pol_down = $false
-$edge_pol_file = Join-Path -Path $Destination -ChildPath "MicrosoftEdgePolicyTemplates.zip"
-$edge_pol_size = ($edge_json | Where-Object {$_.Product -eq "Policy"} | Select-Object -ExpandProperty 'Releases' | Where-Object {$_.Architecture -eq "any" -and $_.Platform -eq "Any" -and $_.Artifacts -ne $null} | Sort-Object -Property 'ProductVersion' -Descending | Select-Object -First 1 | Select-Object -ExpandProperty 'Artifacts' | Where-Object {$_.ArtifactName -eq 'zip'}).SizeInBytes
-$edge_pol_path = ($edge_json | Where-Object {$_.Product -eq "Policy"} | Select-Object -ExpandProperty 'Releases' | Where-Object {$_.Architecture -eq "any" -and $_.Platform -eq "Any" -and $_.Artifacts -ne $null} | Sort-Object -Property 'ProductVersion' -Descending | Select-Object -First 1 | Select-Object -ExpandProperty 'Artifacts' | Where-Object {$_.ArtifactName -eq 'zip'}).Location
+# if Edge MSI file not found in JSON...
+If ($null -eq $EdgeMsi) {
+	Write-Warning -Message "could not locate information required to download MSI file in response from URI: $Uri"
+}
+Else {
+	$DestinationMsi = Join-Path -Path $Destination -ChildPath $EdgeMsi.Artifacts.Location.Split('/')[-1]
+}
 
-# do we have edge already and, if so, is it the same as current?
-If (Test-Path $edge_msi_file) {
-	If ($edge_msi_size -eq (Get-ItemProperty $edge_msi_file).Length -and -not $Force) {
-		Write-Host "Edge Enterprise X64 - skipping download!"
+# if Edge CAB file not found in JSON...
+If ($null -eq $EdgeCab) {
+	Write-Warning -Message "could not locate information required to download CAB file in response from URI: $Uri"
+}
+Else {
+	$DestinationCab = Join-Path -Path $Destination -ChildPath $EdgeCab.Artifacts.Location.Split('/')[-1]
+}
+
+# if Edge MSI file exists and Force parameter not set...
+If ((Test-Path -Path $DestinationMsi -PathType 'Leaf') -and -not $Force) {
+	# get file hash of existing Edge MSI file using algorithm from JSON
+	Try {
+		$FileHashMsi = Get-FileHash -Path $DestinationMsi -Algorithm $EdgeMsi.Artifacts.HashAlgorithm
 	}
-	Else {
-		$edge_msi_down = $true
+	Catch {
+		Return $_
+	}
+	# if hashes match...
+	If ($FileHashMsi.Hash -eq $EdgeMsi.Artifacts.Hash) {
+		# skip downloading Edge MSI file
+		$SkipMSI = $true
+		# report version found
+		Write-Verbose -Verbose -Message "Found existing Edge MSI file with latest product version: $($EdgeMsi.ProductVersion)"
 	}
 } 
 
-# do we have policy already and, if so, is it the same as current?
-If (Test-Path $edge_pol_file) {
-	If ($edge_pol_size -eq (Get-ItemProperty $edge_pol_file).Length -and -not $Force) {
-		Write-Host "Edge Template Files - skipping download!"
+# if Edge CAB file exists and Force parameter not set...
+If ((Test-Path -Path $DestinationCab -PathType 'Leaf') -and -not $Force) {
+	# get file hash of existing Edge CAB file using algorithm from JSON
+	Try {
+		$FileHashCab = Get-FileHash -Path $DestinationCab -Algorithm $EdgeCab.Artifacts.HashAlgorithm
 	}
-	Else {
-		$edge_pol_down = $true
+	Catch {
+		Return $_
 	}
-}
+	# if hashes match...
+	If ($FileHashCab.Hash -eq $EdgeCab.Artifacts.Hash) {
+		# skip downloading Edge CAB file
+		$SkipCab = $true
+		# report version found
+		Write-Verbose -Verbose -Message "Found existing Edge CAB file with latest product version: $($EdgeCab.ProductVersion)"
+	}
+} 
 
-# if we should get a new edge, get it!
-If ($Force -or $edge_msi_down) {
-	Write-Host "Edge Enterprise X64 - downloading!"
-	Invoke-WebRequest -Uri $edge_msi_path -OutFile $edge_msi_file
+# if skip MSI not set...
+If (!$local:SkipMsi) {
+	# download MSI file with BITS
+	Start-BitsTransfer -Source $EdgeMsi.Artifacts.Location -Destination $DestinationMsi
+	# report version of MSI file
+	Write-Verbose -Verbose -Message "Downloaded new Edge MSI file with latest product version: $($EdgeMsi.ProductVersion)"
 }
 
 # if we should get a new policy, get it!
-If ($Force -or $edge_pol_down) {
-	Write-Host "Edge Template Files - downloading!"
-	Invoke-WebRequest -Uri $edge_pol_path -OutFile $edge_pol_file
+If (!$local:SkipCab) {
+	# download CAB file with BITS
+	Start-BitsTransfer -Source $EdgeCab.Artifacts.Location -Destination $DestinationCab
+	# report version of CAB file
+	Write-Verbose -Verbose -Message "Downloaded new Edge CAB file with latest product version: $($EdgeCab.ProductVersion)"
 }
