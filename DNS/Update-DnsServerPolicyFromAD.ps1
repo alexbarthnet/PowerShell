@@ -32,9 +32,15 @@ Param(
 	# string for AD subnet location
 	[Parameter(Position = 0, ValueFromPipeline = $true)]
 	[string]$Location = 'Default',
-	# domain role
+	# suffix for DNS client subnet
 	[Parameter(DontShow)]
-	[uint16]$DomainRole = (Get-CimInstance -ClassName Win32_ComputerSystem -Property DomainRole).DomainRole,
+	[string]$SubnetSuffix = 'subnets',
+	# suffix for DNS client subnet
+	[Parameter(DontShow)]
+	[string]$PolicySuffix = 'default',
+	# domain role of current system
+	[Parameter(DontShow)]
+	[uint16]$DomainRole = (Get-CimInstance -ClassName 'Win32_ComputerSystem' -Property 'DomainRole').DomainRole,
 	# current PDC role holder
 	[Parameter(DontShow)]
 	[string]$PdcRoleOwner = [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain().PdcRoleOwner.Name,
@@ -67,7 +73,7 @@ Begin {
 
 Process {
 	# define DNS client subnets name
-	$DnsSubnetName = $HostName, 'subnets' -join '_'
+	$DnsSubnetName = $HostName, $SubnetSuffix -join '_'
 
 	# retrieve DNS client subnets
 	Try {
@@ -103,7 +109,7 @@ Process {
 	}
 
 	# define DNS query resolution policy
-	$DnsPolicyName = $HostName, 'default' -join '_'
+	$DnsPolicyName = $HostName, $PolicySuffix -join '_'
 
 	# retrieve DNS query resolution policy
 	Try {
