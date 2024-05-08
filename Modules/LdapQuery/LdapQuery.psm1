@@ -328,8 +328,8 @@ Function Invoke-LdapQuery {
 							$RangeLower = [uint32]$Matches['RangeUpper'] + 1
 							$RangeUpper = $RangeLower + $RangeWidth
 
-							# import parameters for LDAP query with ranged retrieval
-							$InvokeLdapQuery = $PSBoundParameters
+							# clone $PSBoundParameters into new hashtable parameters for LDAP query with ranged retrieval
+							$InvokeLdapQuery = [System.Management.Automation.PSSerializer]::Deserialize([System.Management.Automation.PSSerializer]::Serialize($PSBoundParameters))
 
 							# update filter parameters to base search of current object
 							$InvokeLdapQuery['Filter'] = '(objectClass=*)'
