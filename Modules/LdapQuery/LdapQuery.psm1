@@ -258,7 +258,7 @@ Function Invoke-LdapQuery {
 					# if attribute description matches ranged retrieval format...
 					If ($AttributeDescription -match 'range=(?<RangeLower>\d+)-(?<RangeUpper>\d+|\*)') {
 						# if RangeUpper match is '*'...
-						If ($Match['RangeUpper'] -eq '*') {
+						If ($Matches['RangeUpper'] -eq '*') {
 							# continue to next key
 							Continue Key
 						}
