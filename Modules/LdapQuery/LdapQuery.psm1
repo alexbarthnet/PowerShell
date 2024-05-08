@@ -341,7 +341,7 @@ Function Invoke-LdapQuery {
 
 							# invoke LDAP query with ranged retrieval and current query guid
 							Try {
-								Invoke-LdapQuery @InvokeLdapQuery -SkipReturnForRangeRetrieval -QueryGuid $QueryGuid
+								Invoke-LdapQuery @InvokeLdapQuery -QueryGuid $QueryGuid
 							}
 							Catch {
 								Return $_
@@ -355,7 +355,7 @@ Function Invoke-LdapQuery {
 				}
 
 				# return processed entry
-				If (!$SkipReturnForRangeRetrieval) {
+				If (!$PSBoundParameters.ContainsKey('QueryGuid')) {
 					$CurrentObject
 				}
 			}
