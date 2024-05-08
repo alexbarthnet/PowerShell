@@ -239,7 +239,7 @@ Function Invoke-LdapQuery {
 			}
 
 			# process each entry in the search response
-			ForEach ($Entry in $SearchResponse.Entries) {
+			:NextEntry ForEach ($Entry in $SearchResponse.Entries) {
 				# if dictionary for current query contains key for distinguished name from entry...
 				If ($CurrentQuery.ContainsKey($Entry.DistinguishedName)) {
 					# ...and value for key is not sorted list...
@@ -320,7 +320,7 @@ Function Invoke-LdapQuery {
 							# if RangeUpper match is '*'...
 							If ($Matches['RangeUpper'] -eq '*') {
 								# continue to next key
-								Continue Key
+								Continue NextKey
 							}
 
 							# define range values
@@ -359,7 +359,7 @@ Function Invoke-LdapQuery {
 
 				# return processed entry
 				If (!$PSBoundParameters.ContainsKey('QueryGuid')) {
-					$CurrentObject
+					$CurrentQuery[$Entry.DistinguishedName]
 				}
 			}
 
