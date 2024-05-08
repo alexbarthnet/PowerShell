@@ -5,7 +5,7 @@ Function Format-LdapAttribute {
 	Param(
 		[Parameter(Mandatory = $true)]
 		[string]$LdapDisplayName,
-		[Parameter(Mandatory = $true)]
+		[Parameter(Mandatory = $true)][AllowEmptyCollection()]
 		[System.DirectoryServices.Protocols.DirectoryAttribute]$DirectoryAttribute,
 		[Parameter(DontShow)]
 		[System.Collections.Generic.List[object]]$ExistingValues,
@@ -229,6 +229,12 @@ Function Invoke-LdapQuery {
 
 				# retrieve keys from entry
 				:Key ForEach ($Key in $Entry.Attributes.Keys) {
+					# if attribute value is empty...
+					If ($null -eq $Entry.Attributes[$Key]) {
+						# continue to next key
+						Continue Key
+					}
+					
 					# retrieve attribute name and attribute description from key
 					$LdapDisplayName, $AttributeDescription = $Key -split ';'
 
