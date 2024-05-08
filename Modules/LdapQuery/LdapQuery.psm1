@@ -136,7 +136,9 @@ Function Invoke-LdapQuery {
 		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Credential')]
 		[pscredential]$Credential,
 		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Kerberos')]
-		[switch]$Kerberos
+		[switch]$Kerberos,
+		[Parameters(DontShow)]
+		[switch]$SkipReturnForRangeRetrieval
 	)
 
 	Begin {
@@ -189,6 +191,11 @@ Function Invoke-LdapQuery {
 		# add controls to LDAP search request
 		$null = $SearchRequest.Controls.Add($PageResultRequestControl)
 		$null = $SearchRequest.Controls.Add($DomainScopeControl)
+
+		# create dictionary for all objects
+		If ($null -eq $global:LdapObjects -or $global:LdapObjects -isnot [System.Collections.Generic.Dictionary[string, object]]) {
+			$global:LdapObjects = [System.Collections.Generic.Dictionary[string, object]]::new()
+		}
 	}
 
 	Process {
@@ -224,72 +231,127 @@ Function Invoke-LdapQuery {
 
 			# process each entry in the search response
 			ForEach ($Entry in $SearchResponse.Entries) {
-				# create sorted list for attributes
-				$SortedList = [System.Collections.Generic.SortedList[string, object]]::new()
-
-				# retrieve keys from entry
-				:Key ForEach ($Key in $Entry.Attributes.Keys) {
-					# if attribute value is empty...
-					If ($null -eq $Entry.Attributes[$Key]) {
-						# continue to next key
-						Continue Key
+				# if dictionary contains key for distinguished name from entry...
+				If ($global:LdapObjects.ContainsKey($Entry.DistinguishedName)) {
+					# ...and value for key is not sorted list...
+					If ($global:LdapObjects[$Entry.DistinguishedName] -isnot [System.Collections.Generic.SortedList[string, object]]) {
+						# ...reset value to new sorted list
+						$global:LdapObjects[$Entry.DistinguishedName] = [System.Collections.Generic.SortedList[string, object]]::new()
 					}
-					
-					# retrieve attribute name and attribute description from key
-					$LdapDisplayName, $AttributeDescription = $Key -split ';'
+				}
+				# if dictionary does not contain key for distinguished name from entry...
+				Else {
+					# add key for distinguished name from entry with value of new sorted list to dictionary
+					$global:LdapObjects.Add($Entry.DistinguishedName, [System.Collections.Generic.SortedList[string, object]]::new())
+				}
+				
+				# get reference to sorted list for current entry
+				$SortedList = $global:LdapObjects[$Entry.DistinguishedName]
 
-					# if sorted list already contains attribute name...
-					If ($SortedList.ContainsKey($LdapDisplayName)) {
-						# ...format current attribute values then add to sorted list with existing attribute values
-						$SortedList[$LdapDisplayName] = Format-LdapAttribute -LdapDisplayName $LdapDisplayName -DirectoryAttribute $Entry.Attributes[$Key] -ExistingValues $SortedList[$LdapDisplayName]
-					}
-					# if sorted list does not contain attribute name...
-					Else {
-						# ...format current attribute values then add to sorted list
-						$SortedList[$LdapDisplayName] = Format-LdapAttribute -LdapDisplayName $LdapDisplayName -DirectoryAttribute $Entry.Attributes[$Key]
-					}
-
-					# if attribute description not found...
-					If ([System.String]::IsNullOrEmpty($AttributeDescription)) {
-						# continue to next key
-						Continue Key
-					}
-
-					# if attribute description matches ranged retrieval format...
-					If ($AttributeDescription -match 'range=(?<RangeLower>\d+)-(?<RangeUpper>\d+|\*)') {
-						# if RangeUpper match is '*'...
-						If ($Matches['RangeUpper'] -eq '*') {
+				# retrieve attributes from entry
+				:NextAttribute ForEach ($Attribute in $Entry.Attributes) {
+					# retrieve keys from attribute
+					:NextKey ForEach ($Key in $Attribute.Keys) {
+						# if attribute collection for key is empty...
+						If ($Attribute[$Key].Count -eq 0) {
 							# continue to next key
-							Continue Key
+							Continue NextKey
 						}
 
-						# define range values
-						$RangeWidth = [uint32]$Matches['RangeUpper'] - [uint32]$Matches['RangeLower']
-						$RangeLower = [uint32]$Matches['RangeUpper'] + 1
-						$RangeUpper = $RangeLower + $RangeWidth
+						# retrieve attribute name and attribute description from key
+						$LdapDisplayName, $AttributeDescription = $Key -split ';'
 
-						# define initial parameters for LDAP query with ranged retrieval
-						$InvokeLdapQuery = $PSBoundParameters
-
-						# update attribute parameter with next attribute range
-						$InvokeLdapQuery['Attributes'] = "$LdapDisplayName;range=$RangeLower-$RangeUpper"
-
-						# invoke LDAP query with ranged retrieval
+						# retrieve formatted attribute values
 						Try {
-							Invoke-LdapQuery @InvokeLdapQuery
+							$LdapAttribute = Format-LdapAttribute -LdapDisplayName $LdapDisplayName -DirectoryAttribute $Attribute[$Key]
 						}
 						Catch {
-							Return $_
+							<#Do this if a terminating exception happens#>
 						}
-					}
-					# if range does not match regex...
-					Else {
-						Write-Warning "unrecognized attribute description: $AttributeDescription"
+
+						# if sorted list already contains attribute name...
+						If ($SortedList.ContainsKey($LdapDisplayName)) {
+							# if value in sorted list is not a list...
+							If ($SortedList[$LdapDisplayName] -isnot [System.Collections.Generic.List[object]]) {
+								# ...retrieve current objects in value
+								$ObjectsInValue = $SortedList[$LdapDisplayName]
+								# ...reset value to new sorted list
+								$SortedList[$LdapDisplayName] = [System.Collections.Generic.SortedList[string, object]]::new()
+								# ...add current objects to new sorted list
+								If ($ObjectsInValue.Count -gt 1) {
+									$SortedList[$LdapDisplayName].AddRange($ObjectsInValue)
+								}
+								ElseIf ($ObjectsInValue.Count -eq 1) {
+									$SortedList[$LdapDisplayName].Add($ObjectsInValue)
+								}
+							}
+
+							# update attribute name in sorted list with formatted attribute values
+							If ($LdapAttribute.Count -gt 1) {
+								$SortedList[$LdapDisplayName].AddRange($LdapAttribute)
+							}
+							ElseIf ($LdapAttribute.Count -eq 1) {
+								$SortedList[$LdapDisplayName].Add($LdapAttribute)
+							}
+						}
+						# if sorted list does not contain attribute name...
+						Else {
+							# ...add attribute name to sorted list with formatted attribute values
+							$SortedList.Add($LdapDisplayName, $LdapAttribute)
+						}
+
+						# if attribute description not found...
+						If ([System.String]::IsNullOrEmpty($AttributeDescription)) {
+							# continue to next key
+							Continue NextKey
+						}
+
+						# if attribute description matches ranged retrieval format...
+						If ($AttributeDescription -match 'range=(?<RangeLower>\d+)-(?<RangeUpper>\d+|\*)') {
+							# if RangeUpper match is '*'...
+							If ($Matches['RangeUpper'] -eq '*') {
+								# continue to next key
+								Continue Key
+							}
+
+							# define range values
+							$RangeWidth = [uint32]$Matches['RangeUpper'] - [uint32]$Matches['RangeLower']
+							$RangeLower = [uint32]$Matches['RangeUpper'] + 1
+							$RangeUpper = $RangeLower + $RangeWidth
+
+							# import parameters for LDAP query with ranged retrieval
+							$InvokeLdapQuery = $PSBoundParameters
+
+							# update parameters with base search values
+							$InvokeLdapQuery['SearchBase'] = $Entry.DistinguishedName
+							$InvokeLdapQuery['Filter'] = '(objectClass=*)'
+							$InvokeLdapQuery['SearchScope'] = 'Base'
+
+							# update parameters with next attribute range
+							$InvokeLdapQuery['Attributes'] = "$LdapDisplayName;range=$RangeLower-$RangeUpper"
+
+							# update parameters with skip output switch
+							$InvokeLdapQuery['SkipReturnForRangeRetrieval'] = $true
+
+							# invoke LDAP query with ranged retrieval
+							Try {
+								Invoke-LdapQuery @InvokeLdapQuery
+							}
+							Catch {
+								Return $_
+							}
+						}
+						# if range does not match regex...
+						Else {
+							Write-Warning "unrecognized attribute description: $AttributeDescription"
+						}
 					}
 				}
 
 				# return processed entry
-				$SortedList
+				If (!$SkipReturnForRangeRetrieval) {
+					$SortedList
+				}
 			}
 
 			# retrieve current state of page response control
