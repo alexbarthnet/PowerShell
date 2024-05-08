@@ -359,7 +359,7 @@ Function Invoke-LdapQuery {
 
 				# return processed entry
 				If (!$PSBoundParameters.ContainsKey('QueryGuid')) {
-					$CurrentQuery[$Entry.DistinguishedName]
+					$CurrentObject | Select-Object -Property @{ Name = 'DistinguishedName'; Expression = { $Entry.DistinguishedName } }, @{ Name = 'Attributes'; Expression = { $CurrentObject } }
 				}
 			}
 
