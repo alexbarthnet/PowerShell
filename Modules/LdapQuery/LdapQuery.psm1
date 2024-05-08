@@ -138,7 +138,7 @@ Function Invoke-LdapQuery {
 		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Kerberos')]
 		[switch]$Kerberos,
 		[Parameter(DontShow)]
-		[switch]$SkipReturnForRangeRetrieval
+		[guid]$QueryGuid = [System.Guid]::NewGuid()
 	)
 
 	Begin {
@@ -192,10 +192,19 @@ Function Invoke-LdapQuery {
 		$null = $SearchRequest.Controls.Add($PageResultRequestControl)
 		$null = $SearchRequest.Controls.Add($DomainScopeControl)
 
-		# create dictionary for all objects
-		If ($null -eq $global:LdapObjects -or $global:LdapObjects -isnot [System.Collections.Generic.Dictionary[string, object]]) {
-			$global:LdapObjects = [System.Collections.Generic.Dictionary[string, object]]::new()
+		# create global dictionary for ldap queries
+		If ($global:LdapQueries -isnot [System.Collections.Generic.Dictionary[guid, object]]) {
+			$global:LdapQueries = [System.Collections.Generic.Dictionary[guid, object]]::new()
 		}
+
+		# if current query is not in dictionary...
+		If ($global:LdapQueries.ContainsKey($QueryGuid) -eq $false) {
+			# add dictionary for current query to global dictionary
+			$global:LdapQueries.Add($QueryGuid, [System.Collections.Generic.Dictionary[string, object]]::new())
+		}
+
+		# get reference to dictionary for current query
+		$CurrentQuery = $global:LdapQueries[$QueryGuid]
 	}
 
 	Process {
@@ -231,22 +240,22 @@ Function Invoke-LdapQuery {
 
 			# process each entry in the search response
 			ForEach ($Entry in $SearchResponse.Entries) {
-				# if dictionary contains key for distinguished name from entry...
-				If ($global:LdapObjects.ContainsKey($Entry.DistinguishedName)) {
+				# if dictionary for current query contains key for distinguished name from entry...
+				If ($CurrentQuery.ContainsKey($Entry.DistinguishedName)) {
 					# ...and value for key is not sorted list...
-					If ($global:LdapObjects[$Entry.DistinguishedName] -isnot [System.Collections.Generic.SortedList[string, object]]) {
+					If ($CurrentQuery[$Entry.DistinguishedName] -isnot [System.Collections.Generic.SortedList[string, object]]) {
 						# ...reset value to new sorted list
-						$global:LdapObjects[$Entry.DistinguishedName] = [System.Collections.Generic.SortedList[string, object]]::new()
+						$CurrentQuery[$Entry.DistinguishedName] = [System.Collections.Generic.SortedList[string, object]]::new()
 					}
 				}
-				# if dictionary does not contain key for distinguished name from entry...
+				# if dictionary for current query does not contain key for distinguished name from entry...
 				Else {
-					# add key for distinguished name from entry with value of new sorted list to dictionary
-					$global:LdapObjects.Add($Entry.DistinguishedName, [System.Collections.Generic.SortedList[string, object]]::new())
+					# add key for distinguished name from entry with value of new sorted list to dictionary for current query
+					$CurrentQuery.Add($Entry.DistinguishedName, [System.Collections.Generic.SortedList[string, object]]::new())
 				}
 				
-				# get reference to sorted list for current entry
-				$SortedList = $global:LdapObjects[$Entry.DistinguishedName]
+				# get reference to sorted list for attributes of current object from current query 
+				$CurrentObject = $CurrentQuery[$Entry.DistinguishedName]
 
 				# retrieve attributes from entry
 				:NextAttribute ForEach ($Attribute in $Entry.Attributes) {
@@ -259,45 +268,45 @@ Function Invoke-LdapQuery {
 						}
 
 						# retrieve attribute name and attribute description from key
-						$LdapDisplayName, $AttributeDescription = $Key -split ';'
+						$AttributeName, $AttributeDescription = $Key -split ';'
 
 						# retrieve formatted attribute values
 						Try {
-							$LdapAttribute = Format-LdapAttribute -LdapDisplayName $LdapDisplayName -DirectoryAttribute $Attribute[$Key]
+							$LdapAttribute = Format-LdapAttribute -LdapDisplayName $AttributeName -DirectoryAttribute $Attribute[$Key]
 						}
 						Catch {
 							<#Do this if a terminating exception happens#>
 						}
 
-						# if sorted list already contains attribute name...
-						If ($SortedList.ContainsKey($LdapDisplayName)) {
+						# if sorted list for current object already contains attribute name...
+						If ($CurrentObject.ContainsKey($AttributeName)) {
 							# if value in sorted list is not a list...
-							If ($SortedList[$LdapDisplayName] -isnot [System.Collections.Generic.List[object]]) {
-								# ...retrieve current objects in value
-								$ObjectsInValue = $SortedList[$LdapDisplayName]
+							If ($CurrentObject[$AttributeName] -isnot [System.Collections.Generic.List[object]]) {
+								# ...retrieve objects in value
+								$ObjectsInValue = $CurrentObject[$AttributeName]
 								# ...reset value to new sorted list
-								$SortedList[$LdapDisplayName] = [System.Collections.Generic.SortedList[string, object]]::new()
+								$CurrentObject[$AttributeName] = [System.Collections.Generic.List[object]]::new()
 								# ...add current objects to new sorted list
 								If ($ObjectsInValue.Count -gt 1) {
-									$SortedList[$LdapDisplayName].AddRange($ObjectsInValue)
+									$CurrentObject[$AttributeName].AddRange($ObjectsInValue)
 								}
 								ElseIf ($ObjectsInValue.Count -eq 1) {
-									$SortedList[$LdapDisplayName].Add($ObjectsInValue)
+									$CurrentObject[$AttributeName].Add($ObjectsInValue)
 								}
 							}
 
 							# update attribute name in sorted list with formatted attribute values
 							If ($LdapAttribute.Count -gt 1) {
-								$SortedList[$LdapDisplayName].AddRange($LdapAttribute)
+								$CurrentObject[$AttributeName].AddRange($LdapAttribute)
 							}
 							ElseIf ($LdapAttribute.Count -eq 1) {
-								$SortedList[$LdapDisplayName].Add($LdapAttribute)
+								$CurrentObject[$AttributeName].Add($LdapAttribute)
 							}
 						}
-						# if sorted list does not contain attribute name...
+						# if sorted list for current object does not contain attribute name...
 						Else {
 							# ...add attribute name to sorted list with formatted attribute values
-							$SortedList.Add($LdapDisplayName, $LdapAttribute)
+							$CurrentObject.Add($AttributeName, $LdapAttribute)
 						}
 
 						# if attribute description not found...
@@ -322,20 +331,17 @@ Function Invoke-LdapQuery {
 							# import parameters for LDAP query with ranged retrieval
 							$InvokeLdapQuery = $PSBoundParameters
 
-							# update parameters with base search values
-							$InvokeLdapQuery['SearchBase'] = $Entry.DistinguishedName
+							# update filter parameters to base search of current object
 							$InvokeLdapQuery['Filter'] = '(objectClass=*)'
+							$InvokeLdapQuery['SearchBase'] = $Entry.DistinguishedName
 							$InvokeLdapQuery['SearchScope'] = 'Base'
 
-							# update parameters with next attribute range
-							$InvokeLdapQuery['Attributes'] = "$LdapDisplayName;range=$RangeLower-$RangeUpper"
+							# update attributes parameter with next range
+							$InvokeLdapQuery['Attributes'] = "$AttributeName;range=$RangeLower-$RangeUpper"
 
-							# update parameters with skip output switch
-							$InvokeLdapQuery['SkipReturnForRangeRetrieval'] = $true
-
-							# invoke LDAP query with ranged retrieval
+							# invoke LDAP query with ranged retrieval and current query guid
 							Try {
-								Invoke-LdapQuery @InvokeLdapQuery
+								Invoke-LdapQuery @InvokeLdapQuery -SkipReturnForRangeRetrieval -QueryGuid $QueryGuid
 							}
 							Catch {
 								Return $_
@@ -350,7 +356,7 @@ Function Invoke-LdapQuery {
 
 				# return processed entry
 				If (!$SkipReturnForRangeRetrieval) {
-					$SortedList
+					$CurrentObject
 				}
 			}
 
