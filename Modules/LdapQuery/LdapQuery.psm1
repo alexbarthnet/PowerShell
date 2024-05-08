@@ -339,9 +339,12 @@ Function Invoke-LdapQuery {
 							# update attributes parameter with next range
 							$InvokeLdapQuery['Attributes'] = "$AttributeName;range=$RangeLower-$RangeUpper"
 
-							# invoke LDAP query with ranged retrieval and current query guid
+							# update parameters to include current query guid
+							$InvokeLdapQuery['QueryGuid'] = $QueryGuid
+
+							# invoke LDAP query with ranged retrieval
 							Try {
-								Invoke-LdapQuery @InvokeLdapQuery -QueryGuid $QueryGuid
+								Invoke-LdapQuery @InvokeLdapQuery
 							}
 							Catch {
 								Return $_
