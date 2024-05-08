@@ -1,3 +1,5 @@
+using namespace System.DirectoryServices.Protocols
+
 Function Format-LdapAttribute {
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param(
@@ -111,16 +113,16 @@ Function Format-LdapAttribute {
 Function Invoke-LdapQuery {
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param(
-		[Parameter(Position = 0)]
-		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
-		[Parameter(Position = 1)]
-		[string]$BaseDN = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().GetDirectoryEntry().DistinguishedName,
-		[Parameter(Position = 2)]
-		[string]$Filter = "(&(objectCategory=person)(objectClass=user)(sAMAccountName=$([System.Environment]::UserName.ToLower())))",
+		[Parameter(Position = 0, Mandatory = $true)]
+		[string]$Server,
+		[Parameter(Position = 1, Mandatory = $true)]
+		[string]$SearchBase,
+		[Parameter(Position = 2, Mandatory = $true)]
+		[string]$Filter,
 		[Parameter(Position = 3)]
 		[string[]]$Attributes = '*',
 		[Parameter(Position = 4)][ValidateSet('Base', 'OneLevel', 'Subtree')]
-		[string]$Scope = 'Subtree',
+		[string]$SearchScope = 'Subtree',
 		[Parameter(Position = 5)][ValidateRange(1, 65535)]
 		[int]$Port = 636,
 		[Parameter(Position = 6)][ValidateRange(1, [int]::MaxValue)]
@@ -138,54 +140,55 @@ Function Invoke-LdapQuery {
 	)
 
 	Begin {
-		# define required assemblies
-		$Assemblies = @('System.DirectoryServices.Protocols')
+		# define LDAP identifer properties
+		$FullyQualifiedDnsHostName = $true
+		$Connectionless = $false
 
-		# retrieve loaded assemblies
-		$AssembliesFound = [System.AppDomain]::CurrentDomain.GetAssemblies().GetName().Name
-
-		# verify assemblies
-		ForEach ($Assembly in $Assemblies) { If ($Assembly -notin $AssembliesFound) { $null = [System.Reflection.Assembly]::LoadWithPartialName($Assembly) } }
-
-		# define LDAP server
-		$LdapDirectoryIdentifier = [System.DirectoryServices.Protocols.LdapDirectoryIdentifier]::new($Server, $Port, $true, $false)
+		# create LDAP identifier
+		$LdapDirectoryIdentifier = [System.DirectoryServices.Protocols.LdapDirectoryIdentifier]::new($Server, $Port, $FullyQualifiedDnsHostName, $Connectionless)
 
 		# create LDAP connection
 		$LdapConnection = [System.DirectoryServices.Protocols.LdapConnection]::new($LdapDirectoryIdentifier)
-		$LdapConnection.SessionOptions.ReferralChasing = 'None'
+
+		# update LDAP connection
+		$LdapConnection.SessionOptions.ReferralChasing = [System.DirectoryServices.Protocols.ReferralChasingOptions]::None
 		$LdapConnection.SessionOptions.ProtocolVersion = 3
 
 		# define credentials
 		switch ($PSCmdlet.ParameterSetName) {
 			'Certificate' {
-				$LdapConnection.AuthType = 'Anonymous'
+				$LdapConnection.AuthType = [System.DirectoryServices.Protocols.AuthType]::Anonymous
 				$LdapConnection.SessionOptions.QueryClientCertificate = { $Certificate }
 				$LdapConnection.SessionOptions.SecureSocketLayer = $SSL
 			}
 			'Credential' {
-				$LdapConnection.AuthType = 'Basic'
+				$LdapConnection.AuthType = [System.DirectoryServices.Protocols.AuthType]::Basic
 				$LdapConnection.Credential = $Credential
 				$LdapConnection.SessionOptions.SecureSocketLayer = $SSL
 			}
 			'Kerberos' {
-				$LdapConnection.AuthType = 'Kerberos'
+				$LdapConnection.AuthType = [System.DirectoryServices.Protocols.AuthType]::Kerberos
 			}
 			Default {
-				$LdapConnection.AuthType = 'Negotiate'
+				$LdapConnection.AuthType = [System.DirectoryServices.Protocols.AuthType]::Negotiate
 			}
 		}
 
-		# define paging configuration
+		# define LDAP paging controls
 		$PageResultRequestControl = [System.DirectoryServices.Protocols.PageResultRequestControl]::new($PageSize)
-		$SearchOptionsControl = [System.DirectoryServices.Protocols.SearchOptionsControl]::new('DomainScope')
+		
+		# define LDAP scope controls; instructs server not to generate LDAP referrals
+		$DomainScopeControl = [System.DirectoryServices.Protocols.DomainScopeControl]::new()
 
-		# define LDAP search request
-		$SearchRequest = [System.DirectoryServices.Protocols.SearchRequest]::new($BaseDN, $Filter, $Scope, $Attributes)
+		# create LDAP search request
+		$SearchRequest = [System.DirectoryServices.Protocols.SearchRequest]::new($SearchBase, $Filter, $SearchScope, $Attributes)
+
+		# update LDAP search request
 		$SearchRequest.SizeLimit = $SizeLimit
 
-		# add controls to LDAP search requested
+		# add controls to LDAP search request
 		$null = $SearchRequest.Controls.Add($PageResultRequestControl)
-		$null = $SearchRequest.Controls.Add($SearchOptionsControl)
+		$null = $SearchRequest.Controls.Add($DomainScopeControl)
 	}
 
 	Process {
@@ -215,7 +218,7 @@ Function Invoke-LdapQuery {
 				Return $_
 			}
 			Catch {
-				Write-Host 'ERROR: caught unknown error'
+				Write-Host "ERROR: caught unknown error: '$($_.Exception)'"
 				Return $_
 			}
 
@@ -226,7 +229,7 @@ Function Invoke-LdapQuery {
 
 				# retrieve keys from entry
 				:Key ForEach ($Key in $Entry.Attributes.Keys) {
-					# retrieve attribute name and range from key
+					# retrieve attribute name and attribute description from key
 					$LdapDisplayName, $AttributeDescription = $Key -split ';'
 
 					# if sorted list already contains attribute name...
@@ -247,27 +250,35 @@ Function Invoke-LdapQuery {
 					}
 
 					# if attribute description matches ranged retrieval format...
-					If ($AttributeDescription -match 'range=(\d+)-(\d+|\*)') {
-						# if second match is '*'...
-						If ($Match[2] -eq '*') {
+					If ($AttributeDescription -match 'range=(?<RangeLower>\d+)-(?<RangeUpper>\d+|\*)') {
+						# if RangeUpper match is '*'...
+						If ($Match['RangeUpper'] -eq '*') {
 							# continue to next key
 							Continue Key
 						}
 
-						# retrieve start and end ranges
-						$Range1 = [int32]$Match[1]
-						$Range2 = [int32]$Match[2]
+						# define range values
+						$RangeWidth = [uint32]$Matches['RangeUpper'] - [uint32]$Matches['RangeLower']
+						$RangeLower = [uint32]$Matches['RangeUpper'] + 1
+						$RangeUpper = $RangeLower + $RangeWidth
 
-						
-						$RangeWidth = $Range2 - $Range1 + 1
-							
-							
-						
-						# TODO: range retrieval
+						# define initial parameters for LDAP query with ranged retrieval
+						$InvokeLdapQuery = $PSBoundParameters
+
+						# update attribute parameter with next attribute range
+						$InvokeLdapQuery['Attributes'] = "$LdapDisplayName;range=$RangeLower-$RangeUpper"
+
+						# invoke LDAP query with ranged retrieval
+						Try {
+							Invoke-LdapQuery @InvokeLdapQuery
+						}
+						Catch {
+							Return $_
+						}
 					}
 					# if range does not match regex...
 					Else {
-						Write-Warning "unrecognized attribute description: $Range"
+						Write-Warning "unrecognized attribute description: $AttributeDescription"
 					}
 				}
 
@@ -293,9 +304,29 @@ Function Invoke-LdapQuery {
 	}
 }
 
+Function Test-LdapQuery {
+	# define parameters for Invoke-LdapQuery
+	$InvokeLdapQuery = @{
+		Server      = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
+		SearchBase  = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().GetDirectoryEntry().DistinguishedName
+		Filter      = "(&(objectCategory=person)(objectClass=user)(sAMAccountName=$([System.Environment]::UserName.ToLower())))"
+		Attributes  = '*'
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+	}
+
+	# call Invoke-LdapQuery
+	Try {
+		Invoke-LdapQuery @InvokeLdapQuery
+	}
+	Catch {
+		Return $_
+	}
+}
+
 # define functions to export
 $FunctionsToExport = @(
 	'Invoke-LdapQuery'
+	'Test-LdapQuery'
 )
 
 # export module members
