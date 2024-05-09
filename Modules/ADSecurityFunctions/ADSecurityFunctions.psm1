@@ -1,5 +1,67 @@
 #Requires -Modules ActiveDirectory
 
+Function Get-ADSecurityObjectTypeGuid {
+	[CmdletBinding()]
+	Param (
+		[Parameter(Position = 0, Mandatory = $true)]
+		[string]$DisplayName,
+		[Parameter(DontShow)]
+		[string]$SchemaNamingContext = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema().Name
+	)
+
+	# retrieve schema guid for class matching display name
+	Try {
+		[guid]$Guid = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema().FindClass($DisplayName).SchemaGuid
+	}
+	# if class not found...
+	Catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
+		# retrieve schema guid for property matching display name
+		Try {
+			[guid]$Guid = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema().FindProperty($DisplayName).SchemaGuid
+		}
+		# if property not found...
+		Catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
+			# define objects for directory searcher
+			$SearchBase = 'LDAP://CN=Extended-Rights', $SchemaNamingContext.Split(',', 2)[1] -join ','
+
+			# create directory searcher
+			Try {
+				$Searcher = [System.DirectoryServices.DirectorySearcher]::new($SearchBase, "(&(displayName=$DisplayName)(rightsGuid=*))" , 'rightsGuid' , [System.DirectoryServices.SearchScope]::OneLevel)
+			}
+			Catch {
+				Return $_
+			}
+
+			# retrieve search result from directory searcher
+			Try {
+				$SearchResult = $Searcher.FindOne()
+			}
+			Catch {
+				Return $_
+			}
+
+			# if search result found...
+			If ($SearchResult -is [System.DirectoryServices.SearchResult]) {
+				# ...and first value in search result can parse into a GUID...
+				If ([guid]::TryParse($SearchResult.Properties['rightsGuid'][0], [ref][guid]::empty)) {
+					# retrieve rights guid from first value in search result
+					[guid]$Guid = $SearchResult.Properties['rightsGuid'][0]
+				}
+			}
+			# if search result not found...
+			Else {
+				Return $null
+			}
+		}
+	}
+	Catch {
+		Return $_
+	}
+
+	# return guid
+	Return $Guid
+}
+
 Function Get-ADSecurityIdentifier {
 	[CmdletBinding()]
 	param (
@@ -42,92 +104,579 @@ Function Get-ADSecurityIdentifier {
 	}
 }
 
-Function Get-ADSecurityObjects {
-	[CmdletBinding()]
-	Param(
-		[Parameter(Position = 0)]
-		[switch]$Force
+Function New-ADAccessRules {
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
+	Param (
+		[Parameter(Mandatory = $true)]
+		[System.Security.Principal.SecurityIdentifier]
+		$SecurityIdentifier,
+		[Parameter(ParameterSetName = 'Preset', Mandatory = $true)]
+		[string]$Preset,
+		[Parameter(ParameterSetName = 'Default')]
+		[System.DirectoryServices.ActiveDirectoryRights]$Rights = 'GenericRead',
+		[Parameter(ParameterSetName = 'Default')]
+		[string]$ObjectName,
+		[Parameter(ParameterSetName = 'Default')]
+		[System.Security.AccessControl.AccessControlType]$AccessControlType = 'Allow',
+		[Parameter(ParameterSetName = 'Default')]
+		[System.DirectoryServices.ActiveDirectorySecurityInheritance]$InheritanceType = 'All',
+		[Parameter(ParameterSetName = 'Default')]
+		[string]$InheritingObjectName,
+		[Parameter(DontShow)][switch]$Reset
 	)
 
-	# try catch for error handling
-	Try {
-		# retrieve servers
-		If ($Force -or $null -eq $ad_dc_pdc) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_dc_pdc' -Value ([System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name) }
-		If ($Force -or $null -eq $ad_dc_rid) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_dc_rid' -Value ([System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().RidRoleOwner.Name) }
-		If ($Force -or $null -eq $ad_dc_ism) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_dc_ism' -Value ([System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().InfrastructureRoleOwner.Name) }
-		If ($Force -or $null -eq $ad_dc_schema) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_dc_schema' -Value ([System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().SchemaRoleOwner.Name) }
-		If ($Force -or $null -eq $ad_dc_naming) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_dc_naming' -Value ([System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().NamingRoleOwner.Name) }
-		If ($Force -or $null -eq $ad_dc_active) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_dc_active' -Value ([System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().FindDomainController().Name) }
+	# define list to contain ACE objects
+	$AccessRules = [System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]::new()
 
-		# retrieve naming contexts
-		If ($Force -or $null -eq $ad_nc_domain) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_nc_domain' -Value ([System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().GetDirectoryEntry().DistinguishedName) }
-		If ($Force -or $null -eq $ad_nc_schema) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_nc_schema' -Value ([System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema().Name) }
-		If ($Force -or $null -eq $ad_nc_config) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_nc_config' -Value $ad_nc_schema.Split(',', 2)[1] }
+	# if preset provided...
+	If ($PSBoundParameters.ContainsKey('Preset')) {
+		# process the requested delegation type
+		switch ($Preset) {
+			'Department' {
+				# define ACE: deny 'WriteProperty' on the 'ou' attribute on 'this object only'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'WriteProperty'
+					type                = 'Deny'
+					objectType          = [guid]'bf9679f0-0de6-11d0-a285-00aa003049e2' # GUID for 'ou' attribute
+					inheritanceType     = 'None'
+					inheritedObjectType = [guid]::empty
+				}
 
-		# retrieve guids
-		If ($Force -or $null -eq $ad_guids_schema) { New-Variable -Force -Scope 'Private' -Option 'ReadOnly' -Name 'ad_guids_schema' -Value (Get-ADObject -SearchBase $ad_nc_schema -LDAPFilter '(schemaidguid=*)' -Properties 'lDAPDisplayName', 'schemaIDGUID') }
-		If ($Force -or $null -eq $ad_guids_rights) { New-Variable -Force -Scope 'Private' -Option 'ReadOnly' -Name 'ad_guids_rights' -Value (Get-ADObject -SearchBase $ad_nc_config -LDAPFilter '(&(objectclass=controlAccessRight)(rightsguid=*))' -Properties 'displayName', 'rightsGuid') }
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
-		# create and populate hash tables
-		If ($Force -or $null -eq $ad_map_rights) {
-			New-Variable -Force -Scope 'Private' -Name 'ad_map_rights_to_guid' -Value @{}
-			ForEach ($guid in $ad_guids_rights) { $ad_map_rights_to_guid[$guid.displayName] = $guid.rightsGuid }
-			New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_map_rights' -Value $ad_map_rights_to_guid
+				# define ACE: deny 'WriteDacl' on 'this object only'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'WriteDacl'
+					type                = 'Deny'
+					objectType          = [guid]::empty
+					inheritanceType     = 'None'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: deny 'WriteDacl' on descendent 'organizationalUnit' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'WriteDacl'
+					type                = 'Deny'
+					objectType          = [guid]::empty
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967aa5-0de6-11d0-a285-00aa003049e2' # GUID for 'organizationalUnit' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: deny 'CreateChild','DeleteChild' of 'user' objects on 'this object and all child objects'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'CreateChild', 'DeleteChild'
+					type                = 'Deny'
+					objectType          = [guid]'bf967aba-0de6-11d0-a285-00aa003049e2' # GUID for 'user' objects
+					inheritanceType     = 'All'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: deny 'CreateChild','DeleteChild' of 'inetOrgPerson' objects on 'this object and all child objects'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'CreateChild', 'DeleteChild'
+					type                = 'Deny'
+					objectType          = [guid]'4828cc14-1437-45bc-9b07-ad6f015e5f28' # GUID for 'inetOrgPerson' objects
+					inheritanceType     = 'All'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: deny 'CreateChild','DeleteChild' of 'account' objects on 'this object and all child objects'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'CreateChild', 'DeleteChild'
+					type                = 'Deny'
+					objectType          = [guid]'2628a46a-a6ad-4ae0-b854-2b12d9fe6f9e' # GUID for 'account' objects
+					inheritanceType     = 'All'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'GenericAll' on 'this object and all child objects'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'GenericAll'
+					type                = 'Allow'
+					objectType          = [guid]::empty
+					inheritanceType     = 'All'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+			}
+			'Computer' {
+				# define ACE: allow 'CreateChild','DeleteChild' of 'computer' objects on 'this object and all child objects'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'CreateChild', 'DeleteChild'
+					type                = 'Allow'
+					objectType          = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritanceType     = 'All'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'GenericAll' on descendent 'computer' objects"
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'GenericAll'
+					type                = 'Allow'
+					objectType          = [guid]::empty
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'GenericAll' on descendent 'msFVE-RecoveryInformation' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'GenericAll'
+					type                = 'Allow'
+					objectType          = [guid]::empty
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'ea715d30-8f53-40d0-bd1e-6109186d782c' # GUID for 'msFVE-RecoveryInformation' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+			}
+			'ComputerCreate' {
+				# define ACE: allow 'CreateChild' of 'computer' objects on 'this object and all child objects'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'CreateChild'
+					type                = 'Allow'
+					objectType          = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritanceType     = 'All'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+			}
+			'ComputerDelete' {
+				# define ACE: allow 'DeleteChild' of 'computer' objects on 'this object and all child objects'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'DeleteChild'
+					type                = 'Allow'
+					objectType          = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritanceType     = 'All'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+			}
+			'ComputerDenyCreate' {
+				# define ACE: deny 'CreateChild' of 'computer' objects on 'this object and all child objects'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'CreateChild'
+					type                = 'Deny'
+					objectType          = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritanceType     = 'All'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+			}
+			'ComputerLAPS' {
+				# define ACE: allow 'ReadProperty','ExtendedRight' on the 'ms-Mcs-AdmPwd' attribute on descendent 'computer' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'ReadProperty', 'ExtendedRight'
+					type                = 'Allow'
+					objectType          = [guid]'18c34bdf-9362-4ad4-9e4c-5f22796cc969' # GUID for 'ms-Mcs-AdmPwd' attribute
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+			}
+			'ComputerWindowsLAPS' {
+				# define ACE: allow 'ReadProperty','ExtendedRight' on the 'msLAPS-Password' attribute on descendent 'computer' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'ReadProperty', 'ExtendedRight'
+					type                = 'Allow'
+					objectType          = [guid]'23f208e9-5657-4fc0-a61c-f3bbe4a45277' # GUID for 'msLAPS-Password' attribute
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'ReadProperty','ExtendedRight' on the 'msLAPS-EncryptedPassword' attribute on descendent 'computer' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'ReadProperty', 'ExtendedRight'
+					type                = 'Allow'
+					objectType          = [guid]'291d1f487-0bda-4d78-8df9-38072e3b827a' # GUID for 'msLAPS-EncryptedPassword' attribute
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'ReadProperty','ExtendedRight' on the 'msLAPS-EncryptedPasswordHistory' attribute on descendent 'computer' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'ReadProperty', 'ExtendedRight'
+					type                = 'Allow'
+					objectType          = [guid]'18100c82-7fdc-4fba-8b0c-0cc7930ebfcd' # GUID for 'msLAPS-EncryptedPasswordHistory' attribute
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'ReadProperty' on the 'msLAPS-PasswordExpirationTime' attribute on descendent 'computer' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'ReadProperty'
+					type                = 'Allow'
+					objectType          = [guid]'1762af1f-0320-43c4-9847-fb4de0c4b9d0' # GUID for 'msLAPS-PasswordExpirationTime' attribute
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+			}
+			'ComputerBitLocker' {
+				# define ACE: allow 'GenericAll' on descendent 'msFVE-RecoveryInformation' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'GenericAll'
+					type                = 'Allow'
+					objectType          = [guid]::empty
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'ea715d30-8f53-40d0-bd1e-6109186d782c' # GUID for 'msFVE-RecoveryInformation' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+			}
+			'ComputerJoin' {
+				# define ACE: allow 'WriteProperty' on the 'Account Restrictions' property set on descendent 'computer' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'WriteProperty'
+					type                = 'Allow'
+					objectType          = [guid]'4c164200-20c0-11d0-a768-00aa006e0529' # GUID for 'Account Restrictions' property set
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'Reset Password' on descendent 'computer' objects"
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'Self'
+					type                = 'Allow'
+					objectType          = [guid]'00299570-246d-11d0-a768-00aa006e0529' # GUID for 'Reset Password' rights
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'Validated write to DNS host name' rights on descendent 'computer' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'Self'
+					type                = 'Allow'
+					objectType          = [guid]'72e39547-7b18-11d1-adef-00c04fd8d5cd' # GUID for 'Validated write to DNS host name' rights
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'Validated write to service principal name' rights on descendent 'computer' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'Self'
+					type                = 'Allow'
+					objectType          = [guid]'f3a64788-5306-11d1-a9c5-0000f80367c1' # GUID for 'Validated write to service principal name' rights
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+			}
+			'ComputerRename' {
+				# define ACE: allow 'ReadProperty','WriteProperty' on the 'cn' attribute on descendent 'computer' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'WriteProperty'
+					type                = 'Allow'
+					objectType          = [guid]'bf96793f-0de6-11d0-a285-00aa003049e2' # GUID for 'cn' attribute
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'ReadProperty','WriteProperty' on the 'sAMAccountName' attribute on descendent 'computer' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'WriteProperty'
+					type                = 'Allow'
+					objectType          = [guid]'3e0abfd0-126a-11d0-a060-00aa006c33ed' # GUID for 'sAMAccountName' attribute
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'WriteProperty' on the 'Account Restrictions' property set on descendent 'computer' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'WriteProperty'
+					type                = 'Allow'
+					objectType          = [guid]'4c164200-20c0-11d0-a768-00aa006e0529' # GUID for 'Account Restrictions' property set
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'Validated write to DNS host name' rights on descendent 'computer' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'Self'
+					type                = 'Allow'
+					objectType          = [guid]'72e39547-7b18-11d1-adef-00c04fd8d5cd' # GUID for 'Validated write to DNS host name' rights
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'Validated write to service principal name' rights on descendent 'computer' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'Self'
+					type                = 'Allow'
+					objectType          = [guid]'f3a64788-5306-11d1-a9c5-0000f80367c1' # GUID for 'Validated write to service principal name' rights
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+			}
+			'Group' {
+				# define ACE: allow 'CreateChild','DeleteChild' of 'group' objects on 'this object and all child objects'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'CreateChild', 'DeleteChild'
+					type                = 'Allow'
+					objectType          = [guid]'bf967a9c-0de6-11d0-a285-00aa003049e2' # GUID for 'group' objects
+					inheritanceType     = 'All'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'GenericAll' on all descendent 'group' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'GenericAll'
+					type                = 'Allow'
+					objectType          = [guid]::empty
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a9c-0de6-11d0-a285-00aa003049e2' # GUID for 'group' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+			}
+			'GroupMembership' {
+				# define ACE: allow 'ReadProperty','WriteProperty' on the 'member' attribute on descendent 'group' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'ReadProperty', 'WriteProperty'
+					type                = 'Allow'
+					objectType          = [guid]'bf9679c0-0de6-11d0-a285-00aa003049e2' # GUID for 'member' attribute
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a9c-0de6-11d0-a285-00aa003049e2' # GUID for 'group' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+			}
+			'GroupPolicy' {
+				# define ACE: allow 'ReadProperty','WriteProperty' on the 'gPLink' attribute on 'this object only'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'ReadProperty', 'WriteProperty'
+					type                = 'Allow'
+					objectType          = [guid]'f30e3bbe-9ff0-11d1-b603-0000f80367c1' # GUID for 'gPLink' attribute
+					inheritanceType     = 'None'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'ReadProperty','WriteProperty' on the 'gPOptions' attribute on 'this object only'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'ReadProperty', 'WriteProperty'
+					type                = 'Allow'
+					objectType          = [guid]'f30e3bbf-9ff0-11d1-b603-0000f80367c1' # GUID for 'gPOptions' attribute
+					inheritanceType     = 'None'
+					inheritedObjectType = [guid]::empty
+				}
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'ReadProperty','WriteProperty' on the 'gPLink' attribute on descendent 'organizationalUnit' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'ReadProperty', 'WriteProperty'
+					type                = 'Allow'
+					objectType          = [guid]'f30e3bbe-9ff0-11d1-b603-0000f80367c1' # GUID for 'gPLink' attribute
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967aa5-0de6-11d0-a285-00aa003049e2' # GUID for 'organizationalUnit' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'ReadProperty','WriteProperty' on the 'gPOptions' attribute on descendent 'organizationalUnit' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'ReadProperty', 'WriteProperty'
+					type                = 'Allow'
+					objectType          = [guid]'f30e3bbf-9ff0-11d1-b603-0000f80367c1' # GUID for 'gPOptions' attribute
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967aa5-0de6-11d0-a285-00aa003049e2' # GUID for 'organizationalUnit' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+			}
+			'OU' {
+				# define ACE: allow 'CreateChild','DeleteChild' of 'organizationalUnit' objects on 'this object and all child objects'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'CreateChild', 'DeleteChild'
+					type                = 'Allow'
+					objectType          = [guid]'bf967aa5-0de6-11d0-a285-00aa003049e2' # GUID for 'organizationalUnit' objects
+					inheritanceType     = 'All'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'WriteProperty' on the 'ou' attribute on all descendent 'organizationalUnit' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'ReadProperty', 'WriteProperty'
+					type                = 'Allow'
+					objectType          = [guid]'bf9679f0-0de6-11d0-a285-00aa003049e2' # GUID for 'ou' attribute
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967aa5-0de6-11d0-a285-00aa003049e2' # GUID for 'organizationalUnit' objects
+				}
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'WriteProperty' on the 'description' attribute on all descendent 'organizationalUnit' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'ReadProperty', 'WriteProperty'
+					type                = 'Allow'
+					objectType          = [guid]'bf967950-0de6-11d0-a285-00aa003049e2' # GUID for 'description' attribute
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967aa5-0de6-11d0-a285-00aa003049e2' # GUID for 'organizationalUnit' objects
+				}
+
+				# create ACE and add to array
+				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+			}
+			Default {
+				$AccessRules = $null
+			}
 		}
-		If ($Force -or $null -eq $ad_map_schema) {
-			New-Variable -Force -Scope 'Private' -Name 'ad_map_schema_to_guid' -Value @{}
-			ForEach ($guid in $ad_guids_schema) { $ad_map_schema_to_guid[$guid.lDAPDisplayName] = [guid]$guid.schemaIDGUID }
-			New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_map_schema' -Value $ad_map_schema_to_guid
-		}
-		If ($Force -or $null -eq $ad_map_rights_reverse) {
-			New-Variable -Force -Scope 'Private' -Name 'ad_map_guid_to_rights' -Value @{}
-			ForEach ($guid in $ad_guids_rights) { $ad_map_guid_to_rights[$guid.rightsGuid] = $guid.displayName }
-			New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_map_rights_reverse' -Value $ad_map_guid_to_rights
-		}
-		If ($Force -or $null -eq $ad_map_schema_reverse) {
-			New-Variable -Force -Scope 'Private' -Name 'ad_map_guid_to_schema' -Value @{}
-			ForEach ($guid in $ad_guids_schema) { $ad_map_guid_to_schema[[guid]$guid.schemaIDGUID] = $guid.lDAPDisplayName }
-			New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_map_schema_reverse' -Value $ad_map_guid_to_schema
-		}
-
-		# create strings for access control types
-		# see reference at https://docs.microsoft.com/en-us/dotnet/api/system.security.accesscontrol.accesscontroltype
-		If ($Force -or $null -eq $ad_accesstype_allow) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_accesstype_allow' -Value 'Allow' } #right(s) will be allowed
-		If ($Force -or $null -eq $ad_accesstype_deny) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_accesstype_deny' -Value 'Deny' } #right(s) will be denied
-
-		# create strings for active directory rights
-		# see reference at https://docs.microsoft.com/en-us/dotnet/api/system.directoryservices.activedirectoryrights
-		If ($Force -or $null -eq $ad_rights_ga) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_rights_ga' -Value 'GenericAll' }
-		If ($Force -or $null -eq $ad_rights_gr) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_rights_gr' -Value 'GenericRead' }
-		If ($Force -or $null -eq $ad_rights_gw) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_rights_gw' -Value 'GenericWrite' }
-		If ($Force -or $null -eq $ad_rights_rp) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_rights_rp' -Value 'ReadProperty' }
-		If ($Force -or $null -eq $ad_rights_wp) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_rights_wp' -Value 'WriteProperty' }
-		If ($Force -or $null -eq $ad_rights_rd) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_rights_rd' -Value 'ReadDacl' }
-		If ($Force -or $null -eq $ad_rights_wd) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_rights_wd' -Value 'WriteDacl' }
-		If ($Force -or $null -eq $ad_rights_cc) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_rights_cc' -Value 'CreateChild' }
-		If ($Force -or $null -eq $ad_rights_dc) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_rights_dc' -Value 'DeleteChild' }
-		If ($Force -or $null -eq $ad_rights_ca) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_rights_ca' -Value 'ExtendedRight' }
-		If ($Force -or $null -eq $ad_rights_sw) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_rights_sw' -Value 'Self' }
-
-		# create strings for active directory inheritances
-		# note: the spelling of "descendents" below is intentional by Microsoft
-		# see reference at https://docs.microsoft.com/en-us/dotnet/api/system.directoryservices.activedirectorysecurityinheritance
-		If ($Force -or $null -eq $ad_inherit_all) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_inherit_all' -Value 'All' } #self and all descendents
-		If ($Force -or $null -eq $ad_inherit_desc) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_inherit_desc' -Value 'Descendents' } #all descendents without self
-		If ($Force -or $null -eq $ad_inherit_none) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_inherit_none' -Value 'None' } #self only
-		If ($Force -or $null -eq $ad_inherit_children) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_inherit_children' -Value 'Children' } # immediate descendents only
-		If ($Force -or $null -eq $ad_inherit_selfandchildren) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_inherit_selfandchildren' -Value 'SelfAndChildren' } # self and immediate descendents only
-
-		# create SIDs for well-known objects
-		# see reference at https://docs.microsoft.com/en-us/dotnet/api/system.directoryservices.activedirectorysecurityinheritance
-		If ($Force -or $null -eq $ad_sid_ownerrights) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_sid_ownerrights' -Value ([System.Security.Principal.SecurityIdentifier]('S-1-3-4')) }
-		If ($Force -or $null -eq $ad_sid_system) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_sid_system' -Value ([System.Security.Principal.SecurityIdentifier]('S-1-5-18')) }
-		If ($Force -or $null -eq $ad_sid_administrators) { New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_sid_administrators' -Value ([System.Security.Principal.SecurityIdentifier]('S-1-5-32-544')) }
 	}
-	Catch {
-		# return the error
-		$_
+	# if preset not provided...
+	Else {
+		# translate object name to GUID of schema object or control access rights
+		If ($PSBoundParameters.ContainsKey('ObjectName')) {
+			$objectType = Get-ADSecurityObjectTypeGuid -DisplayName $ObjectName
+		}
+		Else {
+			$objectType = [guid]::empty
+		}
+
+		# translate inheriting object name to GUID of schema object
+		If ($PSBoundParameters.ContainsKey('InheritingObjectName')) {
+			$inheritedObjectType = Get-ADSecurityObjectTypeGuid -DisplayName $InheritingObjectName
+		}
+		Else {
+			$inheritedObjectType = [guid]::empty
+		}
+
+		# define ACE: deny 'WriteProperty' on the 'ou' attribute on 'this object only'
+		$Ace = @{
+			objectSid           = $SecurityIdentifier
+			adRights            = $Rights
+			type                = $AccessControlType
+			objectType          = $objectType
+			inheritanceType     = $InheritanceType
+			inheritedObjectType = $inheritedObjectType
+		}
+
+		# create ACE and add to list
+		$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 	}
+
+	# return ACE objects
+	Return $AccessRules
 }
 
 Function Reset-ADSecurity {
@@ -266,7 +815,7 @@ Function Reset-ADSecurity {
 		}
 
 		# if owner provided...
-		If ($PSBoundParameters.ContainsKey('Owner')) { 
+		If ($PSBoundParameters.ContainsKey('Owner')) {
 			try {
 				$nTSecurityDescriptor.SetOwner($OwnerSid)
 			}
@@ -483,13 +1032,11 @@ Function Update-ADSecurity {
 	}
 }
 
-# load the AD security objects on module load
-Get-ADSecurityObjects -Force
-
 # define functions to export
 $FunctionsToExport = @(
+	'Get-ADSecurityObjectTypeGuid'
 	'Get-ADSecurityIdentifier'
-	'Get-ADSecurityObjects'
+	'New-ADAccessRules'
 	'Reset-ADSecurity'
 	'Update-ADSecurity'
 )
