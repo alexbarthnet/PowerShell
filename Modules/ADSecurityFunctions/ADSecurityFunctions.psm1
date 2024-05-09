@@ -876,7 +876,7 @@ Function Update-ADSecurity {
 	# validate access rules
 	ForEach ($ActiveDirectoryAccessRule in $AccessRule) {
 		If ($ActiveDirectoryAccessRule -isnot [System.DirectoryServices.ActiveDirectoryAccessRule]) {
-			Write-Warning -Message 'one or more values for the AccessRules parameter are not an ActiveDirectoryAccessRules'
+			Write-Warning -Message 'one or more values for the AccessRule parameter are not an ActiveDirectoryAccessRule'
 			Return
 		}
 	}
@@ -956,14 +956,14 @@ Function Update-ADSecurity {
 			}
 
 			# if remove requested and no explicit rules are defined in the access control list...
-			If ($Inheritance -eq 'Remove' -and -not $nTSecurityDescriptor.Access.Where({ !$_.IsInherited }) -and -not $KeepInheritedRulesForEmptyACL -and -not $PSBoundParameters.ContainsKey('AccessRules')) {
+			If ($Inheritance -eq 'Remove' -and -not $nTSecurityDescriptor.Access.Where({ !$_.IsInherited }) -and -not $KeepInheritedRulesForEmptyACL -and -not $PSBoundParameters.ContainsKey('AccessRule')) {
 				# ...and keep inherited rules for empty ACL was set...
 				If ($KeepInheritedRulesForEmptyACL) {
 					# retain inherited permissions
 					$KeepInheritedRules = $true
 				}
 				# ...and no access rules provided to fill otherwise empty ACL...
-				ElseIf (-not $PSBoundParameters.ContainsKey('AccessRules')) {
+				ElseIf (-not $PSBoundParameters.ContainsKey('AccessRule')) {
 					Write-Warning -Message "cannot remove inherited access rules without replacement access rules if resultant ACL would be empty; could remove Inheritance for on object: '$($ADObject.DistinguishedName)'"
 					Continue NextObject
 				}
@@ -982,7 +982,7 @@ Function Update-ADSecurity {
 		# if reset requested...
 		If ($local:Reset) {
 			# ...and access rules provided...
-			If ($PSBoundParameters.ContainsKey('AccessRules')) {
+			If ($PSBoundParameters.ContainsKey('AccessRule')) {
 				# process each provided access rule...
 				ForEach ($ActiveDirectoryAccessRule in $AccessRule) {
 					# ...and remove existing access rules matching the identity in the provided access rule
