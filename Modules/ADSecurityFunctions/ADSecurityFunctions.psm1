@@ -110,7 +110,7 @@ Function Get-ADSecurityIdentifier {
 	}
 }
 
-Function New-ADAccessRules {
+Function New-ADAccessRuleList {
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param (
 		# the security identifier for the access rule
@@ -136,7 +136,7 @@ Function New-ADAccessRules {
 		[string]$InheritingObjectName,
 		# create list for ActiveDirectoryAccessRule objects; permit submitting existing list to adding objects to list
 		[Parameter(Mandatory = $false)]
-		[System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]$AccessRules = [System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]::new()
+		[System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]$AccessRuleList = [System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]::new()
 	)
 
 	# if preset provided...
@@ -155,7 +155,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: deny 'WriteDacl' on 'this object only'
 				$Ace = @{
@@ -168,7 +168,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: deny 'WriteDacl' on descendent 'organizationalUnit' objects
 				$Ace = @{
@@ -181,7 +181,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: deny 'CreateChild','DeleteChild' of 'user' objects on 'this object and all child objects'
 				$Ace = @{
@@ -194,7 +194,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: deny 'CreateChild','DeleteChild' of 'inetOrgPerson' objects on 'this object and all child objects'
 				$Ace = @{
@@ -207,7 +207,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: deny 'CreateChild','DeleteChild' of 'account' objects on 'this object and all child objects'
 				$Ace = @{
@@ -220,7 +220,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'GenericAll' on 'this object and all child objects'
 				$Ace = @{
@@ -233,7 +233,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
 			'Computer' {
 				# define ACE: allow 'CreateChild','DeleteChild' of 'computer' objects on 'this object and all child objects'
@@ -247,7 +247,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'GenericAll' on descendent 'computer' objects"
 				$Ace = @{
@@ -260,7 +260,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'GenericAll' on descendent 'msFVE-RecoveryInformation' objects
 				$Ace = @{
@@ -273,7 +273,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
 			'ComputerCreate' {
 				# define ACE: allow 'CreateChild' of 'computer' objects on 'this object and all child objects'
@@ -287,7 +287,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
 			'ComputerDelete' {
 				# define ACE: allow 'DeleteChild' of 'computer' objects on 'this object and all child objects'
@@ -301,7 +301,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
 			'ComputerDenyCreate' {
 				# define ACE: deny 'CreateChild' of 'computer' objects on 'this object and all child objects'
@@ -315,7 +315,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
 			'ComputerLAPS' {
 				# define ACE: allow 'ReadProperty','ExtendedRight' on the 'ms-Mcs-AdmPwd' attribute on descendent 'computer' objects
@@ -329,7 +329,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
 			'ComputerWindowsLAPS' {
 				# define ACE: allow 'ReadProperty','ExtendedRight' on the 'msLAPS-Password' attribute on descendent 'computer' objects
@@ -343,7 +343,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'ReadProperty','ExtendedRight' on the 'msLAPS-EncryptedPassword' attribute on descendent 'computer' objects
 				$Ace = @{
@@ -356,7 +356,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'ReadProperty','ExtendedRight' on the 'msLAPS-EncryptedPasswordHistory' attribute on descendent 'computer' objects
 				$Ace = @{
@@ -369,7 +369,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'ReadProperty' on the 'msLAPS-PasswordExpirationTime' attribute on descendent 'computer' objects
 				$Ace = @{
@@ -382,7 +382,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
 			'ComputerBitLocker' {
 				# define ACE: allow 'GenericAll' on descendent 'msFVE-RecoveryInformation' objects
@@ -396,7 +396,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
 			'ComputerJoin' {
 				# define ACE: allow 'WriteProperty' on the 'Account Restrictions' property set on descendent 'computer' objects
@@ -410,7 +410,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'Reset Password' on descendent 'computer' objects"
 				$Ace = @{
@@ -423,7 +423,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'Validated write to DNS host name' rights on descendent 'computer' objects
 				$Ace = @{
@@ -436,7 +436,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'Validated write to service principal name' rights on descendent 'computer' objects
 				$Ace = @{
@@ -449,7 +449,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
 			'ComputerRename' {
 				# define ACE: allow 'ReadProperty','WriteProperty' on the 'cn' attribute on descendent 'computer' objects
@@ -463,7 +463,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'ReadProperty','WriteProperty' on the 'sAMAccountName' attribute on descendent 'computer' objects
 				$Ace = @{
@@ -476,7 +476,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'WriteProperty' on the 'Account Restrictions' property set on descendent 'computer' objects
 				$Ace = @{
@@ -489,7 +489,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'Validated write to DNS host name' rights on descendent 'computer' objects
 				$Ace = @{
@@ -502,7 +502,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'Validated write to service principal name' rights on descendent 'computer' objects
 				$Ace = @{
@@ -515,7 +515,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
 			'Group' {
 				# define ACE: allow 'CreateChild','DeleteChild' of 'group' objects on 'this object and all child objects'
@@ -529,7 +529,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'GenericAll' on all descendent 'group' objects
 				$Ace = @{
@@ -542,7 +542,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
 			'GroupMembership' {
 				# define ACE: allow 'ReadProperty','WriteProperty' on the 'member' attribute on descendent 'group' objects
@@ -556,7 +556,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
 			'GroupPolicy' {
 				# define ACE: allow 'ReadProperty','WriteProperty' on the 'gPLink' attribute on 'this object only'
@@ -570,7 +570,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'ReadProperty','WriteProperty' on the 'gPOptions' attribute on 'this object only'
 				$Ace = @{
@@ -582,7 +582,7 @@ Function New-ADAccessRules {
 					inheritedObjectType = [guid]::empty
 				}
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'ReadProperty','WriteProperty' on the 'gPLink' attribute on descendent 'organizationalUnit' objects
 				$Ace = @{
@@ -595,7 +595,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'ReadProperty','WriteProperty' on the 'gPOptions' attribute on descendent 'organizationalUnit' objects
 				$Ace = @{
@@ -608,7 +608,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
 			'OU' {
 				# define ACE: allow 'CreateChild','DeleteChild' of 'organizationalUnit' objects on 'this object and all child objects'
@@ -622,7 +622,7 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'WriteProperty' on the 'ou' attribute on all descendent 'organizationalUnit' objects
 				$Ace = @{
@@ -634,7 +634,7 @@ Function New-ADAccessRules {
 					inheritedObjectType = [guid]'bf967aa5-0de6-11d0-a285-00aa003049e2' # GUID for 'organizationalUnit' objects
 				}
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
 				# define ACE: allow 'WriteProperty' on the 'description' attribute on all descendent 'organizationalUnit' objects
 				$Ace = @{
@@ -647,10 +647,10 @@ Function New-ADAccessRules {
 				}
 
 				# create ACE and add to array
-				$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+				$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
 			Default {
-				$AccessRules = $null
+				$AccessRuleList = $null
 			}
 		}
 	}
@@ -683,11 +683,11 @@ Function New-ADAccessRules {
 		}
 
 		# create ACE and add to list
-		$AccessRules.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+		$AccessRuleList.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 	}
 
 	# return ACE objects
-	Return $AccessRules
+	Return $AccessRuleList
 }
 
 Function Reset-ADSecurity {
@@ -860,7 +860,7 @@ Function Update-ADSecurity {
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][Alias('Objects')]
 		[object[]]$Identity,
 		[Parameter(Position = 1)][Alias('Permissions')]
-		[object[]]$AccessRules,
+		[object[]]$AccessRule,
 		[Parameter(Position = 2)]
 		[object[]]$SID,
 		[Parameter(Position = 3)][ValidateSet('Enable', 'Disable', 'Remove')]
@@ -874,7 +874,7 @@ Function Update-ADSecurity {
 	)
 
 	# validate access rules
-	ForEach ($ActiveDirectoryAccessRule in $AccessRules) {
+	ForEach ($ActiveDirectoryAccessRule in $AccessRule) {
 		If ($ActiveDirectoryAccessRule -isnot [System.DirectoryServices.ActiveDirectoryAccessRule]) {
 			Write-Warning -Message 'one or more values for the AccessRules parameter are not an ActiveDirectoryAccessRules'
 			Return
@@ -984,14 +984,14 @@ Function Update-ADSecurity {
 			# ...and access rules provided...
 			If ($PSBoundParameters.ContainsKey('AccessRules')) {
 				# process each provided access rule...
-				ForEach ($AccessRule in $AccessRules) {
+				ForEach ($ActiveDirectoryAccessRule in $AccessRule) {
 					# ...and remove existing access rules matching the identity in the provided access rule
 					Try {
-						$nTSecurityDescriptor.PurgeAccessRules($AccessRule.IdentityReference)
-						Write-Warning "removed existing access rules for '$($AccessRule.IdentityReference)' from object: '$($ADObject.DistinguishedName)'"
+						$nTSecurityDescriptor.PurgeAccessRules($ActiveDirectoryAccessRule.IdentityReference)
+						Write-Warning "removed existing access rules for '$($ActiveDirectoryAccessRule.IdentityReference)' from object: '$($ADObject.DistinguishedName)'"
 					}
 					Catch {
-						Write-Warning -Message "could not remove existing access rules for '$($AccessRule.IdentityReference)' from object: '$($ADObject.DistinguishedName)'"
+						Write-Warning -Message "could not remove existing access rules for '$($ActiveDirectoryAccessRule.IdentityReference)' from object: '$($ADObject.DistinguishedName)'"
 						Continue NextObject
 					}
 				}
@@ -1014,9 +1014,9 @@ Function Update-ADSecurity {
 		}
 
 		# process each access rule
-		ForEach ($AccessRule in $AccessRules) {
+		ForEach ($ActiveDirectoryAccessRule in $AccessRule) {
 			Try {
-				$nTSecurityDescriptor.AddAccessRule($AccessRule)
+				$nTSecurityDescriptor.AddAccessRule($ActiveDirectoryAccessRule)
 			}
 			Catch {
 				Write-Warning -Message "could not add access rule to object: '$($ADObject.DistinguishedName)'"
@@ -1047,7 +1047,7 @@ Function Update-ADSecurity {
 $FunctionsToExport = @(
 	'Get-ADSecurityObjectTypeGuid'
 	'Get-ADSecurityIdentifier'
-	'New-ADAccessRules'
+	'New-ADAccessRuleList'
 	'Reset-ADSecurity'
 	'Update-ADSecurity'
 )
