@@ -3,8 +3,10 @@
 Function Get-ADSecurityObjectTypeGuid {
 	[CmdletBinding()]
 	Param (
-		[Parameter(Position = 0, Mandatory = $true)]
+		[Parameter(Mandatory = $true, Position = 0, ValueFromPipeline)]
 		[string]$DisplayName,
+		[Parameter(Mandatory = $false)]
+		[switch]$SchemaClassObjectsOnly,
 		[Parameter(DontShow)]
 		[string]$SchemaNamingContext = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema().Name
 	)
@@ -15,6 +17,10 @@ Function Get-ADSecurityObjectTypeGuid {
 	}
 	# if class not found...
 	Catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
+		# if schema class objects only requested...
+		If ($SchemaClassObjectsOnly) {
+			Return $null
+		}
 		# retrieve schema guid for property matching display name
 		Try {
 			[guid]$Guid = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema().FindProperty($DisplayName).SchemaGuid
@@ -107,26 +113,31 @@ Function Get-ADSecurityIdentifier {
 Function New-ADAccessRules {
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param (
-		[Parameter(Mandatory = $true)]
-		[System.Security.Principal.SecurityIdentifier]
-		$SecurityIdentifier,
-		[Parameter(ParameterSetName = 'Preset', Mandatory = $true)]
+		# the security identifier for the access rule
+		[Parameter(Mandatory = $true, Position = 0, ValueFromPipeline)]
+		[System.Security.Principal.SecurityIdentifier]$SecurityIdentifier,
+		# a preset that returns multiple access rules
+		[Parameter(Mandatory = $true, Position = 1, ParameterSetName = 'Preset')]
 		[string]$Preset,
-		[Parameter(ParameterSetName = 'Default')]
+		# the rights for the access rule, the default is "Read"
+		[Parameter(Mandatory = $false, ParameterSetName = 'Default')]
 		[System.DirectoryServices.ActiveDirectoryRights]$Rights = 'GenericRead',
-		[Parameter(ParameterSetName = 'Default')]
+		# display name of inheriting object type, can be an Active Directory object type
+		[Parameter(Mandatory = $false, ParameterSetName = 'Default')]
 		[string]$ObjectName,
-		[Parameter(ParameterSetName = 'Default')]
+		# the access type for the access rule, the default is "Allow"
+		[Parameter(Mandatory = $false, ParameterSetName = 'Default')]
 		[System.Security.AccessControl.AccessControlType]$AccessControlType = 'Allow',
-		[Parameter(ParameterSetName = 'Default')]
+		# the inheritance for the access rule, the default is "This object and all child objects"
+		[Parameter(Mandatory = $false, ParameterSetName = 'Default')]
 		[System.DirectoryServices.ActiveDirectorySecurityInheritance]$InheritanceType = 'All',
-		[Parameter(ParameterSetName = 'Default')]
+		# display name of inheriting object type, can be an Active Directory object type
+		[Parameter(Mandatory = $false, ParameterSetName = 'Default')]
 		[string]$InheritingObjectName,
-		[Parameter(DontShow)][switch]$Reset
+		# create list for ActiveDirectoryAccessRule objects; permit submitting existing list to adding objects to list
+		[Parameter(Mandatory = $false)]
+		[System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]$AccessRules = [System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]::new()
 	)
-
-	# define list to contain ACE objects
-	$AccessRules = [System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]::new()
 
 	# if preset provided...
 	If ($PSBoundParameters.ContainsKey('Preset')) {
@@ -645,7 +656,7 @@ Function New-ADAccessRules {
 	}
 	# if preset not provided...
 	Else {
-		# translate object name to GUID of schema object or control access rights
+		# translate object name to GUID of schema class object, attribute object, or a control access right
 		If ($PSBoundParameters.ContainsKey('ObjectName')) {
 			$objectType = Get-ADSecurityObjectTypeGuid -DisplayName $ObjectName
 		}
@@ -653,9 +664,9 @@ Function New-ADAccessRules {
 			$objectType = [guid]::empty
 		}
 
-		# translate inheriting object name to GUID of schema object
+		# translate inheriting object name to GUID of schema class object
 		If ($PSBoundParameters.ContainsKey('InheritingObjectName')) {
-			$inheritedObjectType = Get-ADSecurityObjectTypeGuid -DisplayName $InheritingObjectName
+			$inheritedObjectType = Get-ADSecurityObjectTypeGuid -DisplayName $InheritingObjectName -SchemaClassObjectsOnly
 		}
 		Else {
 			$inheritedObjectType = [guid]::empty
@@ -682,7 +693,7 @@ Function New-ADAccessRules {
 Function Reset-ADSecurity {
 	[CmdletBinding()]
 	param (
-		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][Alias('Objects')]
 		[object[]]$Identity,
 		[Parameter(Position = 1)]
 		[object]$Owner,
@@ -846,9 +857,9 @@ Function Reset-ADSecurity {
 
 Function Update-ADSecurity {
 	Param (
-		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][Alias('Objects')]
 		[object[]]$Identity,
-		[Parameter(Position = 1)]
+		[Parameter(Position = 1)][Alias('Permissions')]
 		[object[]]$AccessRules,
 		[Parameter(Position = 2)]
 		[object[]]$SID,
