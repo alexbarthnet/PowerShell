@@ -27,7 +27,7 @@ Function Get-ADSecurityIdentifier {
 				Return [System.Security.Principal.SecurityIdentifier]($Principal)
 			}
 			# a principal with domain prefix or suffix
-			{ ($_ -match '^[\w\s\.-]+\\[\w\s\.-]+$') -or ($_ -match '^[\w\.-]+@[\w\.-]+$') } {
+			{ ($_ -match '^[\w\s\.-]+\\[\w\s\.-]+\$*$') -or ($_ -match '^[\w\.-]+@[\w\.-]+$') } {
 				Return ([System.Security.Principal.NTAccount]($Principal)).Translate([System.Security.Principal.SecurityIdentifier])
 			}
 			# a principal without domain prefix or suffix
@@ -130,184 +130,167 @@ Function Get-ADSecurityObjects {
 	}
 }
 
-Function New-ADCustomPSDrive {
-	Param(
-		[Parameter(Position = 0)]
-		[string]$Name = 'ADCustom',
-		[Parameter(Position = 1)]
-		[string]$Server = $ad_dc_pdc,
-		[Parameter(Position = 2)]
-		[switch]$Force,
-		[Parameter(Position = 3)]
-		[switch]$Passthru
-	)
-
-	Try {
-		# check for PSDrive with with matching Name
-		$ad_custom_psdrive = $null
-		$ad_custom_psdrive = Get-PSDrive -Scope 'Global' | Where-Object { $_.Name -eq $Name }
-
-		# set Force if found PSDrive has incorrect values
-		If ($ad_custom_psdrive.Server -ne $Server -or $ad_custom_psdrive.Root -ne '//RootDSE/' -or -not $ad_custom_psdrive.Provider -match 'ActiveDirectory$') {
-			$Force = $true
-		}
-
-		# remove found PSDrive if Force set
-		If ($Force) {
-			$ad_custom_psdrive | Remove-PSDrive -Force -ErrorAction 'SilentlyContinue' -Scope 'Global'
-			$ad_custom_psdrive = $null
-		}
-
-		# create PSdrive with correct values
-		If ($null -eq $ad_custom_psdrive) {
-			$ad_custom_psdrive = New-PSDrive -Name $Name -Server $Server -PSProvider 'ActiveDirectory' -Root '//RootDSE/' -Scope 'Global'
-		}
-
-		# return object if requested
-		If ($Passthru) {
-			$ad_custom_psdrive
-		}
-	}
-	Catch {
-		$_
-	}
-}
-
-Function Remove-ADCustomPSDrive {
-	Param(
-		[Parameter(Position = 0)]
-		[string]$Name = 'ADCustom'
-	)
-
-	Try {
-		# check for PSDrive with with matching Name
-		$ad_custom_psdrive = $null
-		$ad_custom_psdrive = Get-PSDrive -Scope 'Global' | Where-Object { $_.Name -eq $Name }
-
-		# check for PSdrive with matching Name
-		If ($ad_custom_psdrive) {
-			# remove any PSdrive with with matching Name
-			$ad_custom_psdrive | Remove-PSDrive -Force -Scope 'Global'
-		}
-	}
-	Catch {
-		$_
-	}
-}
-
 Function Reset-ADSecurity {
 	[CmdletBinding()]
 	param (
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		[object[]]$Identity,
 		[Parameter(Position = 1)]
-		[string]$Owner,
+		[object]$Owner,
+		[Parameter(Position = 1)]
+		[switch]$ForceInheritance,
 		[Parameter(Position = 2)]
-		[string]$Server = $ad_dc_pdc
+		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
 	)
 
-	# create custom PSdrive if requested
-	If ($null -ne $Server) {
+	# if owner provided and not a SID...
+	If ($PSBoundParameters.ContainsKey('Owner') -and $Owner -isnot [System.Security.Principal.SecurityIdentifier]) {
+		# get owner SID
 		Try {
-			$ad_psdrive = (New-ADCustomPSDrive -Server $Server -Passthru).Name
+			$Owner = Get-ADSecurityIdentifier -Principal $Owner
 		}
 		Catch {
-			Write-Host "ERROR: creating custom PSDrive for server: '$Server'"
-			Return
+			Write-Warning -Message "could not retrieve SID for owner: '$Owner'"
+			Return $_
 		}
-	}
-	Else {
-		$ad_psdrive = 'AD'
 	}
 
-	# create empty objects
-	$ad_owner = $null
-	$ad_objects = @()
-	$ad_defaultsddl = @{}
-
-	# retrieve owner SID if requested
-	If ($null -ne $Owner) {
-		Try {
-			$ad_owner = Get-ADSecurityIdentifier -Principal $Owner
-		}
-		Catch {
-			Write-Host "ERROR: could not retrieve SID for owner: '$Owner'"
-		}
-	}
+	# create list for objects
+	$ADObjects = [System.Collections.Generic.List[object]]::new()
 
 	# retrieve objects from input
-	:ad_identity ForEach ($ad_identity in $Identity) {
-		If ($ad_identity -is [Microsoft.ActiveDirectory.Management.ADObject]) {
-			# if an ADObject, retrieve the DN
-			$ad_objects += $ad_identity
+	:NextIdentity ForEach ($Object in $Identity) {
+		If ($Object -is [Microsoft.ActiveDirectory.Management.ADObject]) {
+			# add object to list and continue
+			$ADObjects.Add($Object)
+			Continue NextIdentity
 		}
-		ElseIf ($ad_object -is [System.String]) {
-			# if a string, assume value is the object DN
+
+		# if object is a string...
+		If ($Object -is [System.String]) {
+			# get ADObject using object as identity
 			Try {
-				$ad_objects += Get-ADObject -Identity $ad_identity
+				$ADObject = Get-ADObject -Server $Server -Identity $Object -Properties 'nTSecurityDescriptor'
 			}
 			Catch {
-				Write-Host "ERROR: could not retrieve object for '$ad_identity'"
+				Write-Warning -Message "could not retrieve object for '$Object'"
 			}
+
+			# add object to list and continue
+			$ADObjects.Add($ADObject)
+			Continue NextIdentity
 		}
-		Default {
-			# if any other object type, continue to next iteration of foreeach loop
-			Write-Host "ERROR: could not process object type: '[$($ad_identity.GetType().FullName)]'"
-		}
+
+		# if any other object type, continue to next iteration of foreeach loop
+		Write-Warning -Message "could not process '[$($Object.GetType().FullName)]' object type for object: '$Object'"
 	}
+
+	# create hashtable for default security descriptors
+	$defaultSecurityDescriptors = @{}
 
 	# process objects retrieved from input
-	:ad_object ForEach ($ad_object in $ad_objects) {
-		# retrieve object class
-		Try {
-			$ad_class = $ad_object.objectClass
-		}
-		Catch {
-			Write-Host "ERROR: could not retrieve object class for: '$($ad_object.DistinguishedName)'"
-		}
-
-
+	:NextObject ForEach ($ADObject in $ADObjects) {
 		# check hashtable for default security descriptor of object class
-		If ([string]::IsNullOrEmpty($ad_defaultsddl[$ad_class])) {
+		If (!$defaultSecurityDescriptors.ContainsKey($ADObject.objectClass)) {
+			# define parameters for Get-ADObject
+			$GetADObject = @{
+				Filter      = "ldapDisplayName -eq '$($ADObject.objectClass)'"
+				Properties  = 'defaultSecurityDescriptor'
+				SearchBase  = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema().Name
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
 			Try {
-				$ad_defaultsddl[$ad_class] = (Get-ADObject -Filter "ldapDisplayName -eq '$ad_class'" -SearchBase $ad_nc_schema -Properties 'defaultSecurityDescriptor').defaultSecurityDescriptor
+				$defaultSecurityDescriptors[$ADObject.objectClass] = (Get-ADObject @GetADObject).defaultSecurityDescriptor
 			}
 			Catch {
-				Write-Host "ERROR: could not retrieve default security descriptor for object class: '$ad_class'"
-				Continue ad_object
+				Write-Warning -Message "could not retrieve default security descriptor for object class: '$($ADObject.objectClass)'"
+				Continue NextObject
 			}
 		}
 
-		# get ACL for object
-		$ad_path = $ad_psdrive, $ad_object.DistinguishedName -join ':\'
-		$ad_acl = Get-Acl -Path $ad_path
+		# check object for nTSecurityDescriptor property
+		If ($null -eq $ADObject.nTSecurityDescriptor) {
+			Try {
+				$ADObject = Get-ADObject -Server $Server -Identity $ADObject.DistinguishedName -Properties 'nTSecurityDescriptor'
+			}
+			Catch {
+				Write-Warning -Message "could not retrieve nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
+				Continue NextObject
+			}
+		}
+
+		# retrieve nTSecurityDescriptor from object
+		$nTSecurityDescriptor = $ADObject.nTSecurityDescriptor
+
+		# validate nTSecurityDescriptor object type
+		If ($nTSecurityDescriptor -isnot [System.DirectoryServices.ActiveDirectorySecurity]) {
+			Write-Warning -Message "found invalid '[$($nTSecurityDescriptor.GetType().FullName)]' object type for nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
+			Continue NextObject
+		}
+
+		# retrieve inheritance settings
+		$InheritanceEnabled = $nTSecurityDescriptor.AreAccessRulesProtected
 
 		# remove inheritance from object
-		$ad_acl.SetAccessRuleProtection($true, $false)
+		try {
+			$nTSecurityDescriptor.SetAccessRuleProtection($true, $false)
+		}
+		catch {
+			Write-Warning -Message "could not remove inheritance from nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
+			Continue NextObject
+		}
 
 		# remove existing ACEs from object
-		$ad_acl.Access | ForEach-Object { $ad_acl.RemoveAccessRule($_) } | Out-Null
+		$nTSecurityDescriptor.Access | ForEach-Object { $nTSecurityDescriptor.RemoveAccessRuleSpecific($_) }
 
 		# add default SDDL to ACL
-		$ad_acl.SetSecurityDescriptorSddlForm($ad_sddl)
+		try {
+			$nTSecurityDescriptor.SetSecurityDescriptorSddlForm($defaultSecurityDescriptors[$ADObject.objectClass])
+		}
+		catch {
+			Write-Warning -Message "could not copy default security descriptor to nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
+			Continue NextObject
+		}
 
-		# enable inheritance on object
-		$ad_acl.SetAccessRuleProtection($false, $false)
+		# if inheritance is required or was previously enabled...
+		If ($ForceInheritance -or $InheritanceEnabled) {
+			# enable inheritance on object
+			try {
+				$nTSecurityDescriptor.SetAccessRuleProtection($false, $false)
+			}
+			catch {
+				Write-Warning -Message "could not restore inheritance from nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
+				Continue NextObject
+			}
+		}
 
-		# set owner on ACL if provided
-		If ($null -ne $ad_owner) { $ad_acl.SetOwner($ad_owner) }
+		# if owner provided...
+		If ($PSBoundParameters.ContainsKey('Owner')) { 
+			try {
+				$nTSecurityDescriptor.SetOwner($OwnerSid)
+			}
+			catch {
+				Write-Warning -Message "could not set owner in nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
+				Continue NextObject
+			}
+		}
+
+		# define parameters for Set-Acl
+		$SetADObject = @{
+			Identity    = $ADObject.DistinguishedName
+			Server      = $Server
+			Replace     = @{ nTSecurityDescriptor = $nTSecurityDescriptor }
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
 
 		# set ACL for object
-		$ad_acl | Set-Acl -Path $ad_path
-	}
-
-	# remove custom PSdrive if created
-	If ($null -ne $Server) {
 		Try {
-			Remove-ADCustomPSDrive
+			Set-ADObject @SetADObject
 		}
 		Catch {
-			Write-Host 'ERROR: removing custom PSDrive'
+			Write-Warning -Message "could not update nTSecurityDescriptor on object: '$($ADObject.DistinguishedName)'"
+			Return $_
 		}
 	}
 }
@@ -315,145 +298,187 @@ Function Reset-ADSecurity {
 Function Update-ADSecurity {
 	Param (
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
-		[object[]]$Objects,
+		[object[]]$Identity,
 		[Parameter(Position = 1)]
-		[object[]]$Permissions,
-		[Parameter(Position = 2)][ValidateScript({ $_ -is [System.Security.Principal.SecurityIdentifier] })]
-		[object]$SID,
+		[object[]]$AccessRules,
+		[Parameter(Position = 2)]
+		[object[]]$SID,
 		[Parameter(Position = 3)][ValidateSet('Enable', 'Disable', 'Remove')]
 		[string]$Inheritance,
 		[Parameter(Position = 4)]
-		[string]$Server = $ad_dc_pdc,
+		[switch]$Reset,
 		[Parameter(Position = 5)]
-		[switch]$Reset
+		[switch]$KeepInheritedRulesForEmptyACL,
+		[Parameter(Position = 6)]
+		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
 	)
 
-	# create custom PSdrive if requested
-	If ($null -ne $Server) {
-		Try {
-			$ad_psdrive = (New-ADCustomPSDrive -Server $Server -Passthru).Name
-		}
-		Catch {
-			Write-Host "ERROR: creating 'ADCustom' PSDrive for server: '$Server'"
-			Break
+	# validate access rules
+	ForEach ($ActiveDirectoryAccessRule in $AccessRules) {
+		If ($ActiveDirectoryAccessRule -isnot [System.DirectoryServices.ActiveDirectoryAccessRule]) {
+			Write-Warning -Message 'one or more values for the AccessRules parameter are not an ActiveDirectoryAccessRules'
+			Return
 		}
 	}
-	Else {
-		$ad_psdrive = 'AD'
+
+	# validate SIDs
+	ForEach ($SecurityIdentifier in $SID) {
+		If ($SecurityIdentifier -isnot [System.Security.Principal.SecurityIdentifier]) {
+			Write-Warning -Message 'one or more values for the SID parameter are not a SecurityIdentifier'
+			Return
+		}
 	}
 
-	# create empty array
-	$ad_object_fqdns = @()
+	# create list for objects
+	$ADObjects = [System.Collections.Generic.List[object]]::new()
 
-	# retrieve DNs of objects
-	ForEach ($ad_object in $Objects) {
-		switch ($true) {
-			{ $ad_object -is [Microsoft.ActiveDirectory.Management.ADObject] } {
-				# if an ADObject, retrieve the DN
-				$ad_object_fqdns += $ad_object.DistinguishedName
-			}
-			{ $ad_object -is [System.String] } {
-				# if a string, assume value is the object DN
-				$ad_object_fqdns += $ad_object
-			}
-			Default {
-				# if any other object type, continue to next iteration of foreeach loop
-				Write-Host "ERROR: cannot process object type: '[$($ad_object.GetType().FullName)]'"
-			}
+	# retrieve objects from input
+	:NextIdentity ForEach ($Object in $Identity) {
+		If ($Object -is [Microsoft.ActiveDirectory.Management.ADObject]) {
+			# add object to list and continue
+			$ADObjects.Add($Object)
+			Continue NextIdentity
 		}
+
+		# if object is a string...
+		If ($Object -is [System.String]) {
+			# get ADObject using object as identity
+			Try {
+				$ADObject = Get-ADObject -Server $Server -Identity $Object -Properties 'nTSecurityDescriptor'
+			}
+			Catch {
+				Write-Warning -Message "could not retrieve object for '$Object'"
+			}
+
+			# add object to list and continue
+			$ADObjects.Add($ADObject)
+			Continue NextIdentity
+		}
+
+		# if any other object type, continue to next iteration of foreeach loop
+		Write-Warning -Message "could not process object type: '[$($Object.GetType().FullName)]'"
 	}
 
 	# process DNs
-	:ad_object_dn ForEach ($ad_object_dn in $ad_object_fqdns) {
-		# define path for AD filesystem provider
-		$ad_object_path = ($ad_psdrive + ':\' + $ad_object_dn)
-		# validate the AD file system provider can retrieve the object
-		If (Test-Path -Path $ad_object_path) {
-			# retrieve ACL
-			$ad_object_acl = $null
+	:NextObject ForEach ($ADObject in $ADObjects) {
+		# check object for nTSecurityDescriptor property
+		If ($null -eq $ADObject.nTSecurityDescriptor) {
 			Try {
-				$ad_object_acl = Get-Acl -Path $ad_object_path
+				$ADObject = Get-ADObject -Server $Server -Identity $ADObject.DistinguishedName -Properties 'nTSecurityDescriptor'
 			}
 			Catch {
-				Write-Host "ERROR: could not retrieve ACL for: '$ad_object_dn'"
-				Continue ad_object_dn
-			}
-			# retrieve inheritance settings
-			# $ad_object_acl.IsProtected
-			# $ad_object_acl.preserveInheritance
-			# check inheritance settings
-			Try {
-				switch ($Inheritance) {
-					'Enable' {
-						# enable inheritance
-						$ad_object_acl.SetAccessRuleProtection($false, $false)
-					}
-					'Disable' {
-						# disable inheritance and copy inherited permissions
-						$ad_object_acl.SetAccessRuleProtection($true, $true)
-					}
-					'Remove' {
-						# remove inheritance if possible, disable otherwise
-						If ($Permissions.Count -ge 1) {
-							# disable inheritance and do not copy inherited permissions
-							$ad_object_acl.SetAccessRuleProtection($true, $false)
-						}
-						Else {
-							# disable inheritance and copy inherited permissions
-							$ad_object_acl.SetAccessRuleProtection($true, $true)
-							Write-Host 'WARNING: inherited access cannot be removed without replacement ACEs, inheritance disabled instead'
-						}
-					}
-					Default {
-						# leave inheritance as is
-					}
-				}
-			}
-			Catch {
-				Write-Host "ERROR: could set inheritance on ACL for: '$ad_object_dn'"
-				Continue ad_object_dn
-			}
-			# remove existing ACEs for any IdentityReference found in provided ACEs
-			If ($Reset -and $Permissions.Count -gt 0) {
-				ForEach ($ad_object_ace in $Permissions) {
-					$ad_object_acl.PurgeAccessRules($ad_object_ace.IdentityReference)
-				}
-				Write-Host "Removed existing access for principals in requested ACEs on object: '$ad_object_dn'"
-			}
-			# remove existing ACEs for any provided SID
-			If ($Reset -and $SID -is [System.Security.Principal.SecurityIdentifier]) {
-				ForEach ($ad_object_ace in $Permissions) {
-					$ad_object_acl.PurgeAccessRules($SID)
-				}
-				Write-Host "Removed existing access for principals in requested ACEs on object: '$ad_object_dn'"
-			}
-			# add defined ACEs
-			ForEach ($ad_object_ace in $Permissions) {
-				$ad_object_acl.AddAccessRule($ad_object_ace)
-			}
-			# update ACL
-			Try {
-				Set-Acl -AclObject $ad_object_acl -Path $ad_object_path
-				Write-Host "Updated ACL on object: '$ad_object_dn'"
-			}
-			Catch {
-				Write-Host "ERROR: could set inheritance on ACL for: '$ad_object_dn'"
-				Continue ad_object_dn
+				Write-Warning -Message "could not retrieve nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
+				Continue NextObject
 			}
 		}
-		Else {
-			Write-Host "WARNING: object not found: '$ad_object_dn'"
-		}
-	}
 
-	# remove custom PSdrive if created
-	If ($null -ne $Server) {
+		# retrieve nTSecurityDescriptor from object
+		$nTSecurityDescriptor = $ADObject.nTSecurityDescriptor
+
+		# if inheritance changes requested...
+		If ($PSBoundParameters.ContainsKey('Inheritance')) {
+			switch ($Inheritance) {
+				'Enable' {
+					# enable inheritance
+					$DisableInheritance = $false
+					$KeepInheritedRules = $false
+				}
+				'Disable' {
+					# disable inheritance and retain inherited permissions
+					$DisableInheritance = $true
+					$KeepInheritedRules = $true
+				}
+				'Remove' {
+					# disable inheritance and remove inherited permissions
+					$DisableInheritance = $true
+					$KeepInheritedRules = $false
+				}
+			}
+
+			# if remove requested and no explicit rules are defined in the access control list...
+			If ($Inheritance -eq 'Remove' -and -not $nTSecurityDescriptor.Access.Where({ !$_.IsInherited }) -and -not $KeepInheritedRulesForEmptyACL -and -not $PSBoundParameters.ContainsKey('AccessRules')) {
+				# ...and keep inherited rules for empty ACL was set...
+				If ($KeepInheritedRulesForEmptyACL) {
+					# retain inherited permissions
+					$KeepInheritedRules = $true
+				}
+				# ...and no access rules provided to fill otherwise empty ACL...
+				ElseIf (-not $PSBoundParameters.ContainsKey('AccessRules')) {
+					Write-Warning -Message "cannot remove inherited access rules without replacement access rules if resultant ACL would be empty; could remove Inheritance for on object: '$($ADObject.DistinguishedName)'"
+					Continue NextObject
+				}
+			}
+
+			# update inheritance settings
+			Try {
+				$nTSecurityDescriptor.SetAccessRuleProtection($DisableInheritance, $KeepInheritedRules)
+			}
+			Catch {
+				Write-Warning -Message "could not modify inheritance of ACL on object: '$($ADObject.DistinguishedName)'"
+				Continue NextObject
+			}
+		}
+
+		# if reset requested...
+		If ($local:Reset) {
+			# ...and access rules provided...
+			If ($PSBoundParameters.ContainsKey('AccessRules')) {
+				# process each provided access rule...
+				ForEach ($AccessRule in $AccessRules) {
+					# ...and remove existing access rules matching the identity in the provided access rule
+					Try {
+						$nTSecurityDescriptor.PurgeAccessRules($AccessRule.IdentityReference)
+						Write-Warning "removed existing access rules for '$($AccessRule.IdentityReference)' from object: '$($ADObject.DistinguishedName)'"
+					}
+					Catch {
+						Write-Warning -Message "could not remove existing access rules for '$($AccessRule.IdentityReference)' from object: '$($ADObject.DistinguishedName)'"
+						Continue NextObject
+					}
+				}
+			}
+			# ...and SID provided...
+			If ($PSBoundParameters.ContainsKey('SID')) {
+				# process each provided SID...
+				ForEach ($SecurityIdentifier in $SID) {
+					# ...and remove existing access rules matching the SID
+					Try {
+						$nTSecurityDescriptor.PurgeAccessRules($SecurityIdentifier)
+						Write-Warning "removed existing access rules for '$($SecurityIdentifier.Value)' from object: '$($ADObject.DistinguishedName)'"
+					}
+					Catch {
+						Write-Warning -Message "could not remove existing access rules for '$($SecurityIdentifier.Value)' from object: '$($ADObject.DistinguishedName)'"
+						Continue NextObject
+					}
+				}
+			}
+		}
+
+		# process each access rule
+		ForEach ($AccessRule in $AccessRules) {
+			Try {
+				$nTSecurityDescriptor.AddAccessRule($AccessRule)
+			}
+			Catch {
+				Write-Warning -Message "could not add access rule to object: '$($ADObject.DistinguishedName)'"
+				Continue NextObject
+			}
+		}
+
+		# define parameters for Set-Acl
+		$SetADObject = @{
+			Identity    = $ADObject.DistinguishedName
+			Server      = $Server
+			Replace     = @{ nTSecurityDescriptor = $nTSecurityDescriptor }
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# set ACL for object
 		Try {
-			Remove-ADCustomPSDrive
+			Set-ADObject @SetADObject
 		}
 		Catch {
-			Write-Host 'ERROR: removing custom PSDrive'
-			Break
+			Write-Warning -Message "could not update nTSecurityDescriptor on object: '$($ADObject.DistinguishedName)'"
+			Continue NextObject
 		}
 	}
 }
@@ -465,8 +490,6 @@ Get-ADSecurityObjects -Force
 $FunctionsToExport = @(
 	'Get-ADSecurityIdentifier'
 	'Get-ADSecurityObjects'
-	'New-ADCustomPSDrive'
-	'Remove-ADCustomPSDrive'
 	'Reset-ADSecurity'
 	'Update-ADSecurity'
 )
