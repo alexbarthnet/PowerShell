@@ -8,8 +8,6 @@ Function Format-LdapAttribute {
 		[Parameter(Mandatory = $true)][AllowEmptyCollection()]
 		[System.DirectoryServices.Protocols.DirectoryAttribute]$DirectoryAttribute,
 		[Parameter(DontShow)]
-		[System.Collections.Generic.List[object]]$ExistingValues,
-		[Parameter(DontShow)]
 		[System.Globalization.CultureInfo]$Culture = (Get-Culture)
 	)
 
@@ -29,16 +27,6 @@ Function Format-LdapAttribute {
 
 	# create a generic list to contain values
 	$List = [System.Collections.Generic.List[object]]::new()
-
-	# if existing values provided...
-	If ($PSBoundParameters.ContainsKey('ExistingValues')) {
-		If ($ExistingValues.Count -gt 1) {
-			$List.AddRange($ExistingValues)
-		}
-		Else {
-			$List.Add($ExistingValues)
-		}
-	}
 
 	# process each value in directory attribute by index
 	For ($Index = 0; $Index -lt $DirectoryAttribute.Count; $Index++) {
@@ -149,14 +137,14 @@ Function Invoke-LdapQuery {
 		# create LDAP identifier
 		$LdapDirectoryIdentifier = [System.DirectoryServices.Protocols.LdapDirectoryIdentifier]::new($Server, $Port, $FullyQualifiedDnsHostName, $Connectionless)
 
-		# create LDAP connection
+		# create LDAP connection with LDAP identifier
 		$LdapConnection = [System.DirectoryServices.Protocols.LdapConnection]::new($LdapDirectoryIdentifier)
 
-		# update LDAP connection
-		$LdapConnection.SessionOptions.ReferralChasing = [System.DirectoryServices.Protocols.ReferralChasingOptions]::None
+		# update protocol settings for LDAP connection 
 		$LdapConnection.SessionOptions.ProtocolVersion = 3
+		$LdapConnection.SessionOptions.ReferralChasing = [System.DirectoryServices.Protocols.ReferralChasingOptions]::None
 
-		# define credentials
+		# update security settings for LDAP connection 
 		switch ($PSCmdlet.ParameterSetName) {
 			'Certificate' {
 				$LdapConnection.AuthType = [System.DirectoryServices.Protocols.AuthType]::Anonymous
@@ -192,19 +180,19 @@ Function Invoke-LdapQuery {
 		$null = $SearchRequest.Controls.Add($PageResultRequestControl)
 		$null = $SearchRequest.Controls.Add($DomainScopeControl)
 
-		# create global dictionary for ldap queries
-		If ($global:LdapQueries -isnot [System.Collections.Generic.Dictionary[guid, object]]) {
-			$global:LdapQueries = [System.Collections.Generic.Dictionary[guid, object]]::new()
+		# create scoped dictionary for ldap queries
+		If ($script:LdapQueries -isnot [System.Collections.Generic.Dictionary[guid, object]]) {
+			$script:LdapQueries = [System.Collections.Generic.Dictionary[guid, object]]::new()
 		}
 
 		# if current query is not in dictionary...
-		If ($global:LdapQueries.ContainsKey($QueryGuid) -eq $false) {
-			# add dictionary for current query to global dictionary
-			$global:LdapQueries.Add($QueryGuid, [System.Collections.Generic.Dictionary[string, object]]::new())
+		If ($script:LdapQueries.ContainsKey($QueryGuid) -eq $false) {
+			# add dictionary for current query to scoped dictionary
+			$script:LdapQueries.Add($QueryGuid, [System.Collections.Generic.Dictionary[string, object]]::new())
 		}
 
 		# get reference to dictionary for current query
-		$CurrentQuery = $global:LdapQueries[$QueryGuid]
+		$CurrentQuery = $script:LdapQueries[$QueryGuid]
 	}
 
 	Process {
@@ -254,14 +242,14 @@ Function Invoke-LdapQuery {
 					$CurrentQuery.Add($Entry.DistinguishedName, [System.Collections.Generic.SortedList[string, object]]::new())
 				}
 				
-				# get reference to sorted list for attributes of current object from current query 
+				# get reference to sorted list for current object
 				$CurrentObject = $CurrentQuery[$Entry.DistinguishedName]
 
-				# retrieve attributes from entry
+				# process each attribute key-value pair in attributes collection
 				:NextAttribute ForEach ($Attribute in $Entry.Attributes) {
-					# retrieve keys from attribute
+					# process each key in attribute keys
 					:NextKey ForEach ($Key in $Attribute.Keys) {
-						# if attribute collection for key is empty...
+						# if no value present for attribute key...
 						If ($Attribute[$Key].Count -eq 0) {
 							# continue to next key
 							Continue NextKey
@@ -278,24 +266,14 @@ Function Invoke-LdapQuery {
 							<#Do this if a terminating exception happens#>
 						}
 
-						# if sorted list for current object already contains attribute name...
+						# if current object list has existing value for attribute name...
 						If ($CurrentObject.ContainsKey($AttributeName)) {
-							# if value in sorted list is not a list...
+							# if existing value are not a list...
 							If ($CurrentObject[$AttributeName] -isnot [System.Collections.Generic.List[object]]) {
-								# ...retrieve objects in value
-								$ObjectsInValue = $CurrentObject[$AttributeName]
-								# ...reset value to new sorted list
-								$CurrentObject[$AttributeName] = [System.Collections.Generic.List[object]]::new()
-								# ...add current objects to new sorted list
-								If ($ObjectsInValue.Count -gt 1) {
-									$CurrentObject[$AttributeName].AddRange($ObjectsInValue)
-								}
-								ElseIf ($ObjectsInValue.Count -eq 1) {
-									$CurrentObject[$AttributeName].Add($ObjectsInValue)
-								}
+								# cast existing value into list and update current object
+								$CurrentObject[$AttributeName] = [System.Collections.Generic.List[object]]($CurrentObject[$AttributeName])
 							}
-
-							# update attribute name in sorted list with formatted attribute values
+							# update existing value with formatted attribute values
 							If ($LdapAttribute.Count -gt 1) {
 								$CurrentObject[$AttributeName].AddRange($LdapAttribute)
 							}
@@ -303,9 +281,9 @@ Function Invoke-LdapQuery {
 								$CurrentObject[$AttributeName].Add($LdapAttribute)
 							}
 						}
-						# if sorted list for current object does not contain attribute name...
+						# if current object list does not have existing value for attribute name...
 						Else {
-							# ...add attribute name to sorted list with formatted attribute values
+							# add entry to current object with attribute name and formatted attribute values
 							$CurrentObject.Add($AttributeName, $LdapAttribute)
 						}
 
@@ -357,8 +335,9 @@ Function Invoke-LdapQuery {
 					}
 				}
 
-				# return processed entry
+				# if query guid was not explicitly provided...
 				If (!$PSBoundParameters.ContainsKey('QueryGuid')) {
+					# return processed entry
 					$CurrentObject | Select-Object -Property @{ Name = 'DistinguishedName'; Expression = { $Entry.DistinguishedName } }, @{ Name = 'Attributes'; Expression = { $CurrentObject } }
 				}
 			}
@@ -381,29 +360,9 @@ Function Invoke-LdapQuery {
 	}
 }
 
-Function Test-LdapQuery {
-	# define parameters for Invoke-LdapQuery
-	$InvokeLdapQuery = @{
-		Server      = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
-		SearchBase  = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().GetDirectoryEntry().DistinguishedName
-		Filter      = "(&(objectCategory=person)(objectClass=user)(sAMAccountName=$([System.Environment]::UserName.ToLower())))"
-		Attributes  = '*'
-		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-	}
-
-	# call Invoke-LdapQuery
-	Try {
-		Invoke-LdapQuery @InvokeLdapQuery
-	}
-	Catch {
-		Return $_
-	}
-}
-
 # define functions to export
 $FunctionsToExport = @(
 	'Invoke-LdapQuery'
-	'Test-LdapQuery'
 )
 
 # export module members
