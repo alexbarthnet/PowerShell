@@ -1,6 +1,26 @@
 #Requires -Modules ActiveDirectory
 
-Function Get-ADSecurityDefaultAccessRule {
+Function Get-ADObjectTypeDefaultAccessRule {
+	<#
+	.SYNOPSIS
+	Retrieve the default access rule from the schema definition of an object type in Active Directory.
+
+	.DESCRIPTION
+	Retrieve the default access rule from the schema definition of an object type in Active Directory.
+
+	.PARAMETER DisplayName
+	Specifies the value of the ldapDisplayName attribute of the schema object.
+
+	.INPUTS
+	System.String.
+
+	.OUTPUTS
+	System.DirectoryServices.ActiveDirectorySecurity.
+
+	.EXAMPLE
+	PS> Get-ADObjectTypeDefaultAccessRule -DisplayName 'User'
+	#>
+
 	[CmdletBinding()]
 	Param (
 		[Parameter(Mandatory = $true, Position = 0, ValueFromPipeline)]
@@ -11,7 +31,7 @@ Function Get-ADSecurityDefaultAccessRule {
 
 	# retrieve default security descriptor for class with matching display name
 	Try {
-		$DefaultObjectSecurityDescriptor = $Schema.FindClass($DisplayName).DefaultObjectSecurityDescriptor
+		[System.DirectoryServices.ActiveDirectorySecurity]$DefaultObjectSecurityDescriptor = $Schema.FindClass($DisplayName).DefaultObjectSecurityDescriptor
 	}
 	# if class not found...
 	Catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
@@ -26,7 +46,36 @@ Function Get-ADSecurityDefaultAccessRule {
 	Return $DefaultObjectSecurityDescriptor
 }
 
-Function Get-ADSecurityObjectTypeGuid {
+Function Get-ADObjectTypeGuid {
+	<#
+	.SYNOPSIS
+	Retrieve the GUID for an object type or an extended right in Active Directory.
+
+	.DESCRIPTION
+	Retrieve the GUID for an object type or an extended right in Active Directory.
+
+	.PARAMETER DisplayName
+	Specifies the value of the ldapDisplayName attribute of the object type or the displayName of the extended right.
+
+	.PARAMETER LimitToSchemaClassObjects
+	Switch to limit the search to only schema class objects.
+
+	.INPUTS
+	System.String.
+
+	.OUTPUTS
+	System.Guid.
+
+	.EXAMPLE
+	PS> Get-ADObjectTypeGuid -DisplayName 'User'
+
+	.EXAMPLE
+	PS> Get-ADObjectTypeGuid -DisplayName 'SamAccountName'
+
+	.EXAMPLE
+	PS> Get-ADObjectTypeGuid -DisplayName 'Reset Password'
+	#>
+
 	[CmdletBinding()]
 	Param (
 		[Parameter(Mandatory = $true, Position = 0, ValueFromPipeline)]
@@ -56,11 +105,12 @@ Function Get-ADSecurityObjectTypeGuid {
 			# define LDAP path for extended rights container
 			$SearchBase = 'LDAP://CN=Extended-Rights', $Schema.Name.Split(',', 2)[1] -join ','
 
-			# define filter for matching
+			# define filter for matching display name where rights guid is defined
+			$Filter = "(&(displayName=$DisplayName)(rightsGuid=*))"
 
 			# search for extended right with matching display name
 			Try {
-				$SearchResult = [System.DirectoryServices.DirectorySearcher]::new($SearchBase, "(&(displayName=$DisplayName)(rightsGuid=*))" , 'rightsGuid' , [System.DirectoryServices.SearchScope]::OneLevel).FindOne()
+				$SearchResult = [System.DirectoryServices.DirectorySearcher]::new($SearchBase, $Filter , 'rightsGuid' , [System.DirectoryServices.SearchScope]::OneLevel).FindOne()
 			}
 			Catch {
 				Return $_
@@ -68,10 +118,13 @@ Function Get-ADSecurityObjectTypeGuid {
 
 			# if search result found...
 			If ($SearchResult -is [System.DirectoryServices.SearchResult]) {
-				# ...and first value in search result can parse into a GUID...
-				If ([guid]::TryParse($SearchResult.Properties['rightsGuid'][0], [ref][guid]::empty)) {
-					# retrieve rights guid from first value in search result
-					[guid]$Guid = $SearchResult.Properties['rightsGuid'][0]
+				# ...and the first search result contains the 'rightsGuid' property...
+				If ($SearchResult[0].Properties.PropertyNames -contains 'rightsGuid') {
+					# ...and first value in 'rightsGuid' property can parse into a GUID...
+					If ([guid]::TryParse($SearchResult[0].Properties['rightsGuid'][0], [ref][guid]::empty)) {
+						# retrieve the rights guid
+						[guid]$Guid = $SearchResult[0].Properties['rightsGuid'][0]
+					}
 				}
 			}
 			# if search result not found...
@@ -88,7 +141,70 @@ Function Get-ADSecurityObjectTypeGuid {
 	Return $Guid
 }
 
+Function Get-ADPrincipal {
+	<#
+	.SYNOPSIS
+	Retrieve a NTAccount-style principal from a security identifier.
+
+	.DESCRIPTION
+	Retrieve a NTAccount-style principal from a security identifier.
+
+	.PARAMETER SecurityIdentifier
+	A valid security identifier object.
+
+	.INPUTS
+	System.Security.Principal.SecurityIdentifier.
+
+	.OUTPUTS
+	System.String.
+
+	.EXAMPLE
+	PS> Get-ADPrincipal -SecurityIdentifier 'S-1-5-11'
+	#>
+
+	[CmdletBinding()]
+	param (
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
+		[System.Security.Principal.SecurityIdentifier]$SecurityIdentifier
+	)
+
+	# translate SID to NTAccount principal
+	Try {
+		$SecurityIdentifier.Translate([System.Security.Principal.NTAccount]).Value
+	}
+	Catch {
+		# return error
+		Return $_
+	}
+}
+
 Function Get-ADSecurityIdentifier {
+	<#
+	.SYNOPSIS
+	Retrieve the security identifier for a security principal in Active Directory.
+
+	.DESCRIPTION
+	Retrieve the security identifier for a security principal in Active Directory.
+
+	.PARAMETER Principal
+	A string containing a valid principal in either NTAccount or User Principal Name style.
+
+	.INPUTS
+	System.String.
+
+	.OUTPUTS
+	System.Security.Principal.SecurityIdentifier.
+
+	.EXAMPLE
+	PS> Get-ADSecurityIdentifier -Principal 'Administrator'
+
+	.EXAMPLE
+	PS> Get-ADSecurityIdentifier -Principal 'Domain Users'
+
+	.EXAMPLE
+	PS> Get-ADSecurityIdentifier -Principal 'administrator@example.com'
+	#>
+
 	[CmdletBinding()]
 	param (
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
@@ -120,7 +236,7 @@ Function Get-ADSecurityIdentifier {
 			}
 			# a principal without domain prefix or suffix
 			Default {
-				Return ([System.Security.Principal.NTAccount]("$Domain\$Principal")).Translate([System.Security.Principal.SecurityIdentifier])
+				Return ([System.Security.Principal.NTAccount]($Domain, $Principal)).Translate([System.Security.Principal.SecurityIdentifier])
 			}
 		}
 	}
@@ -130,7 +246,267 @@ Function Get-ADSecurityIdentifier {
 	}
 }
 
+Function Get-ADAccessRule {
+	<#
+	.SYNOPSIS
+	Retrieve the Active Directory access rules from an existing object.
+
+	.DESCRIPTION
+	Retrieve the Active Directory access rules from an existing object.
+
+	.PARAMETER Identity
+	One or more Active Directory objects. Each value must be a valid distinguished name for an Active Directory object or a Microsoft.ActiveDirectory.Management.ADObject object.
+
+	.PARAMETER IncludeInherited
+	Optional parameter to included inherited permissions. The default configuration retrieves explicitly defined access rules.
+
+	.PARAMETER SecurityIdentifier
+	Optional parameter to filter access rules to the provided security identifier. Only access rules that contain the matching values will be returned.
+
+	.PARAMETER Rights
+	Optional parameter to filter access rules to the provided Active Directory rights value. Only access rules that contain the matching values will be returned.
+
+	.PARAMETER ObjectName
+	Optional parameter to filter access rules to the provided object type name. Only access rules that contain the matching values will be returned.
+
+	.PARAMETER AccessControlType
+	Optional parameter to filter access rules to the provided access control type. Only access rules that contain the matching values will be returned.
+
+	.PARAMETER InheritanceType
+	Optional parameter to filter access rules to the provided inheritance type. Only access rules that contain the matching values will be returned.
+
+	.PARAMETER InheritingObjectName
+	Optional parameter to filter access rules to the provided inheriting object type name. Only access rules that contain the matching values will be returned.
+
+	.PARAMETER AccessRule
+	Optional parameter for an existing list of access rules. The access rules retrieved will be added to this list and the updated list will be returned.
+
+	.INPUTS
+	System.Object.
+
+	.OUTPUTS
+	[System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]].
+
+	.EXAMPLE
+	PS> Get-ADAccessRule -Identity 'CN=Computers,DC=example,DC=com'
+
+	.EXAMPLE
+	PS> Get-ADAccessRule -Identity 'CN=Computers,DC=example,DC=com' -IncludedInherited
+	#>
+
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
+	Param (
+		# one or more Active Directory objects, each value must be an ADObject or the distinguished name of an Active Directory object
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][Alias('Objects')]
+		[object[]]$Identity,
+		# switch to include inherited permissions
+		[Parameter(Mandatory = $false)]
+		[switch]$IncludeInherited,
+		# the security identifier for the access rule
+		[Parameter(Mandatory = $false)]
+		[System.Security.Principal.SecurityIdentifier]$SecurityIdentifier,
+		# the rights for the access rule, the default is "Read", set to "Self" for extended rights
+		[Parameter(Mandatory = $false)]
+		[System.DirectoryServices.ActiveDirectoryRights]$Rights,
+		# display name of inheriting object type, can be an Active Directory object type
+		[Parameter(Mandatory = $false)]
+		[string]$ObjectName,
+		# the access type for the access rule, the default is "Allow"
+		[Parameter(Mandatory = $false)]
+		[System.Security.AccessControl.AccessControlType]$AccessControlType,
+		# the inheritance for the access rule, the default is "This object and all child objects"
+		[Parameter(Mandatory = $false)]
+		[System.DirectoryServices.ActiveDirectorySecurityInheritance]$InheritanceType,
+		# display name of inheriting object type, can be an Active Directory object type
+		[Parameter(Mandatory = $false)]
+		[string]$InheritingObjectName,
+		# create list for ActiveDirectoryAccessRule objects; supports importing existing ActiveDirectoryAccessRule object or existing list of ActiveDirectoryAccessRule objects
+		[Parameter(Mandatory = $false)]
+		[System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]$AccessRule = [System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]::new(),
+		# string for the server where the actions will be performed, the default server is the current PDC role owner
+		[Parameter(DontShow)]
+		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
+	)
+
+	# translate object name to GUID of schema class object, attribute object, or a control access right
+	If ($PSBoundParameters.ContainsKey('ObjectName')) {
+		$objectType = Get-ADObjectTypeGuid -DisplayName $ObjectName
+	}
+	Else {
+		$objectType = [guid]::empty
+	}
+
+	# translate inheriting object name to GUID of schema class object
+	If ($PSBoundParameters.ContainsKey('InheritingObjectName')) {
+		$inheritedObjectType = Get-ADObjectTypeGuid -DisplayName $InheritingObjectName -LimitToSchemaClassObjects
+	}
+	Else {
+		$inheritedObjectType = [guid]::empty
+	}
+
+	# create list for Active Directory objects
+	$ADObjects = [System.Collections.Generic.List[Microsoft.ActiveDirectory.Management.ADObject]]::new()
+
+	# retrieve Active Directory objects for each identity
+	ForEach ($Object in $Identity) {
+		# if object is an ADObject...
+		If ($Object -is [Microsoft.ActiveDirectory.Management.ADObject]) {
+			# add object to list and continue
+			$ADObjects.Add($Object)
+		}
+		# if object is a string...
+		ElseIf ($Object -is [System.String]) {
+			# get ADObject using object as identity
+			Try {
+				$ADObject = Get-ADObject -Server $Server -Identity $Object -Properties 'nTSecurityDescriptor'
+			}
+			Catch {
+				Write-Warning -Message "could not retrieve object for input: '$Object'"
+				Return $_
+			}
+			# add ADObject to list and continue
+			$ADObjects.Add($ADObject)
+		}
+		# if object is not an ADObject or a string...
+		Else {
+			# warn and return
+			Write-Warning -Message "could not process '[$($Object.GetType().FullName)]' object type for object: '$Object'"
+			Return
+		}
+	}
+
+	# reset security descriptors for each object
+	ForEach ($ADObject in $ADObjects) {
+		# check object for nTSecurityDescriptor property
+		If ($null -eq $ADObject.nTSecurityDescriptor) {
+			Try {
+				$ADObject = Get-ADObject -Server $Server -Identity $ADObject.DistinguishedName -Properties 'nTSecurityDescriptor'
+			}
+			Catch {
+				Write-Warning -Message "could not retrieve nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
+				Return $_
+			}
+		}
+
+		# retrieve nTSecurityDescriptor from object
+		$nTSecurityDescriptor = $ADObject.nTSecurityDescriptor
+
+		# validate nTSecurityDescriptor object type
+		If ($nTSecurityDescriptor -isnot [System.DirectoryServices.ActiveDirectorySecurity]) {
+			Write-Warning -Message "found invalid '[$($nTSecurityDescriptor.GetType().FullName)]' object type for nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
+			Return $_
+		}
+
+		# retrieve existing access rules that are explicitly defined and not inherited for the unique identity references
+		$ExistingAccessRules = $nTSecurityDescriptor.GetAccessRules($true, $IncludeInherited, [System.Security.Principal.SecurityIdentifier])
+
+		# filter existing access rules
+		:NextAccessRule ForEach ($ExistingAccessRule in $ExistingAccessRules) {
+			# if security identifier provided...
+			If ($PSBoundParameters.ContainsKey('SecurityIdentifier')) {
+				# ...and existing access rule does not contain security identifier...
+				If ($ExistingAccessRule.IdentityReference -ne $SecurityIdentifier) {
+					# ...continue to next access rule
+					Continue NextAccessRule
+				}
+			}
+
+			# if active directory rights provided...
+			If ($PSBoundParameters.ContainsKey('Rights')) {
+				# ...and existing access rule does not contain active directory rights...
+				If ($ExistingAccessRule.ActiveDirectoryRights -ne $Rights) {
+					# ...continue to next access rule
+					Continue NextAccessRule
+				}
+			}
+
+			# if access control type provided...
+			If ($PSBoundParameters.ContainsKey('AccessControlType')) {
+				# ...and existing access rule does not contain access control type...
+				If ($ExistingAccessRule.ActiveDirectoryRights -ne $AccessControlType) {
+					# ...continue to next access rule
+					Continue NextAccessRule
+				}
+			}
+
+			# if inheritance type provided...
+			If ($PSBoundParameters.ContainsKey('InheritanceType')) {
+				# ...and existing access rule does not contain inheritance type...
+				If ($ExistingAccessRule.InheritanceType -ne $InheritanceType) {
+					# ...continue to next access rule
+					Continue NextAccessRule
+				}
+			}
+
+			# if object name provided...
+			If ($PSBoundParameters.ContainsKey('ObjectName')) {
+				# ...and existing access rule does not contain associated object type...
+				If ($ExistingAccessRule.objectType -ne $objectType) {
+					# ...continue to next access rule
+					Continue NextAccessRule
+				}
+			}
+
+			# if inheriting object name provided...
+			If ($PSBoundParameters.ContainsKey('InheritingObjectName')) {
+				# ...and existing access rule does not contain associated inherited object type...
+				If ($ExistingAccessRule.InheritedObjectType -ne $inheritedObjectType) {
+					# ...continue to next access rule
+					Continue NextAccessRule
+				}
+			}
+
+			# add existing access rule to list
+			$AccessRule.Add($ExistingAccessRule)
+		}
+	}
+
+	# return ACE objects
+	Return $AccessRule
+}
+
 Function New-ADAccessRule {
+	<#
+	.SYNOPSIS
+	Create an Active Directory access rule.
+
+	.DESCRIPTION
+	Create an Active Directory access rule.
+
+	.PARAMETER SecurityIdentifier
+	The security identifier to include in the access rule.
+
+	.PARAMETER Preset
+	A string parameter defining a preset to create multiple access rules for the provided security identifier.
+
+	.PARAMETER Rights
+	The Active Directory rights for the access rule. The default value is 'GenericRead'
+
+	.PARAMETER ObjectName
+	The display name of the object type for the access rule. 
+
+	.PARAMETER AccessControlType
+	The access control type for the access rule. The default value is 'Allow'
+
+	.PARAMETER InheritanceType
+	The inheritance type for the access rule. The default value is 'All'
+
+	.PARAMETER InheritingObjectName
+	The display name of the inheriting object type for the access rule. 
+
+	.PARAMETER AccessRule
+	Optional parameter for an existing list of access rules. The access rules created will be added to this list and the updated list will be returned.
+
+	.INPUTS
+	System.Security.Principal.SecurityIdentifier.
+
+	.OUTPUTS
+	System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule].
+
+	.EXAMPLE
+	PS> New-ADAccessRule -SecurityIdentifier (Get-ADSecurityIdentifier -Principal 'Domain Users') -Rights 'CreateChild' -ObjectName 'Computer' -AccessControlType 'Allow' -InheritanceType 'Descendents' -InheritingObjectName 'organizationalUnit'
+	#>
+
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param (
 		# the security identifier for the access rule
@@ -678,7 +1054,7 @@ Function New-ADAccessRule {
 	Else {
 		# translate object name to GUID of schema class object, attribute object, or a control access right
 		If ($PSBoundParameters.ContainsKey('ObjectName')) {
-			$objectType = Get-ADSecurityObjectTypeGuid -DisplayName $ObjectName
+			$objectType = Get-ADObjectTypeGuid -DisplayName $ObjectName
 		}
 		Else {
 			$objectType = [guid]::empty
@@ -686,7 +1062,7 @@ Function New-ADAccessRule {
 
 		# translate inheriting object name to GUID of schema class object
 		If ($PSBoundParameters.ContainsKey('InheritingObjectName')) {
-			$inheritedObjectType = Get-ADSecurityObjectTypeGuid -DisplayName $InheritingObjectName -LimitToSchemaClassObjects
+			$inheritedObjectType = Get-ADObjectTypeGuid -DisplayName $InheritingObjectName -LimitToSchemaClassObjects
 		}
 		Else {
 			$inheritedObjectType = [guid]::empty
@@ -711,6 +1087,29 @@ Function New-ADAccessRule {
 }
 
 Function Remove-ADSecurity {
+	<#
+	.SYNOPSIS
+	Remove one or more Active Directory access rules from one or more Active Directory objects.
+
+	.DESCRIPTION
+	Remove one or more Active Directory access rules from one or more Active Directory objects.
+
+	.PARAMETER Identity
+	One or more Active Directory objects. Each value must be a valid distinguished name for an Active Directory object or a Microsoft.ActiveDirectory.Management.ADObject object.
+
+	.PARAMETER AccessRule
+	One or more Active Directory access rules. Each value must be a valid System.DirectoryServices.ActiveDirectoryAccessRule object.
+
+	.INPUTS
+	System.Object.
+
+	.OUTPUTS
+	None.
+
+	.EXAMPLE
+	PS> Remove-ADSecurity -Identity 'CN=Computers,DC=example,DC=com' -AccessRule $AccessRules
+	#>
+
 	[CmdletBinding()]
 	param (
 		# one or more Active Directory objects, each value must be an ADObject or the distinguished name of an Active Directory object
@@ -829,6 +1228,29 @@ Function Remove-ADSecurity {
 }
 
 Function Revoke-ADSecurity {
+	<#
+	.SYNOPSIS
+	Remove Active Directory access rules containing the provided security identifiers from one or more Active Directory objects.
+
+	.DESCRIPTION
+	Remove Active Directory access rules containing the provided security identifiers from one or more Active Directory objects.
+
+	.PARAMETER Identity
+	One or more Active Directory objects. Each value must be a valid distinguished name for an Active Directory object or a Microsoft.ActiveDirectory.Management.ADObject object.
+
+	.PARAMETER SecurityIdentifier
+	One or more security identifiers. Each value must be a valid System.Security.Principal.SecurityIdentifier object.
+
+	.INPUTS
+	System.Object.
+
+	.OUTPUTS
+	None.
+
+	.EXAMPLE
+	PS> Revoke-ADSecurity -Identity 'CN=Computers,DC=example,DC=com' -SecurityIdentifier $SecurityIdentifier
+	#>
+
 	[CmdletBinding()]
 	param (
 		# one or more Active Directory objects, each value must be an ADObject or the distinguished name of an Active Directory object
@@ -935,6 +1357,32 @@ Function Revoke-ADSecurity {
 }
 
 Function Reset-ADSecurity {
+	<#
+	.SYNOPSIS
+	Reset the Active Directory access rules on one or more Active Directory objects.
+
+	.DESCRIPTION
+	Replaces all explicitly defined access rules on the Active Directory object with the default access rules from the schema definition of the object type.
+
+	.PARAMETER Identity
+	One or more Active Directory objects. Each value must be a valid distinguished name for an Active Directory object or a Microsoft.ActiveDirectory.Management.ADObject object.
+
+	.PARAMETER Owner
+	Optional parameter to update the owner of the Active Directory objects. The caller must possess the SeSecurityPrivilege on domain controllers to update the owner of Active Directory objects.
+
+	.PARAMETER Inheritance
+	Optional parameter to update the inheritance of the Active Directory objects.
+
+	.INPUTS
+	System.Object.
+
+	.OUTPUTS
+	None.
+
+	.EXAMPLE
+	PS> Revoke-ADSecurity -Identity 'CN=Computers,DC=example,DC=com' -SecurityIdentifier $SecurityIdentifier
+	#>
+
 	[CmdletBinding()]
 	param (
 		# one or more Active Directory objects, each value must be an ADObject or the distinguished name of an Active Directory object
@@ -1003,7 +1451,7 @@ Function Reset-ADSecurity {
 		If (!$defaultSecurityDescriptors.ContainsKey($ADObject.objectClass)) {
 			# retrieve default security descriptor for object class
 			Try {
-				$defaultSecurityDescriptors[$ADObject.objectClass] = Get-ADSecurityDefaultAccessRule -DisplayName $ADObject.objectClass
+				$defaultSecurityDescriptors[$ADObject.objectClass] = Get-ADObjectTypeDefaultAccessRule -DisplayName $ADObject.objectClass
 			}
 			Catch {
 				Write-Warning -Message "could not retrieve default security descriptor for object class: '$($ADObject.objectClass)'"
@@ -1124,6 +1572,41 @@ Function Reset-ADSecurity {
 }
 
 Function Update-ADSecurity {
+	<#
+	.SYNOPSIS
+	Updates the Active Directory access rules on one or more Active Directory objects.
+
+	.DESCRIPTION
+	Updates the Active Directory access rules on one or more Active Directory objects.
+
+	.PARAMETER Identity
+	One or more Active Directory objects. Each value must be a valid distinguished name for an Active Directory object or a Microsoft.ActiveDirectory.Management.ADObject object.
+
+	.PARAMETER AccessRule
+	One or more Active Directory access rules. Each value must be a valid System.DirectoryServices.ActiveDirectoryAccessRule object.
+
+	.PARAMETER Inheritance
+	Optional parameter to update the inheritance of the Active Directory objects. The supported values are:
+	- Enable: enables inheritance on the object
+	- Disable: disables inheritance on the object and converts all inherited access rules to explicit access rules
+	- Remove: disables inheritance on the object and removes all inherited access rules from the object, this option will cause an error if no explicitly defined access rules exist
+
+	.PARAMETER Reset
+	Optional parameter to remove any existing access rules matching the identity reference in the provided access rules.
+
+	.INPUTS
+	System.Object.
+
+	.OUTPUTS
+	None.
+
+	.EXAMPLE
+	PS> Update-ADSecurity -Identity 'CN=Computers,DC=example,DC=com' -AccessRule $AccessRules
+
+	.EXAMPLE
+	PS> Update-ADSecurity -Identity 'CN=Computers,DC=example,DC=com' -AccessRule $AccessRules -Inheritance 'Enable'
+	#>
+
 	Param (
 		# one or more Active Directory objects, each value must be an ADObject or the distinguished name of an Active Directory object
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][Alias('Objects')]
@@ -1297,9 +1780,11 @@ Function Update-ADSecurity {
 
 # define functions to export
 $FunctionsToExport = @(
-	'Get-ADSecurityDefaultAccessRule'
-	'Get-ADSecurityObjectTypeGuid'
+	'Get-ADObjectTypeDefaultAccessRule'
+	'Get-ADObjectTypeGuid'
+	'Get-ADPrincipal'
 	'Get-ADSecurityIdentifier'
+	'Get-ADAccessRule'
 	'New-ADAccessRule'
 	'Remove-ADSecurity'
 	'Revoke-ADSecurity'
