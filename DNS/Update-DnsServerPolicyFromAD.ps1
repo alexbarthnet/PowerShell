@@ -73,7 +73,7 @@ Begin {
 
 Process {
 	# define DNS client subnets name
-	$DnsSubnetName = $HostName, $SubnetSuffix -join '_'
+	$DnsSubnetName = $HostName, $SubnetSuffix -join '-'
 
 	# retrieve DNS client subnets
 	Try {
@@ -109,7 +109,7 @@ Process {
 	}
 
 	# define DNS query resolution policy
-	$DnsPolicyName = $HostName, $PolicySuffix -join '_'
+	$DnsPolicyName = $HostName, $PolicySuffix -join '-'
 
 	# retrieve DNS query resolution policy
 	Try {
@@ -157,7 +157,7 @@ Process {
 
 	# get subnets from AD
 	Try {
-		$ADReplicationSubnets = Get-ADReplicationSubnet -Server $DomainController | Where-Object { $_.Location -eq $Location } | Sort-Object -Property 'Name'
+		$ADReplicationSubnets = Get-ADReplicationSubnet -Server $DomainController -Filter '*' | Where-Object { $_.Location -eq $Location } | Sort-Object -Property 'Name'
 	}
 	Catch {
 		Write-Warning 'could not retrieve AD replication subnets'
