@@ -30,8 +30,8 @@ Param (
 	# local DNS hostname
 	[Parameter(DontShow)]
 	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
-	
 )
+
 Begin {
 	# if skip transcript not requested...
 	If (!$SkipTranscript) {
