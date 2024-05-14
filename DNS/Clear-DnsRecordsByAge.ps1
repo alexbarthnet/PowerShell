@@ -30,8 +30,23 @@ Param (
 
 Begin {
 	Function Assert-NonInteractiveSession {
-		# if user session is not interactive or if any of the command line arguments start with -NonI...
-		![System.Environment]::UserInteractive -or [System.Environment]::GetCommandLineArgs().StartsWith('-NonI', [System.StringComparison]::InvariantCultureIgnoreCase).Contains($true)
+		# if environment is not interactive
+		If (![System.Environment]::UserInteractive) {
+			Return $true
+		}
+
+		# retrieve command line args
+		$CommandLineArgs = [System.Environment]::GetCommandLineArgs()
+
+		# process command line args
+		ForEach ($CommandLineArg in $CommandLineArgs) {
+			If ($CommandLineArg.StartsWith('-NonI', [System.StringComparison]::InvariantCultureIgnoreCase)) {
+				Return $true
+			}
+		}
+
+		# if true has not been returned...
+		Return $false
 	}
 
 	Function Get-PreviousDate {
