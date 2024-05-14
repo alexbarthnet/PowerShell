@@ -90,7 +90,7 @@ Process {
 			$NextDomainController = Get-ADDomainController -Server $ADDomainControllerInSite.HostName -Identity $ADDomainControllerInSite
 		}
 		Catch {
-			Write-Warning -Mesage "could not retrieve domain controller: '$($ADDomainControllerInSite.HostName)'"
+			Write-Warning -Message "could not retrieve domain controller: '$($ADDomainControllerInSite.HostName)'"
 			Continue NextDomainController
 		}
 		# if domain controller found...
@@ -114,7 +114,7 @@ Process {
 			Move-ADDirectoryServerOperationMasterRole -Server $NextDomainController.HostName -Identity $NextDomainController -OperationMasterRole $OperationMasterRole -Confirm:$false
 		}
 		Catch {
-			Write-Warning -Mesage "could not move '$OperationMasterRole' role to domain controller: '$($NextDomainController.HostName)'"
+			Write-Warning -Message "could not move '$OperationMasterRole' role to domain controller: '$($NextDomainController.HostName)'"
 			Return $_
 		}
 		# declare move
