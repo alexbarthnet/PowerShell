@@ -13,6 +13,7 @@ String parameter for the Active Directory site name to search for the next avail
 #>
 [CmdletBinding()]
 Param (
+	# active directory site of local system
 	[Parameter(Position = 0)]
 	[string]$SiteName = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySite]::GetComputerSite().Name,
 	# domain role of current system
