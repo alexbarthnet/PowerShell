@@ -39,15 +39,15 @@ Catch {
 }
 
 # create URI for file from response
-$UriForFile = $WebRequest.Headers.Location.Replace('/tag/', '/download/'), '/', $FileName -join $null
+$UriForBits = $WebRequest.Headers.Location.Replace('/tag/', '/download/'), '/', $FileName -join $null
 
 # check file
 If ((Test-Path -Path $FilePath) -and -not $SkipDownload) {
 	# get MD5 hash for local file and remote URI
-	$HashFromFile = [System.Convert]::ToBase64String([System.Security.Cryptography.HashAlgorithm]::Create('md5').ComputeHash((Get-Content -Path $FilePath -Raw -Encoding Byte)))
-	$HashFromLink = (Invoke-WebRequest -Uri $UriForFile -UseBasicParsing -Method 'Head').Headers.'Content-MD5'
+	$HashFromFilePath = [System.Convert]::ToBase64String([System.Security.Cryptography.HashAlgorithm]::Create('md5').ComputeHash((Get-Content -Path $FilePath -Raw -Encoding Byte)))
+	$HashInUriHeaders = (Invoke-WebRequest -Uri $UriForBits -UseBasicParsing -Method 'Head').Headers.'Content-MD5'
 	# compare hashs
-	If ($HashFromLink -eq $HashFromFile) {
+	If ($HashFromFilePath -eq $HashInUriHeaders) {
 		Write-Output 'MD5 hash of most recent download matches MD5 hash in headers for URL, skipping!'
 		$SkipDownload = $true
 	}
@@ -56,19 +56,19 @@ If ((Test-Path -Path $FilePath) -and -not $SkipDownload) {
 # download file to destination
 If ($Force -or -not $SkipDownload) {
 	Try {
-		Invoke-WebRequest -Uri $UriForFile -UseBasicParsing -OutFile $FilePath
+		Start-BitsTransfer -Source $UriForBits -Destination $FilePath
 	}
 	Catch {
-		Write-Error 'ERROR: could not download the file to the specified location'
-		Return
+		Write-Warning -Message "could not download '$UriForBits' to '$FilePath"
+		Return $_
 	}
 }
 
 # install file
 If ($Install -or $InstallService) {
 	# check for admin rights
-	If (-not ([System.Security.Principal.WindowsPrincipal]([System.Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
-		Write-Error "ERROR: the 'Install' switch was set but the script cannot continue. The current PowerShell session does not have the Administrator role."
+	If (!([Security.Principal.WindowsPrincipal]([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
+		Write-Warning -Message 'cannot install: the current PowerShell session does not have the Administrator role.'
 		Return
 	}
 

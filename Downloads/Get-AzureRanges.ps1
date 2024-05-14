@@ -1,30 +1,39 @@
 [CmdletBinding()]
 Param (
 	[Parameter(Position = 0)][ValidateScript({ Test-Path -Path $_ })]
-	[string]$Destination = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path,
+	[string]$Path = (Get-Location),
 	[Parameter(Position = 1)]
-	[string]$FileName = 'ServiceTags_Public.json'
+	[string]$FileName = 'ServiceTags_Public.json',
+	[Parameter(DontShow)]
+	[string]$Uri = 'https://www.microsoft.com/en-us/download/confirmation.aspx?id=56519',
+	[Parameter(DontShow)]
+	[string]$FilePath = (Join-Path -Path $Path -ChildPath $FileName),
+	[Parameter(DontShow)]
+	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
 )
 
-# define local objects
-$file_down = $true
-$file_path = Join-Path -Path $Destination -ChildPath $FileName
-
 # retrieve information on latest release
-$uri_path = 'https://www.microsoft.com/en-us/download/confirmation.aspx?id=56519'
-$uri_link = ((Invoke-WebRequest -Uri $uri_path -UseBasicParsing -MaximumRedirection 0).Links | Where-Object {$_.href -match "\.json$" -and $_.target} | Sort-Object 'href' -Unique | Select-Object -Last 1).href
+$UriForBits = (Invoke-WebRequest -Uri $Uri -UseBasicParsing -MaximumRedirection 0).Links.Where({ $_.href -match "\.json$" -and $_.target }) | Sort-Object 'href' -Unique | Select-Object -Last 1 -ExpandProperty 'href'
 
 # check file
-If (Test-Path $file_path) {
-	$uri_size = (Invoke-WebRequest -Uri $uri_link -UseBasicParsing -Method Head).Headers.'Content-Length'
-	If ($uri_size -eq (Get-ItemProperty $file_path).Length -and -not $Force) {
-		Write-Output 'Size of most recent download matches current download size, skipping!'
-		$file_down = $false
+If ((Test-Path -Path $FilePath) -and -not $SkipDownload) {
+	# get size of local file and remote URI
+	$LengthFromFilePath = (Get-ItemProperty -Path $FilePath -ErrorAction 'SilentlyContinue').Length
+	$LengthInUriHeaders = (Invoke-WebRequest -Uri $Uri -UseBasicParsing -Method 'Head').Headers.'Content-Length'
+	# compare sizes
+	If ($LengthFromFilePath -eq $LengthInUriHeaders) {
+		Write-Output 'The local file and remote file have the same size, skipping download'
+		$SkipDownload = $true
 	}
 }
 
-# download file
-If ($file_down) {
-	# download latest release to temp file
-	Invoke-WebRequest -Uri $uri_link -UseBasicParsing -OutFile $file_path
+# download file to destination
+If ($Force -or -not $SkipDownload) {
+	Try {
+		Start-BitsTransfer -Source $UriForBits -Destination $FilePath
+	}
+	Catch{
+		Write-Warning -Message "could not download '$UriForBits' to '$FilePath"
+		Return $_
+	}
 }

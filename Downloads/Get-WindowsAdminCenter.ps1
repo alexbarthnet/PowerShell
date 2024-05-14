@@ -1,7 +1,7 @@
 [CmdletBinding()]
 Param (
 	[Parameter(Position = 0)][ValidateScript({ Test-Path -Path $_ })]
-	[string]$Path = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path,
+	[string]$Path = (Get-Location),
 	[Parameter(Position = 1)]
 	[switch]$Force,
 	[Parameter(Position = 2)]
@@ -108,7 +108,6 @@ Function Get-FileByteHash {
 		Throw $_
 	}
 
-
 	# get hash of bytes
 	Try {
 		$Hash = $HashAlgorithm.ComputeHash($Bytes)
@@ -131,7 +130,7 @@ Function Get-FileByteHash {
 
 # expand uri
 Try {
-	$Uri = Expand-Uri -Uri $Uri
+	$UriForBits = Expand-Uri -Uri $Uri
 }
 Catch {
 	Throw $_
@@ -139,14 +138,14 @@ Catch {
 
 # get file from uri
 Try {
-	$Headers = Get-HeadersFromUri -Uri $Uri
+	$Headers = Get-HeadersFromUri -Uri $UriForBits
 }
 Catch {
 	Throw $_
 }
 
 # retrieve file name from headers
-$ChildPath = Split-Path -Path $Uri -Leaf
+$ChildPath = Split-Path -Path $UriForBits -Leaf
 
 # create local path
 $FilePath = Join-Path -Path $Path -ChildPath $ChildPath
@@ -189,11 +188,11 @@ If ((Test-Path -Path $FilePath -PathType Leaf) -and -not $Force) {
 If ($Force -or -not $SkipDownload) {
 	# ...download the file
 	Try {
-		Start-BitsTransfer -Source $Uri -Destination $FilePath
+		Start-BitsTransfer -Source $UriForBits -Destination $FilePath
 	}
 	Catch {
-		Write-Error 'ERROR: could not download file'
-		Throw $_
+		Write-Warning -Message "could not download '$UriForBits' to '$FilePath"
+		Return $_
 	}
 }
 

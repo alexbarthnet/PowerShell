@@ -1,7 +1,7 @@
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param (
 	[Parameter(ParameterSetName = 'Default')][ValidateScript({ Test-Path -Path $_ })]
-	[string]$Destination = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path,
+	[string]$Path = (Get-Location),
 	[Parameter(Mandatory = $false)]
 	[switch]$Force,
 	[Parameter(DontShow)]
@@ -25,7 +25,7 @@ If ($null -eq $EdgeMsi) {
 	Write-Warning -Message "could not locate information required to download MSI file in response from URI: $Uri"
 }
 Else {
-	$DestinationMsi = Join-Path -Path $Destination -ChildPath $EdgeMsi.Artifacts.Location.Split('/')[-1]
+	$DestinationMsi = Join-Path -Path $Path -ChildPath $EdgeMsi.Artifacts.Location.Split('/')[-1]
 }
 
 # if Edge CAB file not found in JSON...
@@ -33,7 +33,7 @@ If ($null -eq $EdgeCab) {
 	Write-Warning -Message "could not locate information required to download CAB file in response from URI: $Uri"
 }
 Else {
-	$DestinationCab = Join-Path -Path $Destination -ChildPath $EdgeCab.Artifacts.Location.Split('/')[-1]
+	$DestinationCab = Join-Path -Path $Path -ChildPath $EdgeCab.Artifacts.Location.Split('/')[-1]
 }
 
 # if Edge MSI file exists and Force parameter not set...
