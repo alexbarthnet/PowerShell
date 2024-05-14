@@ -9,7 +9,7 @@ Updates the Scheduled Tasks defined in a GPO from an XML object.
 A reference to the GPO. Must be a GPO object from Get-GPO, the GUID of a GPO, or the name of a GPO.
 
 .PARAMETER XML
-The XML object, the GPO GUID, or the GPO name.
+The XML object containing a Scheduled Task.
 
 .INPUTS
 None.
@@ -41,7 +41,7 @@ Param(
 
 Begin {
 	# if GPO parameter is not a GPO...
-	If ($Gpo -isnot [Microsoft.Gpo]) {
+	If ($Gpo -isnot [Microsoft.GroupPolicy.Gpo]) {
 		# ...and input object is a GUID...
 		If ($Gpo -is [guid] -or [guid]::TryParse($Gpo, [ref][guid]::Empty)) {
 			# ...get GPO by GUID

@@ -44,7 +44,7 @@ Param(
 
 Begin {
 	# if input object is not a GPO...
-	If ($GPO -isnot [Microsoft.Gpo]) {
+	If ($GPO -isnot [Microsoft.GroupPolicy.Gpo]) {
 		# ...and input object is a GUID...
 		If ($GPO -is [guid] -or [guid]::TryParse($GPO, [ref][guid]::Empty)) {
 			# ...get GPO by GUID
