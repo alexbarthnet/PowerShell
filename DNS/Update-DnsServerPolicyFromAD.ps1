@@ -155,7 +155,7 @@ Process {
 		$DomainController = $Hostname
 	}
 
-	# get subnets from AD
+	# get subnets from AD sorted by name
 	Try {
 		$ADReplicationSubnets = Get-ADReplicationSubnet -Server $DomainController -Filter '*' | Where-Object { $_.Location -eq $Location } | Sort-Object -Property 'Name'
 	}
@@ -170,7 +170,7 @@ Process {
 		Return
 	}
 
-	# get primary DNS zones from AD
+	# get primary DNS zones from AD sorted by zone type and name
 	Try {
 		$DnsServerZones = Get-DnsServerZone -ComputerName $DomainController | Where-Object { $_.ZoneType -eq 'Primary' -and $_.IsDsIntegrated -and -not $_.IsAutoCreated } | Sort-Object -Property 'IsReverseLookupZone', 'ZoneName'
 	}
@@ -264,9 +264,17 @@ Process {
 		Write-Verbose -Verbose -Message "Updated IPv6 subnets in '$DnsSubnetName' DNS client subnet"
 	}
 
-	# sort DNS server zones and insert filter into zone name
+	# update DNS server zones with prefix and suffix
 	Try {
-		$DnsPolicyFqdn = ($DnsServerZones.ZoneName | ForEach-Object { "*.$_." }) -join ','
+		$DnsPolicyFqdnsFromServer = ($DnsServerZones.ZoneName | ForEach-Object { "*.$_." })
+	}
+	Catch {
+		Return $_
+	}
+
+	# join DNS server zones into single string
+	Try {
+		$DnsPolicyFqdn = $DnsPolicyFqdnsFromServer -join ','
 	}
 	Catch {
 		Return $_
@@ -305,21 +313,46 @@ Process {
 		Write-Verbose -Verbose -Message "Will update '$DnsPolicyName' policy to refresh client subnet criteria"
 		$UpdatePolicy = $true
 	}
+	Else {
+		Write-Verbose -Verbose -Message "Verified '$DnsPolicyName' policy contains client subnet criteria: 'NE,$DnsSubnetName'"
+	}
 
 	# verify DNS policy contains Fqdn criteria
 	If (!$DnsPolicy.Criteria.Where({ $_.CriteriaType -eq 'Fqdn' })) {
-		Write-Verbose -Verbose -Message "Will update '$DnsPolicyName' policy to add missing FQDN criteria"
+		Write-Verbose -Verbose -Message "Will update '$DnsPolicyName' policy to add missing domain filter criteria"
 		$UpdatePolicy = $true
 	}
 	# verify DNS policy contains 1 Fqdn criteria
 	ElseIf ($DnsPolicy.Criteria.Where({ $_.CriteriaType -eq 'Fqdn' }).Count -gt 1) {
-		Write-Verbose -Verbose -Message "Will update '$DnsPolicyName' policy to remove extra FQDN criteria"
+		Write-Verbose -Verbose -Message "Will update '$DnsPolicyName' policy to remove extra domain filter criteria"
 		$UpdatePolicy = $true
 	}
 	# verify DNS policy contains expected Fqdn criteria
 	ElseIf ($DnsPolicy.Criteria.Where({ $_.CriteriaType -eq 'Fqdn' }).Criteria -ne "NE,$DnsPolicyFqdn") {
-		Write-Verbose -Verbose -Message "Will update '$DnsPolicyName' policy to refresh FQDN criteria"
+		Write-Verbose -Verbose -Message "Will update '$DnsPolicyName' policy to refresh domain filter criteria"
 		$UpdatePolicy = $true
+		# retrieve FQDNs in policy
+		$DnsPolicyFqdnsFromPolicy = $DnsPolicy.Criteria.Where({ $_.CriteriaType -eq 'Fqdn' }).Criteria.Split(',', 2)[1].Split(',')
+		# report FQDNs from policy to remove
+		:NextFqdn ForEach ($Fqdn in $DnsPolicyFqdnsFromPolicy) {
+			If ($Fqdn -notin $DnsPolicyFqdnsFromServer) {
+				Write-Verbose -Verbose -Message "Will update '$DnsPolicyName' policy to remove FQDN criteria: 'NE,$Fqdn'"
+			}
+			Else {
+				Write-Verbose -Verbose -Message "Verified '$DnsPolicyName' policy contains effective FQDN criteria: 'NE,$Fqdn'"
+			}
+		}
+		# report FQDNs from server to add
+		:NextFqdn ForEach ($Fqdn in $DnsPolicyFqdnsFromServer) {
+			If ($Fqdn -notin $DnsPolicyFqdnsFromPolicy) {
+				Write-Verbose -Verbose -Message "Will update '$DnsPolicyName' policy to add FQDN criteria: 'NE,$Fqdn'"
+			}
+		}
+	}
+	Else {
+		ForEach ($Fqdn in $DnsPolicyFqdnsFromServer) {
+			Write-Verbose -Verbose -Message "Verified '$DnsPolicyName' policy contains effective FQDN criteria: 'NE,$Fqdn'"
+		}
 	}
 
 	# if update to policy required...
