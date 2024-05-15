@@ -1,3 +1,5 @@
+#requires -Modules DnsServer
+
 <#
 .SYNOPSIS
 Adds a new forward zone to a DNS server.
@@ -22,6 +24,7 @@ None.
 
 .OUTPUTS
 None.
+
 #>
 
 [CmdletBinding()]
