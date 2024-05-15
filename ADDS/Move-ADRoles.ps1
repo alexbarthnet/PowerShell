@@ -96,7 +96,10 @@ Process {
 		}
 		# if domain controller found...
 		If ($script:NextDomainController) {
-			Write-Verbose -Verbose -Message "found next available domain controller in same site: '$($NextDomainController.HostName)'"
+			# retrieve server name
+			$Server = $script:NextDomainController.HostName
+			# declare found and break loop
+			Write-Verbose -Verbose -Message "found next available domain controller in same site: '$Server'"
 			Break NextDomainController
 		}
 	}
@@ -112,14 +115,14 @@ Process {
 	ForEach ($OperationMasterRole in $ADDomainController.OperationMasterRoles) {
 		# move operation master role to next domain controller
 		Try {
-			Move-ADDirectoryServerOperationMasterRole -Server $NextDomainController.HostName -Identity $NextDomainController -OperationMasterRole $OperationMasterRole -Confirm:$false
+			Move-ADDirectoryServerOperationMasterRole -Server $Server -Identity $NextDomainController -OperationMasterRole $OperationMasterRole -Confirm:$false
 		}
 		Catch {
-			Write-Warning -Message "could not move '$OperationMasterRole' role to domain controller: '$($NextDomainController.HostName)'"
+			Write-Warning -Message "could not move '$OperationMasterRole' role to domain controller: '$Server'"
 			Return $_
 		}
 		# declare move
-		Write-Verbose -Verbose -Message "moved '$OperationMasterRole' role to domain controller: '$($NextDomainController.HostName)'"
+		Write-Verbose -Verbose -Message "moved '$OperationMasterRole' role to domain controller: '$Server'"
 	}
 }
 
