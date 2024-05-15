@@ -1,16 +1,55 @@
 #Requires -Modules DnsServer,TranscriptWithHostAndDate
 
-[CmdletBinding(SupportsShouldProcess)]
+<#
+.SYNOPSIS
+Removes dynamic DNS records that have not been updated since the datetime computed by the required parameters.
+
+.DESCRIPTION
+Removes dynamic DNS records that have not been updated since the datetime computed by the required parameters. This script supplants DNS scavenging with improved logging and flexibility.
+
+.PARAMETER ZoneName
+Specifies one or more DNS lookup zones to cleanup. Cannot be combined with the AllZones or ExcludeReverseLookupZones parameters
+
+.PARAMETER AllZones
+Swith parameter to cleanup all AD-integrated primary DNS lookup zones with Dynamic Update enabled. Cannot be combined with the ZoneName parameter.
+
+.PARAMETER ExcludeReverseLookupZones
+Swith parameter to exclude reverse lookup zones from cleanup. Cannot be combined with the ZoneName parameter.
+
+.PARAMETER OlderThanUnits
+The number of datetime units to create the computed datetime. The default value is '30'
+
+.PARAMETER OlderThanType
+The type of datetime units to create the computed datetime. The supported values are 'Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', and 'Years'. The default value is 'Days'
+
+.INPUTS
+System.String[]. One or more DNS lookup zones can be submitted via the pipeline.
+
+.OUTPUTS
+None. The script reports on actions taken and does not provide any actionable output.
+
+.EXAMPLE
+.\Clear-DnsRecordsByAge.ps1 -AllZones -OlderThanUnits 90 -OlderThanType 'Days'
+
+#>
+
+[CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Default')]
 Param (
+	# names of zones for DNS record cleanup
+	[Parameter(ParameterSetName = 'Default', Mandatory = $true, ValueFromPipeline = $true)]
+	[string[]]$ZoneName,
+	# names of zones for DNS record cleanup
+	[Parameter(ParameterSetName = 'AllZones', Mandatory = $true)]
+	[switch]$AllZones,
+	# switch to exclude reverse lookup zones
+	[Parameter(ParameterSetName = 'AllZones')]
+	[switch]$ExcludeReverseLookupZones,
 	# first part of time for DNS record cleanup
 	[Parameter(Position = 0)][ValidateRange(1, 65535)]
 	[uint16]$OlderThanUnits = 30,
 	# second part of time for DNS record cleanup
 	[Parameter(Position = 1)][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
 	[string]$OlderThanType = 'Days',
-	# domains for DNS record cleanup
-	[Parameter(Position = 2)]
-	[string]$Domain = '*',
 	# infrastructure master for current domain
 	[Parameter(DontShow)]
 	[string]$InfrastructureRoleOwner = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().InfrastructureRoleOwner.Name,
@@ -99,13 +138,31 @@ Process {
 	# declare date
 	Write-TranscriptWithHostAndDate "Checking for records older than $OlderThanUnits $OlderThanType ($($PreviousDate.ToString()))"
 
-	# get DNS zones
+	# get AD-integrated primary DNS zones with dynamic update enabled
 	Try {
-		$DnsServerZones = Get-DnsServerZone -ComputerName $InfrastructureRoleOwner | Where-Object { $_.ZoneName -like $Domain -and $_.ZoneName -notlike '_msdcs.*' -and $_.ZoneType -eq 'Primary' -and $_.DynamicUpdate -eq 'Secure' -and $_.IsDsIntegrated }
+		$DnsServerZones = Get-DnsServerZone -ComputerName $InfrastructureRoleOwner | Where-Object { $_.IsDsIntegrated -and $_.ZoneName -notlike '_msdcs.*' -and $_.ZoneType -eq 'Primary' -and $_.DynamicUpdate -in 'Secure', 'Unsecure' }
 	}
 	Catch {
 		Write-WarningToTranscriptWithHostAndDate "could not retrieve DNS zones: $($_.Exeception.Message)"
 		Return $_
+	}
+
+	# if in default run mode...
+	If ($PSBoundParameters.ContainsKey('ZoneName')) {
+		# filter zones to zonename parameter
+		If ($ZoneName.Count -gt 1) {
+			$DnsServerZones = $DnsServerZones.Where({ $_.ZoneName -in $ZoneName })
+		}
+		Else {
+			$DnsServerZones = $DnsServerZones.Where({ $_.ZoneName -like $ZoneName })
+		}
+	}
+
+	# if in all zones run mode...
+	If ($PSBoundParameters.ContainsKey('AllZones')) {
+		If ($ExcludeReverseLookupZones) {
+			$DnsServerZones = $DnsServerZones.Where({ $_.IsReverseLookupZone -eq $false })
+		}
 	}
 
 	# process each DNS zone
