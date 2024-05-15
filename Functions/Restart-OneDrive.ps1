@@ -114,19 +114,19 @@ Function Restart-OneDrive {
 	$CurrentSessionId = [System.Diagnostics.Process]::GetCurrentProcess().SI
 
 	# get any OneDrive processes in current session
-	$OneDriveProcess = [System.Diagnostics.Process]::GetProcessByName('OneDrive').Where({ $_.Path -eq $OneDriveExe -and -$_.SI -eq $CurrentSessionId })
+	$OneDriveProcess = [System.Diagnostics.Process]::GetProcessesByName('OneDrive').Where({ $_.Path -eq $OneDriveExe -and -$_.SI -eq $CurrentSessionId })
 
 	# shutdown OneDrive via RunAs with the Basic User trust level
 	If ($OneDriveProcess) { Start-Process -WindowStyle Hidden -FilePath $RunAsExe -ArgumentList "/trustlevel:0x20000 `"$OneDriveExe /shutdown`"" }
 
 	# wait for OneDrive process in current session to close
-	Do { $OneDriveProcess = [System.Diagnostics.Process]::GetProcessByName('OneDrive').Where({ $_.Path -eq $OneDriveExe -and -$_.SI -eq $CurrentSessionId }) } Until (!$OneDriveProcess)
+	Do { $OneDriveProcess = [System.Diagnostics.Process]::GetProcessesByName('OneDrive').Where({ $_.Path -eq $OneDriveExe -and -$_.SI -eq $CurrentSessionId }) } Until (!$OneDriveProcess)
 
 	# start OneDrive in the background via RunAs with the Basic User trust level
 	If (!$OneDriveProcess) { Start-Process -WindowStyle Hidden -FilePath $RunAsExe -ArgumentList "/trustlevel:0x20000 `"$OneDriveExe /background`"" }
 
 	# wait for OneDrive process to start in current session
-	Do { $OneDriveProcess = [System.Diagnostics.Process]::GetProcessByName('OneDrive').Where({ $_.Path -eq $OneDriveExe -and -$_.SI -eq $CurrentSessionId }) } Until ($OneDriveProcess)
+	Do { $OneDriveProcess = [System.Diagnostics.Process]::GetProcessesByName('OneDrive').Where({ $_.Path -eq $OneDriveExe -and -$_.SI -eq $CurrentSessionId }) } Until ($OneDriveProcess)
 
 	# wait for OneDrive to load initial window
 	Start-Sleep -Seconds 1
