@@ -1,4 +1,4 @@
-#requires -Modules ActiveDirectory,DnsServer,TranscriptWithHostAndDate
+#requires -Modules DnsServer,ActiveDirectory,TranscriptWithHostAndDate
 
 <#
 .SYNOPSIS
