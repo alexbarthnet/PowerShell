@@ -1,59 +1,118 @@
 Begin {
-	# define transcript file
-	$log_root = [System.Environment]::GetFolderPath('CommonApplicationData')
-	$log_file = (Split-Path -Path $PSCommandPath -Leaf).Replace((Get-Item -Path $PSCommandPath).Extension, '.txt')
-	$log_path = Join-Path -Path $log_root -Child $log_file
+	# create log folder path from environment
+	Try {
+		$LogFolderPath = Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'PowerShell_transcript'
+	}
+	Catch {
+		Exit 101
+	}
 
-	# force close open transcript and clear errors
-	Try { Stop-Transcript; $Error.Clear() } Catch [System.Management.Automation.PSInvalidOperationException] { $Error.Clear() }
+	# create log file name from command path
+	Try {
+		$LogFileName = (Get-Item -Path $PSCommandPath).Name.Replace((Get-Item -Path $PSCommandPath).Extension, '.txt')
+	}
+	Catch {
+		Exit 102
+	}
+
+	# join paths
+	Try {
+		$Path = Join-Path -Path $LogFolderPath -ChildPath $LogFileName
+	}
+	Catch {
+		Exit 103
+	}
 
 	# start transcript
-	Start-Transcript -Path $log_path -Append -Force
+	Try {
+		Start-Transcript -Path $Path -Append
+	}
+	Catch {
+		Exit 104
+	}
 }
 
 Process {
 	# define package provider names and versions
-	$ps_providers = @{
+	$PackageProviders = @{
 		NuGet = [System.Version]'2.8.5.208'
 	}
 
 	# define powershell module names and versions
-	$ps_modules = @{
-		PSWindowsUpdate = [System.Version]'2.2.0.2' 
+	$Modules = @{
+		PSWindowsUpdate = [System.Version]'2.2.0.2'
 	}
 
 	# install required providers
-	ForEach ($provider in $ps_providers.Keys) {
-		$ps_provider = Get-PackageProvider -Name $provider
-		If (($null -eq $ps_provider) -or ($ps_provider.Version -lt $ps_providers[$provider])) {
-			Try {
-				Install-PackageProvider -Name $provider -Scope 'AllUsers' -Force
-			}
-			Catch {
-				Write-Error "Installing package '$provider'"
-				Return
-			}
+	:NextProviderName ForEach ($ProviderName in $PackageProviders.Keys) {
+		# get package provider by name
+		Try {
+			$PackageProvider = Get-PackageProvider -Name $ProviderName
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve package provider: $ProviderName"
+			Return $_
+		}
+
+		# if package provider found with required or later version
+		If ($PackageProvider -and $PackageProvider.Version -ge $PackageProviders[$ProviderName]) {
+			Write-Verbose -Verbose -Message "found package provider '$ProviderName' with version: $($PackageProvider.Version)"
+			Continue :NextProviderName
+		}
+
+		# install package provider to all users scope
+		Try {
+			Install-PackageProvider -Name $ProviderName -Scope 'AllUsers' -Force
+		}
+		Catch {
+			Write-Warning -Message "could not install package provider: $ProviderName"
+			Return $_
 		}
 	}
 
 	# install required modules
-	ForEach ($module in $ps_modules.Keys) {
-		$ps_module = Get-Module -ListAvailable -Name $module
-		If (($null -eq $ps_module) -or ($ps_module.Version -lt $ps_modules[$module])) {
-			Try {
-				Install-Module -Name $module -Scope 'AllUsers' -Force -AllowClobber
-			}
-			Catch {
-				Write-Error "Installing module '$module'"
-				Return
-			}
+	:NextModuleName ForEach ($ModuleName in $Modules.Keys) {
+		# get module by name
+		Try {
+			$Module = Get-Module -Name $ModuleName -ListAvailable
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve module: $ModuleName"
+			Return $_
+		}
+
+		# if module found with required or later version
+		If ($Module -and $Module.Version -ge $Modules[$ModuleName]) {
+			Write-Verbose -Verbose -Message "found module '$ModuleName' with version: $($Module.Version)"
+			Continue :NextModuleName
+		}
+
+		# install module to all users scope
+		Try {
+			Install-Module -Name $ModuleName -Scope 'AllUsers' -Force -AllowClobber
+		}
+		Catch {
+			Write-Warning -Message "could not install module: $ModuleName"
+			Return $_
 		}
 	}
 
 	# update windows
-	Install-WindowsUpdate -NotTitle 'Preview' -AcceptAll -AutoReboot
+	Try {
+		Install-WindowsUpdate -NotTitle 'Preview' -AcceptAll -AutoReboot
+	}
+	Catch {
+		Write-Warning -Message "could not install updates: $($_.ToString())"
+		Return $_
+	}
+
 }
 
 End {
-	Stop-Transcript
+	Try {
+		Stop-Transcript
+	}
+	Catch {
+		Exit 201
+	}
 }
