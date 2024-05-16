@@ -18,13 +18,13 @@ Begin {
 			Passthru = $true
 		}
 
-		# make 5 attempsts at renaming computer
+		# make 5 attempts to rename computer
 		Do {
 			# sleep to allow for domain replication of new computer objects
 			Start-Sleep -Seconds 5
 			# rename computer
 			Try {
-				$HasSucceeded = Rename-Computer @RenameComputer | Select-Object 'HasSucceeded' -ExpandProperty 'HasSucceeded'
+				$HasSucceeded = Rename-Computer @RenameComputer | Select-Object -ExpandProperty 'HasSucceeded'
 				Write-Host "...renamed computer on try #$($Counter)"
 			}
 			Catch {
@@ -45,17 +45,17 @@ Begin {
 		}
 	}
 
-	# create path from environment
+	# create log folder path from environment
 	Try {
-		$LogFolderPath = (Get-CimInstance -Class Win32_OperatingSystem).WindowsDirectory
+		$LogFolderPath = Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'PowerShell_transcript'
 	}
 	Catch {
 		Exit 101
 	}
 
-	# create name from command path
+	# create log file name from command path
 	Try {
-		$LogName = (Split-Path -Path $PSCommandPath -Leaf).Replace((Get-Item -Path $PSCommandPath).Extension, '.txt')
+		$LogFileName = (Get-Item -Path $PSCommandPath).Name.Replace((Get-Item -Path $PSCommandPath).Extension, '.txt')
 	}
 	Catch {
 		Exit 102
@@ -63,7 +63,7 @@ Begin {
 
 	# join paths
 	Try {
-		$LogPath = Join-Path -Path $LogFolderPath -Child $LogName
+		$Path = Join-Path -Path $LogFolderPath -ChildPath $LogFileName
 	}
 	Catch {
 		Exit 103
@@ -71,7 +71,7 @@ Begin {
 
 	# start transcript
 	Try {
-		$TestPath = Test-Path -Path $LogPath -PathType Leaf
+		$SecondPass = Test-Path -Path $Path -PathType Leaf
 	}
 	Catch {
 		Exit 104
@@ -79,7 +79,7 @@ Begin {
 
 	# start transcript
 	Try {
-		Start-Transcript -Path $LogPath -Append
+		Start-Transcript -Path $Path -Append
 	}
 	Catch {
 		Exit 105
@@ -91,7 +91,7 @@ Begin {
 		$ComputerName = (Get-Item 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName').GetValue('ComputerName')
 	}
 	Catch {
-		Throw $_
+		Return $_
 	}
 
 	# get virtual machine name
@@ -100,7 +100,7 @@ Begin {
 		$VirtualMachineName = (Get-Item 'HKLM:\SOFTWARE\Microsoft\Virtual Machine\Guest\Parameters').GetValue('VirtualMachineName')
 	}
 	Catch {
-		Throw $_
+		Return $_
 	}
 }
 
@@ -124,27 +124,33 @@ Process {
 	}
 
 	# declare pass
-	If (-not $TestPath) {
+	If (!$SecondPass) {
 		Write-Host 'First pass at renaming...'
 	}
 	Else {
 		Write-Host 'Second pass at renaming...'
 	}
 
-	# call function
+	# call rename function
 	Try {
 		$HasSucceeded = Rename-VirtualMachine -NewName $VirtualMachineName
 	}
 	Catch {
-		Throw $_
+		Return $_
 	}
 	
-	# restart computer on success in either pass or on failure in first pass
-	If ($HasSucceeded -or -not $TestPath) {
+	# if rename succeeded or the first pass...
+	If ($HasSucceeded -or -not $SecondPass) {
+		# restart computer
 		Restart-Computer -Force
 	}
 }
 
 End {
-	Stop-Transcript
+	Try {
+		Stop-Transcript
+	}
+	Catch {
+		Exit 201
+	}
 }
