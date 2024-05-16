@@ -122,7 +122,7 @@ Function Invoke-LdapQuery {
 		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Certificate')]
 		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
 		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Credential')]
-		[pscredential]$Credential,
+		[System.Management.Automation.PSCredential]$Credential,
 		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Kerberos')]
 		[switch]$Kerberos,
 		[Parameter(DontShow)]
@@ -140,7 +140,7 @@ Function Invoke-LdapQuery {
 		# create LDAP connection with LDAP identifier
 		$LdapConnection = [System.DirectoryServices.Protocols.LdapConnection]::new($LdapDirectoryIdentifier)
 
-		# update protocol settings for LDAP connection 
+		# update protocol settings for LDAP connection
 		$LdapConnection.SessionOptions.ProtocolVersion = 3
 		$LdapConnection.SessionOptions.ReferralChasing = [System.DirectoryServices.Protocols.ReferralChasingOptions]::None
 
@@ -158,6 +158,8 @@ Function Invoke-LdapQuery {
 			}
 			'Kerberos' {
 				$LdapConnection.AuthType = [System.DirectoryServices.Protocols.AuthType]::Kerberos
+				$LdapConnection.SessionOptions.Sealing = $true
+				$LdapConnection.SessionOptions.Signing = $true
 			}
 			Default {
 				$LdapConnection.AuthType = [System.DirectoryServices.Protocols.AuthType]::Negotiate
