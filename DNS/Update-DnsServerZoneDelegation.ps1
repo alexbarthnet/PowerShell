@@ -1,3 +1,5 @@
+#requires -Modules DnsServer
+
 <#
 .SYNOPSIS
 Update NS records in one or more existing zone delegations.
