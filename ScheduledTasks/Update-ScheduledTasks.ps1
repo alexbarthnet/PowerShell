@@ -1073,9 +1073,9 @@ Process {
 		$Remove {
 			Try {
 				# remove existing entry by primary key(s)...
-				$JsonData = $JsonData | Where-Object { -not ($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath) }
+				$JsonData = [array]($JsonData.Where({ $_.TaskName -ne $TaskName -and $_.TaskPath -ne $TaskPath }))
 				# if JSON data empty...
-				If ($null -eq $JsonData) {
+				If ($JsonData.Count -eq 0) {
 					# clear JSON data
 					[string]::Empty | Set-Content -Path $Json
 					Write-Verbose -Verbose -Message "Removed '$TaskName' at '$Taskpath' from configuration file: '$Json'"
@@ -1159,11 +1159,11 @@ Process {
 				$JsonEntry = [pscustomobject]$JsonParameters
 
 				# if existing entry has same primary key(s)...
-				If ($JsonData | Where-Object { $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath }) {
+				If ($JsonData.Where({ $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath })) {
 					# inquire before removing existing entry
 					Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction 'Inquire'
 					# remove existing entry with same primary key(s)
-					$JsonData = $JsonData | Where-Object { -not ($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath) }
+					$JsonData = [array]($JsonData.Where({ $_.TaskName -ne $TaskName -and $_.TaskPath -ne $TaskPath }))
 				}
 
 				# add entry to data
