@@ -26,14 +26,14 @@ Function ConvertTo-Collection {
 				# if property value is a pscustomobject...
 				If ($PropertyValue -is [System.Management.Automation.PSCustomObject]) {
 					# convert property value into collection
-					$Value = ConvertTo-Collection -InputObject $PropertyValue -Ordered:$Ordered
-					# add property value to arraylist
-					$Values.Add($Value)
+					$PropertyValueCollection = ConvertTo-Collection -InputObject $PropertyValue -Ordered:$Ordered
+					# add property value collection to arraylist
+					$PropertyValues.Add($PropertyValueCollection)
 				}
 				# if property value is not a pscustomobject...
 				Else {
-					# add value to arraylist
-					$Values.Add($Property.Value)
+					# add property value to arraylist
+					$PropertyValues.Add($PropertyValue)
 				}
 			}
 			# convert arraylist to array then add array to collection
@@ -43,9 +43,9 @@ Function ConvertTo-Collection {
 			# if property value is a pscustomobject...
 			If ($Property.Value -is [System.Management.Automation.PSCustomObject]) {
 				# convert property value into collection
-				$Value = ConvertTo-Collection -InputObject $Property.Value -Ordered:$Ordered
+				$PropertyValueCollection = ConvertTo-Collection -InputObject $Property.Value -Ordered:$Ordered
 				# add property name and value to collection
-				$Collection[$Property.Name] = $Value
+				$Collection[$Property.Name] = $PropertyValueCollection
 			}
 			# if property value is not a pscustomobject...
 			Else {
