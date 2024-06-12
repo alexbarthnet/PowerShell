@@ -1,24 +1,17 @@
-Write-Host 'This file contains example hashtables for splatting Write-VMFromJsonFile.ps1'
-Get-Content -Path $PSCommandPath | Select-Object -Skip 4
-Return
-# content below this line
+Write-Host "##### BEGIN EXAMPLE #####`n"; Get-Content -Path $PSCommandPath | Select-Object -Skip 3; Write-Host "`n##### END EXAMPLE #####"; Return
+# content begins on the line after next
 
 # define path to JSON file
-
 $Json = '.\vm-test.json'
 
-.\Write-VMFromJsonFile.ps1 -Json $Json -Clear
-
-# add OS deployment via ISO
-
+# define OS deployment via ISO
 $AddOSD = @{
 	VMName           = 'testvm1'
 	DeploymentMethod = 'ISO'
-	DeploymentPath   = 'F:\storage\images\microsoft\technet\en-us_windows_server_2022_x64_dvd.iso'
+	DeploymentPath   = 'F:\storage\images\microsoft\en-us_windows_server_2022_x64_dvd.iso'
 }
 
-# add OS deployment via WDS
-
+# define OS deployment via WDS
 $AddOSD = @{
 	VMName           = 'testvm1'
 	DeploymentMethod = 'WDS'
@@ -26,8 +19,7 @@ $AddOSD = @{
 	DeploymentPath   = 'WdsClientUnattend\Unattend-1-Prestaged-WindowsServer2022.xml'
 }
 
-# add OS deployment via SCCM
-
+# define OS deployment via SCCM
 $AddOSD = @{
 	VMName                = 'testvm1'
 	DeploymentMethod      = 'SCCM'
@@ -38,4 +30,5 @@ $AddOSD = @{
 	MaintenanceCollection = 'MW - Every Tuesday 2000-0000'
 }
 
+# add OS deployement to JSON file
 .\Write-VMFromJsonFile.ps1 -Json $Json -AddOSD @AddOSD

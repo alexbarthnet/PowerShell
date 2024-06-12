@@ -1,16 +1,10 @@
-Write-Host 'This file contains example hashtables for splatting Write-VMFromJsonFile.ps1'
-Get-Content -Path $PSCommandPath | Select-Object -Skip 4
-Return
-# content below this line
+Write-Host "##### BEGIN EXAMPLE #####`n"; Get-Content -Path $PSCommandPath | Select-Object -Skip 3; Write-Host "`n##### END EXAMPLE #####"; Return
+# content begins on the line after next
 
 # define path to JSON file
-
 $Json = '.\vm-test.json'
 
-.\Write-VMFromJsonFile.ps1 -Json $Json -Clear
-
-# add VM to stand-alone hypervisor
-
+# define stand-alone VM
 $AddVM = @{
 	VMName                        = 'testvm0'
 	Path                          = 'E:\Hyper-V'
@@ -26,8 +20,7 @@ $AddVM = @{
 	PreserveVMParameters          = $true
 }
 
-# add VM to clustered hypervisor
-
+# define clustered VM
 $AddVM = @{
 	VMName                        = 'testvm1'
 	Path                          = 'C:\ClusterStorage\Hyper-V-1'
@@ -43,16 +36,18 @@ $AddVM = @{
 	PreserveVMParameters          = $true
 }
 
+# add VM to JSON file
 .\Write-VMFromJsonFile.ps1 -Json $Json -Add @AddVM
 
-# add configuration for default VMNetworkAdapter
+# define default VMNetworkAdapter for VM
 $AddDefaultVMNetworkAdapter = @{
 	SwitchName       = 'ConvergedSwitch'
 	VlanId           = 10
 	MacAddressPrefix = '0ABC'
 	IPAddress        = '192.168.10.251'
-	DhcpServer       = 'dhcp1'
 	DhcpScope        = '192.168.10.0'
+	DhcpServer       = 'dhcp1'
 }
 
+# add VM with default VMNetworkAdapter to JSON file
 .\Write-VMFromJsonFile.ps1 -Json $Json -Add @AddVM @AddDefaultVMNetworkAdapter
