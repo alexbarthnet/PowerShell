@@ -1111,7 +1111,7 @@ Begin {
 				# define parameters for Import-CMComputerInformation
 				$ImportCMComputerInformation = @{
 					CollectionId = $AllSystems.CollectionID
-					ComputerName = $Name.ToUpper()
+					ComputerName = $Name
 					SMBiosGuid   = $ArgumentList['BIOSGUID']
 					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 				}
