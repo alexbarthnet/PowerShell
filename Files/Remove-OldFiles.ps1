@@ -265,18 +265,18 @@ Process {
 		$Remove {
 			Try {
 				# remove existing entry by primary key(s)...
-				$JsonData = $JsonData | Where-Object { $_.Path -ne $Path }
+				$JsonData = [array]($JsonData.Where({ $_.Path -ne $Path }))
 				# if JSON data empty...
-				If ($null -eq $JsonData) {
+				If ($JsonData.Count -eq 0) {
 					# clear JSON data
 					[string]::Empty | Set-Content -Path $Json
 					Write-Verbose -Verbose -Message  "Removed '$Path' from configuration file: '$Json'"
 				}
 				Else {
 					# export JSON data
-					$JsonData | Sort-Object -Property Path | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
+					$JsonData | Sort-Object -Property 'Path' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 					Write-Verbose -Verbose -Message  "Removed '$Path' from configuration file: '$Json'"
-					$JsonData | Sort-Object -Property Path | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+					$JsonData | Sort-Object -Property 'Path' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 				}
 				$JsonData | Format-List
 			}
@@ -302,11 +302,11 @@ Process {
 				$JsonEntry = [pscustomobject]$JsonParameters
 
 				# if existing entry has same primary key(s)...
-				If ($JsonData | Where-Object { $_.Path -eq $Path }) {
+				If ($JsonData.Where({ $_.Path -eq $Path })) {
 					# inquire before removing existing entry
 					Write-Warning -Message "Will overwrite existing entry for '$Path' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
 					# remove existing entry with same primary key(s)
-					$JsonData = $JsonData | Where-Object { $_.Path -ne $Path }
+					$JsonData = [array]($JsonData.Where({ $_.Path -ne $Path }))
 				}
 
 				# add entry to data
