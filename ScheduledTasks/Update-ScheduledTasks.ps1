@@ -168,12 +168,18 @@ Param(
 	# scheduled task parameter - modules
 	[Parameter(ParameterSetName = 'Add')]
 	[string[]]$Modules,
-	# scheduled task parameter - modules
+	# scheduled task parameter - certificates
 	[Parameter(ParameterSetName = 'Add')]
 	[string[]]$Certificates,
 	# switch to remove old tasks during run
 	[Parameter(ParameterSetName = 'Default')]
 	[switch]$RemoveOldTasks,
+	# switch to process JSON entries for previous versions of the script
+	[Parameter(ParameterSetName = 'Default')]
+	[switch]$Run,
+	# switch to process JSON entries for previous versions of the script
+	[Parameter(ParameterSetName = 'Default')]
+	[switch]$Update,
 	# switch to skip transcript logging
 	[Parameter(DontShow)]
 	[switch]$SkipTranscript,
@@ -213,7 +219,7 @@ Begin {
 			Return $_
 		}
 
-		# get thumbprints from PFX 
+		# get thumbprints from PFX
 		Try {
 			$Thumbprints = $PfxData.EndEntityCertificates | Select-Object -First 1 -ExpandProperty 'Thumbprint'
 		}
@@ -788,7 +794,7 @@ Begin {
 			[Parameter(DontShow)]
 			[string]$TranscriptTime = ([datetime]::Now.ToString('yyyyMMddHHmmss'))
 		)
-	
+
 		# verify transcript path
 		If (!(Test-Path -Path $TranscriptPath -PathType 'Container')) {
 			# define parameters for New-Item
@@ -797,7 +803,7 @@ Begin {
 				ItemType    = 'Directory'
 				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 			}
-	
+
 			# create transcript path
 			Try {
 				$null = New-Item @NewItem
@@ -806,17 +812,17 @@ Begin {
 				Throw $_
 			}
 		}
-	
+
 		# build transcript file name with defined prefix, hostname, transcript name and current datetime
 		$TranscriptFile = "PowerShell_transcript.$TranscriptHost.$TranscriptName.$TranscriptTime.txt"
-	
+
 		# define parameters for Start-Transcript
 		$StartTranscript = @{
 			Path        = Join-Path -Path $TranscriptPath -ChildPath $TranscriptFile
 			Force       = $true
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
-	
+
 		# start transcript
 		Try	{
 			$null = Start-Transcript @StartTranscript
@@ -856,10 +862,10 @@ Begin {
 			[Parameter(DontShow)]
 			[uint16]$TranscriptFileCount = 7
 		)
-	
+
 		# define filter using default transcript prefix, hostname, and script name
 		$TranscriptFilter = "PowerShell_transcript.$TranscriptHost.$TranscriptName*"
-	
+
 		# get transcript files matching filter
 		Try {
 			$TranscriptFiles = Get-ChildItem -Path $TranscriptPath -Filter $TranscriptFilter -ErrorAction 'SilentlyContinue'
@@ -867,7 +873,7 @@ Begin {
 		Catch {
 			Write-Warning -Message $_.ToString()
 		}
-	
+
 		# define transcript date
 		switch ($TranscriptDateUnits) {
 			'Hours' {
@@ -886,10 +892,10 @@ Begin {
 				$TranscriptDate = [datetime]::FromFileTime(0)
 			}
 		}
-	
+
 		# declare cleanup thresholds
 		Write-Verbose -Verbose -Message "Removing transcript files from '$TranscriptPath' matching '$TranscriptFilter' with a LastWriteTime before '$($TranscriptDate.ToString('s'))' provided that '$TranscriptFileCount' files remain"
-	
+
 		# split transcript files into files-to-remain and files-to-remove based upon LastWriteTime
 		Try {
 			$FilesToRemain, $FilesToRemove = $TranscriptFiles.Where({ $_.LastWriteTime -ge $TranscriptDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
@@ -897,7 +903,7 @@ Begin {
 		Catch {
 			Write-Warning -Message $_.ToString()
 		}
-	
+
 		# if count of files-to-remain is than minimum file count...
 		If ($FilesToRemain.Count -lt $TranscriptFileCount) {
 			# declare skipping cleanup
@@ -914,7 +920,7 @@ Begin {
 				}
 			}
 		}
-	
+
 		# stop transcript
 		Try {
 			Stop-Transcript
@@ -939,89 +945,54 @@ Begin {
 Process {
 	# if Install set...
 	If ($Install) {
-		# define static parameters for Update-ScheduledTaskFromJson
-		$UpdateScheduledTaskFromJson = @{
-			TaskName  = 'Update-ScheduledTasks'
-			TaskPath  = '\'
-			Execute   = Join-Path -Path $PSHOME -ChildPath 'powershell.exe'
-			Argument  = "-NonInteractive -NoProfile -ExecutionPolicy ByPass -File `"$PSCommandPath`" -Json `"$Json`""
-			UserId    = 'SYSTEM'
-			LogonType = 'ServiceAccount'
-			RunLevel  = 'Highest'
+		# set script mode to Add
+		$Add = $true
+
+		# define static parameters for Add mode
+		$TaskName = 'Update-ScheduledTasks'
+		$TaskPath = '\'
+		$Execute = Join-Path -Path $PSHOME -ChildPath 'powershell.exe'
+		$Argument = "-NonInteractive -NoProfile -ExecutionPolicy ByPass -File `"$PSCommandPath`" -Json `"$Json`""
+		$UserId = 'SYSTEM'
+		$LogonType = 'ServiceAccount'
+		$RunLevel = 'Highest'
+
+		# if TriggerAt parameter not provided...
+		If (!$PSBoundParameters.ContainsKey('TriggerAt')) {
+			$TriggerAt = [datetime]'00:00:00'
 		}
 
-		# if TriggerAt parameter provided...
-		If ($PSBoundParameters.ContainsKey('TriggerAt')) {
-			$UpdateScheduledTaskFromJson['TriggerAt'] = $TriggerAt
-		}
-		Else {
-			$UpdateScheduledTaskFromJson['TriggerAt'] = [datetime]'00:00:00'
+		# if RandomDelay parameter not provided...
+		If (!$PSBoundParameters.ContainsKey('RandomDelay')) {
+			$RandomDelay = (New-TimeSpan -Minutes 0)
 		}
 
-		# if RandomDelay parameter provided...
-		If ($PSBoundParameters.ContainsKey('RandomDelay')) {
-			$UpdateScheduledTaskFromJson['RandomDelay'] = $RandomDelay
-		}
-		Else {
-			$UpdateScheduledTaskFromJson['RandomDelay'] = (New-TimeSpan -Minutes 0)
+		# if ExecutionTimeLimit parameter not provided...
+		If (!$PSBoundParameters.ContainsKey('ExecutionTimeLimit')) {
+			$ExecutionTimeLimit = (New-TimeSpan -Minutes 1)
 		}
 
-		# if ExecutionTimeLimit parameter provided...
-		If ($PSBoundParameters.ContainsKey('ExecutionTimeLimit')) {
-			$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = $ExecutionTimeLimit
+		# if RepetitionInterval parameter not provided...
+		If (!$PSBoundParameters.ContainsKey('RepetitionInterval')) {
+			$RepetitionInterval = (New-TimeSpan -Minutes 15)
 		}
-		Else {
-			$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = (New-TimeSpan -Minutes 1)
-		}
-
-		# if RepetitionInterval parameter provided...
-		If ($PSBoundParameters.ContainsKey('RepetitionInterval')) {
-			$UpdateScheduledTaskFromJson['RepetitionInterval'] = $RepetitionInterval
-		}
-		Else {
-			$UpdateScheduledTaskFromJson['RepetitionInterval'] = (New-TimeSpan -Minutes 15)
-		}
-
-		# install scheduled task
-		Try {
-			Update-ScheduledTaskFromJson @UpdateScheduledTaskFromJson
-		}
-		Catch {
-			Return $_
-		}
-
-		# report and return
-		Write-Verbose -Verbose -Message 'Installed Update-ScheduledTasks'
-		Return
 	}
 
 	# if Uninstall set...
 	If ($Uninstall) {
-		# define parameters for Unregister-ScheduledTask
-		$UnregisterScheduledTask = @{
-			TaskName = 'Update-ScheduledTasks'
-			TaskPath = '\'
-			Confirm  = $false
-		}
+		# set script mode to Remove
+		$Remove = $true
 
-		# uninstall scheduled task
-		Try {
-			Unregister-ScheduledTask @UnregisterScheduledTask
-		}
-		Catch {
-			Return $_
-		}
-
-		# report and return
-		Write-Output 'Uninstalled Update-ScheduledTasks'
-		Return
+		# define parameters for Remove mode
+		$TaskName = 'Update-ScheduledTasks'
+		$TaskPath = '\'
 	}
 
 	# if JSON file found...
 	If (Test-Path -Path $Json) {
 		# ...create JSON data object as array of PSCustomObjects from JSON file content
 		Try {
-			$JsonData = [array](Get-Content -Path $Json -ErrorAction 'Stop' | ConvertFrom-Json -ErrorAction 'Stop')
+			$JsonData = [array](Get-Content -Path $Json -ErrorAction 'Stop' | ConvertFrom-Json)
 		}
 		Catch {
 			Write-Warning -Message "could not read configuration file: '$Json'"
@@ -1095,9 +1066,18 @@ Process {
 		# add entry to configuration file
 		$Add {
 			Try {
-				# validate task path when task name not 'Update-ScheduledTasks'
-				If ($TaskName -ne 'Update-ScheduledTasks' -and -not (Test-ScheduledTaskPath -TaskPath $TaskPath)) {
-					Write-Warning -Message "the path defined is not permitted: '$TaskPath'"
+				# validate task path
+				Try {
+					$TaskPathIsValid = Test-ScheduledTaskPath -TaskPath $TaskPath
+				}
+				Catch {
+					Write-Warning -Message "could not validate TaskPath value: $TaskPath"
+					Return
+				}
+
+				# if task name not 'Update-ScheduledTasks' and task path is not valid...
+				If ($TaskName -ne 'Update-ScheduledTasks' -and -not $TaskPathIsValid) {
+					Write-Warning -Message "the provided TaskPath is not permitted: '$TaskPath'"
 					Return
 				}
 
@@ -1113,42 +1093,42 @@ Process {
 
 				# create ordered dictionary for custom object
 				$JsonParameters = [ordered]@{
-					TaskName  = $TaskName
-					TaskPath  = $TaskPath
-					Execute   = $Execute
-					Argument  = $Argument
-					UserId    = $UserId
-					LogonType = $LogonType
-					TriggerAt = $TriggerAt
+					TaskName  = [string]$TaskName
+					TaskPath  = [string]$TaskPath
+					Execute   = [string]$Execute
+					Argument  = [string]$Argument
+					UserId    = [string]$UserId
+					LogonType = [string]$LogonType
+					TriggerAt = [datetime]$TriggerAt
 				}
 
 				# add RandomDelay if provided as datetime value
-				If ($PSBoundParameters.ContainsKey('RandomDelay')) {
+				If ($script:RandomDelay) {
 					$JsonParameters['RandomDelayTime'] = [datetime]($TriggerAt + $RandomDelay)
 				}
 
 				# add ExecutionTimeLimitTime1 if provided as datetime value
-				If ($PSBoundParameters.ContainsKey('ExecutionTimeLimit')) {
+				If ($script:ExecutionTimeLimit) {
 					$JsonParameters['ExecutionTimeLimitTime'] = [datetime]($TriggerAt + $ExecutionTimeLimit)
 				}
 
 				# add RepetitionInterval if provided as datetime value
-				If ($PSBoundParameters.ContainsKey('RepetitionInterval')) {
+				If ($script:RepetitionInterval) {
 					$JsonParameters['RepetitionIntervalTime'] = [datetime]($TriggerAt + $RepetitionInterval)
 				}
 
 				# add RunLevel if provided
-				If ($PSBoundParameters.ContainsKey('RunLevel')) {
-					$JsonParameters['RunLevel'] = $RunLevel
+				If ($script:RunLevel) {
+					$JsonParameters['RunLevel'] = [string]$RunLevel
 				}
 
 				# add Modules if provided
-				If ($PSBoundParameters.ContainsKey('Modules')) {
+				If ($script:Modules) {
 					$JsonParameters['Modules'] = [string[]]$Modules
 				}
 
 				# add Certificates if provided
-				If ($PSBoundParameters.ContainsKey('Certificates')) {
+				If ($script:Certificates) {
 					$JsonParameters['Certificates'] = [string[]]$Certificates
 				}
 
@@ -1182,7 +1162,7 @@ Process {
 		# process entries in configuration file
 		Default {
 			# declare start
-			Write-Verbose -Verbose -Message "Updating scheduled tasks from '$Json'"
+			Write-Host "`nUpdating scheduled tasks from '$Json'"
 
 			# check entry count in configuration file
 			If ($JsonData.Count -eq 0) {
@@ -1190,175 +1170,220 @@ Process {
 				Return
 			}
 
-			# create hashtable for cleanup
-			$ExpectedTasks = @{}
+			# define list for all certificates
+			$Certificates = [System.Collections.Generic.List[string]]::new()
 
-			# process configuration file
-			:JsonEntry ForEach ($JsonEntry in $JsonData) {
-				# validate values in JSON file
-				Switch ($true) {
-					([string]::IsNullOrEmpty($JsonEntry.TaskName)) {
-						Write-Warning -Message "required entry (TaskName) not found in configuration file: $Json"; Continue JsonEntry
-					}
-					([string]::IsNullOrEmpty($JsonEntry.TaskPath)) {
-						Write-Warning -Message "required value (TaskPath) not found in configuration file: $Json"; Continue JsonEntry
-					}
-					([string]::IsNullOrEmpty($JsonEntry.Execute)) {
-						Write-Warning -Message "required value (Execute) not found in configuration file: $Json"; Continue JsonEntry
-					}
-					([string]::IsNullOrEmpty($JsonEntry.Argument)) {
-						Write-Warning -Message "required value (Argument) not found in configuration file: $Json"; Continue JsonEntry
-					}
-					([string]::IsNullOrEmpty($JsonEntry.UserId)) {
-						Write-Warning -Message "required value (UserId) not found in configuration file: $Json"; Continue JsonEntry
-					}
-					([string]::IsNullOrEmpty($JsonEntry.LogonType)) {
-						Write-Warning -Message "required value (LogonType) not found in configuration file: $Json"; Continue JsonEntry
-					}
-					($JsonEntry.TriggerAt -isnot [datetime]) {
-						Write-Warning -Message "invalid entry (TriggerAt) found in configuration file: $Json"; Continue JsonEntry
-					}
-					Default {
-						# if valid task path provided...
-						If (Test-ScheduledTaskPath -TaskPath $JsonEntry.TaskPath) {
-							# check expected tasks hashtable for task path
-							If (!$ExpectedTasks.ContainsKey($JsonEntry.TaskPath) -or $ExpectedTasks[$JsonEntry.TaskPath] -isnot [System.Collections.Generic.List[string]]) {
-								$ExpectedTasks[$JsonEntry.TaskPath] = [System.Collections.Generic.List[string]]::new()
-							}
-
-							# update expected tasks hashtable with task name
-							$ExpectedTasks[$JsonEntry.TaskPath].Add($JsonEntry.TaskName)
-						}
-
-						# define hashtable for function
-						$UpdateScheduledTaskFromJson = @{
-							TaskName  = [string]$JsonEntry.TaskName
-							TaskPath  = [string]$JsonEntry.TaskPath
-							Execute   = [string]$JsonEntry.Execute
-							Argument  = [string]$JsonEntry.Argument
-							UserId    = [string]$JsonEntry.UserId
-							LogonType = [string]$JsonEntry.LogonType
-							TriggerAt = [datetime]$JsonEntry.TriggerAt
-						}
-
-						# if RunLevel defind in JSON...
-						If ($null -ne $JsonEntry.RunLevel -and $JsonEntry.RunLevel -is [string]) {
-							# add RunLevel to hashtable
-							$UpdateScheduledTaskFromJson['RunLevel'] = [string]$RunLevel
-						}
-
-						# if TriggerAt defined in JSON...
-						If ($null -ne $JsonEntry.TriggerAt) {
-							# ...and TriggerAt is datetime...
-							If ($JsonEntry.TriggerAt -is [datetime]) {
-								# ...add TriggerAt to hashtable
-								$UpdateScheduledTaskFromJson['TriggerAt'] = [datetime]$JsonEntry.TriggerAt
-							}
-							Else {
-								Write-Warning -Message "could not cast TriggerAt to [datetime] in task: '$($JsonEntry.TaskName)'"
-								Continue JsonData
-							}
-
-							# ...and RandomDelayTime defined in JSON...
-							If ($null -ne $JsonEntry.RandomDelayTime) {
-								# ...and RandomDelayTime is datetime...
-								If ($JsonEntry.RandomDelayTime -is [datetime]) {
-									# ...and RandomDelayTime is greater than (after) TriggerAt
-									If ($JsonEntry.RandomDelayTime -ge $JsonEntry.TriggerAt) {
-										# ...create RandomDelay timespan and add to hashtable
-										$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonEntry.RandomDelayTime - $JsonEntry.TriggerAt)
-									}
-									Else {
-										Write-Warning -Message "RandomDelayTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
-										Continue JsonData
-									}
-								}
-								Else {
-									Write-Warning -Message "could not cast RandomDelayTime to [datetime] in task: '$($JsonEntry.TaskName)'"
-									Continue JsonData
-								}
-							}
-
-							# ...and RepetitionIntervalTime defined in JSON...
-							If ($null -ne $JsonEntry.RepetitionIntervalTime) {
-								# ...and RepetitionIntervalTime is datetime...
-								If ($JsonEntry.RepetitionIntervalTime -is [datetime]) {
-									# ...and RepetitionIntervalTime is greater than (after) TriggerAt
-									If ($JsonEntry.RepetitionIntervalTime -ge $JsonEntry.TriggerAt) {
-										# ...create RepetitionInterval timespan and add to hashtable
-										$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonEntry.RepetitionIntervalTime - $JsonEntry.TriggerAt)
-									}
-									Else {
-										Write-Warning -Message "RepetitionIntervalTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
-										Continue JsonData
-									}
-								}
-								Else {
-									Write-Warning -Message "could not cast RepetitionIntervalTime to [datetime] in task: '$($JsonEntry.TaskName)'"
-									Continue JsonData
-								}
-							}
-
-							# ...and ExecutionTimeLimitTime defined in JSON...
-							If ($null -ne $JsonEntry.ExecutionTimeLimitTime) {
-								# ...and ExecutionTimeLimitTime is datetime...
-								If ($JsonEntry.ExecutionTimeLimitTime -is [datetime]) {
-									# ...and ExecutionTimeLimitTime is greater than (after) TriggerAt
-									If ($JsonEntry.ExecutionTimeLimitTime -ge $JsonEntry.TriggerAt) {
-										# ...create ExecutionTimeLimit timespan and add to hashtable
-										$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonEntry.ExecutionTimeLimitTime - $JsonEntry.TriggerAt)
-									}
-									Else {
-										Write-Warning -Message "ExecutionTimeLimitTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
-										Continue JsonData
-									}
-								}
-								Else {
-									Write-Warning -Message "could not cast ExecutionTimeLimitTime to [datetime] in task: '$($JsonEntry.TaskName)'"
-									Continue JsonData
-								}
-							}
-						}
-
-						# update scheduled task
-						Try {
-							Update-ScheduledTaskFromJson @UpdateScheduledTaskFromJson
-						}
-						Catch {
-							Return $_
-						}
-
-						# if Modules defined in JSON...
-						ForEach ($Path in $JsonEntry.Modules) {
-							# install module
-							Try {
-								Install-ModuleFromPath -Path $Path
-							}
-							Catch {
-								Return $_
-							}
-						}
-
-						# if Certificates defined in JSON...
-						ForEach ($Path in $JsonEntry.Certificates) {
-							# install module
-							Try {
-								Import-CertificateFromPath -Path $Path
-							}
-							Catch {
-								Return $_
-							}
-						}
+			# process entries in configuration file for certificates
+			ForEach ($JsonEntry in $JsonData) {
+				# process each certificate defined in the scheduled task
+				ForEach ($Certificate in $JsonEntry.Certificates) {
+					# if certificate not in certificates list...
+					If ($Certificate -notin $Certificates) {
+						# add certificate to list
+						$Certificates.Add($Certificate)
 					}
 				}
 			}
 
+			# process certificates in all certificates list
+			ForEach ($Certificate in $Certificates) {
+				# import certificate
+				Try {
+					Import-CertificateFromPath -Path $Certificate
+				}
+				Catch {
+					Return $_
+				}
+			}
+
+			# define list for all modules
+			$Modules = [System.Collections.Generic.List[string]]::new()
+
+			# process entries in configuration file for modules
+			ForEach ($JsonEntry in $JsonData) {
+				# process each module defined in the scheduled task
+				ForEach ($Module in $JsonEntry.Modules) {
+					# if module not in modules list...
+					If ($Module -notin $Modules) {
+						# add module to list
+						$Modules.Add($Module)
+					}
+				}
+			}
+
+			# process modules in all modules list
+			ForEach ($Module in $Modules) {
+				# install module
+				Try {
+					Install-ModuleFromPath -Path $Module
+				}
+				Catch {
+					Return $_
+				}
+			}
+
+			# create dictionary for expected tasks
+			$ExpectedTasks = [System.Collections.Generic.Dictionary[string, [System.Collections.Generic.List[string]]]]::new()
+
+			# process configuration file
+			:JsonEntry ForEach ($JsonEntry in $JsonData) {
+				# validate values present in JSON file
+				Switch ($true) {
+					([string]::IsNullOrEmpty($JsonEntry.TaskName)) {
+						Write-Warning -Message "required entry (TaskName) not found in configuration file: $Json"
+						Continue NextJsonEntry
+					}
+					([string]::IsNullOrEmpty($JsonEntry.TaskPath)) {
+						Write-Warning -Message "required value (TaskPath) not found in configuration file: $Json"
+						Continue NextJsonEntry
+					}
+					([string]::IsNullOrEmpty($JsonEntry.Execute)) {
+						Write-Warning -Message "required value (Execute) not found in configuration file: $Json"
+						Continue NextJsonEntry
+					}
+					([string]::IsNullOrEmpty($JsonEntry.Argument)) {
+						Write-Warning -Message "required value (Argument) not found in configuration file: $Json"
+						Continue NextJsonEntry
+					}
+					([string]::IsNullOrEmpty($JsonEntry.UserId)) {
+						Write-Warning -Message "required value (UserId) not found in configuration file: $Json"
+						Continue NextJsonEntry
+					}
+					([string]::IsNullOrEmpty($JsonEntry.LogonType)) {
+						Write-Warning -Message "required value (LogonType) not found in configuration file: $Json"
+						Continue NextJsonEntry
+					}
+					($null -eq $JsonEntry.TriggerAt) {
+						Write-Warning -Message "required value (TriggerAt) not found in configuration file: $Json"
+						Continue NextJsonEntry
+					}
+					($null -ne $JsonEntry.TriggerAt -and $JsonEntry.TriggerAt -isnot [datetime]) {
+						Write-Warning -Message 'required value (TriggerAt) found in configuration file but is not a [datetime] object'
+						Continue NextJsonEntry
+					}
+					($null -ne $JsonEntry.RandomDelayTime -and $JsonEntry.RandomDelayTime -isnot [datetime]) {
+						Write-Warning -Message 'optional value (RandomDelayTime) found in configuration file but is not a [datetime] object'
+						Continue NextJsonEntry
+					}
+					($null -ne $JsonEntry.RepetitionIntervalTime -and $JsonEntry.RepetitionIntervalTime -isnot [datetime]) {
+						Write-Warning -Message 'optional value (RepetitionIntervalTime) found in configuration file but is not a [datetime] object'
+						Continue NextJsonEntry
+					}
+					($null -ne $JsonEntry.ExecutionTimeLimitTime -and $JsonEntry.ExecutionTimeLimitTime -isnot [datetime]) {
+						Write-Warning -Message 'optional value (ExecutionTimeLimitTime) found in configuration file but is not a [datetime] object'
+						Continue NextJsonEntry
+					}
+				}
+
+				# validate task path
+				Try {
+					$TaskPathIsValid = Test-ScheduledTaskPath -TaskPath $JsonEntry.TaskPath
+				}
+				Catch {
+					Write-Warning -Message "could not validate TaskPath value found in configuration file: '$($JsonEntry.TaskPath)'"
+					Continue NextJsonEntry
+				}
+
+				# if task name not 'Update-ScheduledTasks' and task path is not valid...
+				If ($JsonEntry.TaskName -ne 'Update-ScheduledTasks' -and -not $TaskPathIsValid) {
+					Write-Warning -Message "the TaskPath value found in configuration file is not permitted: '$($JsonEntry.TaskPath)'"
+					Continue NextJsonEntry
+				}
+
+				# check expected tasks hashtable for task path
+				If (!$ExpectedTasks.ContainsKey($JsonEntry.TaskPath)) {
+					$ExpectedTasks.Add($JsonEntry.TaskPath, [System.Collections.Generic.List[string]]::new())
+				}
+
+				# update expected tasks hashtable with task name
+				Try {
+					$ExpectedTasks[$JsonEntry.TaskPath].Add($JsonEntry.TaskName)
+				}
+				Catch {
+					Write-Warning -Message "could not add task to dictionary: '$($JsonEntry.TaskName)'"
+					Continue NextJsonEntry
+				}
+
+				# define parameters for Update-ScheduledTaskFromJson
+				$UpdateScheduledTaskFromJson = @{
+					TaskName  = [string]$JsonEntry.TaskName
+					TaskPath  = [string]$JsonEntry.TaskPath
+					Execute   = [string]$JsonEntry.Execute
+					Argument  = [string]$JsonEntry.Argument
+					UserId    = [string]$JsonEntry.UserId
+					LogonType = [string]$JsonEntry.LogonType
+					TriggerAt = [datetime]$JsonEntry.TriggerAt
+				}
+
+				# if RunLevel defined in JSON...
+				If ($null -ne $JsonEntry.RunLevel) {
+					# add RunLevel to parameters
+					$UpdateScheduledTaskFromJson['RunLevel'] = [string]$RunLevel
+				}
+
+				# if RandomDelayTime defined in JSON...
+				If ($null -ne $JsonEntry.RandomDelayTime) {
+					# ...and RandomDelayTime is less than (before) TriggerAt...
+					If ($JsonEntry.RandomDelayTime -lt $JsonEntry.TriggerAt) {
+						Write-Warning -Message "RandomDelayTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
+						Continue NextJsonEntry
+					}
+					# create RandomDelay timespan and add to parameters
+					$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]($JsonEntry.RandomDelayTime - $JsonEntry.TriggerAt)
+				}
+
+				# if RepetitionIntervalTime defined in JSON...
+				If ($null -ne $JsonEntry.RepetitionIntervalTime) {
+					# ...and RepetitionIntervalTime is less than (before) TriggerAt...
+					If ($JsonEntry.RepetitionIntervalTime -lt $JsonEntry.TriggerAt) {
+						Write-Warning -Message "RepetitionIntervalTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
+						Continue NextJsonEntry
+					}
+					# create RepetitionInterval timespan and add to parameters
+					$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]($JsonEntry.RepetitionIntervalTime - $JsonEntry.TriggerAt)
+				}
+
+				# if ExecutionTimeLimitTime defined in JSON...
+				If ($null -ne $JsonEntry.ExecutionTimeLimitTime) {
+					# ...and ExecutionTimeLimitTime is less than (before) TriggerAt...
+					If ($JsonEntry.ExecutionTimeLimitTime -lt $JsonEntry.TriggerAt) {
+						Write-Warning -Message "ExecutionTimeLimitTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
+						Continue NextJsonEntry
+					}
+					# create ExecutionTimeLimit timespan and add to parameters
+					$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonEntry.ExecutionTimeLimitTime - $JsonEntry.TriggerAt)
+				}
+
+				# update scheduled task
+				Try {
+					Update-ScheduledTaskFromJson @UpdateScheduledTaskFromJson
+				}
+				Catch {
+					Return $_
+				}
+			}
+
 			# process cleanup hashtable
-			:TaskPath ForEach ($TaskPath in $ExpectedTasks.Keys) {
-				# check if any bad path values have been snuck in
-				If (-not (Test-ScheduledTaskPath -TaskPath $TaskPath)) {
-					Write-Warning -Message "the path defined is not permitted: '$TaskPath' for '$($ExpectedTasks[$TaskPath])'"
-					Continue TaskPath
+			:NextTaskPath ForEach ($TaskPath in $ExpectedTasks.Keys) {
+				# if task path is root...
+				If ($TaskPath -eq '\') {
+					# quietly continue to next task path
+					Continue NextTaskPath
+				}
+
+				# validate task path
+				Try {
+					$TaskPathIsValid = Test-ScheduledTaskPath -TaskPath $TaskPath
+				}
+				Catch {
+					Write-Warning -Message "could not validate TaskPath value found in expected tasks list: $TaskPath"
+					Continue NextTaskPath
+				}
+
+				# if task path is not valid...
+				If (!$TaskPathIsValid) {
+					Write-Warning -Message "the TaskPath value found in expected tasks list is not permitted: '$($JsonEntry.TaskPath)'"
+					Continue NextTaskPath
 				}
 
 				# get all tasks in TaskPath
@@ -1373,8 +1398,11 @@ Process {
 				# process each task in key
 				ForEach ($TaskName in $TasksInPath) {
 					If ($TaskName -notin $ExpectedTasks[$TaskPath]) {
+						# report errant scheduled task
+						Write-Warning -Message "the path '$TaskPath' contains a scheduled task not defined in the JSON file: '$TaskName'"
+
+						# remove errant scheduled task
 						Try {
-							Write-Verbose -Verbose -Message "the task '$TaskName' should not exist in path '$TaskPath'"
 							# Unregister-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath
 						}
 						Catch {
@@ -1385,6 +1413,66 @@ Process {
 				}
 			}
 		}
+	}
+
+	# if Install set...
+	If ($Install) {
+		# define parameters for Update-ScheduledTaskFromJson
+		$UpdateScheduledTaskFromJson = @{
+			TaskName           = $TaskName
+			TaskPath           = $TaskPath
+			Execute            = $Execute
+			Argument           = $Argument
+			UserId             = $UserId
+			LogonType          = $LogonType
+			RunLevel           = $RunLevel
+			TriggerAt          = $TriggerAt
+			RandomDelay        = $RandomDelay
+			ExecutionTimeLimit = $ExecutionTimeLimit
+			RepetitionInterval = $RepetitionInterval
+		}
+
+		# install scheduled task
+		Try {
+			Update-ScheduledTaskFromJson @UpdateScheduledTaskFromJson
+		}
+		Catch {
+			Return $_
+		}
+	}
+
+	# if Uninstall set...
+	If ($Uninstall) {
+		# define parameters for scheduled task
+		$UnregisterScheduledTask = @{
+			TaskName = $TaskName
+			TaskPath = $TaskPath
+		}
+
+		# retrieve scheduled task
+		Try {
+			$ScheduledTask = Get-ScheduledTask @UnregisterScheduledTask -ErrorAction 'SilentlyContinue'
+		}
+		Catch {
+			Return $_
+		}
+
+		# if scheduled task not found...
+		If (!$ScheduledTask) {
+			Write-Warning -Message "Could not locate existing scheduled task '$TaskName' at path '$TaskPath'"
+			Return
+		}
+
+		# uninstall scheduled task
+		Try {
+			Unregister-ScheduledTask @UnregisterScheduledTask -Confirm:$false
+		}
+		Catch {
+			Return $_
+		}
+
+		# report
+		Write-Verbose -Verbose -Message "Unregistered existing scheduled task '$TaskName' at path '$TaskPath'"
 	}
 }
 
