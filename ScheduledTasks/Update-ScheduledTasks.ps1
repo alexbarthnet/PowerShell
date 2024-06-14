@@ -1171,22 +1171,22 @@ Process {
 			}
 
 			# define list for all certificates
-			$Certificates = [System.Collections.Generic.List[string]]::new()
+			$CertificateList = [System.Collections.Generic.List[string]]::new()
 
 			# process entries in configuration file for certificates
 			ForEach ($JsonEntry in $JsonData) {
 				# process each certificate defined in the scheduled task
 				ForEach ($Certificate in $JsonEntry.Certificates) {
 					# if certificate not in certificates list...
-					If ($Certificate -notin $Certificates) {
+					If ($Certificate -notin $CertificateList) {
 						# add certificate to list
-						$Certificates.Add($Certificate)
+						$CertificateList.Add($Certificate)
 					}
 				}
 			}
 
 			# process certificates in all certificates list
-			ForEach ($Certificate in $Certificates) {
+			ForEach ($Certificate in $CertificateList) {
 				# import certificate
 				Try {
 					Import-CertificateFromPath -Path $Certificate
@@ -1197,22 +1197,22 @@ Process {
 			}
 
 			# define list for all modules
-			$Modules = [System.Collections.Generic.List[string]]::new()
+			$ModuleList = [System.Collections.Generic.List[string]]::new()
 
 			# process entries in configuration file for modules
 			ForEach ($JsonEntry in $JsonData) {
 				# process each module defined in the scheduled task
 				ForEach ($Module in $JsonEntry.Modules) {
 					# if module not in modules list...
-					If ($Module -notin $Modules) {
+					If ($Module -notin $ModuleList) {
 						# add module to list
-						$Modules.Add($Module)
+						$ModuleList.Add($Module)
 					}
 				}
 			}
 
 			# process modules in all modules list
-			ForEach ($Module in $Modules) {
+			ForEach ($Module in $ModuleList) {
 				# install module
 				Try {
 					Install-ModuleFromPath -Path $Module
