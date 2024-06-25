@@ -19,24 +19,24 @@ Function ConvertTo-Collection {
 	ForEach ($Property in $InputObject.PSObject.Properties) {
 		# if property contains multiple values...
 		If ($Property.Value.Count -gt 1) {
-			# define arraylist for property values
-			$PropertyValues = [System.Collections.ArrayList]::new()
+			# define list for property values
+			$PropertyValues = [System.Collections.Generic.List[object]]::new($Property.Value.Count)
 			# process each property value
 			ForEach ($PropertyValue in $Property.Value) {
 				# if property value is a pscustomobject...
 				If ($PropertyValue -is [System.Management.Automation.PSCustomObject]) {
 					# convert property value into collection
 					$PropertyValueCollection = ConvertTo-Collection -InputObject $PropertyValue -Ordered:$Ordered
-					# add property value collection to arraylist
+					# add property value collection to list
 					$PropertyValues.Add($PropertyValueCollection)
 				}
 				# if property value is not a pscustomobject...
 				Else {
-					# add property value to arraylist
+					# add property value to list
 					$PropertyValues.Add($PropertyValue)
 				}
 			}
-			# convert arraylist to array then add array to collection
+			# convert list to array then add array to collection
 			$Collection[$Property.Name] = $PropertyValues.ToArray()
 		}
 		Else {
