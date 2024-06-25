@@ -600,7 +600,7 @@ Process {
 			$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 		}
 		Catch {
-			Write-Host "`nERROR: could not read configuration file: '$Json'"
+			Write-Warning -Message "could not read configuration file: '$Json'"
 			Return $_
 		}
 	}
@@ -615,7 +615,7 @@ Process {
 		# if item not found in JSON data and not Adding...
 		If ($null -eq $JsonData.$JsonKey -and -not $Add) {
 			# ...report and return
-			Write-Host "`nERROR: could not find entry '$JsonKey' in configuration file: '$Json'"
+			Write-Warning -Message "could not find entry '$JsonKey' in configuration file: '$Json'"
 			Return
 		}
 	}

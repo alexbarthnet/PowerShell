@@ -1633,7 +1633,7 @@ Process {
 		$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 	}
 	Catch {
-		Write-Host "`nERROR: could not read configuration file: '$Json'"
+		Write-Warning -Message "could not read configuration file: '$Json'"
 		Throw $_
 	}
 

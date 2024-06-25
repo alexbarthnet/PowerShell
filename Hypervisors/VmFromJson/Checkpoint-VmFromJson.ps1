@@ -1,7 +1,7 @@
 Param(
 	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Json,
-	[Parameter(ValueFromPipeline = $True)]
+	[Parameter(Mandatory = $False, ValueFromPipeline = $True)]
 	[string[]]$VMName,
 	[string]$ComputerName,
 	[string]$SnapshotName,
@@ -360,7 +360,7 @@ Process {
 		$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 	}
 	Catch {
-		Write-Host "`nERROR: could not read configuration file: '$Json'"
+		Write-Warning -Message "could not read configuration file: '$Json'"
 		Throw $_
 	}
 
