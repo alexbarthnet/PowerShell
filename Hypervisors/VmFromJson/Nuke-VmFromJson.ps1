@@ -708,7 +708,7 @@ Begin {
 		$InvokeCommand['ArgumentList']['BIOSGUID'] = $BIOSGUID
 
 		# connect to SCCM remotely
-		Write-Host ("$Hostname,$ComputerName,$Name - connecting to SCCM: " + $vm_deployment_server)
+		Write-Host ("$Hostname,$ComputerName,$Name - connecting to SCCM: $DeploymentServer")
 		Invoke-Command @InvokeCommand -ScriptBlock {
 			Param($ArgumentList)
 
@@ -1821,7 +1821,7 @@ Process {
 		If ($null -ne $VM) {
 			# get parent snapshots
 			Try {
-				$VMSnapshots = Get-VMSnapshot -VM $VM | Where-Object { !$ParentalCheckpointName }
+				$VMSnapshots = Get-VMSnapshot -VM $VM
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM snapshots")
