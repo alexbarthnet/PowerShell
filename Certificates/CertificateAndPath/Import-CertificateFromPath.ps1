@@ -68,7 +68,7 @@ Param(
 	[string]$Subject,
 	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Path,
-	[Parameter(Position = 3, Mandatory = $True, ParameterSetName = 'Add')]
+	[Parameter(Position = 3, ParameterSetName = 'Add')]
 	[string[]]$Principals,
 	# path to JSON configuration file
 	[Parameter(Mandatory = $True)]
@@ -338,7 +338,7 @@ Begin {
 			[switch]$Validate,
 			[Parameter(Position = 2)]
 			[string]$ValidationExtension = '.cer',
-			[Parameter(Position = 3)]
+			[Parameter(Position = 3)][AllowEmptyCollection()]
 			[string[]]$Principals
 		)
 
@@ -388,8 +388,11 @@ Begin {
 		# report certificate information, verify permissions, then import chain
 		If ($cert_found.Certificate -is [System.Security.Cryptography.X509Certificates.X509Certificate2]) {
 			$cert_found.Certificate | Get-CertificateDetails
-			$cert_found.Certificate | Set-CertificatePermissions -Principals $Principals
 			$cert_found.Certificate | Import-ChainCertificates -Path $cert_pfx_file.DirectoryName
+			If ($Principals) {
+				$cert_found.Certificate | Set-CertificatePermissions -Principals $Principals
+			}
+
 			If ($Replace) {
 				# get certs matching subject and sort by descending issue date
 				$cert_with_same_subject = @()
@@ -417,7 +420,7 @@ Begin {
 		)
 
 		# remove common name identifier if present
-		If ($Subject.StartsWith('CN=',[System.StringComparison]::InvariantCultureIgnoreCase)) {
+		If ($Subject.StartsWith('CN=', [System.StringComparison]::InvariantCultureIgnoreCase)) {
 			$Subject = $Subject -replace '^CN='
 		}
 
@@ -426,7 +429,7 @@ Begin {
 
 		# retrieve PKCS12 files matching $Subject
 		If ($Subject -ne '_default') {
-			$PFXFiles = $PFXFiles | Where-Object { $_.BaseName.StartsWith($Subject,[System.StringComparison]::InvariantCultureIgnoreCase) } | Select-Object -Last 1
+			$PFXFiles = $PFXFiles | Where-Object { $_.BaseName.StartsWith($Subject, [System.StringComparison]::InvariantCultureIgnoreCase) } | Select-Object -Last 1
 		}
 
 		# if no PFX files found...
@@ -684,11 +687,15 @@ Process {
 		# add entry to configuration file
 		$Add {
 			Try {
-				# create hashtable for custom object
+				# define required parameters for custom object
 				$JsonParameters = [ordered]@{
 					Subject    = [string]$Subject
-					Storage    = [string]$Storage
-					Principals = [string[]]$Principals
+					Path       = [string]$Path
+				}
+
+				# define optional parameters for custom object
+				If ($PSBoundParameters.ContainsKey('Principals')) {
+					$JsonParameters['Principals'] = [string[]]$Principals
 				}
 
 				# add current time as FileDateTimeUniversal
@@ -734,20 +741,21 @@ Process {
 					([string]::IsNullOrEmpty($JsonDatum.Path)) {
 						Write-Host "ERROR: required entry (Path) not found in configuration file: $Json"; Continue :JsonDatum
 					}
-					([string]::IsNullOrEmpty($JsonDatum.Principals)) {
-						Write-Host "ERROR: required entry (Principals) not found in configuration file: $Json"; Continue :JsonDatum
-					}
 					Default {
 						# declare JSON entry contents
 						Write-Host " - Subject    : '$($JsonDatum.Subject)'"
 						Write-Host " - Path       : '$($JsonDatum.Path)'"
-						Write-Host " - Principals : '$($JsonDatum.Principals)'"
 
 						# define required parameters for Import-PfxCertificateFromFolder
 						$ImportPfxCertificateFromFolder = @{
 							Subject    = [string]$JsonDatum.Subject
 							Path       = [string]$JsonDatum.Path
-							Principals = [string[]]$JsonDatum.Principals
+						}
+
+						# define optional parameters for Import-PfxCertificateFromFolder
+						If ($null -ne $JsonDatum.Principals) {
+							Write-Host " - Principals : '$($JsonDatum.Principals)'"
+							$ImportPfxCertificateFromFolder['Principals'] = [string[]]$JsonDatum.Principals
 						}
 
 						# import PFX certificate from folder
