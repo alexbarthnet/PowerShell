@@ -74,7 +74,7 @@ Function Format-ReversedDistinguishedName {
 	.DESCRIPTION
 	Reverses the order of the elements of a distingiushed name.
 
-	.PARAMETER DistingiushedName
+	.PARAMETER DistinguishedName
 	Specifies the distinguished name to be reversed.
 
 	.PARAMETER Separator
@@ -744,7 +744,6 @@ Function Get-CertificateFromUri {
 
 		# get certificate sent by server
 		Try {
-			
 			$Certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($SSLStream.RemoteCertificate)
 		}
 		Catch {
