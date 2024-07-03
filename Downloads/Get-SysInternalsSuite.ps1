@@ -4,9 +4,11 @@ Param (
 	[string]$Path = (Get-Location),
 	[Parameter(Position = 1)]
 	[switch]$Extract,
-	[Parameter(Position = 2)]
-	[switch]$SkipDownload,
+	[Parameter(Position = 2)][ValidateScript({ Test-Path -Path $_ })]
+	[string]$PathForExtractedFiles,
 	[Parameter(Position = 3)]
+	[switch]$SkipDownload,
+	[Parameter(Position = 4)]
 	[switch]$Force,
 	[Parameter(DontShow)]
 	[string]$Uri = 'https://download.sysinternals.com/files/SysinternalsSuite.zip',
@@ -44,30 +46,39 @@ If ($Force -or -not $SkipDownload) {
 	}
 }
 
-# extract files to destination
+# expand archive to destination
 If ((Test-Path -Path $FilePath) -and $Extract) {
-	# get basename of file
-	$ChildPath = (Get-Item -Path $FilePath).BaseName
+	# if path for extracted files provided...
+	If ($PSBoundParameters.ContainsKey('PathForExtractedFiles')) {
+		# define destination path
+		$DestinationPath = $PathForExtractedFiles
+	}
+	Else {
+		# get basename of file
+		$FileName = (Get-Item -Path $FilePath).BaseName
 
-	# define folder using path and basename of file
-	$Folder = Join-Path -Path $Path -ChildPath $ChildPath
+		# create destination path from path and basename of file
+		$DestinationPath = Join-Path -Path $Path -ChildPath $FileName
 
-	# create folder
-	If (-not (Test-Path -Path $Folder)) {
-		Try {
-			$null = New-Item -ItemType 'Directory' -Path $Folder -Force
-		}
-		Catch {
-			Write-Warning -Message "could not create folder: $Folder"
-			Return $_
+		# if destination path not found...
+		If (!(Test-Path -Path $DestinationPath)) {
+			# create destination path
+			Try {
+				$null = New-Item -ItemType 'Directory' -Path $Path -Name $FileName -Force
+			}
+			Catch {
+				Write-Warning -Message "could not create folder: $DestinationPath"
+				Return $_
+			}
 		}
 	}
+
 	# extract files to folder
 	Try {
-		Expand-Archive -Path $FilePath -DestinationPath $Folder -Force
+		Expand-Archive -Path $FilePath -DestinationPath $DestinationPath -Force
 	}
 	Catch {
-		Write-Warning -Message "could not extract files to the folder: $Folder"
+		Write-Warning -Message "could not extract files to folder: $DestinationPath"
 		Return $_
 	}
 }
