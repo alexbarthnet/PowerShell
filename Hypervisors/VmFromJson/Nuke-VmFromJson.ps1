@@ -712,6 +712,9 @@ Begin {
 		Invoke-Command @InvokeCommand -ScriptBlock {
 			Param($ArgumentList)
 
+			# reset device object
+			$Device = $null
+
 			# create objects for reporting
 			$Hostname = $ArgumentList['Hostname']
 			$ComputerName = $ArgumentList['ComputerName']
@@ -779,13 +782,19 @@ Begin {
 					Write-Host ("$Hostname,$ComputerName,$Name - ...remove device from SCCM before continuing")
 					Return
 				}
+
+				# if device not found by name...
+				If ($null -eq $Device) {
+					# report and continue
+					Write-Host ("$Hostname,$ComputerName,$Name - ...device not found by name in 'All Systems' collection")
+				}
 			}
 
-			# retrieve device by BIOSGUID
+			# retrieve device by SMBIOSGUID
 			If ($null -eq $Device) {
-				# retrieve device by BIOSGUID
+				# retrieve device by SMBIOSGUID
 				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - retrieving devices from 'All Systems' collection")
+					Write-Host ("$Hostname,$ComputerName,$Name - retrieving device by SMBIOSGUID from 'All Systems' collection")
 					$Device = Get-CMDevice -Collection $AllSystems -Fast | Where-Object { $_.SMBIOSGUID -eq $ArgumentList['BIOSGUID'] }
 				}
 				Catch {
@@ -793,7 +802,7 @@ Begin {
 					Throw $_
 				}
 
-				# if multiple devices found by BIOSGUID...
+				# if multiple devices found by SMBIOSGUID...
 				If ($Device.Count -gt 1) {
 					# ...warn and return
 					Write-Host ("$Hostname,$ComputerName,$Name - WARNING: multiple devices found with the same SMBIOSGUID")
@@ -801,19 +810,24 @@ Begin {
 					Return
 				}
 
-				# if device found by BIOSGUID and with unexpected name...
+				# if device found by SMBIOSGUID and with unexpected name...
 				If ($null -ne $Device -and $Device.Name -ne $Name) {
 					# ...warn and return
 					Write-Host ("$Hostname,$ComputerName,$Name - WARNING: device found by SMBIOSGUID with unexpected name: '$($Device.Name)'")
 					Write-Host ("$Hostname,$ComputerName,$Name - ...remove device from SCCM before continuing")
 					Return
 				}
+
+				# if device not found by SMBIOSGUID...
+				If ($null -eq $Device) {
+					# report and continue
+					Write-Host ("$Hostname,$ComputerName,$Name - ...device not found by SMBIOSGUID in 'All Systems' collection")
+				}
 			}
 
 			# if Device not found...
 			If ($null -eq $Device) {
-				# report and return
-				Write-Host ("$Hostname,$ComputerName,$Name - ...existing device not found by Name or BIOSGUID")
+				# return
 				Return
 			}
 			# if Device found...
