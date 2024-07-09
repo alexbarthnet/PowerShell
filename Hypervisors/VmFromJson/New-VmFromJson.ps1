@@ -1078,9 +1078,9 @@ Begin {
 				}
 			}
 
-			# retrieve device by BIOSGUID
+			# retrieve device by SMBIOSGUID
 			If ($null -eq $Device) {
-				# retrieve device by BIOSGUID
+				# retrieve device by SMBIOSGUID
 				Try {
 					Write-Host ("$Hostname,$ComputerName,$Name - retrieving device by SMBIOSGUID from 'All Systems' collection")
 					$Device = Get-CMDevice -Collection $AllSystems -Fast | Where-Object { $_.SMBIOSGUID -eq $ArgumentList['BIOSGUID'] }
@@ -1090,7 +1090,7 @@ Begin {
 					Throw $_
 				}
 
-				# if multiple devices found by BIOSGUID...
+				# if multiple devices found by SMBIOSGUID...
 				If ($Device.Count -gt 1) {
 					# ...warn and return
 					Write-Host ("$Hostname,$ComputerName,$Name - WARNING: multiple devices found with the same SMBIOSGUID")
@@ -1121,7 +1121,7 @@ Begin {
 				}
 			}
 
-			# if device not found by name or BIOSGUID...
+			# if device not found by name or SMBIOSGUID...
 			If ($null -eq $Device) {
 				# define parameters for Import-CMComputerInformation
 				$ImportCMComputerInformation = @{
