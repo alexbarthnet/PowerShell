@@ -595,9 +595,9 @@ Process {
 		}
 	}
 	Else {
-		# import JSON data
+		# import JSON data AS-IS; do not cast to array
 		Try {
-			$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
+			$JsonData = Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json
 		}
 		Catch {
 			Write-Warning -Message "could not read configuration file: '$Json'"
