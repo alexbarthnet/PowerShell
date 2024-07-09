@@ -992,6 +992,9 @@ Begin {
 				}
 			}
 
+			# reset device object
+			$Device = $null
+
 			# create objects for reporting
 			$Hostname = $ArgumentList['Hostname']
 			$ComputerName = $ArgumentList['ComputerName']
@@ -1067,13 +1070,19 @@ Begin {
 					Write-Host ("$Hostname,$ComputerName,$Name - ...remove device from SCCM before continuing")
 					Return
 				}
+
+				# if device not found by name...
+				If ($null -eq $Device) {
+					# report and continue
+					Write-Host ("$Hostname,$ComputerName,$Name - ...device not found by name in 'All Systems' collection")
+				}
 			}
 
 			# retrieve device by BIOSGUID
 			If ($null -eq $Device) {
 				# retrieve device by BIOSGUID
 				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - retrieving devices from 'All Systems' collection")
+					Write-Host ("$Hostname,$ComputerName,$Name - retrieving device by SMBIOSGUID from 'All Systems' collection")
 					$Device = Get-CMDevice -Collection $AllSystems -Fast | Where-Object { $_.SMBIOSGUID -eq $ArgumentList['BIOSGUID'] }
 				}
 				Catch {
@@ -1104,6 +1113,12 @@ Begin {
 					Write-Host ("$Hostname,$ComputerName,$Name - ...remove device from SCCM before continuing")
 					Return
 				}
+
+				# if device not found by SMBIOSGUID...
+				If ($null -eq $Device) {
+					# report and continue
+					Write-Host ("$Hostname,$ComputerName,$Name - ...device not found by SMBIOSGUID in 'All Systems' collection")
+				}
 			}
 
 			# if device not found by name or BIOSGUID...
@@ -1118,7 +1133,7 @@ Begin {
 
 				# import the device into SCCM
 				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - ...adding device to SCCM")
+					Write-Host ("$Hostname,$ComputerName,$Name - adding device to SCCM...")
 					Import-CMComputerInformation @ImportCMComputerInformation
 				}
 				Catch {
@@ -3690,7 +3705,7 @@ Process {
 					Cluster        = $ClusterName
 					Name           = $Name
 					ChooseBestNode = $true
-					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+					ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
 				}
 
 				# stop cluster group
