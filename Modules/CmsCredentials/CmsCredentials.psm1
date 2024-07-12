@@ -374,7 +374,7 @@ Function New-CmsCredentialCertificate {
 			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
 		}
 
-		# show credentials on remote computer
+		# create certificate for credential on remote computer
 		ForEach ($RemoteComputerName in $ComputerName) {
 			# if remote computer name is local computer name...
 			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
@@ -408,7 +408,7 @@ Function New-CmsCredentialCertificate {
 
 	# define certificate values
 	$SelfSignedCertificate = @{
-		Subject           = "CN=$($Guid.Guid), OU=$Identity, O=CmsCredentials"
+		Subject           = "CN=$Guid, OU=$Identity, O=CmsCredentials"
 		Type              = 'DocumentEncryptionCert'
 		HashAlgorithm     = 'SHA512'
 		KeyLength         = 4096
@@ -453,16 +453,25 @@ Function Get-CmsCredential {
 	Retrieves a credential protected by CMS.
 
 	.DESCRIPTION
-	Retrieves a credential encrypted by a CMS certificate. The calling user must have read access to the private key of the certificate that protects the credential.
+	Retrieves a credential encrypted by a CMS certificate. The calling user must have read access to the private key that protects the credential.
 
 	.PARAMETER FilePath
 	Specifies the path to a CMS credential file. Cannot be combined with the Identity parameter.
+
+	.PARAMETER To
+	Specifies the CMS message recipient in one of the following formats:
+		* An actual certificate (as retrieved from the certificate provider).
+		* Path to the a file containing the certificate.
+		* Path to a directory containing the certificate.
+		* Thumbprint of the certificate (used to look in the certificate store).
+		* Subject name of the certificate (used to look in the certificate store).
+	Requires the FilePath parameter.
 
 	.PARAMETER Identity
 	Specifies the identity of the CMS credential. Cannot be combined with the FilePath parameter.
 
 	.PARAMETER Path
-	Specifies the path to a folder containing CMS credential files. The default value is the 'C:\ProgramData\CmsCredentials' folder.
+	Specifies the path to a folder containing CMS credential files. The default value is the 'C:\ProgramData\CmsCredentials' folder. Requires the Identity parameter.
 
 	.PARAMETER AsPlainText
 	Specifies the credential should be returned as a plain-text password. The credential will be returned a PSCustomObject with Username and Password properties.
@@ -488,6 +497,8 @@ Function Get-CmsCredential {
 	Param(
 		[Parameter(ParameterSetName = 'FilePath', Position = 0, Mandatory)]
 		[string]$FilePath,
+		[Parameter(ParameterSetName = 'FilePath', Position = 1)][ValidateScript({ $_ -is [System.Security.Cryptography.X509Certificates.X509Certificate2] -or $_ -is [System.String] })]
+		[object]$To,
 		[Parameter(ParameterSetName = 'Identity', Position = 0, Mandatory)]
 		[string]$Identity,
 		[Parameter(ParameterSetName = 'Identity', Position = 1)]
@@ -532,7 +543,7 @@ Function Get-CmsCredential {
 			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
 		}
 
-		# show credentials on remote computer
+		# get credential on remote computer
 		ForEach ($RemoteComputerName in $ComputerName) {
 			# if remote computer name is local computer name...
 			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
@@ -583,18 +594,28 @@ Function Get-CmsCredential {
 			Write-Warning -Message "could not search for files for '$Identity' identity in path: $Path"
 			Throw $_
 		}
+		# if file not found...
+		If ([string]::IsNullOrEmpty($local:FilePath)) {
+			# declare and return
+			Write-Warning -Message "could not locate credential file for '$Identity' identity in path: $Path"
+			Return $null
+		}
 	}
 
-	# if file not found...
-	If ([string]::IsNullOrEmpty($local:FilePath)) {
-		# declare and return
-		Write-Warning -Message "could not locate credential file for '$Identity' identity in path: $Path"
-		Return $null
+	# define required parameters for Unprotect-CmsMessage
+	$UnprotectCmsMessage = @{
+		Path        = $FilePath
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+	}
+
+	# define optional parameters for Unprotect-CmsMessage
+	If ($PSBoundParameters.ContainsKey('To')) {
+		$UnprotectCmsMessage['To'] = $local:To
 	}
 
 	# decrypt content of credential file
 	Try {
-		$InputObject = Unprotect-CmsMessage -Path $FilePath -ErrorAction 'Stop'
+		$InputObject = Unprotect-CmsMessage @UnprotectCmsMessage
 	}
 	Catch {
 		Write-Warning -Message "could not decrypt content in file: '$FilePath'"
@@ -628,6 +649,16 @@ Function Get-CmsCredential {
 		Return $PSCustomObject
 	}
 
+	# if domain not included in credential...
+	If ([string]::IsNullOrEmpty($PSCustomObject.Domain)) {
+		# retrieve username from object as-is
+		$Username = $PSCustomObject.Username
+	}
+	Else {
+		# combine domain and username from object
+		$Username = $PSCustomObject.Domain, $PSCustomObject.Username -join '\'
+	}
+
 	# convert password property into secure string
 	Try {
 		$SecureString = ConvertTo-SecureString -String $PSCustomObject.Password -AsPlainText -Force -ErrorAction 'Stop'
@@ -639,7 +670,7 @@ Function Get-CmsCredential {
 
 	# create PSCredential object
 	Try {
-		$PSCredential = [System.Management.Automation.PSCredential]::new($PSCustomObject.Username, $SecureString)
+		$PSCredential = [System.Management.Automation.PSCredential]::new($Username, $SecureString)
 	}
 	Catch {
 		Write-Warning -Message "could not create PSCredential object on '$Hostname' for identity: $Identity"
@@ -656,28 +687,34 @@ Function Protect-CmsCredential {
 	Protects a credential with CMS.
 
 	.DESCRIPTION
-	Protects a credential by encrypting it with a certificate using CMS. The calling user must have read access to the public key of the certificate that will protect the credential.
+	Protects a credential by encrypting it with a certificate using CMS. The calling user must have read access to the public key that will protect the credential.
 
 	.PARAMETER Credential
 	Specifies the PSCredential object to protect with CMS.
 
-	.PARAMETER Thumbprint
-	Specifies the thumbprint for an existing CMS certificate. Cannot be combined with the Identity parameter.
+	.PARAMETER To
+	Specifies one or more CMS message recipients, identified in any of the following formats: 
+		* An actual certificate (as retrieved from the certificate provider).
+		* Path to the file containing the certificate.
+		* Path to a directory containing the certificate.
+		* Thumbprint of the certificate (used to look in the certificate store).
+		* Subject name of the certificate (used to look in the certificate store).
+	Cannot be combined with the Identity parameter.
 
 	.PARAMETER Identity
-	Specifies the identity for the CMS credential. Cannot be combined with the Thumbprint parameter. A new CMS certificate will be created if an existing CMS certificate for the provided identify is not found.
+	Specifies the identity for the CMS credential. Cannot be combined with the To parameter. A new CMS certificate will be created if an existing CMS certificate for the provided identify is not found.
+
+	.PARAMETER OutFile
+	Specifies the path for the CMS credential file.
+
+	.PARAMETER Path
+	Specifies the path for the folder where the CMS credential file will be created when the OutFile parameter is not provided. The default value is 'C:\ProgramData\CmsCredentials'. The folder is created when it does not exist and the OutFile parameter is not provided.
 
 	.PARAMETER Reset
 	Switch to create a new CMS certificate and credential file for the provided identity. Requires the Identity parameter.
 
 	.PARAMETER SkipCleanup
 	Switch to skip removal of old CMS certificates and credential files for the provided identity. Requires the Identity parameter.
-
-	.PARAMETER Path
-	Specifies the path to the folder where CMS credential files are be stored. The default value is 'C:\ProgramData\CmsCredentials' and the folder will be created if it does not exist.
-
-	.PARAMETER OutFile
-	Specifies the path for the CMS credential file. This will override both the Path parameter and the file name derived from the Identity or Thumbprint parameters.
 
 	.PARAMETER ComputerName
 	Specifies the name of one or more remote computers.
@@ -692,20 +729,21 @@ Function Protect-CmsCredential {
 
 	[CmdletBinding(DefaultParameterSetName = 'Identity')]
 	Param (
-		[Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+		[Parameter(ValueFromPipeline = $true, Mandatory = $true)]
 		[pscredential]$Credential,
-		[Parameter(ParameterSetName = 'Thumbprint', Mandatory = $true, Position = 0)]
-		[string]$Thumbprint,
-		[Parameter(ParameterSetName = 'Identity', Mandatory = $true, Position = 0)]
+		[Parameter(ParameterSetName = 'Explicit', Position = 0, Mandatory = $true)][ValidateScript({ $_ -is [System.Security.Cryptography.X509Certificates.X509Certificate2] -or $_ -is [System.String] })]
+		[object]$To,
+		[Parameter(ParameterSetName = 'Identity', Position = 0, Mandatory = $true)]
 		[string]$Identity,
+		[Parameter(ParameterSetName = 'Explicit', Position = 1, Mandatory = $true)]
+		[Parameter(ParameterSetName = 'Identity', Position = 1)]
+		[string]$OutFile,
+		[Parameter(ParameterSetName = 'Identity')]
+		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
 		[Parameter(ParameterSetName = 'Identity')]
 		[switch]$Reset,
 		[Parameter(ParameterSetName = 'Identity')]
 		[switch]$SkipCleanup,
-		[Parameter(Mandatory = $false)]
-		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
-		[Parameter(Mandatory = $false)]
-		[string]$OutFile,
 		[Parameter(Mandatory = $false)]
 		[string[]]$ComputerName,
 		[Parameter(Mandatory = $false)]
@@ -748,7 +786,7 @@ Function Protect-CmsCredential {
 			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
 		}
 
-		# show credentials on remote computer
+		# protect credential on remote computer
 		ForEach ($RemoteComputerName in $ComputerName) {
 			# if remote computer name is local computer name...
 			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
@@ -780,180 +818,149 @@ Function Protect-CmsCredential {
 		}
 	}
 
-	# if thumbprint provided...
-	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
-		# create path for certificate by thumbprint
-		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
-		# retrieve certificate by thumbprint
-		Try {
-			$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
-		}
-		Catch {
-			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
-			Throw $_
-		}
-
-		# if certificate subject is an empty string...
-		If ([string]::IsNullOrEmpty($Certificate.Subject)) {
-			# warn and return
-			Write-Warning -Message "the subject of the certificate on '$Hostname' with '$($Certificate.Thumbprint)' thumbprint is null or an empty string"
-			Return
-		}
-
-		# if certificate subject contains invalid characters...
-		If (Test-CmsInvalidSubject -Subject $Certificate.Subject) {
-			# warn and return
-			Write-Warning -Message "the subject of the certificate on '$Hostname' with '$($Certificate.Thumbprint)' thumbprint contains one or more of the following invalid characters: '\' (backslash)"
-			Return
-		}
-
-	}
-	# if thumbprint not provided and reset not requested...
-	Else {
+	# if identity provided...
+	If ($PSBoundParameters.ContainsKey('Identity')) {
 		# if reset not requested...
-		If (!$PSBoundParameters.ContainsKey('Reset')) {
-			# define pattern as organizational unit of Identity followed by organization of CmsCredentials
-			$Pattern = "OU=$Identity, O=CmsCredentials$"
+		If (!$local:Reset) {
+			# define pattern that:
+			# - starts with common name of a GUID
+			# - includes organizational unit of Identity
+			# - concludes with organization of CmsCredentials
+			$Pattern = "^CN=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}, OU=$Identity, O=CmsCredentials$"
+
 			# retrieve latest certificate where subject matches pattern
 			Try {
-				$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_.Subject -Pattern $Pattern -Quiet } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
+				$To = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_.Subject -Pattern $Pattern -Quiet } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
 			}
 			Catch {
 				Write-Warning -Message "could not search for certificate in '$CertStoreLocation' on '$Hostname' with identity: $Identity"
 				Throw $_
 			}
 		}
-	}
 
-	# if certificate not found...
-	If ($null -eq $local:Certificate) {
-		# create new certificate for identity
-		Try {
-			$Certificate = New-CmsCredentialCertificate -Identity $Identity
-		}
-		Catch {
-			Write-Warning -Message "could not create certificate on '$Hostname' with identity: $Identity"
-			Throw $_
-		}
-	}
-
-	# if OutFile not provided...
-	If (!($PSBoundParameters.ContainsKey('OutFile'))) {
-		# if folder path not found...
-		If (!(Test-Path -Path $Path -PathType 'Container')) {
-			# create path
+		# if certificate not found...
+		If (!$local:To) {
+			# create new certificate for identity
 			Try {
-				$null = New-Item -ItemType Directory -Path $Path -Verbose -ErrorAction 'Stop'
+				$To = New-CmsCredentialCertificate -Identity $Identity
 			}
 			Catch {
-				Write-Warning -Message "could not create folder on '$Hostname' with path: $Path"
+				Write-Warning -Message "could not create certificate on '$Hostname' with identity: $Identity"
 				Throw $_
 			}
 		}
 
-		# create child path from first element of certificate subject
-		Try {
-			# 1. split DN of subject on ', ' to get RDNs
-			# 2. get first RDN that starts with 'CN='
-			# 3. remove 'CN=' from to get attribute value of RDN
-			# 4. append '.txt' to attribute value of RDN
-			$ChildPath = "$($Certificate.Subject.Split(', ',[System.StringSplitOptions]::RemoveEmptyEntries).Where({ $_.StartsWith('CN=')})[0].Replace('CN=',$null)).txt"
-		}
-		Catch {
-			Write-Warning -Message "could not create child path on '$Hostname' from certificate with subject: $($Certificate.Subject)"
-			Throw $_
-		}
+		# if outfile parameter not provided...
+		If (!$local:OutFile) {
+			# if folder path not found...
+			If (!(Test-Path -Path $Path -PathType 'Container')) {
+				# create path
+				Try {
+					$null = New-Item -ItemType Directory -Path $Path -Verbose -ErrorAction 'Stop'
+				}
+				Catch {
+					Write-Warning -Message "could not create folder on '$Hostname' with path: $Path"
+					Throw $_
+				}
+			}
 
-		# define CMS file path
-		$OutFile = Join-Path -Path $Path -ChildPath $ChildPath
+			# create file name from certificate
+			Try {
+				$FileName = $To.GetNameInfo('SimpleName', $false)
+			}
+			Catch {
+				Write-Warning -Message "could not create filename on '$Hostname' from certificate subject: $($To.Subject)"
+				Throw $_
+			}
+
+			# define CMS file path
+			$OutFile = Join-Path -Path $Path -ChildPath "$FileName.txt"
+		}
 	}
 
-	# if CMS file found...
-	If (Test-Path -Path $OutFile -PathType 'Leaf') {
-		# if force not set...
-		If (!$local:Force) {
-			Write-Warning -Message "existing credential file found; continue to overwrite file on '$Hostname' with path: $OutFile" -WarningAction Inquire
-		}
+	# if recipient is a certificate...
+	If ($To -is [System.Security.Cryptography.X509Certificates.X509Certificate2]) {
+		# define recipient string as subject of certificate
+		$RecipientString = $To.Subject
 	}
-	# if CMS file not found...
+	# if recipient is not a certificate...
 	Else {
-		# create CMS file
-		Try {
-			$null = New-Item -ItemType File -Path $OutFile -Verbose -ErrorAction 'Stop'
-		}
-		Catch {
-			Write-Warning -Message "could not create file on '$Hostname' with path: $OutFile"
-			Throw $_
+		# define recipient string as value of recipient
+		$RecipientString = $To
+	}
+
+	# if CMS credential file found...
+	If (Test-Path -Path $OutFile -PathType 'Leaf') {
+		# if force and reset not set...
+		If (!$local:Force -and !$local:Reset) {
+			Write-Warning -Message "existing credential file found; continue to overwrite file on '$Hostname' with path: $OutFile" -WarningAction 'Inquire'
 		}
 	}
 
-	# create custom object for export
-	$InputObject = [pscustomobject]@{
-		Username = $Credential.Username
-		Password = $Credential.GetNetworkCredential().Password
-	}
-
-	# convert custom object into JSON string
+	# convert network credential to JSON string
 	Try {
-		$Content = ConvertTo-Json -InputObject $InputObject -ErrorAction 'Stop'
+		$Content = $Credential.GetNetworkCredential() | Select-Object -Property 'UserName', 'Password', 'Domain' | ConvertTo-Json -ErrorAction 'Stop'
 	}
 	Catch {
 		Write-Warning -Message "could not convert custom object on '$Hostname' for identity: $Identity"
 		Throw $_
 	}
 
-	# encrypt credentials to certificate
+	# encrypt credentials to recipient
 	Try {
-		Protect-CmsMessage -To $Certificate.Thumbprint -Content $Content -OutFile $OutFile -ErrorAction 'Stop'
+		Protect-CmsMessage -To $To -Content $Content -OutFile $OutFile -ErrorAction 'Stop'
 	}
 	Catch {
-		Write-Warning -Message "could not encrypt credential using '$($Certificate.Thumbprint)' thumbprint on '$Hostname' for identity: $Identity"
+		Write-Warning -Message "could not encrypt credential on '$Hostname' for recipient(s): $RecipientString"
 		Throw $_
 	}
 
-	# retrieve content of credential file
-	Try {
-		$Content = Get-Content -Path $OutFile -Raw -ErrorAction 'Stop'
-	}
-	Catch {
-		Write-Warning -Message "could not read credential file on '$Hostname' with path: $OutFile"
-		Throw $_
-	}
-
-	# insert subject line into content of credential file
-	Try {
-		$Value = $Content.Insert(0, "Subject: $($Certificate.Subject)`r`n")
-	}
-	Catch {
-		Write-Warning -Message "could not insert subject into content of encrypted file on '$Hostname' with path: $OutFile"
-		Throw $_
-	}
-
-	# save updated content to credential file
-	Try {
-		Set-Content -Path $OutFile -Value $Value -Encoding 'UTF8'
-	}
-	Catch {
-		Write-Warning -Message "could not update credential file on '$Hostname' with path: $OutFile"
-		Throw $_
-	}
-
-	# if identity provided and skip cleanup not requested...
-	If ($PSBoundParameters.ContainsKey('Identity') -and -not $SkipCleanup) {
-		# define parameters for Remove-CmsCredential
-		$RemoveCmsCredential = @{
-			Identity = $Identity
-			Path     = $Path
-			SkipLast = 1
-		}
-
-		# remove old CMS certificate and files
+	# if identity provided...
+	If ($PSBoundParameters.ContainsKey('Identity')) { 
+		# retrieve content of credential file
 		Try {
-			Remove-CmsCredential @RemoveCmsCredential
+			$Content = Get-Content -Path $OutFile -Raw -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not remove old CMS certificates and files on '$Hostname' for identity: $Identity"
+			Write-Warning -Message "could not read credential file on '$Hostname' with path: $OutFile"
 			Throw $_
+		}
+
+		# insert subject line into content of credential file
+		Try {
+			$Value = $Content.Insert(0, "Subject: $($To.Subject)`r`n")
+		}
+		Catch {
+			Write-Warning -Message "could not insert certificate subject into credential file on '$Hostname' with path: $OutFile"
+			Throw $_
+		}
+
+		# save updated content to credential file
+		Try {
+			Set-Content -Path $OutFile -Value $Value -Encoding 'UTF8' -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not update credential file on '$Hostname' with path: $OutFile"
+			Throw $_
+		}
+
+		# if skip cleanup not requested...
+		If (!$local:SkipCleanup) {
+			# define parameters for Remove-CmsCredential
+			$RemoveCmsCredential = @{
+				Identity = $Identity
+				Path     = $Path
+				SkipLast = 1
+			}
+
+			# remove old CMS certificate and files
+			Try {
+				Remove-CmsCredential @RemoveCmsCredential
+			}
+			Catch {
+				Write-Warning -Message "could not remove old CMS certificates and files on '$Hostname' for identity: $Identity"
+				Throw $_
+			}
 		}
 	}
 }
@@ -1003,9 +1010,9 @@ Function Remove-CmsCredential {
 
 	[CmdletBinding(DefaultParameterSetName = 'Identity')]
 	Param (
-		[Parameter(ParameterSetName = 'Thumbprint', Mandatory = $true, Position = 0)]
+		[Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'Thumbprint')]
 		[string]$Thumbprint,
-		[Parameter(ParameterSetName = 'Identity', Mandatory = $true, Position = 0)]
+		[Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'Identity')]
 		[string]$Identity,
 		[Parameter(Mandatory = $false)]
 		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
@@ -1051,7 +1058,7 @@ Function Remove-CmsCredential {
 			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
 		}
 
-		# show credentials on remote computer
+		# remove credential on remote computer
 		ForEach ($RemoteComputerName in $ComputerName) {
 			# if remote computer name is local computer name...
 			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
@@ -1095,6 +1102,21 @@ Function Remove-CmsCredential {
 			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
 			Throw $_
 		}
+
+		# if certificate subject is an empty string...
+		If ([string]::IsNullOrEmpty($Certificate.Subject)) {
+			# warn and return
+			Write-Warning -Message "the subject of the certificate on '$Hostname' with '$Thumbprint' thumbprint is null or an empty string"
+			Return
+		}
+
+		# if certificate subject contains invalid characters...
+		If (Test-CmsInvalidSubject -Subject $Certificate.Subject) {
+			# warn and return
+			Write-Warning -Message "the subject of the certificate on '$Hostname' with '$Thumbprint' thumbprint contains one or more of the following invalid characters: '\' (backslash)"
+			Return
+		}
+
 		# retrieve pattern as subject of certificate
 		$Pattern = $Certificate.Subject
 		$SimpleMatch = $true
@@ -1107,9 +1129,11 @@ Function Remove-CmsCredential {
 
 	# if path to credential certificates found...
 	If (Test-Path -Path $CertStoreLocation -PathType 'Container') {
+		# define script block for where-object
+		$ScriptBlock = { Select-String -InputObject $_.Subject -Pattern $Pattern -SimpleMatch:$SimpleMatch -Quiet }
 		# retrieve credential certificates with matching subject
 		Try {
-			$CredentialCerts = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_.Subject -Pattern $Pattern -SimpleMatch:$SimpleMatch -Quiet } | Sort-Object -Property 'NotBefore' | Select-Object -SkipLast $SkipLast
+			$CredentialCerts = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object -FilterScript $ScriptBlock | Sort-Object -Property 'NotBefore' | Select-Object -SkipLast $SkipLast
 		}
 		Catch {
 			Write-Warning -Message "could not retrieve credential certificates on '$Hostname'"
@@ -1122,9 +1146,11 @@ Function Remove-CmsCredential {
 
 	# if path to credential files found...
 	If (Test-Path -Path $Path -PathType 'Container') {
+		# define script block for where-object
+		$ScriptBlock = { Select-String -InputObject $_ -Pattern $Pattern -SimpleMatch:$SimpleMatch -Quiet }
 		# retrieve credential files where content contains matching subject
 		Try {
-			$CredentialFiles = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_ -Pattern $Pattern -SimpleMatch:$SimpleMatch -Quiet } | Sort-Object -Property 'LastWriteTime' | Select-Object -SkipLast $SkipLast
+			$CredentialFiles = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop' | Where-Object -FilterScript $ScriptBlock | Sort-Object -Property 'LastWriteTime' | Select-Object -SkipLast $SkipLast
 		}
 		Catch {
 			Write-Warning -Message "could not search for credential files on '$Hostname' in path: $Path"
@@ -1203,9 +1229,9 @@ Function Show-CmsCredential {
 
 	[CmdletBinding(DefaultParameterSetName = 'Identity')]
 	Param (
-		[Parameter(ParameterSetName = 'Thumbprint', Mandatory = $false, Position = 0)]
+		[Parameter(Mandatory = $false, Position = 0, ParameterSetName = 'Thumbprint')]
 		[string]$Thumbprint,
-		[Parameter(ParameterSetName = 'Identity', Mandatory = $false, Position = 0)]
+		[Parameter(Mandatory = $false, Position = 0, ParameterSetName = 'Identity')]
 		[string]$Identity,
 		[Parameter(Mandatory = $false)]
 		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
@@ -1249,7 +1275,7 @@ Function Show-CmsCredential {
 			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
 		}
 
-		# show credentials on remote computer
+		# show credential on remote computer
 		ForEach ($RemoteComputerName in $ComputerName) {
 			# if remote computer name is local computer name...
 			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
@@ -1454,6 +1480,9 @@ Function Update-CmsCredentialAccess {
 	.PARAMETER Principals
 	Specifies one or more security principals.
 
+	.PARAMETER ComputerName
+	Specifies the name of one or more remote computers.
+
 	.INPUTS
 	None.
 
@@ -1464,9 +1493,9 @@ Function Update-CmsCredentialAccess {
 
 	[CmdletBinding(DefaultParameterSetName = 'Identity')]
 	Param (
-		[Parameter(ParameterSetName = 'Thumbprint', Mandatory = $true, Position = 0)]
+		[Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'Thumbprint')]
 		[string]$Thumbprint,
-		[Parameter(ParameterSetName = 'Identity', Mandatory = $true, Position = 0)]
+		[Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'Identity')]
 		[string]$Identity,
 		[Parameter(Mandatory = $true, Position = 1)][ValidateSet('Grant', 'Revoke', 'Reset', 'Show')]
 		[string]$Mode,
@@ -1512,7 +1541,7 @@ Function Update-CmsCredentialAccess {
 			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
 		}
 
-		# show credentials on remote computer
+		# update access to credential on remote computer
 		ForEach ($RemoteComputerName in $ComputerName) {
 			# if remote computer name is local computer name...
 			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
