@@ -1,4 +1,5 @@
 #requires -Modules ZenossCloudFunctions,CmsCredentials
+
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 param (
 	# string for CmsCredential identity
@@ -176,7 +177,7 @@ Begin {
 Process {
 	# get credential object
 	Try {
-		$Credential = Unprotect-CmsCredentials -Identity $Identity
+		$Credential = Get-CmsCredential -Identity $Identity
 	}
 	Catch {
 		Throw $_
