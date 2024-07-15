@@ -11,7 +11,7 @@ Specifies the privilege to enable on the process. Must be a valid security privi
 .PARAMETER ProcessId
 Specifies the process ID to enable the privilege. The default value is the current process ID.
 
-.PARAMETER Switch
+.PARAMETER Disable
 Switch parameter to disable the privilege.
 
 .INPUTS
@@ -21,7 +21,7 @@ None.
 Boolean
 
 .EXAMPLE
-PS> .\Set-TokenPrivilege.ps1 -Privilege SeBackupPrivilege
+PS> .\Update-TokenPrivilege.ps1 -Privilege SeBackupPrivilege
 
 .LINK
 https://learn.microsoft.com/en-us/windows/win32/secauthz/privilege-constants
