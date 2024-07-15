@@ -750,19 +750,22 @@ Function Get-CertificateFromUri {
 			Throw $_
 		}
 
-		# return results
-		If ($Chain) {
-			Try {
-				$CertificateChain = Get-CertificateChain -Certificate $Certificate
-			}
-			Catch {
-				Throw $_
-			}
-			Return $CertificateChain
-		}
-		Else {
+		# if chain not requested...
+		If (!$Chain) {
+			# return certificate
 			Return $Certificate
 		}
+
+		# get certificate chain from certificate
+		Try {
+			$CertificateChain = Get-CertificateChain -Certificate $Certificate
+		}
+		Catch {
+			Throw $_
+		}
+
+		# return certificate chain
+		Return $CertificateChain
 	}
 
 	End {
