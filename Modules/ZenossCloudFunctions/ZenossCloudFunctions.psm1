@@ -30,9 +30,9 @@ Function Add-ZenossCloudDevice {
 	.EXAMPLE
 	PS> Add-ZenossCloudDevice -Uri 'https://test.zenoss.io/cz0/zport/dmd/device_router' -Key '0123456789abcdef' -Device 'test-device-1.department.example.com' -State 'Production'
 
+	.NOTES
+	This function is a work-in-progress and not complete.
 	#>
-
-	# DRAFT FUNCTION; NOT COMPLETE
 
 	[CmdletBinding(DefaultParameterSetName = 'Uri')]
 	param (
@@ -212,7 +212,7 @@ Function Get-ZenossCloudDevices {
 		'Content-Type' = 'application/json'
 	}
 
-	# create hashtable for body data
+	# create hashtable for data property in body
 	$Data = @{
 		limit = 300
 	}
@@ -391,32 +391,31 @@ Function Get-ZenossCloudProductionStates {
 		# return production states
 		Return $ZenossProductionStates
 	}
-	Else {
-		# create hashtable for headers
-		$HeadersHashtable = @{
-			'z-api-key'    = $Key
-			'Content-Type' = 'application/json'
-		}
 
-		# create hashtable for body
-		$BodyHashtable = @{
-			'action' = 'DeviceRouter'
-			'method' = 'getProductionStates'
-			'tid'    = 1
-		}
-
-		# create headers from hashtable
-		$Headers = $HeadersHashtable | ConvertTo-Json -Compress
-
-		# create body from hashtable
-		$Body = $BodyHashtable | ConvertTo-Json -Compress
-
-		# invoke rest method to retrieve production states
-		$ZenossProductionStates = Invoke-RestMethod -Method 'Post' -Uri $Uri -Headers $Headers -Body $Body
-
-		# return production states
-		Return $ZenossProductionStates
+	# create hashtable for headers
+	$HeadersHashtable = @{
+		'z-api-key'    = $Key
+		'Content-Type' = 'application/json'
 	}
+
+	# create hashtable for body
+	$BodyHashtable = @{
+		'action' = 'DeviceRouter'
+		'method' = 'getProductionStates'
+		'tid'    = 1
+	}
+
+	# create headers from hashtable
+	$Headers = $HeadersHashtable | ConvertTo-Json -Compress
+
+	# create body from hashtable
+	$Body = $BodyHashtable | ConvertTo-Json -Compress
+
+	# invoke rest method to retrieve production states
+	$ZenossProductionStates = Invoke-RestMethod -Method 'Post' -Uri $Uri -Headers $Headers -Body $Body
+
+	# return production states
+	Return $ZenossProductionStates
 }
 
 Function Set-ZenossCloudProductionState {
@@ -624,11 +623,11 @@ Function Invoke-ZenossCloudDeviceRemodel {
 
 # define functions to export
 $FunctionsToExport = @(
-    'Get-ZenossCloudDevices'
-    'Get-ZenossCloudDevice'
-    'Get-ZenossCloudProductionStates'
-    'Set-ZenossCloudProductionState'
-    'Invoke-ZenossCloudDeviceRemodel'
+	'Get-ZenossCloudDevices'
+	'Get-ZenossCloudDevice'
+	'Get-ZenossCloudProductionStates'
+	'Set-ZenossCloudProductionState'
+	'Invoke-ZenossCloudDeviceRemodel'
 )
 
 # export module members
