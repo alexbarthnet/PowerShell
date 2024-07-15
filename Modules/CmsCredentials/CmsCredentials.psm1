@@ -1457,7 +1457,7 @@ Function Show-CmsCredential {
 	}
 
 	# display list entries
-	$List | Sort-Object -Property 'Identity', 'CommonName' | Format-Table ComputerName, Identity, CommonName, Thumbprint, Path
+	$List | Sort-Object -Property 'Identity', 'CommonName' | Format-Table -AutoSize ComputerName, Identity, CommonName, Thumbprint, Path
 }
 
 Function Update-CmsCredentialAccess {
