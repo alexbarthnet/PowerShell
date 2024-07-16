@@ -87,7 +87,7 @@ Process {
 		Write-Verbose -Verbose -Message "found remote domain controller: $Server"
 	}
 
-	# get local domain controller DSA on remote domain controller
+	# get DSA object for local domain controller from remote domain controller
 	Try {
 		$ADObject = Get-ADObject -Server $Server -Identity $LocalDomainController.NTDSSettingsObjectDN -Properties 'options'
 	}
@@ -96,13 +96,13 @@ Process {
 		Return $_
 	}
 
-	# if local domain controller is already a global catalog...
+	# if Global Catalog role already disabled on DSA object...
 	If ($ADObject.options -eq '0') {
-		Write-Verbose -Verbose -Message "found Global Catalog role already disabled for local domain controller on remote domain controller: $Server"
+		Write-Warning -Message "found Global Catalog role already disabled for local domain controller on remote domain controller: $Server"
 		Return
 	}
 
-	# get other domain controller in same site
+	# disable Global Catalog role for local domain controller object on remote domain controller
 	Try {
 		Set-ADObject -Server $Server -Identity $LocalDomainController.NTDSSettingsObjectDN -Replace @{ options = '0' }
 	}
