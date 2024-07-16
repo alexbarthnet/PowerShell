@@ -73,8 +73,8 @@ Process {
 		Write-Verbose -Verbose -Message "stopped service: $ServiceName"
 	}
 
-	# sleep to allow clients to determine domain controller is offline
-	Start-Sleep -Seconds 10
+	# sleep to allow clients to determine domain controller services are offline
+	Start-Sleep -Seconds 60
 }
 
 End {
