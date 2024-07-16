@@ -104,10 +104,10 @@ Process {
 		}
 	}
 
-	# if next domain controllers not found...
+	# if next domain controller not found...
 	If ($null -eq $script:NextDomainController) {
 		# warn and return
-		Write-Warning -Message "could not connect to any other domain controllers in site: '$($ADDomainController.Site)'"
+		Write-Warning -Message "could not connect to any other domain controllers in site: '$SiteName'"
 		Return
 	}
 
