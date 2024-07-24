@@ -1,3 +1,84 @@
+Function ConvertTo-PEMCertificate {
+	<#
+	.SYNOPSIS
+	Convert an input object into a PEM-formatted certificate.
+
+	.DESCRIPTION
+	Convert an input object into an PEM-formatted certificate. The input object can be a byte array, a collection where the first element is a byte array, or the string representation of a byte array.
+
+	.PARAMETER InputObject
+	Specifies the input object that represents an X.509 certificate
+
+	.PARAMETER AsPrivateKey
+	Specifies the string should use the private key header and footer instead of the certificate header and footer.
+
+	.INPUTS
+	System.ByteArray,System.Collections,System.String. A byte array, a collection containing a byte array as the first element, or the string representation of a byte array.
+
+	.OUTPUTS
+	String. A PEM-formatted certificate.
+
+	#>
+	[CmdletBinding()]
+	Param (
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
+		$InputObject,
+		[Parameter(Position = 1)]
+		[switch]$AsPrivateKey
+	)
+
+	Write-Verbose $InputObject.GetType().FullName
+
+	# if InputObject is a collection...
+	If ( $InputObject -is [System.Collections.CollectionBase]) {
+		# ...retrieve the first entry in the collection
+		$InputObject = $InputObject[0]
+	}
+
+	# if InputObject is a byte array...
+	If ( $InputObject -is [byte[]] ) {
+		# ...copy InputObject to byte array
+		$ByteArray = $InputObject
+	}
+	# if InputObject is a string...
+	ElseIf ( $InputObject -is [string]) {
+		# ...convert InputObject into a byte array
+		$ByteArray = [System.Convert]::ToByte($InputObject)
+	}
+	# if InputObject is not a pre-configured type...
+	Else {
+		# ...cast InputObject into a byte array
+		Try {
+			$ByteArray = [byte[]]$InputObject
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
+	# create base64-encoded string from byte array
+	Try {
+		$Base64String = [Convert]::ToBase64String($ByteArray, [Base64FormattingOptions]::InsertLineBreaks)
+	}
+	Catch {
+		Throw $_
+	}
+
+	# if private key requested...
+	If ($AsPrivateKey) {
+		# create PEM-formatted string for a private key from base64-encoded string
+		$PemFormattedString = '-----BEGIN PRIVATE KEY-----', $Base64String, '-----END PRIVATE KEY-----' -join "`r`n"
+	}
+	# if private key not requested...
+	Else {
+		# create PEM-formatted string for a certificate from base64-encoded string
+		$PemFormattedString = '-----BEGIN CERTIFICATE-----', $Base64String, '-----END CERTIFICATE-----' -join "`r`n"
+	}
+
+	# return PEM-formatted string
+	Return $PemFormattedString
+}
+
 Function ConvertTo-X509Certificate {
 	<#
 	.SYNOPSIS
@@ -204,7 +285,7 @@ Function Get-CertificateAltSecurityIdentity {
 				Write-Warning 'Issuer empty or not found on certificate'
 				Return $null
 			}
-	
+
 			# if SerialNumber empty or not found...
 			If ([String]::IsNullOrEmpty($Certificate.SerialNumber)) {
 				# ...warn and return
@@ -242,7 +323,7 @@ Function Get-CertificateAltSecurityIdentity {
 				Write-Warning 'Issuer empty or not found on certificate'
 				Return $null
 			}
-	
+
 			# if Subject empty or not found...
 			If ([String]::IsNullOrEmpty($Certificate.Subject)) {
 				# ...warn and return
@@ -280,7 +361,7 @@ Function Get-CertificateAltSecurityIdentity {
 		'IssuerSerialNumber' {
 			# get the reversed issuer
 			$ReversedIssuer = Format-ReversedDistinguishedName -DistinguishedName $Certificate.Issuer
-			
+
 			# get the reversed serial number respecting byte boundaries
 			$ReversedSerialNumber = Format-ReversedString -String $Certificate.SerialNumber -Count 2
 
@@ -339,6 +420,9 @@ Function Get-CertificateBundle {
 	.PARAMETER IncludeCertificate
 	Switch to include the original X.509 certificate object in the CA Bundle.
 
+	.PARAMETER RootFirst
+	Switch to place the root certificate first. The chain order is determined by the NotBefore property on the certificate objects.
+
 	.INPUTS
 	X509Certificate2. An object representing an X.509 certificate.
 
@@ -353,7 +437,9 @@ Function Get-CertificateBundle {
 		[Parameter(Position = 1)]
 		[string]$Path,
 		[Parameter(Position = 2)]
-		[switch]$IncludeCertificate
+		[switch]$IncludeCertificate,
+		[Parameter(Position = 3)]
+		[switch]$RootFirst
 	)
 
 	# get certificate chain from certificate
@@ -364,32 +450,32 @@ Function Get-CertificateBundle {
 		Throw $_
 	}
 
+	# if root first requested...
+	If ($RootFirst) {
+		$CertificateChain = $CertificateChain | Sort-Object -Property 'NotBefore'
+	}
+
 	# creat empty string for CA bundle
 	$CertificateBundle = [System.String]::Empty
 
 	# process each certificate in certificate chain
 	:CertificateInChain ForEach ($CertificateInChain in $CertificateChain) {
-		# if the following are true...
-		#  - thumbprint of certificate in chain matches thumbprint of provided certificate
-		#  - subject of certificate in chain does not match subject of provided certificate
-		#  - the IncludeCertificate switch was not set
-		If ($CertificateInChain.Thumbprint -eq $Certificate.Thumbprint -and -not $CertificateInChain.Subject -eq $Certificate.Subject -and -not $IncludeCertificate) {
+		# if thumbprint of certificate in chain matches thumbprint of provided certificate and IncludeCertificate not set...
+		If ($CertificateInChain.Thumbprint -eq $Certificate.Thumbprint -and -not $IncludeCertificate) {
 			# ...continue to next certificate in chain
 			Continue CertificateInChain
 		}
 
-		# encode certificate data with base64
+		# convert certificate to PEM-formatted string
 		Try {
-			$CertificateInChainBase64 = [System.Convert]::ToBase64String($CertificateInChain.RawData, [System.Base64FormattingOptions]::InsertLineBreaks)
+			$CertificateInChainPEM = ConvertTo-PEMCertificate -InputObject $CertificateInChain.RawData
 		}
 		Catch {
-			Throw $_
+			Write-Warning -Message 'could not create PEM-formatted string from byte array'
+			Return $_
 		}
 
-		# add header and footer to encoded certificate data
-		$CertificateInChainPEM = "-----BEGIN CERTIFICATE-----`r`n$CertificateInChainBase64`r`n-----END CERTIFICATE-----"
-
-		# add encoded certificate data to bundle
+		# add formatted certificate data to bundle
 		If ([string]::IsNullOrEmpty($CertificateBundle)) {
 			$CertificateBundle = $CertificateInChainPEM
 		}
@@ -906,6 +992,154 @@ Function Get-CertificatePrivateKeyPath {
 	}
 }
 
+Function Get-PfxPrivateKey {
+	<#
+	.SYNOPSIS
+	Retrieves the private key from a PFX file.
+
+	.DESCRIPTION
+	Retrieves the private key from a PFX file. The private key is returned as a PEM-formatted string unless the AsByteArray switch parameter is provided.
+
+	.PARAMETER PfxPath
+	Specifies the path to a PFX file
+
+	.PARAMETER Password
+	Specifies the password to the PFX file.
+
+	.PARAMETER AsByteArray
+	Switch to return the private key as a byte array instead of a PEM-formatted string.
+
+	.INPUTS
+	String. A string containing the path to a PFX file
+
+	.OUTPUTS
+	Byte[], String. A byte array representing the public key in the PFX file or a string containing the public key in PEM format.
+
+	#>
+	[CmdletBinding()]
+	Param (
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
+		[string]$PfxFile,
+		[Parameter(Position = 1)]
+		[SecureString]$Password,
+		[Parameter(Position = 2)]
+		[switch]$AsByteArray
+	)
+
+	# create certificate object from PFX file with exportable flag
+	Try {
+		$Certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($PfxFile, $Password, [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)
+	}
+	Catch {
+		Write-Warning -Message "could not create certificate oobject from provided file: '$PfxFile'"
+		Return $_
+	}
+
+	# retrieve private key object
+	Try {
+		$PrivateKeyObject = [Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($Certificate)
+	}
+	Catch {
+		Write-Warning -Message 'could not retrieve private key object from certificate'
+		Return $_
+	}
+
+	# if private key export policy does not include plain text export...
+	If (!($PrivateKeyObject.Key.ExportPolicy -band [System.Security.Cryptography.CngExportPolicies]::AllowPlaintextExport)) {
+		Write-Warning -Message 'private key does not permit plain-text export'
+		Return $null
+	}
+
+	# retrieve byte array for private key
+	Try {
+		$PrivateKeyBytes = $PrivateKeyObject.Key.Export([Security.Cryptography.CngKeyBlobFormat]::Pkcs8PrivateBlob)
+	}
+	Catch {
+		Write-Warning -Message 'could not create byte array from private key'
+		Return $_
+	}
+
+	# if byte array requested...
+	If ($AsByteArray) {
+		# ...return byte array
+		Return $PrivateKeyBytes
+	}
+
+	# convert byte array to PEM-formatted string
+	Try {
+		$PrivateKeyPem = ConvertTo-PEMCertificate -InputObject $PublicKeyBytes -AsPrivateKey
+	}
+	Catch {
+		Write-Warning -Message 'could not create PEM-formatted string from byte array'
+		Return $_
+	}
+
+	# return PEM-encoded string
+	Return $PrivateKeyPem
+}
+
+Function Get-PfxPublicKey {
+	<#
+	.SYNOPSIS
+	Retrieves the public key from a PFX file.
+
+	.DESCRIPTION
+	Retrieves the public key from a PFX file. The public key is returned as a PEM-formatted string unless the AsByteArray switch parameter is provided.
+
+	.PARAMETER PfxPath
+	Specifies the path to a PFX file
+
+	.PARAMETER Password
+	Specifies the password to the PFX file.
+
+	.PARAMETER AsByteArray
+	Switch to return the public key as a byte array instead of a PEM-formatted string.
+
+	.INPUTS
+	String. A string containing the path to a PFX file
+
+	.OUTPUTS
+	Byte[], String. A byte array representing the public key in the PFX file or a string containing the public key in PEM format.
+
+	#>
+	[CmdletBinding()]
+	Param (
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
+		[string]$PfxFile,
+		[Parameter(Position = 1)]
+		[SecureString]$Password,
+		[Parameter(Position = 2)]
+		[switch]$AsByteArray
+	)
+
+	# create certificate object from PFX file with exportable flag
+	Try {
+		$Certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($PfxFile, $Password, [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)
+	}
+	Catch {
+		Write-Warning -Message "could not create certificate oobject from provided file: '$PfxFile'"
+		Return $_
+	}
+
+	# if byte array requested...
+	If ($AsByteArray) {
+		# ...return byte array
+		Return $Certificate.RawData
+	}
+
+	# convert byte array to PEM-formatted string
+	Try {
+		$PublicKeyPem = ConvertTo-PEMCertificate -InputObject $Certificate.RawData
+	}
+	Catch {
+		Write-Warning -Message 'could not create PEM-formatted string from byte array'
+		Return $_
+	}
+
+	# return PEM-encoded string
+	Return $PublicKeyPem
+}
+
 Function Grant-CertificatePermissions {
 	<#
 	.SYNOPSIS
@@ -1109,7 +1343,7 @@ Function Revoke-CertificatePermissions {
 	# update ACL if required
 	If ($AccessRules.Count -gt 0) {
 		# update ACL object
-		ForEach ($AccessRule in $AccessRules) { 
+		ForEach ($AccessRule in $AccessRules) {
 			$Acl.RemoveAccessRule($AccessRule)
 		}
 		# set ACL object
@@ -1159,6 +1393,7 @@ Function Test-Thumbprint {
 
 # define functions to export
 $FunctionsToExport = @(
+	'ConvertTo-PEMCertificate'
 	'ConvertTo-X509Certificate'
 	'Format-ReversedDistinguishedName'
 	'Format-ReversedString'
@@ -1168,6 +1403,8 @@ $FunctionsToExport = @(
 	'Get-CertificateFromAD'
 	'Get-CertificateFromUri'
 	'Get-CertificatePrivateKeyPath'
+	'Get-PfxPrivateKey'
+	'Get-PfxPublicKey'
 	'Grant-CertificatePermissions'
 	'Revoke-CertificatePermissions'
 	'Test-Thumbprint'
