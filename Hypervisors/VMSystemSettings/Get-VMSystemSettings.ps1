@@ -1,7 +1,9 @@
+#requires -Modules 'Hyper-V'
+
 [CmdletBinding()]
 Param(
-	[Parameter(ValueFromPipeline = $true, Mandatory = $true)]
-	[object]$VM,
+	[Parameter(ValueFromPipeline = $true, Position = 0, Mandatory = $true)][Alias('VM', 'VMName', 'Id')]
+	[object]$InputObject,
 	[Parameter()]
 	[string]$ComputerName,
 	[Parameter()]
@@ -14,24 +16,24 @@ Begin {
 	Function Get-VMFromParameters {
 		[CmdletBinding()]
 		Param(
-			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] -or $_ -is [guid] -or $_ -is [string] })]
-			[object]$VM,
+			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] -or $_ -is [guid] -or $_ -is [string] })][Alias('VM', 'VMName', 'Id')]
+			[object]$InputObject,
 			[string]$ComputerName,
 			[switch]$Force
 		)
 
-		# if VM is a virtual machine object and Force not set...
-		If ($VM -is [Microsoft.HyperV.PowerShell.VirtualMachine] -and -not $Force) {
+		# if InputObject is a virtual machine object and Force not set...
+		If ($InputObject -is [Microsoft.HyperV.PowerShell.VirtualMachine] -and -not $Force) {
 			# ...return VM as-is
-			Return $VM
+			Return $InputObject
 		}
 
 		# if computername not provided...
 		If ([string]::IsNullOrEmpty($ComputerName)) {
-			# ...and VM is a virtual machine...
-			If ($VM -is [Microsoft.HyperV.PowerShell.VirtualMachine]) {
+			# ...and InputObject is a virtual machine...
+			If ($InputObject -is [Microsoft.HyperV.PowerShell.VirtualMachine]) {
 				# get computer name from VM
-				$ComputerName = $VM.ComputerName
+				$ComputerName = $InputObject.ComputerName
 			}
 			Else {
 				# get computer name from hostname
@@ -45,20 +47,20 @@ Begin {
 			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 		}
 
-		# if VM is a virtual machine object...
-		If ($VM -is [Microsoft.HyperV.PowerShell.VirtualMachine]) {
+		# if InputObject is a virtual machine object...
+		If ($InputObject -is [Microsoft.HyperV.PowerShell.VirtualMachine]) {
 			# ...set ID from Id property on VM object
-			$GetVM['Id'] = $VM.Id
+			$GetVM['Id'] = $InputObject.Id
 		}
-		# if VM is a GUID...
-		ElseIf ($VM -is [guid] -or [guid]::TryParse($VM, [ref][guid]::Empty)) {
+		# if InputObject is a GUID...
+		ElseIf ($InputObject -is [guid] -or [guid]::TryParse($InputObject, [ref][guid]::Empty)) {
 			# ...set ID from value of VM cast as a GUID
-			$GetVM['Id'] = [guid]$VM
+			$GetVM['Id'] = [guid]$InputObject
 		}
-		# if VM is a string...
+		# if InputObject is a string...
 		Else {
 			# ...set Name from value of VM
-			$GetVM['Name'] = $VM
+			$GetVM['Name'] = $InputObject
 		}
 
 		# get VM with arguments
@@ -130,7 +132,7 @@ Process {
 	# get VM from parameters
 	Try {
 		# cast return as type to force terminating error
-		$VM = Get-VMFromParameters -ComputerName $ComputerName -VM $VM
+		$VM = Get-VMFromParameters -ComputerName $ComputerName -InputObject $InputObject
 	}
 	Catch {
 		Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
@@ -142,7 +144,6 @@ Process {
 		VM          = $VM
 		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 	}
-
 	# define optional parameters for Get-CimInstanceForVM
 	If ($null -ne $Property) {
 		$GetCimInstanceForVM['Property'] = $Property
