@@ -326,8 +326,8 @@ Function New-CmsCredentialCertificate {
 	Param (
 		[Parameter(Mandatory = $true, Position = 0)]
 		[string]$Identity,
-		[Parameter(Mandatory = $false)]
-		[switch]$Exportable,
+		[Parameter(Mandatory = $false)][ValidateSet('NonExportable', 'ExportableEncrypted', 'Exportable')]
+		[string]$KeyExportPolicy = 'NonExportable',
 		[Parameter(Mandatory = $false)]
 		[string[]]$ComputerName,
 		[Parameter(DontShow)]
@@ -412,17 +412,16 @@ Function New-CmsCredentialCertificate {
 		Type              = 'DocumentEncryptionCert'
 		HashAlgorithm     = 'SHA512'
 		KeyLength         = 4096
+		KeyExportPolicy   = $KeyExportPolicy
 		NotBefore         = $NotBefore
 		NotAfter          = $NotAfter
 		CertStoreLocation = $CertStoreLocation
 	}
 
-	# if certificate should be exportable...
-	If ($PSBoundParameters.ContainsKey('Exportable')) {
-		$SelfSignedCertificate['KeyExportPolicy'] = 'ExportableEncrypted'
-	}
-	Else {
-		$SelfSignedCertificate['KeyExportPolicy'] = 'NonExportable'
+	# if certificate should be exportable as plain text...
+	If ($KeyExportPolicy -eq 'Exportable') {
+		# update certificate type to use legacy CSP
+		$SelfSignedCertificate['Type'] = 'DocumentEncryptionCertLegacyCsp'
 	}
 
 	# check operating system
@@ -693,7 +692,7 @@ Function Protect-CmsCredential {
 	Specifies the PSCredential object to protect with CMS.
 
 	.PARAMETER To
-	Specifies one or more CMS message recipients, identified in any of the following formats: 
+	Specifies one or more CMS message recipients, identified in any of the following formats:
 		* An actual certificate (as retrieved from the certificate provider).
 		* Path to the file containing the certificate.
 		* Path to a directory containing the certificate.
@@ -916,7 +915,7 @@ Function Protect-CmsCredential {
 	}
 
 	# if identity provided...
-	If ($PSBoundParameters.ContainsKey('Identity')) { 
+	If ($PSBoundParameters.ContainsKey('Identity')) {
 		# retrieve content of credential file
 		Try {
 			$Content = Get-Content -Path $OutFile -Raw -ErrorAction 'Stop'
