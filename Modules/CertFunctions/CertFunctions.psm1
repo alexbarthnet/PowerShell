@@ -1052,7 +1052,7 @@ Function Get-PfxPrivateKey {
 
 	# retrieve byte array for private key
 	Try {
-		$PrivateKeyBytes = $PrivateKeyObject.Key.Export([Security.Cryptography.CngKeyBlobFormat]::Pkcs8PrivateBlob)
+		$ByteArray = $PrivateKeyObject.Key.Export([Security.Cryptography.CngKeyBlobFormat]::Pkcs8PrivateBlob)
 	}
 	Catch {
 		Write-Warning -Message 'could not create byte array from private key'
@@ -1062,12 +1062,12 @@ Function Get-PfxPrivateKey {
 	# if byte array requested...
 	If ($AsByteArray) {
 		# ...return byte array
-		Return $PrivateKeyBytes
+		Return $ByteArray
 	}
 
 	# convert byte array to PEM-formatted string
 	Try {
-		$PrivateKeyPem = ConvertTo-PEMCertificate -InputObject $PublicKeyBytes -AsPrivateKey
+		$PemCertificate = ConvertTo-PEMCertificate -InputObject $ByteArray -AsPrivateKey
 	}
 	Catch {
 		Write-Warning -Message 'could not create PEM-formatted string from byte array'
@@ -1075,7 +1075,7 @@ Function Get-PfxPrivateKey {
 	}
 
 	# return PEM-encoded string
-	Return $PrivateKeyPem
+	Return $PemCertificate
 }
 
 Function Get-PfxPublicKey {
@@ -1129,7 +1129,7 @@ Function Get-PfxPublicKey {
 
 	# convert byte array to PEM-formatted string
 	Try {
-		$PublicKeyPem = ConvertTo-PEMCertificate -InputObject $Certificate.RawData
+		$PemCertificate = ConvertTo-PEMCertificate -InputObject $Certificate.RawData
 	}
 	Catch {
 		Write-Warning -Message 'could not create PEM-formatted string from byte array'
@@ -1137,7 +1137,7 @@ Function Get-PfxPublicKey {
 	}
 
 	# return PEM-encoded string
-	Return $PublicKeyPem
+	Return $PemCertificate
 }
 
 Function Grant-CertificatePermissions {
