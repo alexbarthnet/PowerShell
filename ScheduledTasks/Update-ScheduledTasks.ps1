@@ -74,14 +74,17 @@ String or string array representing the path to one or more PowerShell modules r
 .PARAMETER Certificates
 String or string array representing the path to one or more PFX certificate files. Each certificate will be installed in the local machine personal store.
 
+.PARAMETER Expression
+String containing an expression to evaluate. The expression must return a boolean. The result of evaluating the expression determines the state of the scheduled task trigger.
+
 .PARAMETER RemoveOldTasks
 Switch parameter to remove any scheduled task that is not defined in the JSON file and located in any of the task paths defined on the entries in the JSON configuration file.
 
 .PARAMETER TranscriptName
 The string to substitute for the random component of the default PowerShell transcript file name.
 
-.PARAMETER TranscriptPath
-The path to an existing folder for saving PowerShell transcript files.
+.PARAMETER SkipTranscript
+Switch parameter to skip logging to a PowerShell transcript.
 
 .INPUTS
 None.
@@ -167,10 +170,15 @@ Param(
 	[string]$RunLevel = 'Highest',
 	# scheduled task parameter - modules
 	[Parameter(ParameterSetName = 'Add')]
+	[Parameter(ParameterSetName = 'Install')]
 	[string[]]$Modules,
 	# scheduled task parameter - certificates
 	[Parameter(ParameterSetName = 'Add')]
+	[Parameter(ParameterSetName = 'Install')]
 	[string[]]$Certificates,
+	# expression to evaluate for task trigger
+	[Parameter(ParameterSetName = 'Add')]
+	[string]$Expression,
 	# switch to remove old tasks during run
 	[Parameter(ParameterSetName = 'Default')]
 	[switch]$RemoveOldTasks,
@@ -195,6 +203,96 @@ Param(
 )
 
 Begin {
+	Function Compare-CimInstance {
+		Param(
+			[Microsoft.Management.Infrastructure.CimInstance]$ReferenceInstance,
+			[Microsoft.Management.Infrastructure.CimInstance]$DifferenceInstance
+		)
+
+		# for each named typed property in the reference object...
+		ForEach ($Name in $ReferenceInstance.CimInstanceProperties.Where({ $_.CimType -notin 'Instance', 'InstanceArray' }).Name) {
+			# report property name
+			Write-Verbose -Message "comparing '$Name' property in reference instance"
+			# if property value in reference instance does not match property value in difference instance...
+			If ($ReferenceInstance.$Name -ne $DifferenceInstance.$Name) {
+				# return false
+				Return $false
+			}
+		}
+
+		# for each named typed property in the difference object...
+		ForEach ($Name in $DifferenceInstance.CimInstanceProperties.Where({ $_.CimType -notin 'Instance', 'InstanceArray' }).Name) {
+			# report property name
+			Write-Verbose -Message "comparing '$Name' property in difference instance"
+			# if property value in difference instance does not match property value in reference instance...
+			If ($DifferenceInstance.$Name -ne $ReferenceInstance.$Name) {
+				# return false
+				Return $false
+			}
+		}
+
+		# for each named instance in the reference object...
+		ForEach ($InstanceName in $ReferenceInstance.CimInstanceProperties.Where({ $_.CimType -eq 'Instance' }).Name) {
+			# if named instance missing from difference object...
+			If ($null -eq $DifferenceInstance.CimInstanceProperties.Where({ $_.CimType -eq 'Instance' -and $_.Name -eq $InstanceName })) {
+				# return false
+				Return $false
+			}
+			# compare instance objects
+			Try {
+				$ForwardComparison = Compare-CimInstance -ReferenceInstance $ReferenceInstance.$InstanceName -DifferenceInstance $DifferenceInstance.$InstanceName
+			}
+			Catch {
+				Return $_
+			}
+			# if forward comparison is false...
+			If ($ForwardComparison -eq $false) {
+				Return $false
+			}
+		}
+
+		# for each named instance in the difference object...
+		ForEach ($InstanceName in $DifferenceInstance.CimInstanceProperties.Where({ $_.CimType -eq 'Instance' }).Name) {
+			# if named instance missing from reference object...
+			If ($null -eq $ReferenceInstance.CimInstanceProperties.Where({ $_.CimType -eq 'Instance' -and $_.Name -eq $InstanceName })) {
+				# return false
+				Return $false
+			}
+			# compare instance objects
+			Try {
+				$ReverseComparison = Compare-CimInstance -ReferenceInstance $DifferenceInstance.$InstanceName -DifferenceInstance $ReferenceInstance.$InstanceName
+			}
+			Catch {
+				Return $_
+			}
+			# if reverse comparison is false...
+			If ($ReverseComparison -eq $false) {
+				Return $false
+			}
+		}
+
+		# TODO: complete forward check of instance arrays
+		# for each named instance array in reference object...
+		ForEach ($InstanceName in $ReferenceInstance.CimInstanceProperties.Where({ $_.CimType -eq 'InstanceArray' }).Name) {
+			# if named instance array missing from difference object...
+			If ($null -eq $DifferenceInstance.CimInstanceProperties.Where({ $_.CimType -eq 'InstanceArray' -and $_.Name -eq $InstanceName })) {
+				# return false
+				Return $false
+			}
+
+		}
+
+		# TODO: complete reverse check of instance arrays
+		# for each named instance array in difference object...
+		ForEach ($InstanceName in $DifferenceInstance.CimInstanceProperties.Where({ $_.CimType -eq 'InstanceArray' }).Name) {
+			# if named instance array missing from reference object...
+			If ($null -eq $ReferenceInstance.CimInstanceProperties.Where({ $_.CimType -eq 'InstanceArray' -and $_.Name -eq $InstanceName })) {
+				# return false
+				Return $false
+			}
+		}
+	}
+
 	Function Import-CertificateFromPath {
 		[CmdletBinding()]
 		Param(
@@ -547,6 +645,7 @@ Begin {
 			[string]$Execute,
 			[string]$Argument,
 			# trigger
+			[boolean]$TriggerEnabled,
 			[datetime]$TriggerAt,
 			[timespan]$RandomDelay,
 			[timespan]$RepetitionInterval,
@@ -562,6 +661,21 @@ Begin {
 		$ScheduledTaskActionParams = @{
 			Execute  = $Execute
 			Argument = $Argument
+		}
+
+		# create params for New-ScheduledTaskTrigger
+		$ScheduledTaskPrincipalParams = @{
+			UserId = $UserId
+		}
+
+		# add logon type if configured
+		If ($null -ne $LogonType) {
+			$ScheduledTaskPrincipalParams['LogonType'] = $LogonType
+		}
+
+		# add run leve if configured
+		If ($null -ne $RunLevel) {
+			$ScheduledTaskPrincipalParams['RunLevel'] = $RunLevel
 		}
 
 		# create params for New-ScheduledTaskSettingsSet
@@ -591,21 +705,6 @@ Begin {
 			$ScheduledTaskTriggerParams['RepetitionInterval'] = $RepetitionInterval
 		}
 
-		# create params for New-ScheduledTaskTrigger
-		$ScheduledTaskPrincipalParams = @{
-			UserId = $UserId
-		}
-
-		# add repetition interval if configured
-		If ($null -ne $LogonType) {
-			$ScheduledTaskPrincipalParams['LogonType'] = $LogonType
-		}
-
-		# add repetition interval if configured
-		If ($null -ne $RunLevel) {
-			$ScheduledTaskPrincipalParams['RunLevel'] = $RunLevel
-		}
-
 		# create scheduled task action
 		Try {
 			$Action = New-ScheduledTaskAction @ScheduledTaskActionParams
@@ -614,9 +713,9 @@ Begin {
 			Return $_
 		}
 
-		# create scheduled task trigger
+		# create scheduled task principal
 		Try {
-			$Trigger = New-ScheduledTaskTrigger @ScheduledTaskTriggerParams
+			$Principal = New-ScheduledTaskPrincipal @ScheduledTaskPrincipalParams
 		}
 		Catch {
 			Return $_
@@ -630,12 +729,17 @@ Begin {
 			Return $_
 		}
 
-		# create scheduled task principal
+		# create scheduled task trigger
 		Try {
-			$Principal = New-ScheduledTaskPrincipal @ScheduledTaskPrincipalParams
+			$Trigger = New-ScheduledTaskTrigger @ScheduledTaskTriggerParams
 		}
 		Catch {
 			Return $_
+		}
+
+		# update scheduled task trigger
+		If ($null -ne $TriggerEnabled) {
+			$Trigger.Enabled = $TriggerEnabled
 		}
 
 		# verify task path starts with \
@@ -659,12 +763,20 @@ Begin {
 
 		# if scheduled task exists...
 		If ($Existing) {
-			# ...verify task action components
-			$FixExecute = $Existing.Actions[0].Execute -ne $Action.Execute
-			$FixArguments = $Existing.Actions[0].Arguments -ne $Action.Arguments
+			# verify task action values
+			If ($Existing.Actions.Count -ne 1) {
+				$FixActions = $true
+			}
+			Else {
+				# reset boolean
+				$FixActions = $false
+				# verify values
+				If ($Existing.Actions[0].Execute -ne $Action.Execute) { $FixActions = $true }
+				If ($Existing.Actions[0].Arguments -ne $Action.Arguments) { $FixActions = $true }
+			}
 
-			# ...verify task action
-			If ($FixExecute -or $FixArguments) {
+			# update task action if necessary
+			If ($FixActions) {
 				Try {
 					Write-Verbose -Verbose -Message "Updating action for existing scheduled task '$TaskName' at path '$TaskPath'"
 					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Action $Action
@@ -675,36 +787,47 @@ Begin {
 				}
 			}
 
-			# ...verify task trigger components
-			$FixStartBoundary = [datetime]$Existing.Triggers[0].StartBoundary -ne [datetime]$Trigger.StartBoundary
-			If ($null -ne $RandomDelay -or $RandomDelay -ne 0) {
-				$FixRandomDelay = $Existing.Triggers[0].RandomDelay -ne $Trigger.RandomDelay
+			# verify task principal values
+			If ($null -eq $Existing.Principal) {
+				$FixPrincipal = $true
 			}
-			If ($null -ne $RepetitionInterval -or $RepetitionInterval -ne 0) {
-				$FixRepetitionInterval = $Existing.Triggers[0].Repetition.Interval -ne $Trigger.Repetition.Interval
+			Else {
+				# reset boolean
+				$FixPrincipal = $false
+				# verify values
+				If ($Existing.Principal.UserId -ne $Principal.UserId) { $FixPrincipal = $true }
+				If ($Existing.Principal.LogonType -ne $Principal.LogonType) { $FixPrincipal = $true }
+				If ($Existing.Principal.RunLevel -ne $Principal.RunLevel) { $FixPrincipal = $true }
 			}
 
-			# ...verify task trigger
-			If ($FixStartBoundary -or $FixRandomDelay -or $FixRepetitionInterval) {
+			# update task principal if necessary
+			If ($FixPrincipal) {
 				Try {
-					Write-Verbose -Verbose -Message "Updating trigger for existing scheduled task '$TaskName' at path '$TaskPath'"
-					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Trigger $Trigger
+					Write-Verbose -Verbose -Message "Updating principal for existing scheduled task '$TaskName' at path '$TaskPath'"
+					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Principal $Principal
 				}
 				Catch {
-					Write-Warning -Message "could not update trigger for existing scheduled task '$TaskName' at path '$TaskPath'"
+					Write-Warning -Message "could not update principal for existing scheduled task '$TaskName' at path '$TaskPath'"
 					Return $_
 				}
 			}
-			# ...verify task settings components
-			$FixEnabled = $Existing.Settings.Enabled -ne $Settings.Enabled
-			$FixStartOnBattery = $Existing.Settings.DisallowStartIfOnBatteries -ne $Settings.DisallowStartIfOnBatteries
-			$FixStopIfOnBattery = $Existing.Settings.StopIfGoingOnBatteries -ne $Settings.StopIfGoingOnBatteries
-			If ($null -ne $ExecutionTimeLimit -or $ExecutionTimeLimit -ne 0) {
-				$FixExecutionTimeLimit = $Existing.Settings.ExecutionTimeLimit -ne $Settings.ExecutionTimeLimit
+
+			# verify task settings values
+			If ($null -eq $Existing.Settings) {
+				$FixSettings = $true
+			}
+			Else {
+				# reset boolean
+				$FixSettings = $false
+				# verify values
+				If ($Existing.Settings.Enabled -ne $Settings.Enabled) { $FixSettings = $true }
+				If ($Existing.Settings.DisallowStartIfOnBatteries -ne $Settings.DisallowStartIfOnBatteries) { $FixSettings = $true }
+				If ($Existing.Settings.StopIfGoingOnBatteries -ne $Settings.StopIfGoingOnBatteries) { $FixSettings = $true }
+				If ($Existing.Settings.ExecutionTimeLimit -ne $Settings.ExecutionTimeLimit) { $FixSettings = $true }
 			}
 
-			# ...verify task settings
-			If ($FixEnabled -or $FixStartOnBattery -or $FixStopIfOnBattery -or $FixExecutionTimeLimit) {
+			# update task settings if necessary
+			If ($FixSettings) {
 				Try {
 					Write-Verbose -Verbose -Message "Updating settings for existing scheduled task '$TaskName' at path '$TaskPath'"
 					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Settings $Settings
@@ -715,28 +838,29 @@ Begin {
 				}
 			}
 
-			# ...verify task principal components
-			If ($Principal.UserId.Contains('\')) {
-				$FixUserId = $Existing.Principal.UserId -ne ($Principal.UserId.Split('\'))[1]
+			# verify task trigger values
+			If ($Existing.Triggers.Count -ne 1) {
+				$FixTriggers = $true
 			}
 			Else {
-				$FixUserId = $Existing.Principal.UserId -ne $Principal.UserId
-			}
-			If ($null -ne $LogonType) {
-				$FixLogonType = $Existing.Principal.LogonType -ne $Principal.LogonType
-			}
-			If ($null -ne $RunLevel) {
-				$FixRunLevel = $Existing.Principal.RunLevel -ne $Principal.RunLevel
+				# reset boolean
+				$FixTriggers = $false
+				# verify values
+				If ($Existing.Triggers[0].CimClass.CimClassName -ne $Trigger.CimClass.CimClassName) { $FixTriggers = $true }
+				If ($Existing.Triggers[0].Enabled -ne $Trigger.Enabled) { $FixTriggers = $true }
+				If ($Existing.Triggers[0].StartBoundary -ne $Trigger.StartBoundary) { $FixTriggers = $true }
+				If ($Existing.Triggers[0].RandomDelay -ne $Trigger.RandomDelay) { $FixTriggers = $true }
+				If ($Existing.Triggers[0].Repetition.Interval -ne $Trigger.Repetition.Interval) { $FixTriggers = $true }
 			}
 
-			# ...verify task principal
-			If ($FixUserId -or $FixLogonType -or $FixRunLevel) {
+			# update task trigger if necessary
+			If ($FixTriggers) {
 				Try {
-					Write-Verbose -Verbose -Message "Updating principal for existing scheduled task '$TaskName' at path '$TaskPath'"
-					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Principal $Principal
+					Write-Verbose -Verbose -Message "Updating trigger for existing scheduled task '$TaskName' at path '$TaskPath'"
+					$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Trigger $Trigger
 				}
 				Catch {
-					Write-Warning -Message "could not update principal for existing scheduled task '$TaskName' at path '$TaskPath'"
+					Write-Warning -Message "could not update trigger for existing scheduled task '$TaskName' at path '$TaskPath'"
 					Return $_
 				}
 			}
@@ -930,8 +1054,8 @@ Begin {
 		}
 	}
 
-	# if parameter set is Default and SkipTranscript not set...
-	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $PSBoundParameters.ContainsKey('SkipTranscript')) {
+	# if SkipTranscript not requested...
+	If (!$SkipTranscript) {
 		# start transcript with default parameters
 		Try {
 			Start-TranscriptWithHostAndDate
@@ -956,11 +1080,6 @@ Process {
 		$UserId = 'SYSTEM'
 		$LogonType = 'ServiceAccount'
 		$RunLevel = 'Highest'
-
-		# if TriggerAt parameter not provided...
-		If (!$PSBoundParameters.ContainsKey('TriggerAt')) {
-			$TriggerAt = [datetime]'00:00:00'
-		}
 
 		# if RandomDelay parameter not provided...
 		If (!$PSBoundParameters.ContainsKey('RandomDelay')) {
@@ -1130,6 +1249,11 @@ Process {
 				# add Certificates if provided
 				If ($script:Certificates) {
 					$JsonParameters['Certificates'] = [string[]]$Certificates
+				}
+
+				# add Expression if provided
+				If ($script:Expression) {
+					$JsonParameters['Expression'] = [string]$Expression
 				}
 
 				# add current time as FileDateTimeUniversal
@@ -1354,6 +1478,27 @@ Process {
 					$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]($JsonEntry.ExecutionTimeLimitTime - $JsonEntry.TriggerAt)
 				}
 
+				# if trigger expression defined...
+				If ($null -ne $JsonEntry.Expression) {
+					# invoke trigger expression
+					Try {
+						$Evaluation = Invoke-Expression -Command $JsonEntry.Expression
+					}
+					Catch {
+						Write-Warning -Message "could not invoke the TriggerExpression: '$($JsonEntry.Expression)'"
+						Continue NextJsonEntry
+					}
+
+					# if trigger evaluation is not a boolean...
+					If ($Evaluation -isnot [boolean]) {
+						Write-Warning -Message "the evaluation of the TriggerExpression returned an invalid type: '$($Evaluation.GetType().FullName)'"
+						Continue NextJsonEntry
+					}
+
+					# add trigger evaluation to parameters
+					$UpdateScheduledTaskFromJson['TriggerEnabled'] = $Evaluation
+				}
+
 				# update scheduled task
 				Try {
 					Update-ScheduledTaskFromJson @UpdateScheduledTaskFromJson
@@ -1477,8 +1622,8 @@ Process {
 }
 
 End {
-	# if parameter set is Default and SkipTranscript not set...
-	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $PSBoundParameters.ContainsKey('SkipTranscript')) {
+	# if SkipTranscript not requested...
+	If (!$SkipTranscript) {
 		# stop transcript with default parameters
 		Try {
 			Stop-TranscriptWithHostAndDate
