@@ -1054,7 +1054,7 @@ Begin {
 		}
 	}
 
-	# if SkipTranscript not requested...
+	# if skip transcript not requested...
 	If (!$SkipTranscript) {
 		# start transcript with default parameters
 		Try {
@@ -1622,7 +1622,7 @@ Process {
 }
 
 End {
-	# if SkipTranscript not requested...
+	# if skip transcript not requested...
 	If (!$SkipTranscript) {
 		# stop transcript with default parameters
 		Try {

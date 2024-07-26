@@ -133,7 +133,7 @@ Begin {
 		Return $CertificateFound
 	}
 
-	# if SkipTranscript not set...
+	# if skip transcript not requested...
 	If (!$SkipTranscript) {
 		# start transcript with default parameters
 		Try {
@@ -219,7 +219,7 @@ Process {
 		$PfxFiles = Get-ChildItem -Path $Path -Filter 'untrustedguardian*' | Where-Object { $_.Extension -match '^\.p(fx|12)$' }
 	}
 	Catch {
-		Write-Warning "could not search '$Path' for PFX files: $($_.Exception.Message)"
+		Write-Warning -Message "could not search '$Path' for PFX files: $($_.Exception.Message)"
 		Return $_
 	}
 
@@ -237,13 +237,13 @@ Process {
 			Import-PfxCertificateWithDpapi @ImportPfxCertificateWithDpapi
 		}
 		Catch {
-			Write-Warning "could not import '$($PfxFile.FullName)' file to '$CertStoreLocation' store: $($_.Exception.Message)"
+			Write-Warning -Message "could not import '$($PfxFile.FullName)' file to '$CertStoreLocation' store: $($_.Exception.Message)"
 		}
 	}
 }
 
 End {
-	# if SkipTranscript not set...
+	# if skip transcript not requested...
 	If (!$SkipTranscript) {
 		# stop transcript with default parameters
 		Try {

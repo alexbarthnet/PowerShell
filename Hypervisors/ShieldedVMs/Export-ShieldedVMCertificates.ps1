@@ -166,7 +166,7 @@ Begin {
 		Return $Groups
 	}
 
-	# if SkipTranscript not set...
+	# if skip transcript not requested...
 	If (!$SkipTranscript) {
 		# start transcript with default parameters
 		Try {
@@ -327,13 +327,13 @@ Process {
 			Export-PfxCertificateWithDpapi @ExportPfxCertificateWithDpapi
 		}
 		Catch {
-			Write-Warning "could not export '$($Certificate.Subject)' certificate to '$FilePath' path: $($_.Exception.Message)"
+			Write-Warning -Message "could not export '$($Certificate.Subject)' certificate to '$FilePath' path: $($_.Exception.Message)"
 		}
 	}
 }
 
 End {
-	# if SkipTranscript not set...
+	# if skip transcript not requested...
 	If (!$SkipTranscript) {
 		# stop transcript with default parameters
 		Try {
