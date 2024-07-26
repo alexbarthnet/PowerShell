@@ -59,7 +59,7 @@ Param(
 )
 
 Begin {
-	# if SkipTranscript not set...
+	# if skip transcript not requested...
 	If (!$SkipTranscript) {
 		# start transcript with default parameters
 		Try {
@@ -80,7 +80,7 @@ Process {
 		$DnsSubnet = Get-DnsServerClientSubnet | Where-Object { $_.Name -eq $DnsSubnetName }
 	}
 	Catch {
-		Write-Warning 'could not retrieve DNS subnets'
+		Write-Warning -Message 'could not retrieve DNS subnets'
 		Return $_
 	}
 
@@ -88,11 +88,12 @@ Process {
 	If (!$DnsSubnet) {
 		# define required parameters for default DNS subnets
 		$AddDnsServerClientSubnet = @{
-			Name        = $DnsSubnetName
-			IPv4Subnet  = '127.0.0.1/8'
-			IPv6Subnet  = '::1/128'
-			PassThru    = $true
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			Name         = $DnsSubnetName
+			ComputerName = $DnsHostName
+			IPv4Subnet   = '127.0.0.1/8'
+			IPv6Subnet   = '::1/128'
+			PassThru     = $true
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 		}
 
 		# create default DNS subnets
@@ -100,7 +101,7 @@ Process {
 			$DnsSubnet = Add-DnsServerClientSubnet @AddDnsServerClientSubnet
 		}
 		Catch {
-			Write-Warning 'could not create default DNS subnet'
+			Write-Warning -Message 'could not create default DNS subnet'
 			Return $_
 		}
 
@@ -116,7 +117,7 @@ Process {
 		$DnsPolicy = Get-DnsServerQueryResolutionPolicy | Where-Object { $_.Name -eq $DnsPolicyName }
 	}
 	Catch {
-		Write-Warning 'could not retrieve DNS policies'
+		Write-Warning -Message 'could not retrieve DNS policies'
 		Return $_
 	}
 
@@ -125,6 +126,7 @@ Process {
 		# define required parameters for default DNS policy
 		$AddDnsServerQueryResolutionPolicy = @{
 			Name            = $DnsPolicyName
+			ComputerName    = $DnsHostName
 			Action          = 'DENY'
 			Condition       = 'AND'
 			ClientSubnet    = "EQ,$DnsSubnetName"
@@ -139,7 +141,7 @@ Process {
 			$DnsPolicy = Add-DnsServerQueryResolutionPolicy @AddDnsServerQueryResolutionPolicy
 		}
 		Catch {
-			Write-Warning 'could not create default DNS Policy'
+			Write-Warning -Message 'could not create default DNS Policy'
 			Return $_
 		}
 
@@ -152,21 +154,21 @@ Process {
 		$DomainController = $PdcRoleOwner
 	}
 	Else {
-		$DomainController = $Hostname
+		$DomainController = $DnsHostName
 	}
 
 	# get subnets from AD sorted by name
 	Try {
-		$ADReplicationSubnets = Get-ADReplicationSubnet -Server $DomainController -Filter '*' | Where-Object { $_.Location -eq $Location } | Sort-Object -Property 'Name'
+		$ADReplicationSubnets = Get-ADReplicationSubnet -Server $DomainController -Filter "Location -eq '$Location'" | Sort-Object -Property 'Name'
 	}
 	Catch {
-		Write-Warning 'could not retrieve AD replication subnets'
+		Write-Warning -Message "could not retrieve AD Replication Subnets from domain controller: '$DomainController'"
 		Return $_
 	}
 
 	# if subnets not found matching location...
 	If (!$ADReplicationSubnets) {
-		Write-Warning "could not locate any AD Replication Subnets with location matching: $Location"
+		Write-Warning -Message "could not locate any AD Replication Subnets with location matching: '$Location'"
 		Return
 	}
 
@@ -175,13 +177,13 @@ Process {
 		$DnsServerZones = Get-DnsServerZone -ComputerName $DomainController | Where-Object { $_.ZoneType -eq 'Primary' -and $_.IsDsIntegrated -and -not $_.IsAutoCreated } | Sort-Object -Property 'IsReverseLookupZone', 'ZoneName'
 	}
 	Catch {
-		Write-Warning "could not retrieve DNS server zones from server: $($GetDnsServerZone['ComputerName'])"
+		Write-Warning -Message "could not retrieve DNS server zones from domain controller: '$DomainController'"
 		Return $_
 	}
 
 	# if primary DNS zones not found...
 	If (!$DnsServerZones) {
-		Write-Warning 'could not locate any primary DNS Server Zones'
+		Write-Warning -Message 'could not locate any primary DNS Server Zones'
 		Return
 	}
 
@@ -245,7 +247,7 @@ Process {
 			Set-DnsServerClientSubnet -Name $DnsSubnetName -IPv4Subnet $IPv4Subnets -Action 'REPLACE'
 		}
 		Catch {
-			Write-Warning "could not update DNS subnet: $DnsSubnetName"
+			Write-Warning -Message "could not update DNS subnet: $DnsSubnetName"
 			Return $_
 		}
 	}
@@ -256,7 +258,7 @@ Process {
 			Set-DnsServerClientSubnet -Name $DnsSubnetName -IPv6Subnet $IPv6Subnets -Action 'REPLACE'
 		}
 		Catch {
-			Write-Warning "could not update DNS subnet: $DnsSubnetName"
+			Write-Warning -Message "could not update DNS subnet: $DnsSubnetName"
 			Return $_
 		}
 
@@ -360,6 +362,7 @@ Process {
 		# define parameters for DnsServerQueryResolutionPolicy
 		$DnsServerQueryResolutionPolicy = @{
 			Name            = $DnsPolicyName
+			ComputerName    = $DnsHostName
 			Condition       = 'AND'
 			ClientSubnet    = "NE,$DnsSubnetName"
 			Fqdn            = "NE,$DnsPolicyFqdn"
@@ -374,7 +377,7 @@ Process {
 				Remove-DnsServerQueryResolutionPolicy -Name $DnsPolicyName -Force
 			}
 			Catch {
-				Write-Warning 'could not remove existing DNS policy'
+				Write-Warning -Message 'could not remove existing DNS policy'
 				Return $_
 			}
 
@@ -383,7 +386,7 @@ Process {
 				Add-DnsServerQueryResolutionPolicy -Action 'DENY' @DnsServerQueryResolutionPolicy
 			}
 			Catch {
-				Write-Warning 'could not add new DNS policy'
+				Write-Warning -Message 'could not add new DNS policy'
 				Return $_
 			}
 
@@ -396,7 +399,7 @@ Process {
 				Set-DnsServerQueryResolutionPolicy @DnsServerQueryResolutionPolicy
 			}
 			Catch {
-				Write-Warning 'could not update existing DNS policy'
+				Write-Warning -Message 'could not update existing DNS policy'
 				Return $_
 			}
 
@@ -411,7 +414,7 @@ Process {
 }
 
 End {
-	# if SkipTranscript not set...
+	# if skip transcript not requested...
 	If (!$SkipTranscript) {
 		# stop transcript with default parameters
 		Try {
