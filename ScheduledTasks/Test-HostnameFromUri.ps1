@@ -29,9 +29,6 @@ Param(
 	# URI for reference text
 	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Default')]
 	[uri]$Uri,
-	# string for the JSON file containing the value for the Uri property
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Json')][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
-	[string]$Json,
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant()
@@ -133,33 +130,6 @@ Begin {
 }
 
 Process {
-	# if JSON provided...
-	If ($PSCmdlet.ParameterSetName -eq 'Json') {
-		# retrieve JSON data
-		Try {
-			$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
-		}
-		Catch {
-			Write-Host 'ERROR: retrieving ADFS JSON file'
-			Return $_
-		}
-
-		# if Uri not in JSON data...
-		If ([string]::IsNullOrEmpty($JsonData.Uri)) {
-			Write-Host 'required value not found in JSON file: Uri'
-			Return
-		}
-
-		# cast Uri property to Uri object
-		Try {
-			$Uri = [uri]$JsonData.Uri
-		}
-		Catch {
-			Write-Warning -Message 'could not cast Uri property in JSON file to Uri object'
-			Return $_
-		}
-	}
-
 	# validate URI
 	If ($Uri.Scheme -notin 'http', 'https') {
 		Write-Warning -Message "URI scheme is not 'http' or 'https'"
