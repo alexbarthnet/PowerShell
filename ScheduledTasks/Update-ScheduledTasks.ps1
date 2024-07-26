@@ -848,9 +848,9 @@ Begin {
 				# verify values
 				If ($Existing.Triggers[0].CimClass.CimClassName -ne $Trigger.CimClass.CimClassName) { $FixTriggers = $true }
 				If ($Existing.Triggers[0].Enabled -ne $Trigger.Enabled) { $FixTriggers = $true }
-				If ($Existing.Triggers[0].StartBoundary -ne $Trigger.StartBoundary) { $FixTriggers = $true }
 				If ($Existing.Triggers[0].RandomDelay -ne $Trigger.RandomDelay) { $FixTriggers = $true }
 				If ($Existing.Triggers[0].Repetition.Interval -ne $Trigger.Repetition.Interval) { $FixTriggers = $true }
+				If ([datetime]$Existing.Triggers[0].StartBoundary -ne [datetime]$Trigger.StartBoundary) { $FixTriggers = $true }
 			}
 
 			# update task trigger if necessary
