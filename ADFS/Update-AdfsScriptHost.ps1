@@ -291,17 +291,29 @@ Process {
 		Return $_
 	}
 
-	# test FQDN from JSON data
-	If ([string]::IsNullOrEmpty($JsonData.Fqdn)) {
-		Write-Host 'required value not found in JSON file: Fqdn'
+	# if Uri not in JSON data...
+	If ([string]::IsNullOrEmpty($JsonData.Uri)) {
+		Write-Host 'required value not found in JSON file: Uri'
 		Return
 	}
 
-	# test Path from JSON data
+	# if Path not in JSON data...
 	If ([string]::IsNullOrEmpty($JsonData.Path)) {
 		Write-Host 'required value not found in JSON file: Path'
 		Return
 	}
+
+	# cast Uri property to Uri object
+	Try {
+		$Uri = [uri]$JsonData.Uri
+	}
+	Catch {
+		Write-Warning -Message 'could not cast Uri property in JSON file to Uri object'
+		Return $_
+	}
+
+	# record hostname from original Uri
+	$UriHostName = $Uri.DnsSafeHost
 
 	# build primary path
 	$Path = Join-Path -Path $JsonData.Path -ChildPath $ChildPath
@@ -319,34 +331,27 @@ Process {
 	# define path of specific host file
 	$FilePath = Join-Path -Path $Path -ChildPath "$HostName.txt"
 
-	# define URI to ADFS hostname
-	Try {
-		$Uri = [uri]"https://$($JsonData.Fqdn)/host/"
-		Write-Host "Constructed URL IP address from URL: '$($Uri.AbsoluteUri)'"
-	}
-	Catch {
-		Write-Warning "Error creating URL from FQDN: '$($JsonData.Fqdn)'"
-		Return $_
-	}
-
 	# get content of hosts file
 	Try {
-		$Hosts = Get-Content -Path "$env:SystemRoot\System32\drivers\etc\hosts"
+		$HostsFileContent = Get-Content -Path "$env:SystemRoot\System32\drivers\etc\hosts"
 	}
 	Catch {
 		Write-Warning 'Error retrieving hosts file'
 		Return $_
 	}
 
-	# if hosts contains an entry for FQDN...
-	If ($Hosts -match "^[^#].*$($JsonData.Fqdn)$") {
-		Write-Host 'Hosts file contains active entry with the ADFS FQDN; resolving FQDN to IP via DNS to build alternate host URL'
+	# if hosts contains an entry with hostname from Uri...
+	If ($HostsFileContent -match "^[^#].*$($Uri.DnsSafeHost)$") {
+		# report matching hosts entry found
+		Write-Verbose -Message 'hosts file contains entry with hostname from the provided URI; resolving hostname to IP via DNS to build alternate URI'
+		# record hostname from original Uri
+		$UriHostName = $Uri.DnsSafeHost
 		# resolve host in URI to IP Address to workaround potential hosts file resolution of ADFS servers
 		Try {
 			$Uri = Get-UriWithIPAddressFromUriWithHostname -Uri $Uri
 		}
 		Catch {
-			Write-Warning "could not create new URI with IPaddress from original URI"
+			Write-Warning 'could not create new Uri with IPaddress from original Uri'
 			Return $_
 		}
 	}
@@ -354,7 +359,7 @@ Process {
 	# define parameters for Invoke-WebRequest
 	$InvokeWebRequest = @{
 		Uri                = $Uri
-		Headers            = @{'host' = $JsonData.Fqdn }
+		Headers            = @{ 'host' = $UriHostName }
 		UseBasicParsing    = $true
 		MaximumRedirection = 0
 		ErrorAction        = [System.Management.Automation.ActionPreference]::Stop
