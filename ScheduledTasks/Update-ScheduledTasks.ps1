@@ -1101,14 +1101,14 @@ Process {
 	If ($Register) {
 		# define parameters for Update-ScheduledTaskFromJson
 		$UpdateScheduledTaskFromJson = @{
-			TaskName           = 'Update-ScheduledTasks'
-			TaskPath           = '\'
-			Execute            = Join-Path -Path $PSHOME -ChildPath 'powershell.exe'
-			Argument           = "-NonInteractive -NoProfile -ExecutionPolicy ByPass -File `"$PSCommandPath`" -Json `"$Json`""
-			UserId             = $UserId
-			LogonType          = $LogonType
-			RunLevel           = $RunLevel
-			TriggerAt          = $TriggerAt
+			TaskName  = 'Update-ScheduledTasks'
+			TaskPath  = '\'
+			Execute   = Join-Path -Path $PSHOME -ChildPath 'powershell.exe'
+			Argument  = "-NonInteractive -NoProfile -ExecutionPolicy ByPass -File `"$PSCommandPath`" -Json `"$Json`""
+			UserId    = $UserId
+			LogonType = $LogonType
+			RunLevel  = $RunLevel
+			TriggerAt = $TriggerAt
 		}
 
 		# if RandomDelay parameter not provided...
@@ -1170,7 +1170,7 @@ Process {
 
 		# report state
 		Write-Verbose -Verbose -Message "Unregistered existing scheduled task '$TaskName' at path '$TaskPath'"
-		
+
 		# return after unregistering task
 		Return
 	}
