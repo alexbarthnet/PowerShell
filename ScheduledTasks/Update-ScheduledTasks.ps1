@@ -1323,7 +1323,7 @@ Process {
 					Argument  = [string]$Argument
 					UserId    = [string]$UserId
 					LogonType = [string]$LogonType
-					TriggerAt = [datetime]$TriggerAt
+					TriggerAt = [string]$TriggerAt.ToString('o')
 				}
 
 				# add RandomDelay if provided as datetime value
