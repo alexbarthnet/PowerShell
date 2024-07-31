@@ -1007,15 +1007,15 @@ Process {
 			:NextJsonEntry ForEach ($JsonEntry in $JsonData) {
 				# validate values present in JSON file
 				Switch ($true) {
-					([string]::IsNullOrEmpty($JsonDatum.Path)) {
+					([string]::IsNullOrEmpty($JsonEntry.Path)) {
 						Write-Warning -Message "required entry (Path) not found in configuration file: $Json"
 						Continue NextJsonEntry
 					}
-					([string]::IsNullOrEmpty($JsonDatum.Destination)) {
+					([string]::IsNullOrEmpty($JsonEntry.Destination)) {
 						Write-Warning -Message "required entry (Destination) not found in configuration file: $Json"
 						Continue NextJsonEntry
 					}
-					([string]::IsNullOrEmpty($JsonDatum.Direction)) {
+					([string]::IsNullOrEmpty($JsonEntry.Direction)) {
 						Write-Warning -Message "required entry (Direction) not found in configuration file: $Json"
 						Continue NextJsonEntry
 					}
