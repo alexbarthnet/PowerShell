@@ -9,26 +9,38 @@ Adds or removes Scheduled Tasks defined by entries in a JSON configuration file.
 The path to a JSON file containing the configuration for this script.
 
 .PARAMETER Show
-Switch parameter to show all entries from the JSON configuration file. Cannot be combined with the Clear, Remove, Add, Install, or Uninstall parameters.
+Switch parameter to show all entries from the JSON configuration file. Cannot be combined with the Clear, Remove, Add, AddSelf, RemoveSelf, Register, or Unregister parameters.
 
 .PARAMETER Clear
-Switch parameter to clear all entries from the JSON configuration file. Cannot be combined with the Show, Remove, Add, Install, or Uninstall parameters.
+Switch parameter to clear all entries from the JSON configuration file. Cannot be combined with the Show, Remove, Add, AddSelf, RemoveSelf, Register, or Unregister parameters.
 
 .PARAMETER Remove
-Switch parameter to remove an entry from the JSON configuration file. Cannot be combined with the Show, Clear, Add, Install, or Uninstall parameters.
+Switch parameter to remove an entry from the JSON configuration file. Cannot be combined with the Show, Clear, Add, AddSelf, RemoveSelf, Register, or Unregister parameters.
 
 .PARAMETER Add
-Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Show, Clear, Remove, Install, or Uninstall parameters.
+Switch parameter to add an entry to the JSON configuration file. Cannot be combined with the Show, Clear, Remove, AddSelf, RemoveSelf, Register, or Unregister parameters.
 
-.PARAMETER Install
-Switch parameter to create a scheduled task named "Update-ScheduledTasks" in the root task path. Cannot be combined with the Show, Clear, Remove, Add, or Uninstall parameters. The task is created with a following defaults:
- - The task will run the script from the current path with the provided JSON file
- - The task will run as SYSTEM with highest privilegs
- - The task will run at midnight then every 15 minutes afterwards
+.PARAMETER AddSelf
+Switch parameter to add an entry to the JSON configuration file for this script. Cannot be combined with the Show, Clear, Remove, Add, RemoveSelf, Register, or Unregister parameters. The entry is created with the following defaults:
+ - The entry will be created in the root task path
+ - The entry will run this script from the current path with the provided JSON file
+ - The entry will run as SYSTEM with highest privileges
+ - The entry will run at the start of the next day then every 15 minutes afterwards
+ - The entry will run for a maximum of 1 minute
+
+.PARAMETER RemoveSelf
+Switch parameter to remove an entry from the JSON configuration file for this script. Cannot be combined with the Show, Clear, Remove, Add, AddSelf, Register, or Unregister parameters.
+
+.PARAMETER Register
+Switch parameter to register a scheduled task for this script. Cannot be combined with the Show, Clear, Remove, Add, AddSelf, RemoveSelf, or Unregister parameters. The task is created with the following defaults:
+ - The task will be created in the root task path
+ - The task will run this script from the current path with the provided JSON file
+ - The task will run as SYSTEM with highest privileges
+ - The task will run at the start of the next day then every 15 minutes afterwards
  - The task will run for a maximum of 1 minute
 
-.PARAMETER Uninstall
-Switch parameter to remove the scheduled task named "Update-ScheduledTasks" from the root task path. Cannot be combined with the Show, Clear, Remove, Add, or Install parameters.
+.PARAMETER Unregister
+Switch parameter to unregister the scheduled task created by the Register switch. Cannot be combined with the Show, Clear, Remove, Add, AddSelf, RemoveSelf, or Register parameters.
 
 .PARAMETER TaskName
 The name of the scheduled task. Required when the Add or Remove parameters are specified.
@@ -125,10 +137,14 @@ Param(
 	[switch]$Remove,
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[switch]$Add,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Install')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'AddSelf')]
 	[switch]$Install,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Uninstall')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'RemoveSelf')]
 	[switch]$Uninstall,
+	[Parameter(Mandatory = $True, ParameterSetName = 'Register')]
+	[switch]$Register,
+	[Parameter(Mandatory = $True, ParameterSetName = 'Unregister')]
+	[switch]$Unregister,
 	# scheduled task parameter - register
 	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
@@ -145,36 +161,48 @@ Param(
 	[string]$Argument,
 	# scheduled task parameter - trigger
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Install')]
+	[Parameter(ParameterSetName = 'AddSelf')]
+	[Parameter(ParameterSetName = 'Register')]
 	[datetime]$TriggerAt = [datetime]'00:00:00',
 	# scheduled task parameter - trigger
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Install')]
+	[Parameter(ParameterSetName = 'AddSelf')]
+	[Parameter(ParameterSetName = 'Register')]
 	[timespan]$RandomDelay = (New-TimeSpan -Minutes 5),
 	# scheduled task parameter - trigger
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Install')]
+	[Parameter(ParameterSetName = 'AddSelf')]
+	[Parameter(ParameterSetName = 'Register')]
 	[timespan]$RepetitionInterval = (New-TimeSpan -Hours 1),
 	# scheduled task parameter - settings
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Install')]
+	[Parameter(ParameterSetName = 'AddSelf')]
+	[Parameter(ParameterSetName = 'Register')]
 	[timespan]$ExecutionTimeLimit = (New-TimeSpan -Minutes 30),
 	# scheduled task parameter - principal
 	[Parameter(ParameterSetName = 'Add')]
+	[Parameter(ParameterSetName = 'AddSelf')]
+	[Parameter(ParameterSetName = 'Register')]
 	[string]$UserId = 'SYSTEM',
 	# scheduled task parameter - principal
-	[Parameter(ParameterSetName = 'Add')][ValidateSet('ServiceAccount', 'Password')]
+	[Parameter(ParameterSetName = 'Add')]
+	[Parameter(ParameterSetName = 'AddSelf')]
+	[Parameter(ParameterSetName = 'Register')]
+	[ValidateSet('ServiceAccount', 'Password')]
 	[string]$LogonType = 'ServiceAccount',
 	# scheduled task parameter - principal
-	[Parameter(ParameterSetName = 'Add')][ValidateSet('Highest', 'Limited')]
+	[Parameter(ParameterSetName = 'Add')]
+	[Parameter(ParameterSetName = 'AddSelf')]
+	[Parameter(ParameterSetName = 'Register')]
+	[ValidateSet('Highest', 'Limited')]
 	[string]$RunLevel = 'Highest',
 	# scheduled task parameter - modules
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Install')]
+	[Parameter(ParameterSetName = 'AddSelf')]
 	[string[]]$Modules,
 	# scheduled task parameter - certificates
 	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Install')]
+	[Parameter(ParameterSetName = 'AddSelf')]
 	[string[]]$Certificates,
 	# expression to evaluate for task trigger
 	[Parameter(ParameterSetName = 'Add')]
@@ -1069,8 +1097,86 @@ Begin {
 }
 
 Process {
-	# if Install set...
-	If ($Install) {
+	# if Register set...
+	If ($Register) {
+		# define parameters for Update-ScheduledTaskFromJson
+		$UpdateScheduledTaskFromJson = @{
+			TaskName           = 'Update-ScheduledTasks'
+			TaskPath           = '\'
+			Execute            = Join-Path -Path $PSHOME -ChildPath 'powershell.exe'
+			Argument           = "-NonInteractive -NoProfile -ExecutionPolicy ByPass -File `"$PSCommandPath`" -Json `"$Json`""
+			UserId             = $UserId
+			LogonType          = $LogonType
+			RunLevel           = $RunLevel
+			TriggerAt          = $TriggerAt
+		}
+
+		# if RandomDelay parameter not provided...
+		If (!$PSBoundParameters.ContainsKey('RandomDelay')) {
+			$UpdateScheduledTaskFromJson['RandomDelay'] = (New-TimeSpan -Minutes 0)
+		}
+
+		# if ExecutionTimeLimit parameter not provided...
+		If (!$PSBoundParameters.ContainsKey('ExecutionTimeLimit')) {
+			$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = (New-TimeSpan -Minutes 1)
+		}
+
+		# if RepetitionInterval parameter not provided...
+		If (!$PSBoundParameters.ContainsKey('RepetitionInterval')) {
+			$UpdateScheduledTaskFromJson['RepetitionInterval'] = (New-TimeSpan -Minutes 15)
+		}
+
+		# register scheduled task
+		Try {
+			Update-ScheduledTaskFromJson @UpdateScheduledTaskFromJson
+		}
+		Catch {
+			Return $_
+		}
+
+		# return after registering task
+		Return
+	}
+
+	# if Unregister set...
+	If ($Unregister) {
+		# define parameters for scheduled task
+		$ScheduledTaskParameters = @{
+			TaskName = $TaskName
+			TaskPath = $TaskPath
+		}
+
+		# retrieve scheduled task
+		Try {
+			$ScheduledTask = Get-ScheduledTask @ScheduledTaskParameters -ErrorAction 'SilentlyContinue'
+		}
+		Catch {
+			Return $_
+		}
+
+		# if scheduled task not found...
+		If (!$ScheduledTask) {
+			Write-Warning -Message "Could not locate existing scheduled task '$TaskName' at path '$TaskPath'"
+			Return
+		}
+
+		# uninstall scheduled task
+		Try {
+			Unregister-ScheduledTask @ScheduledTaskParameters -Confirm:$false
+		}
+		Catch {
+			Return $_
+		}
+
+		# report state
+		Write-Verbose -Verbose -Message "Unregistered existing scheduled task '$TaskName' at path '$TaskPath'"
+		
+		# return after unregistering task
+		Return
+	}
+
+	# if AddSelf set...
+	If ($AddSelf) {
 		# set script mode to Add
 		$Add = $true
 
@@ -1079,9 +1185,6 @@ Process {
 		$TaskPath = '\'
 		$Execute = Join-Path -Path $PSHOME -ChildPath 'powershell.exe'
 		$Argument = "-NonInteractive -NoProfile -ExecutionPolicy ByPass -File `"$PSCommandPath`" -Json `"$Json`""
-		$UserId = 'SYSTEM'
-		$LogonType = 'ServiceAccount'
-		$RunLevel = 'Highest'
 
 		# if RandomDelay parameter not provided...
 		If (!$PSBoundParameters.ContainsKey('RandomDelay')) {
@@ -1099,8 +1202,8 @@ Process {
 		}
 	}
 
-	# if Uninstall set...
-	If ($Uninstall) {
+	# if RemoveSelf set...
+	If ($RemoveSelf) {
 		# set script mode to Remove
 		$Remove = $true
 
@@ -1122,8 +1225,8 @@ Process {
 	}
 	# if JSON file was not found...
 	Else {
-		# ...and Add set...
-		If ($Add) {
+		# ...and Add or AddSelf set...
+		If ($Add -or $AddSelf) {
 			# ...try to create the JSON file
 			Try {
 				$null = New-Item -ItemType 'File' -Path $Json -ErrorAction 'Stop'
@@ -1135,7 +1238,7 @@ Process {
 			# ...create JSON data object as empty array
 			$JsonData = @()
 		}
-		# ...and Add not set...
+		# ...and Add or AddSelf not set...
 		Else {
 			# ...report and return
 			Write-Warning -Message "could not find configuration file: '$Json'"
@@ -1585,66 +1688,6 @@ Process {
 				}
 			}
 		}
-	}
-
-	# if Install set...
-	If ($Install) {
-		# define parameters for Update-ScheduledTaskFromJson
-		$UpdateScheduledTaskFromJson = @{
-			TaskName           = $TaskName
-			TaskPath           = $TaskPath
-			Execute            = $Execute
-			Argument           = $Argument
-			UserId             = $UserId
-			LogonType          = $LogonType
-			RunLevel           = $RunLevel
-			TriggerAt          = $TriggerAt
-			RandomDelay        = $RandomDelay
-			ExecutionTimeLimit = $ExecutionTimeLimit
-			RepetitionInterval = $RepetitionInterval
-		}
-
-		# install scheduled task
-		Try {
-			Update-ScheduledTaskFromJson @UpdateScheduledTaskFromJson
-		}
-		Catch {
-			Return $_
-		}
-	}
-
-	# if Uninstall set...
-	If ($Uninstall) {
-		# define parameters for scheduled task
-		$UnregisterScheduledTask = @{
-			TaskName = $TaskName
-			TaskPath = $TaskPath
-		}
-
-		# retrieve scheduled task
-		Try {
-			$ScheduledTask = Get-ScheduledTask @UnregisterScheduledTask -ErrorAction 'SilentlyContinue'
-		}
-		Catch {
-			Return $_
-		}
-
-		# if scheduled task not found...
-		If (!$ScheduledTask) {
-			Write-Warning -Message "Could not locate existing scheduled task '$TaskName' at path '$TaskPath'"
-			Return
-		}
-
-		# uninstall scheduled task
-		Try {
-			Unregister-ScheduledTask @UnregisterScheduledTask -Confirm:$false
-		}
-		Catch {
-			Return $_
-		}
-
-		# report
-		Write-Verbose -Verbose -Message "Unregistered existing scheduled task '$TaskName' at path '$TaskPath'"
 	}
 }
 
