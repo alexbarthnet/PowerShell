@@ -1141,14 +1141,12 @@ Process {
 	# if Unregister set...
 	If ($Unregister) {
 		# define parameters for scheduled task
-		$ScheduledTaskParameters = @{
-			TaskName = 'Update-ScheduledTasks'
-			TaskPath = '\'
-		}
+		$TaskName = 'Update-ScheduledTasks'
+		$TaskPath = '\'
 
 		# retrieve scheduled task
 		Try {
-			$ScheduledTask = Get-ScheduledTask @ScheduledTaskParameters -ErrorAction 'SilentlyContinue'
+			$ScheduledTask = Get-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -ErrorAction 'SilentlyContinue'
 		}
 		Catch {
 			Return $_
@@ -1162,7 +1160,7 @@ Process {
 
 		# uninstall scheduled task
 		Try {
-			Unregister-ScheduledTask @ScheduledTaskParameters -Confirm:$false
+			Unregister-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Confirm:$false
 		}
 		Catch {
 			Return $_
