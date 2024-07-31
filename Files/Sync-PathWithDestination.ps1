@@ -169,8 +169,8 @@ Param(
 
 Begin {
 	Function Resolve-PresetToParameters {
-		# resolve direction
-		If ($null -eq $PSBoundParameters['Direction']) {
+		# resolve Direction
+		If ($null -eq $script:PSBoundParameters['Direction']) {
 			If ($script:Preset -eq 'Sync' -or $script:Preset -eq 'Merge') {
 				$script:Direction = 'Both'
 			}
@@ -180,7 +180,7 @@ Begin {
 		}
 
 		# resolve SkipDelete
-		If ($null -eq $PSBoundParameters['SkipDelete']) {
+		If ($null -eq $script:PSBoundParameters['SkipDelete']) {
 			If ($script:Preset -eq 'Merge' -or $script:Preset -eq 'Contribute' -or $script:Preset -eq 'Missing') {
 				$script:SkipDelete = $true
 			}
@@ -190,7 +190,7 @@ Begin {
 		}
 
 		# resolve SkipExisting
-		If ($null -eq $PSBoundParameters['SkipExisting']) {
+		If ($null -eq $script:PSBoundParameters['SkipExisting']) {
 			If ($script:Preset -eq 'Missing') {
 				$script:SkipExisting = $true
 			}
