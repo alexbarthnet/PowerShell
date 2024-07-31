@@ -1142,8 +1142,8 @@ Process {
 	If ($Unregister) {
 		# define parameters for scheduled task
 		$ScheduledTaskParameters = @{
-			TaskName = $TaskName
-			TaskPath = $TaskPath
+			TaskName = 'Update-ScheduledTasks'
+			TaskPath = '\'
 		}
 
 		# retrieve scheduled task
