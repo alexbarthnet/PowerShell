@@ -42,7 +42,7 @@ Begin {
 			[System.Uri]$Uri,
 			# the DNS server to resolve the URI against
 			[Parameter(DontShow)][ValidateScript({ [System.Net.IPAddress]::TryParse($_, [ref][System.Net.IPAddress]::None) })]
-			[System.Net.IPAddress]$DnsServer = '1.1.1.1',
+			[System.Net.IPAddress[]]$DnsServer = @('8.8.8.8', '8.8.4.4', '1.1.1.1'),
 			# the DNS record type to resolve
 			[Parameter(DontShow)][ValidateScript({ [Microsoft.DnsClient.Commands.RecordType].IsEnumDefined($_) })]
 			[string]$Type = 'A'
