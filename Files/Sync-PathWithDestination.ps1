@@ -77,74 +77,85 @@ None. The script merely reports on actions taken and does not provide any action
 To be added...
 #>
 
-[CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Default')]
+[CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Run')]
 Param(
+	# script parameters - json file
+	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Json')]
 	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Show')]
-	[switch]$Show,
 	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Clear')]
-	[switch]$Clear,
 	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Remove')]
-	[switch]$Remove,
 	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Add')]
-	[switch]$Add,
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Run')]
-	[switch]$Run,
+	[string]$Json,
+	# script parameters - mode
+	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Show')]
+	[switch]$Show,
+	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Clear')]
+	[switch]$Clear,
 	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Remove')]
+	[switch]$Remove,
 	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Add')]
-	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Run')]
-	[ValidatePattern('^[^\*]+$')]
-	[string]$Path,
+	[switch]$Add,
+	# function parameters - source path
 	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Remove')]
 	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Add')]
-	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Run')]
+	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Run')]
+	[ValidatePattern('^[^\*]+$')]
+	[string]$Path,
+	# function parameters - target path
+	[Parameter(Position = 3, Mandatory = $True, ParameterSetName = 'Remove')]
+	[Parameter(Position = 3, Mandatory = $True, ParameterSetName = 'Add')]
+	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Run')]
 	[ValidatePattern('^[^\*]+$')]
 	[string]$Destination,
+	# function parameters - preset for Direction, SkipExisting, SkipDelete
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'Run')]
 	[ValidateSet('Sync', 'Contribute', 'Mirror', 'Merge')]
 	[string]$Preset = 'Sync',
+	# function parameters - sync direction
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'Run')]
 	[ValidateSet('Both', 'Forward', 'Reverse')]
 	[string]$Direction = 'Both',
+	# function parameters - purge destination
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'Run')]
 	[switch]$Purge,
+	# function parameters - include child items
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'Run')]
 	[switch]$Recurse,
+	# function parameters - compare files with Get-FileHash
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'Run')]
 	[switch]$CheckHash,
+	# function parameters - do not delete mismatched files and folders
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'Run')]
 	[switch]$SkipDelete,
+	# function parameters - do not compare existing files and folders
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'Run')]
 	[switch]$SkipExisting,
+	# function parameters - do not compare files
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'Run')]
 	[switch]$SkipFiles,
+	# function parameters - create source path if missing
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'Run')]
 	[switch]$CreatePath,
+	# function parameters - create target path if missing
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'Run')]
 	[switch]$CreateDestination,
+	# function parameters - time sync last ran
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'Run')]
 	[uint64]$LastSyncTime,
-	[Parameter()]
-	[string]$Json,
 	# switch to skip transcript logging
 	[Parameter(DontShow)]
 	[switch]$SkipTranscript,
-	# name in transcript files
-	[Parameter(DontShow)]
-	[string]$TranscriptName,
-	# path to transcript files
-	[Parameter(DontShow)]
-	[string]$TranscriptPath,
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -190,7 +201,7 @@ Begin {
 	}
 
 	Function Sync-ItemsInPathWithDestination {
-		[CmdletBinding()]
+		[CmdletBinding(SupportsShouldProcess)]
 		param (
 			[Parameter()]
 			[string]$Path,
@@ -215,11 +226,15 @@ Begin {
 			[Parameter()]
 			[switch]$CreateDestination,
 			[Parameter()]
-			[uint64]$LastSyncTime = 0
+			[string]$Updated,
+			[Parameter()]
+			[uint64]$LastSyncTime = 0,
+			[Parameter()]
+			[uint64]$CurrentSyncTime = [datetime]::Now.Ticks
 		)
 
 		# get current time
-		$sync_time_ticks = (Get-Date).Ticks
+		$CurrentSyncTime = (Get-Date).Ticks
 
 		# trim inputs
 		$Path = $Path.TrimEnd('\')
@@ -300,12 +315,14 @@ Begin {
 				# create folders that are missing from Destination
 				ForEach ($folder_to_create in $paths_to_create_on_target) {
 					$folder_path_to_create = Join-Path -Path $target_path -ChildPath $folder_to_create
-					Try {
-						$null = New-Item -Path $folder_path_to_create -ItemType 'Directory' -Force -Verbose
-					}
-					Catch {
-						Write-Output "ERROR: could not create folder '$folder_path_to_create'"
-						Return
+					If ($PSCmdlet.ShouldProcess($folder_path_to_create, 'create folder')) {
+						Try {
+							$null = New-Item -Path $folder_path_to_create -ItemType 'Directory' -Force -Verbose
+						}
+						Catch {
+							Write-Output "ERROR: could not create folder '$folder_path_to_create'"
+							Return
+						}
 					}
 				}
 			}
@@ -318,12 +335,14 @@ Begin {
 				# create folders that are missing from Path
 				ForEach ($folder_to_create in $paths_to_create_on_source) {
 					$folder_path_to_create = Join-Path -Path $source_path -ChildPath $folder_to_create
-					Try {
-						$null = New-Item -Path $folder_path_to_create -ItemType 'Directory' -Force -Verbose
-					}
-					Catch {
-						Write-Output "ERROR: could not create folder '$folder_path_to_create'"
-						Return
+					If ($PSCmdlet.ShouldProcess($folder_path_to_create, 'create folder')) {
+						Try {
+							$null = New-Item -Path $folder_path_to_create -ItemType 'Directory' -Force -Verbose
+						}
+						Catch {
+							Write-Output "ERROR: could not create folder '$folder_path_to_create'"
+							Return
+						}
 					}
 				}
 			}
@@ -352,11 +371,13 @@ Begin {
 				ForEach ($file_to_copy in $files_to_copy_to_target) {
 					$source_path_file_forward = Join-Path -Path $source_path -ChildPath $file_to_copy
 					$target_path_file_forward = Join-Path -Path $target_path -ChildPath $file_to_copy
-					Try {
-						Copy-Item -Path $source_path_file_forward -Destination $target_path_file_forward -Force -Verbose
-					}
-					Catch {
-						Write-Output "ERROR: could not copy file '$source_path_file_forward' to file '$target_path_file_forward'"
+					If ($PSCmdlet.ShouldProcess("source: $source_path_file_forward, target: $target_path_file_forward", 'copy file')) {
+						Try {
+							Copy-Item -Path $source_path_file_forward -Destination $target_path_file_forward -Force -Verbose
+						}
+						Catch {
+							Write-Output "ERROR: could not copy file '$source_path_file_forward' to file '$target_path_file_forward'"
+						}
 					}
 				}
 			}
@@ -370,11 +391,13 @@ Begin {
 				ForEach ($file_to_copy in $files_to_copy_to_source) {
 					$target_path_file_reverse = Join-Path -Path $target_path -ChildPath $file_to_copy
 					$source_path_file_reverse = Join-Path -Path $source_path -ChildPath $file_to_copy
-					Try {
-						Copy-Item -Path $target_path_file_reverse -Destination $source_path_file_reverse -Force -Verbose
-					}
-					Catch {
-						Write-Output "ERROR: could not copy file '$target_path_file_reverse' to file '$source_path_file_reverse'"
+					If ($PSCmdlet.ShouldProcess("source: $target_path_file_reverse, target: $source_path_file_reverse", 'copy file')) {
+						Try {
+							Copy-Item -Path $target_path_file_reverse -Destination $source_path_file_reverse -Force -Verbose
+						}
+						Catch {
+							Write-Output "ERROR: could not copy file '$target_path_file_reverse' to file '$source_path_file_reverse'"
+						}
 					}
 				}
 			}
@@ -417,20 +440,24 @@ Begin {
 				}
 				# copy file from Path to Destination if newer or Direction is not 'Both'
 				If ($file_item_on_source.LastWriteTime -gt $file_item_on_target.LastWriteTime -or $Direction -ne 'Both') {
-					Try {
-						Copy-Item -Path $file_path_on_source -Destination $file_path_on_target -Force -Verbose:$VerbosePreference
-					}
-					Catch {
-						Write-Output "ERROR: could not copy file '$file_path_on_source' to file '$file_path_on_target'"
+					If ($PSCmdlet.ShouldProcess("source: $file_path_on_source, target: $file_path_on_target", 'copy file')) {
+						Try {
+							Copy-Item -Path $file_path_on_source -Destination $file_path_on_target -Force -Verbose:$VerbosePreference
+						}
+						Catch {
+							Write-Output "ERROR: could not copy file '$file_path_on_source' to file '$file_path_on_target'"
+						}
 					}
 				}
 				# copy file from Destination to Path if newer and Direction is 'Both'
 				ElseIf ($file_item_on_source.LastWriteTime -lt $file_item_on_target.LastWriteTime -and $Direction -eq 'Both') {
-					Try {
-						Copy-Item -Path $file_path_on_target -Destination $file_path_on_source -Force -Verbose:$VerbosePreference
-					}
-					Catch {
-						Write-Output "ERROR: could not copy file '$file_path_on_target' to file '$file_path_on_source'"
+					If ($PSCmdlet.ShouldProcess("source: $file_path_on_target, target: $file_path_on_source", 'copy file')) {
+						Try {
+							Copy-Item -Path $file_path_on_target -Destination $file_path_on_source -Force -Verbose:$VerbosePreference
+						}
+						Catch {
+							Write-Output "ERROR: could not copy file '$file_path_on_target' to file '$file_path_on_source'"
+						}
 					}
 				}
 			}
@@ -465,11 +492,13 @@ Begin {
 				# remove old files that are only in Destination
 				ForEach ($file_to_remove in $files_to_remove_from_target) {
 					$file_path_to_remove = Join-Path -Path $target_path -ChildPath $file_to_remove
-					Try {
-						$null = Remove-Item -Path $file_path_to_remove -Force -Verbose
-					}
-					Catch {
-						Write-Output "ERROR: could not remove file '$file_path_to_remove'"
+					If ($PSCmdlet.ShouldProcess($file_path_to_remove, 'remove file')) { 
+						Try {
+							$null = Remove-Item -Path $file_path_to_remove -Force -Verbose
+						}
+						Catch {
+							Write-Output "ERROR: could not remove file '$file_path_to_remove'"
+						}
 					}
 				}
 			}
@@ -482,11 +511,13 @@ Begin {
 				# remove old files that are only in Path
 				ForEach ($file_to_remove in $files_to_remove_from_source) {
 					$file_path_to_remove = Join-Path -Path $source_path -ChildPath $file_to_remove
-					Try {
-						$null = Remove-Item -Path $file_path_to_remove -Force -Verbose
-					}
-					Catch {
-						Write-Output "ERROR: could not remove file '$file_path_to_remove'"
+					If ($PSCmdlet.ShouldProcess($file_path_to_remove, 'remove file')) {
+						Try {
+							$null = Remove-Item -Path $file_path_to_remove -Force -Verbose
+						}
+						Catch {
+							Write-Output "ERROR: could not remove file '$file_path_to_remove'"
+						}
 					}
 				}
 			}
@@ -521,11 +552,13 @@ Begin {
 				# remove old paths only in Destination
 				ForEach ($folder_to_remove in $paths_to_remove_from_target) {
 					$folder_path_to_remove = Join-Path -Path $target_path -ChildPath $folder_to_remove
-					Try {
-						$null = Remove-Item -Path $folder_path_to_remove -Force -Verbose:$VerbosePreference
-					}
-					Catch {
-						Write-Output "ERROR: could not remove path '$folder_path_to_remove'"
+					If ($PSCmdlet.ShouldProcess($folder_path_to_remove, 'remove folder')) { 
+						Try {
+							$null = Remove-Item -Path $folder_path_to_remove -Force -Verbose:$VerbosePreference
+						}
+						Catch {
+							Write-Output "ERROR: could not remove path '$folder_path_to_remove'"
+						}
 					}
 				}
 			}
@@ -538,11 +571,13 @@ Begin {
 				# remove old paths only in Path
 				ForEach ($folder_to_remove in $paths_to_remove_from_source) {
 					$folder_path_to_remove = Join-Path -Path $source_path -ChildPath $folder_to_remove
-					Try {
-						$null = Remove-Item -Path $folder_path_to_remove -Force -Verbose:$VerbosePreference
-					}
-					Catch {
-						Write-Output "ERROR: could not remove path '$folder_path_to_remove'"
+					If ($PSCmdlet.ShouldProcess($folder_path_to_remove, 'remove folder')) { 
+						Try {
+							$null = Remove-Item -Path $folder_path_to_remove -Force -Verbose:$VerbosePreference
+						}
+						Catch {
+							Write-Output "ERROR: could not remove path '$folder_path_to_remove'"
+						}
 					}
 				}
 			}
@@ -550,11 +585,12 @@ Begin {
 
 		# update JSON file if LastSyncTime is not 0
 		If ($Json -and $LastSyncTime -ne 0) {
+			# create custom object from parameters then add to object
 			Try {
-				$JsonData = [array]($JsonData | Where-Object { $_.Path -ne $source_path })
-				$JsonData += [pscustomobject]@{
-					Path              = $source_path.TrimEnd('\')
-					Destination       = $target_path.TrimEnd('\')
+				# create ordered dictionary for custom object
+				$JsonParameters = [ordered]@{
+					Path              = $Path
+					Destination       = $Destination
 					Direction         = $Direction
 					Purge             = $Purge.ToBool()
 					Recurse           = $Recurse.ToBool()
@@ -564,12 +600,32 @@ Begin {
 					SkipFiles         = $SkipFiles.ToBool()
 					CreatePath        = $CreatePath.ToBool()
 					CreateDestination = $CreateDestination.ToBool()
-					LastSyncTime      = $sync_time_ticks
+					LastSyncTime      = $CurrentSyncTime
+					Updated           = $Updated
 				}
-				$JsonData | ConvertTo-Json | Set-Content -Path $Json
+
+				# create custom object from hashtable
+				$JsonEntry = [pscustomobject]$JsonParameters
+
+				# if existing entry has same primary key(s)...
+				If ($JsonData.Where({ $_.Path -eq $Path -and $_.Destination -eq $Destination })) {
+					# inquire before removing existing entry
+					Write-Warning -Message "Will overwrite existing entry for '$Path' path and '$Destination' destination in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
+					# remove existing entry with same primary key(s)
+					$JsonData = [array]($JsonData.Where({ $_.Path -ne $Path -and $_.Destination -ne $Destination }))
+				}
+
+				# add entry to data
+				$JsonData += $JsonEntry
+
+				# export JSON data
+				$JsonData | Sort-Object -Property 'Path', 'Destination' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
+				Write-Output "`nAdded entry for '$Path' path and '$Destination' destination to configuration file: '$Json'"
+				$JsonData | Sort-Object -Property 'Path', 'Destination' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			Catch {
-				Write-Output "`nERROR: could not update configuration file after Sync: '$Json'"
+				Write-Warning -Message "could not update configuration file after Sync: '$Json'"
+				Return $_
 			}
 		}
 	}
@@ -679,7 +735,7 @@ Begin {
 
 		# split transcript files on transcript date
 		$NewFiles, $OldFiles = $TranscriptFiles.Where({ $_.LastWriteTime -ge $TranscriptDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
-		
+
 		# if count of files after transcript date is less than to cleanup threshold...
 		If ($NewFiles.Count -lt $TranscriptCount) {
 			# declare skip
@@ -708,16 +764,11 @@ Begin {
 		}
 	}
 
-	# if running...
-	If ($PSCmdlet.ParameterSetName -in 'Default', 'Run') {
-		# define hashtable for transcript functions
-		$TranscriptWithHostAndDate = @{}
-		# define parameters for transcript functions
-		If ($PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptWithHostAndDate['TranscriptName'] = $PSBoundParameters['TranscriptName'] }
-		If ($PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptWithHostAndDate['TranscriptPath'] = $PSBoundParameters['TranscriptPath'] }
-		# start transcript with parameters
+	# if skip transcript not requested...
+	If (!$SkipTranscript) {
+		# start transcript with default parameters
 		Try {
-			Start-TranscriptWithHostAndDate @TranscriptWithHostAndDate
+			Start-TranscriptWithHostAndDate
 		}
 		Catch {
 			Throw $_
@@ -726,43 +777,40 @@ Begin {
 }
 
 Process {
-	# if JSON file not provided...
-	If ($PSBoundParameters.ContainsKey('Json') -eq $false) {
-		# ...define default JSON file
-		$Json = $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, '.json')
-	}
-
-	# if JSON file found...
-	If (Test-Path -Path $Json) {
-		# ...create JSON data object as array of PSCustomObjects from JSON file content
-		Try {
-			$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
-		}
-		Catch {
-			Write-Output "`nERROR: could not read configuration file: '$Json'"
-			Return $_
-		}
-	}
-	# if JSON file was not found...
-	Else {
-		# ...and Add set...
-		If ($Add) {
-			# ...try to create the JSON file
+	# if script not in Run mode...
+	If ($PSCmdLet.ParameterSetName -ne 'Run') {
+		# if JSON file found...
+		If (Test-Path -Path $Json) {
+			# ...create JSON data object as array of PSCustomObjects from JSON file content
 			Try {
-				$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
+				$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 			}
 			Catch {
-				Write-Output "`nERROR: could not create configuration file: '$Json'"
+				Write-Warning -Message "could not read configuration file: '$Json'"
 				Return $_
 			}
-			# ...create JSON data object as empty array
-			$JsonData = @()
 		}
-		# ...and Add not set...
+		# if JSON file was not found...
 		Else {
-			# ...report and return
-			Write-Output "`nERROR: could not find configuration file: '$Json'"
-			Return
+			# ...and Add set...
+			If ($Add) {
+				# ...try to create the JSON file
+				Try {
+					$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
+				}
+				Catch {
+					Write-Warning -Message "could not create configuration file: '$Json'"
+					Return $_
+				}
+				# ...create JSON data object as empty array
+				$JsonData = @()
+			}
+			# ...and Add not set...
+			Else {
+				# ...report and return
+				Write-Warning -Message "could not find configuration file: '$Json'"
+				Return
+			}
 		}
 	}
 
@@ -770,38 +818,40 @@ Process {
 	switch ($true) {
 		# show configuration file
 		$Show {
-			Write-Output "`nDisplaying '$Json'"
+			Write-Verbose -Verbose -Message "Displaying '$Json'"
 			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 		# clear configuration file
 		$Clear {
 			Try {
 				[string]::Empty | Set-Content -Path $Json
-				Write-Output "`nCleared configuration file: '$Json'"
+				Write-Verbose -Verbose -Message "Cleared configuration file: '$Json'"
 			}
 			Catch {
-				Write-Output "`nERROR: could not clear configuration file: '$Json'"
+				Write-Warning -Message "could not clear configuration file: '$Json'"
 				Return $_
 			}
 		}
 		# remove entry from configuration file
 		$Remove {
 			Try {
-				$JsonData = $JsonData | Where-Object {
-					$_.Path -ne $Path -and $_.Destination -ne $Destination
-				}
-				If ($null -eq $JsonData) {
+				# remove existing entry by primary key(s)...
+				$JsonData = [array]($JsonData.Where({ $_.Path -ne $Path -and $_.Destination -ne $Destination }))
+				# if JSON data empty...
+				If ($JsonData.Count -eq 0) {
+					# clear JSON data
 					[string]::Empty | Set-Content -Path $Json
-					Write-Output "`nRemoved entry for '$Path' and '$Destination' from configuration file: '$Json'"
 				}
 				Else {
-					$JsonData | Sort-Object -Property Path, Destination | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-					Write-Output "`nRemoved entry for '$Path' and '$Destination' from configuration file: '$Json'"
+					# export JSON data
+					$JsonData | Sort-Object -Property 'Path', 'Destination' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 				}
-				$JsonData | Format-List
+				# report state and display updated file
+				Write-Verbose -Verbose -Message "Removed '$Path' path with '$Destination' destination from configuration file: '$Json'"
+				$JsonData | Sort-Object -Property 'Path', 'Destination' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			Catch {
-				Write-Output "`nERROR: could not update configuration file: '$Json'"
+				Write-Warning -Message "could not update configuration file: '$Json'"
 				Return $_
 			}
 		}
@@ -812,7 +862,7 @@ Process {
 				Resolve-PresetToParameters
 			}
 			Catch {
-				Write-Output "`nERROR: could not resolve preset to parameters: '$Preset'"
+				Write-Warning -Message "could not resolve preset to parameters: '$Preset'"
 				Throw $_
 			}
 
@@ -821,7 +871,7 @@ Process {
 				$Path = $Path.TrimEnd('\')
 			}
 			Catch {
-				Write-Output "`nERROR: could not trim Path"
+				Write-Warning -Message "could not trim Path: '$Path'"
 				Throw $_
 			}
 
@@ -830,14 +880,14 @@ Process {
 				$Destination = $Destination.TrimEnd('\')
 			}
 			Catch {
-				Write-Output "`nERROR: could not trim Destination"
+				Write-Warning -Message "could not trim Destination: '$Destination'"
 				Throw $_
 			}
 
 			# create custom object from parameters then add to object
 			Try {
 				# create ordered dictionary for custom object
-				$JsonParameters += [pscustomobject]@{
+				$JsonParameters = [ordered]@{
 					Path              = $Path
 					Destination       = $Destination
 					Direction         = $Direction
@@ -853,37 +903,40 @@ Process {
 				}
 
 				# add current time as FileDateTimeUniversal
-				$JsonParameters['Updated'] = Get-Date -Format FileDateTimeUniversal
+				$JsonParameters['Updated'] = (Get-Date -Format FileDateTimeUniversal)
 
 				# create custom object from hashtable
-				$JsonDatum = [pscustomobject]$JsonParameters
+				$JsonEntry = [pscustomobject]$JsonParameters
 
 				# if existing entry has same primary key(s)...
-				If ($JsonData | Where-Object { $_.Path -eq $_.Path -and $_.Destination -eq $_.Destination }) {
+				If ($JsonData.Where({ $_.Path -eq $Path -and $_.Destination -eq $Destination })) {
 					# inquire before removing existing entry
-					Write-Warning -Message "Will overwrite existing entry for '$Path' and '$Destination' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
+					Write-Warning -Message "Will overwrite existing entry for '$Path' path and '$Destination' destination in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
 					# remove existing entry with same primary key(s)
-					$JsonData = $JsonData | Where-Object { $_.Path -ne $_.Path -and $_.Destination -ne $_.Destination }
+					$JsonData = [array]($JsonData.Where({ $_.Path -ne $Path -and $_.Destination -ne $Destination }))
 				}
 
-				# add datum to data
-				$JsonData += $JsonDatum
-				$JsonData | Sort-Object -Property Path, Destination | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-				Write-Output "`nAdded entry for '$Path' and '$Destination' to configuration file: '$Json'"
-				$JsonData | Sort-Object -Property Path, Destination | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+				# add entry to data
+				$JsonData += $JsonEntry
+
+				# export JSON data
+				$JsonData | Sort-Object -Property 'Path', 'Destination' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
+				Write-Output "`nAdded entry for '$Path' path and '$Destination' destination to configuration file: '$Json'"
+				$JsonData | Sort-Object -Property 'Path', 'Destination' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			Catch {
-				Write-Output "`nERROR: could not update configuration file: '$Json'"
+				Write-Warning -Message "could not update configuration file: '$Json'"
+				Return $_
 			}
 		}
-		# run script with provided parameters
+		# run parameters directly
 		$Run {
 			# resolve preset to parameters
 			Try {
 				Resolve-PresetToParameters
 			}
 			Catch {
-				Write-Output "`nERROR: could not resolve preset to parameters: '$Preset'"
+				Write-Warning -Message "could not resolve preset to parameters: '$Preset'"
 				Throw $_
 			}
 
@@ -892,7 +945,7 @@ Process {
 				$Path = $Path.TrimEnd('\')
 			}
 			Catch {
-				Write-Output "`nERROR: could not trim Path"
+				Write-Warning -Message 'could not trim Path'
 				Throw $_
 			}
 
@@ -901,79 +954,95 @@ Process {
 				$Destination = $Destination.TrimEnd('\')
 			}
 			Catch {
-				Write-Output "`nERROR: could not trim Destination"
+				Write-Warning -Message 'could not trim Destination'
 				Throw $_
 			}
 
-			# define required parameters for Sync-ItemsInPathWithDestination
-			$SyncItemsInPathWithDestination = @{
-				Path              = $Path
-				Destination       = $Destination
-				Direction         = $Direction
-				Purge             = $Purge.ToBool()
-				Recurse           = $Recurse.ToBool()
-				CheckHash         = $CheckHash.ToBool()
-				SkipDelete        = $SkipDelete.ToBool()
-				SkipExisting      = $SkipExisting.ToBool()
-				SkipFiles         = $SkipFiles.ToBool()
-				CreatePath        = $CreatePath.ToBool()
-				CreateDestination = $CreateDestination.ToBool()
-				LastSyncTime      = $LastSyncTime
-			}
+			# create hashtable from parameters then splat to function
+			Try {
+				# define required parameters for Sync-ItemsInPathWithDestination
+				$SyncItemsInPathWithDestination = [ordered]@{
+					Path              = $Path
+					Destination       = $Destination
+					Direction         = $Direction
+					Purge             = $Purge.ToBool()
+					Recurse           = $Recurse.ToBool()
+					CheckHash         = $CheckHash.ToBool()
+					SkipDelete        = $SkipDelete.ToBool()
+					SkipExisting      = $SkipExisting.ToBool()
+					SkipFiles         = $SkipFiles.ToBool()
+					CreatePath        = $CreatePath.ToBool()
+					CreateDestination = $CreateDestination.ToBool()
+					LastSyncTime      = $LastSyncTime
+				}
 
-			# define optional parameters for Sync-ItemsInPathWithDestination
-			If ($WhatIfPreference.IsPresent) {
-				$SyncItemsInPathWithDestination['WhatIf'] = $true
-			}
+				# define optional parameters for Sync-ItemsInPathWithDestination
+				If ($WhatIfPreference.IsPresent) {
+					$SyncItemsInPathWithDestination['WhatIf'] = $true
+				}
 
-			# sync items in path with destination
-			Sync-ItemsInPathWithDestination @SyncItemsInPathWithDestination
+				# sync items in path with destination
+				Sync-ItemsInPathWithDestination @SyncItemsInPathWithDestination
+			}
+			Catch {
+				Write-Warning -Message 'could not sync path with destination'
+				Return $_
+			}
 		}
 		# process entries in configuration file
 		Default {
 			# check entry count in configuration file
 			If ($JsonData.Count -eq 0) {
-				Write-Output "`nERROR: no entries found in configuration file: $Json"
+				Write-Warning -Message "no entries found in configuration file: '$Json'"
 				Return
 			}
 
 			# process configuration file
-			:JsonDatum ForEach ($JsonDatum in $JsonData) {
-				switch ($true) {
+			:NextJsonEntry ForEach ($JsonEntry in $JsonData) {
+				# validate values present in JSON file
+				Switch ($true) {
 					([string]::IsNullOrEmpty($JsonDatum.Path)) {
-						Write-Host "ERROR: required entry (Path) not found in configuration file: $Json"; Continue :JsonDatum
+						Write-Warning -Message "required entry (Path) not found in configuration file: $Json"
+						Continue NextJsonEntry
 					}
 					([string]::IsNullOrEmpty($JsonDatum.Destination)) {
-						Write-Host "ERROR: required entry (Destination) not found in configuration file: $Json"; Continue :JsonDatum
+						Write-Warning -Message "required entry (Destination) not found in configuration file: $Json"
+						Continue NextJsonEntry
 					}
 					([string]::IsNullOrEmpty($JsonDatum.Direction)) {
-						Write-Host "ERROR: required entry (Direction) not found in configuration file: $Json"; Continue :JsonDatum
+						Write-Warning -Message "required entry (Direction) not found in configuration file: $Json"
+						Continue NextJsonEntry
 					}
-					Default {
-						# define required parameters for Sync-ItemsInPathWithDestination
-						$SyncItemsInPathWithDestination = @{
-							Path              = $JsonDatum.Path
-							Destination       = $JsonDatum.Destination
-							Direction         = $JsonDatum.Direction
-							Purge             = $JsonDatum.Purge
-							Recurse           = $JsonDatum.Recurse
-							CheckHash         = $JsonDatum.CheckHash
-							SkipDelete        = $JsonDatum.SkipDelete
-							SkipExisting      = $JsonDatum.SkipExisting
-							SkipFiles         = $JsonDatum.SkipFiles
-							CreatePath        = $CreatePath.ToBool()
-							CreateDestination = $CreateDestination.ToBool()
-							LastSyncTime      = $JsonDatum.LastSyncTime
-						}
+				}
 
-						# define optional parameters for Sync-ItemsInPathWithDestination
-						If ($WhatIfPreference.IsPresent) {
-							$SyncItemsInPathWithDestination['WhatIf'] = $true
-						}
+				# define required parameters for Sync-ItemsInPathWithDestination
+				$SyncItemsInPathWithDestination = @{
+					Path              = $JsonEntry.Path
+					Destination       = $JsonEntry.Destination
+					Direction         = $JsonEntry.Direction
+					Purge             = $JsonEntry.Purge
+					Recurse           = $JsonEntry.Recurse
+					CheckHash         = $JsonEntry.CheckHash
+					SkipDelete        = $JsonEntry.SkipDelete
+					SkipExisting      = $JsonEntry.SkipExisting
+					SkipFiles         = $JsonEntry.SkipFiles
+					CreatePath        = $JsonEntry.CreatePath
+					CreateDestination = $JsonEntry.CreateDestination
+					LastSyncTime      = $JsonEntry.LastSyncTime
+					Updated           = $JsonEntry.Updated
+				}
 
-						# sync items in path with destination
-						Sync-ItemsInPathWithDestination @SyncItemsInPathWithDestination
-					}
+				# define optional parameters for Sync-ItemsInPathWithDestination
+				If ($WhatIfPreference.IsPresent) {
+					$SyncItemsInPathWithDestination['WhatIf'] = $true
+				}
+
+				# sync items in path with destination
+				Try {
+					Sync-ItemsInPathWithDestination @SyncItemsInPathWithDestination
+				}
+				Catch {
+					Return $_
 				}
 			}
 		}
@@ -981,11 +1050,11 @@ Process {
 }
 
 End {
-	# if running...
-	If ($PSCmdlet.ParameterSetName -in 'Default', 'Run') {
-		# stop transcript with parameters
+	# if skip transcript not requested...
+	If (!$SkipTranscript) {
+		# stop transcript with default parameters
 		Try {
-			Stop-TranscriptWithHostAndDate @TranscriptWithHostAndDate
+			Stop-TranscriptWithHostAndDate
 		}
 		Catch {
 			Throw $_
