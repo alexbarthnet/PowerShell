@@ -782,40 +782,101 @@ Begin {
 }
 
 Process {
-	# if script not in Run mode...
-	If ($PSCmdLet.ParameterSetName -ne 'Run') {
-		# if JSON file found...
-		If (Test-Path -Path $Json) {
-			# ...create JSON data object as array of PSCustomObjects from JSON file content
+	# if script in direct run mode...
+	If ($PSCmdLet.ParameterSetName -eq 'Run') {
+		# resolve preset to parameters
+		Try {
+			Resolve-PresetToParameters
+		}
+		Catch {
+			Write-Warning -Message "could not resolve preset to parameters: '$Preset'"
+			Throw $_
+		}
+
+		# trim any trailing backslash from Path
+		Try {
+			$Path = $Path.TrimEnd('\')
+		}
+		Catch {
+			Write-Warning -Message 'could not trim Path'
+			Throw $_
+		}
+
+		# trim any trailing backslash from Destination
+		Try {
+			$Destination = $Destination.TrimEnd('\')
+		}
+		Catch {
+			Write-Warning -Message 'could not trim Destination'
+			Throw $_
+		}
+
+		# create hashtable from parameters then splat to function
+		Try {
+			# define required parameters for Sync-ItemsInPathWithDestination
+			$SyncItemsInPathWithDestination = [ordered]@{
+				Path              = $Path
+				Destination       = $Destination
+				Direction         = $Direction
+				Purge             = $Purge.ToBool()
+				Recurse           = $Recurse.ToBool()
+				CheckHash         = $CheckHash.ToBool()
+				SkipDelete        = $SkipDelete.ToBool()
+				SkipExisting      = $SkipExisting.ToBool()
+				SkipFiles         = $SkipFiles.ToBool()
+				CreatePath        = $CreatePath.ToBool()
+				CreateDestination = $CreateDestination.ToBool()
+				LastSyncTime      = $LastSyncTime
+			}
+
+			# define optional parameters for Sync-ItemsInPathWithDestination
+			If ($script:WhatIfPreference.IsPresent) {
+				$SyncItemsInPathWithDestination['WhatIf'] = $script:WhatIfPreference
+			}
+
+			# sync items in path with destination
+			Sync-ItemsInPathWithDestination @SyncItemsInPathWithDestination
+		}
+		Catch {
+			Write-Warning -Message 'could not sync path with destination'
+			Return $_
+		}
+
+		# return after direct run
+		Return
+	}
+
+	# if JSON file found...
+	If (Test-Path -Path $Json) {
+		# ...create JSON data object as array of PSCustomObjects from JSON file content
+		Try {
+			$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
+		}
+		Catch {
+			Write-Warning -Message "could not read configuration file: '$Json'"
+			Return $_
+		}
+	}
+	# if JSON file was not found...
+	Else {
+		# ...and Add set...
+		If ($Add) {
+			# ...try to create the JSON file
 			Try {
-				$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
+				$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
 			}
 			Catch {
-				Write-Warning -Message "could not read configuration file: '$Json'"
+				Write-Warning -Message "could not create configuration file: '$Json'"
 				Return $_
 			}
+			# ...create JSON data object as empty array
+			$JsonData = @()
 		}
-		# if JSON file was not found...
+		# ...and Add not set...
 		Else {
-			# ...and Add set...
-			If ($Add) {
-				# ...try to create the JSON file
-				Try {
-					$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
-				}
-				Catch {
-					Write-Warning -Message "could not create configuration file: '$Json'"
-					Return $_
-				}
-				# ...create JSON data object as empty array
-				$JsonData = @()
-			}
-			# ...and Add not set...
-			Else {
-				# ...report and return
-				Write-Warning -Message "could not find configuration file: '$Json'"
-				Return
-			}
+			# ...report and return
+			Write-Warning -Message "could not find configuration file: '$Json'"
+			Return
 		}
 	}
 
@@ -931,66 +992,6 @@ Process {
 			}
 			Catch {
 				Write-Warning -Message "could not update configuration file: '$Json'"
-				Return $_
-			}
-		}
-		# run parameters directly
-		$Run {
-			# resolve preset to parameters
-			Try {
-				Resolve-PresetToParameters
-			}
-			Catch {
-				Write-Warning -Message "could not resolve preset to parameters: '$Preset'"
-				Throw $_
-			}
-
-			# trim any trailing backslash from Path
-			Try {
-				$Path = $Path.TrimEnd('\')
-			}
-			Catch {
-				Write-Warning -Message 'could not trim Path'
-				Throw $_
-			}
-
-			# trim any trailing backslash from Destination
-			Try {
-				$Destination = $Destination.TrimEnd('\')
-			}
-			Catch {
-				Write-Warning -Message 'could not trim Destination'
-				Throw $_
-			}
-
-			# create hashtable from parameters then splat to function
-			Try {
-				# define required parameters for Sync-ItemsInPathWithDestination
-				$SyncItemsInPathWithDestination = [ordered]@{
-					Path              = $Path
-					Destination       = $Destination
-					Direction         = $Direction
-					Purge             = $Purge.ToBool()
-					Recurse           = $Recurse.ToBool()
-					CheckHash         = $CheckHash.ToBool()
-					SkipDelete        = $SkipDelete.ToBool()
-					SkipExisting      = $SkipExisting.ToBool()
-					SkipFiles         = $SkipFiles.ToBool()
-					CreatePath        = $CreatePath.ToBool()
-					CreateDestination = $CreateDestination.ToBool()
-					LastSyncTime      = $LastSyncTime
-				}
-
-				# define optional parameters for Sync-ItemsInPathWithDestination
-				If ($WhatIfPreference.IsPresent) {
-					$SyncItemsInPathWithDestination['WhatIf'] = $true
-				}
-
-				# sync items in path with destination
-				Sync-ItemsInPathWithDestination @SyncItemsInPathWithDestination
-			}
-			Catch {
-				Write-Warning -Message 'could not sync path with destination'
 				Return $_
 			}
 		}
