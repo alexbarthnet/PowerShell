@@ -240,55 +240,60 @@ Begin {
 		$Path = $Path.TrimEnd('\')
 		$Destination = $Destination.TrimEnd('\')
 
-		# verify source and target
-		If ((Test-Path -Path $Path -PathType 'Container') -and (Test-Path -Path $Destination -PathType 'Container')) {
-			Write-Output "Verified '$Path' and '$Destination' on host"
+		# verify source
+		If (Test-Path -Path $Path -PathType 'Container') {
+			$Source = Get-Item -Path $Path | Select-Object -ExpandProperty 'FullName'
+			Write-Verbose -Message "Found '$Path' on host with full path: $Source"
 		}
-		ElseIf (-not (Test-Path -Path $Path -PathType 'Container')) {
-			If ($CreatePath) {
-				Try {
-					$null = New-Item -ItemType 'Directory' -Path $Path
-				}
-				Catch {
-					Write-Output "Could not create Path folder '$Path' on host"; Return
-				}
+		ElseIf ($CreatePath) {
+			Try {
+				$Source = New-Item -ItemType 'Directory' -Path $Path | Select-Object -ExpandProperty 'FullName'
+				Write-Verbose -Message "Created '$Path' on host with full path: $Source"
 			}
-			Else {
-				Write-Output "Could not find Path folder '$Path' on host"; Return
+			Catch {
+				Write-Warning -Message "Could not create Path folder '$Path' on host"; Return
 			}
 		}
-		ElseIf (-not (Test-Path -Path $Destination -PathType 'Container')) {
-			If ($CreateDestination) {
-				Try {
-					$null = New-Item -ItemType 'Directory' -Path $Destination
-				}
-				Catch {
-					Write-Output "Could not create Destination folder '$Destination' on host"; Return
-				}
+		Else {
+			Write-Warning -Message "Could not find Path folder '$Path' on host"; Return
+		}
+
+		# verify target
+		If (Test-Path -Path $Destination -PathType 'Container') {
+			$Target = Get-Item -Path $Destination | Select-Object -ExpandProperty 'FullName'
+			Write-Verbose -Message "Found '$Destination' on host with full path: $Target"
+		}
+		ElseIf ($CreateDestination) {
+			Try {
+				$Target = New-Item -ItemType 'Directory' -Path $Destination | Select-Object -ExpandProperty 'FullName'
+				Write-Verbose -Message "Created '$Destination' on host with full path: $Target"
 			}
-			Else {
-				Write-Output "Could not find Destination folder '$Destination' on host"; Return
+			Catch {
+				Write-Output "Could not create Destination folder '$Destination' on host"; Return
 			}
+		}
+		Else {
+			Write-Output "Could not find Destination folder '$Destination' on host"; Return
 		}
 
 		# set direction
 		If ($Direction = 'Reverse') {
-			$source_path = $Destination
-			$target_path = $Path
+			$SourcePath = $Target
+			$TargetPath = $Source
 		}
 		Else {
-			$source_path = $Path
-			$target_path = $Destination
+			$SourcePath = $Source
+			$TargetPath = $Target
 		}
 
 		# remove all files and folders from target if Purge is set
 		If ($Purge) {
-			Write-Output "Clearing '$target_path' before copy"
+			Write-Output "Clearing '$TargetPath' before copy"
 			Try {
-				Get-ChildItem -Path $target_path -Recurse -Force | Remove-Item -Force
+				Get-ChildItem -Path $TargetPath -Recurse -Force | Remove-Item -Force
 			}
 			Catch {
-				"ERROR: Could not purge folder '$target_path'"
+				"ERROR: Could not purge folder '$TargetPath'"
 				Return
 			}
 		}
@@ -296,31 +301,31 @@ Begin {
 		# create new folders if Recurse is true
 		If ($Recurse) {
 			# retrieve path objects
-			$path_items_on_source = Get-ChildItem -Path $source_path -Recurse -Directory
-			$path_items_on_target = Get-ChildItem -Path $target_path -Recurse -Directory
+			$SourceFolders = Get-ChildItem -Path $SourcePath -Recurse -Directory
+			$TargetFolders = Get-ChildItem -Path $TargetPath -Recurse -Directory
 
 			# retrieve fullname of new paths
-			$new_paths_on_source = $path_items_on_source | Where-Object { $_.LastWriteTime.Ticks -ge $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
-			$new_paths_on_target = $path_items_on_target | Where-Object { $_.LastWriteTime.Ticks -ge $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
+			$NewSourceFolders = $SourceFolders | Where-Object { $_.LastWriteTime.Ticks -ge $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
+			$NewTargetFolders = $TargetFolders | Where-Object { $_.LastWriteTime.Ticks -ge $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
 
 			# trim new paths to relative paths
-			If ($new_paths_on_source.Count) { $new_paths_on_source_relative = $new_paths_on_source.Replace($source_path, $null) } Else { $new_paths_on_source_relative = @() }
-			If ($new_paths_on_target.Count) { $new_paths_on_target_relative = $new_paths_on_target.Replace($target_path, $null) } Else { $new_paths_on_target_relative = @() }
+			If ($NewSourceFolders.Count) { $RelativeSourceFolders = $NewSourceFolders.Replace($SourcePath, $null) } Else { $RelativeSourceFolders = @() }
+			If ($NewTargetFolders.Count) { $RelativeTargetFolders = $NewTargetFolders.Replace($TargetPath, $null) } Else { $RelativeTargetFolders = @() }
 
 			# create folders in Destination missing from Path
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
 				# retrieve folders that are missing from Destination
-				$paths_to_create_on_target = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$new_paths_on_source_relative, [string[]]$new_paths_on_target_relative))
+				$MissingTargetFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeSourceFolders, [string[]]$RelativeTargetFolders))
 
 				# create folders that are missing from Destination
-				ForEach ($folder_to_create in $paths_to_create_on_target) {
-					$folder_path_to_create = Join-Path -Path $target_path -ChildPath $folder_to_create
-					If ($PSCmdlet.ShouldProcess($folder_path_to_create, 'create folder')) {
+				ForEach ($MissingTargetFolder in $MissingTargetFolders) {
+					$MissingTargetFolder = Join-Path -Path $TargetPath -ChildPath $MissingTargetFolder
+					If ($PSCmdlet.ShouldProcess($MissingTargetFolder, 'create folder')) {
 						Try {
-							$null = New-Item -Path $folder_path_to_create -ItemType 'Directory' -Force -Verbose
+							$null = New-Item -Path $MissingTargetFolder -ItemType 'Directory' -Force -Verbose
 						}
 						Catch {
-							Write-Output "ERROR: could not create folder '$folder_path_to_create'"
+							Write-Output "ERROR: could not create folder '$MissingTargetFolder'"
 							Return
 						}
 					}
@@ -330,17 +335,17 @@ Begin {
 			# create folders in Path missing from Destination
 			If ($Direction -eq 'Both') {
 				# retrieve folders that are missing from Path
-				$paths_to_create_on_source = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$new_paths_on_target_relative, [string[]]$new_paths_on_source_relative))
+				$MissingSourceFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeTargetFolders, [string[]]$RelativeSourceFolders))
 
 				# create folders that are missing from Path
-				ForEach ($folder_to_create in $paths_to_create_on_source) {
-					$folder_path_to_create = Join-Path -Path $source_path -ChildPath $folder_to_create
-					If ($PSCmdlet.ShouldProcess($folder_path_to_create, 'create folder')) {
+				ForEach ($MissingSourceFolder in $MissingSourceFolders) {
+					$MissingSourceFolder = Join-Path -Path $SourcePath -ChildPath $MissingSourceFolder
+					If ($PSCmdlet.ShouldProcess($MissingSourceFolder, 'create folder')) {
 						Try {
-							$null = New-Item -Path $folder_path_to_create -ItemType 'Directory' -Force -Verbose
+							$null = New-Item -Path $MissingSourceFolder -ItemType 'Directory' -Force -Verbose
 						}
 						Catch {
-							Write-Output "ERROR: could not create folder '$folder_path_to_create'"
+							Write-Output "ERROR: could not create folder '$MissingSourceFolder'"
 							Return
 						}
 					}
@@ -351,32 +356,32 @@ Begin {
 		# copy new files if SkipFiles is false
 		If (-not $SkipFiles) {
 			# retrieve file objects
-			$file_items_on_source = Get-ChildItem -Path $source_path -Recurse:$Recurse -File
-			$file_items_on_target = Get-ChildItem -Path $target_path -Recurse:$Recurse -File
+			$SourceItems = Get-ChildItem -Path $SourcePath -Recurse:$Recurse -File
+			$TargetItems = Get-ChildItem -Path $TargetPath -Recurse:$Recurse -File
 
 			# retrieve fullname of new files
-			$new_files_on_source = $file_items_on_source | Where-Object { $_.LastWriteTime.Ticks -ge $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
-			$new_files_on_target = $file_items_on_target | Where-Object { $_.LastWriteTime.Ticks -ge $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
+			$NewSourceFiles = $SourceItems | Where-Object { $_.LastWriteTime.Ticks -ge $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
+			$NewTargetFiles = $TargetItems | Where-Object { $_.LastWriteTime.Ticks -ge $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
 
 			# trim new files to relative paths
-			If ($new_files_on_source.Count) { $new_files_on_source_relative = $new_files_on_source.Replace($source_path, $null) } Else { $new_files_on_source_relative = @() }
-			If ($new_files_on_target.Count) { $new_files_on_target_relative = $new_files_on_target.Replace($target_path, $null) } Else { $new_files_on_target_relative = @() }
+			If ($NewSourceFiles.Count) { $RelativeSourceFiles = $NewSourceFiles.Replace($SourcePath, $null) } Else { $RelativeSourceFiles = @() }
+			If ($NewTargetFiles.Count) { $RelativeTargetFiles = $NewTargetFiles.Replace($TargetPath, $null) } Else { $RelativeTargetFiles = @() }
 
 			# copy new files from Path to Destination
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
 				# retrieve files that are missing from Destination
-				$files_to_copy_to_target = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$new_files_on_source_relative, [string[]]$new_files_on_target_relative))
+				$MissingTargetFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeSourceFiles, [string[]]$RelativeTargetFiles))
 
 				# copy files that are missing from Destination
-				ForEach ($file_to_copy in $files_to_copy_to_target) {
-					$source_path_file_forward = Join-Path -Path $source_path -ChildPath $file_to_copy
-					$target_path_file_forward = Join-Path -Path $target_path -ChildPath $file_to_copy
-					If ($PSCmdlet.ShouldProcess("source: $source_path_file_forward, target: $target_path_file_forward", 'copy file')) {
+				ForEach ($MissingTargetFile in $MissingTargetFiles) {
+					$MissingTargetFileOnSource = Join-Path -Path $SourcePath -ChildPath $MissingTargetFile
+					$MissingTargetFileExpected = Join-Path -Path $TargetPath -ChildPath $MissingTargetFile
+					If ($PSCmdlet.ShouldProcess("source: $MissingTargetFileOnSource, target: $MissingTargetFileExpected", 'copy file')) {
 						Try {
-							Copy-Item -Path $source_path_file_forward -Destination $target_path_file_forward -Force -Verbose
+							Copy-Item -Path $MissingTargetFileOnSource -Destination $MissingTargetFileExpected -Force -Verbose
 						}
 						Catch {
-							Write-Output "ERROR: could not copy file '$source_path_file_forward' to file '$target_path_file_forward'"
+							Write-Output "ERROR: could not copy file '$MissingTargetFileOnSource' to file '$MissingTargetFileExpected'"
 						}
 					}
 				}
@@ -385,18 +390,18 @@ Begin {
 			# copy new files from Destination to Path
 			If ($Direction -eq 'Both') {
 				# retrieve files that are missing from Path
-				$files_to_copy_to_source = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$new_files_on_target_relative, [string[]]$new_files_on_source_relative))
+				$MissingSourceFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeTargetFiles, [string[]]$RelativeSourceFiles))
 
 				# copy files that are missing from Path
-				ForEach ($file_to_copy in $files_to_copy_to_source) {
-					$target_path_file_reverse = Join-Path -Path $target_path -ChildPath $file_to_copy
-					$source_path_file_reverse = Join-Path -Path $source_path -ChildPath $file_to_copy
-					If ($PSCmdlet.ShouldProcess("source: $target_path_file_reverse, target: $source_path_file_reverse", 'copy file')) {
+				ForEach ($MissingSourceFile in $MissingSourceFiles) {
+					$MissingSourceFileOnTarget = Join-Path -Path $TargetPath -ChildPath $MissingSourceFile
+					$MissingSourceFileExpected = Join-Path -Path $SourcePath -ChildPath $MissingSourceFile
+					If ($PSCmdlet.ShouldProcess("source: $MissingSourceFileOnTarget, target: $MissingSourceFileExpected", 'copy file')) {
 						Try {
-							Copy-Item -Path $target_path_file_reverse -Destination $source_path_file_reverse -Force -Verbose
+							Copy-Item -Path $MissingSourceFileOnTarget -Destination $MissingSourceFileExpected -Force -Verbose
 						}
 						Catch {
-							Write-Output "ERROR: could not copy file '$target_path_file_reverse' to file '$source_path_file_reverse'"
+							Write-Output "ERROR: could not copy file '$MissingSourceFileOnTarget' to file '$MissingSourceFileExpected'"
 						}
 					}
 				}
@@ -406,57 +411,57 @@ Begin {
 		# process files if SkipExisting and SkipFiles are false
 		If (-not $SkipExisting -and -not $SkipFiles) {
 			# retrieve fullname of all files
-			$all_files_on_source = $file_items_on_source | Select-Object -ExpandProperty 'FullName'
-			$all_files_on_target = $file_items_on_target | Select-Object -ExpandProperty 'FullName'
+			$AllSourceFiles = $SourceItems | Select-Object -ExpandProperty 'FullName'
+			$AllTargetFiles = $TargetItems | Select-Object -ExpandProperty 'FullName'
 
 			# trim all files to relative paths
-			If ($all_files_on_source.Count) { $all_files_on_source_relative = $all_files_on_source.Replace($source_path, $null) } Else { $all_files_on_source_relative = @() }
-			If ($all_files_on_target.Count) { $all_files_on_target_relative = $all_files_on_target.Replace($target_path, $null) } Else { $all_files_on_target_relative = @() }
+			If ($AllSourceFiles.Count) { $AllRelativeSourceFiles = $AllSourceFiles.Replace($SourcePath, $null) } Else { $AllRelativeSourceFiles = @() }
+			If ($AllTargetFiles.Count) { $AllRelativeTargetFiles = $AllTargetFiles.Replace($TargetPath, $null) } Else { $AllRelativeTargetFiles = @() }
 
 			# retrieve files in both Path and Destination
-			$files_present = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$all_files_on_source_relative, [string[]]$all_files_on_target_relative))
+			$MatchedFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$AllRelativeSourceFiles, [string[]]$AllRelativeTargetFiles))
 
 			# copy any present files when hash or lastwritetime are different
-			ForEach ($file_present in $files_present) {
+			:NextMatchedFile ForEach ($MatchedFile in $MatchedFiles) {
 				# define file path
-				$file_path_on_source = Join-Path -Path $source_path -ChildPath $file_present
-				$file_path_on_target = Join-Path -Path $target_path -ChildPath $file_present
+				$MatchedSourcePath = Join-Path -Path $SourcePath -ChildPath $MatchedFile
+				$MatchedTargetPath = Join-Path -Path $TargetPath -ChildPath $MatchedFile
 				# compare files by hash if requested
 				If ($CheckHash) {
-					If ((Get-FileHash -Path $file_path_on_source).Hash -eq (Get-FileHash -Path $file_path_on_target).Hash) {
-						Write-Verbose "Skipping '$file_path_on_source' as '$file_path_on_target' has same file hash"
+					If ((Get-FileHash -Path $MatchedSourcePath).Hash -eq (Get-FileHash -Path $MatchedTargetPath).Hash) {
+						Write-Verbose "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same file hash"
 						Continue
 					}
 				}
 				# retrieve files
-				$file_item_on_source = Get-Item -Path $file_path_on_source
-				$file_item_on_target = Get-Item -Path $file_path_on_target
+				$MatchedSourceItem = $SourceItems.Where({ $_.FullName -eq $MatchedSourcePath })
+				$MatchedTargetItem = $TargetItems.Where({ $_.FullName -eq $MatchedTargetPath })
 				# compare files by last
 				If (-not $CheckHash) {
-					If ($file_item_on_source.LastWriteTime -eq $file_item_on_target.LastWriteTime) {
-						Write-Verbose "Skipping '$file_path_on_source' as '$file_path_on_target' has same LastWriteTime"
+					If ($MatchedSourceItem.LastWriteTime -eq $MatchedTargetItem.LastWriteTime) {
+						Write-Verbose "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same LastWriteTime"
 						Continue
 					}
 				}
 				# copy file from Path to Destination if newer or Direction is not 'Both'
-				If ($file_item_on_source.LastWriteTime -gt $file_item_on_target.LastWriteTime -or $Direction -ne 'Both') {
-					If ($PSCmdlet.ShouldProcess("source: $file_path_on_source, target: $file_path_on_target", 'copy file')) {
+				If ($MatchedSourceItem.LastWriteTime -gt $MatchedTargetItem.LastWriteTime -or $Direction -ne 'Both') {
+					If ($PSCmdlet.ShouldProcess("source: $MatchedSourcePath, target: $MatchedTargetPath", 'copy file')) {
 						Try {
-							Copy-Item -Path $file_path_on_source -Destination $file_path_on_target -Force -Verbose:$VerbosePreference
+							Copy-Item -Path $MatchedSourcePath -Destination $MatchedTargetPath -Force -Verbose:$VerbosePreference
 						}
 						Catch {
-							Write-Output "ERROR: could not copy file '$file_path_on_source' to file '$file_path_on_target'"
+							Write-Output "ERROR: could not copy file '$MatchedSourcePath' to file '$MatchedTargetPath'"
 						}
 					}
 				}
 				# copy file from Destination to Path if newer and Direction is 'Both'
-				ElseIf ($file_item_on_source.LastWriteTime -lt $file_item_on_target.LastWriteTime -and $Direction -eq 'Both') {
-					If ($PSCmdlet.ShouldProcess("source: $file_path_on_target, target: $file_path_on_source", 'copy file')) {
+				ElseIf ($MatchedSourceItem.LastWriteTime -lt $MatchedTargetItem.LastWriteTime -and $Direction -eq 'Both') {
+					If ($PSCmdlet.ShouldProcess("source: $MatchedTargetPath, target: $MatchedSourcePath", 'copy file')) {
 						Try {
-							Copy-Item -Path $file_path_on_target -Destination $file_path_on_source -Force -Verbose:$VerbosePreference
+							Copy-Item -Path $MatchedTargetPath -Destination $MatchedSourcePath -Force -Verbose:$VerbosePreference
 						}
 						Catch {
-							Write-Output "ERROR: could not copy file '$file_path_on_target' to file '$file_path_on_source'"
+							Write-Output "ERROR: could not copy file '$MatchedTargetPath' to file '$MatchedSourcePath'"
 						}
 					}
 				}
@@ -466,38 +471,38 @@ Begin {
 		# remove old files if SkipDelete is false and SkipExisting or SkipFiles are false
 		If (-not $SkipDelete -and (-not $SkipExisting -or -not $SkipFiles)) {
 			# retrieve file objects
-			$file_items_on_source = Get-ChildItem -Path $source_path -Recurse:$Recurse -File
-			$file_items_on_target = Get-ChildItem -Path $target_path -Recurse:$Recurse -File
+			$SourceItems = Get-ChildItem -Path $SourcePath -Recurse:$Recurse -File
+			$TargetItems = Get-ChildItem -Path $TargetPath -Recurse:$Recurse -File
 
 			# retrieve fullname of files
-			$all_files_on_source = $file_items_on_source | Select-Object -ExpandProperty 'FullName'
-			$all_files_on_target = $file_items_on_target | Select-Object -ExpandProperty 'FullName'
-			$old_files_on_source = $file_items_on_source | Where-Object { $_.LastWriteTime.Ticks -lt $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
-			$old_files_on_target = $file_items_on_target | Where-Object { $_.LastWriteTime.Ticks -lt $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
+			$AllSourceFiles = $SourceItems | Select-Object -ExpandProperty 'FullName'
+			$AllTargetFiles = $TargetItems | Select-Object -ExpandProperty 'FullName'
+			$OldSourceFiles = $SourceItems | Where-Object { $_.LastWriteTime.Ticks -lt $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
+			$OldTargetFiles = $TargetItems | Where-Object { $_.LastWriteTime.Ticks -lt $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
 
 			# trim files to relative paths
-			If ($all_files_on_source.Count) { $all_files_on_source_relative = $all_files_on_source.Replace($source_path, $null) } Else { $all_files_on_source_relative = @() }
-			If ($all_files_on_target.Count) { $all_files_on_target_relative = $all_files_on_target.Replace($target_path, $null) } Else { $all_files_on_target_relative = @() }
-			If ($old_files_on_source.Count) { $old_files_on_source_relative = $old_files_on_source.Replace($source_path, $null) } Else { $old_files_on_source_relative = @() }
-			If ($old_files_on_target.Count) { $old_files_on_target_relative = $old_files_on_target.Replace($target_path, $null) } Else { $old_files_on_target_relative = @() }
+			If ($AllSourceFiles.Count) { $AllRelativeSourceFiles = $AllSourceFiles.Replace($SourcePath, $null) } Else { $AllRelativeSourceFiles = @() }
+			If ($AllTargetFiles.Count) { $AllRelativeTargetFiles = $AllTargetFiles.Replace($TargetPath, $null) } Else { $AllRelativeTargetFiles = @() }
+			If ($OldSourceFiles.Count) { $OldRelativeSourceFiles = $OldSourceFiles.Replace($SourcePath, $null) } Else { $OldRelativeSourceFiles = @() }
+			If ($OldTargetFiles.Count) { $OldRelativeTargetFiles = $OldTargetFiles.Replace($TargetPath, $null) } Else { $OldRelativeTargetFiles = @() }
 
 			# retrieve files in both Path and Destination
-			$files_in_both_paths = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$all_files_on_source_relative, [string[]]$all_files_on_target_relative))
+			$MatchedFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$AllRelativeSourceFiles, [string[]]$AllRelativeTargetFiles))
 
 			# remove old files from Destination
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
 				# retrieve old files that are only in Destination
-				$files_to_remove_from_target = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$old_files_on_target_relative, $files_in_both_paths))
+				$ExpiredTargetFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeTargetFiles, $MatchedFiles))
 
 				# remove old files that are only in Destination
-				ForEach ($file_to_remove in $files_to_remove_from_target) {
-					$file_path_to_remove = Join-Path -Path $target_path -ChildPath $file_to_remove
-					If ($PSCmdlet.ShouldProcess($file_path_to_remove, 'remove file')) { 
+				ForEach ($ExpiredTargetFile in $ExpiredTargetFiles) {
+					$ExpiredTargetFilePath = Join-Path -Path $TargetPath -ChildPath $ExpiredTargetFile
+					If ($PSCmdlet.ShouldProcess($ExpiredTargetFilePath, 'remove file')) {
 						Try {
-							$null = Remove-Item -Path $file_path_to_remove -Force -Verbose
+							$null = Remove-Item -Path $ExpiredTargetFilePath -Force -Verbose
 						}
 						Catch {
-							Write-Output "ERROR: could not remove file '$file_path_to_remove'"
+							Write-Output "ERROR: could not remove file '$ExpiredTargetFilePath'"
 						}
 					}
 				}
@@ -506,17 +511,17 @@ Begin {
 			# remove old files from Path
 			If ($Direction -eq 'Reverse' -or $Direction -eq 'Both') {
 				# retrieve old files that are only in Path
-				$files_to_remove_from_source = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$old_files_on_source_relative, $files_in_both_paths))
+				$ExpiredSourceFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeSourceFiles, $MatchedFiles))
 
 				# remove old files that are only in Path
-				ForEach ($file_to_remove in $files_to_remove_from_source) {
-					$file_path_to_remove = Join-Path -Path $source_path -ChildPath $file_to_remove
-					If ($PSCmdlet.ShouldProcess($file_path_to_remove, 'remove file')) {
+				ForEach ($ExpiredSourceFile in $ExpiredSourceFiles) {
+					$ExpiredSourceFilePath = Join-Path -Path $SourcePath -ChildPath $ExpiredSourceFile
+					If ($PSCmdlet.ShouldProcess($ExpiredSourceFilePath, 'remove file')) {
 						Try {
-							$null = Remove-Item -Path $file_path_to_remove -Force -Verbose
+							$null = Remove-Item -Path $ExpiredSourceFilePath -Force -Verbose
 						}
 						Catch {
-							Write-Output "ERROR: could not remove file '$file_path_to_remove'"
+							Write-Output "ERROR: could not remove file '$ExpiredSourceFilePath'"
 						}
 					}
 				}
@@ -526,38 +531,38 @@ Begin {
 		# remove old paths if SkipDelete and SkipExisting are false and Recurse is true
 		If (-not $SkipDelete -and -not $SkipExisting -and $Recurse) {
 			# retrieve path objects
-			$path_items_on_source = Get-ChildItem -Path $source_path -Recurse:$Recurse -Directory
-			$path_items_on_target = Get-ChildItem -Path $target_path -Recurse:$Recurse -Directory
+			$SourceFolders = Get-ChildItem -Path $SourcePath -Recurse:$Recurse -Directory
+			$TargetFolders = Get-ChildItem -Path $TargetPath -Recurse:$Recurse -Directory
 
 			# retrieve fullname of paths
-			$all_folders_on_source = $path_items_on_source | Select-Object -ExpandProperty 'FullName'
-			$all_folders_on_target = $path_items_on_target | Select-Object -ExpandProperty 'FullName'
-			$old_folders_on_source = $path_items_on_source | Where-Object { $_.LastWriteTime.Ticks -lt $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
-			$old_folders_on_target = $path_items_on_target | Where-Object { $_.LastWriteTime.Ticks -lt $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
+			$AllSourceFolders = $SourceFolders | Select-Object -ExpandProperty 'FullName'
+			$AllTargetFolders = $TargetFolders | Select-Object -ExpandProperty 'FullName'
+			$OldSourceFolders = $SourceFolders | Where-Object { $_.LastWriteTime.Ticks -lt $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
+			$OldTargetFolders = $TargetFolders | Where-Object { $_.LastWriteTime.Ticks -lt $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
 
 			# trim paths to relative paths
-			If ($all_folders_on_source.Count) { $all_folders_on_source_relative = $all_folders_on_source.Replace($source_path, $null) } Else { $all_folders_on_source_relative = @() }
-			If ($all_folders_on_target.Count) { $all_folders_on_target_relative = $all_folders_on_target.Replace($target_path, $null) } Else { $all_folders_on_target_relative = @() }
-			If ($old_folders_on_source.Count) { $old_folders_on_source_relative = $old_folders_on_source.Replace($source_path, $null) } Else { $old_folders_on_source_relative = @() }
-			If ($old_folders_on_target.Count) { $old_folders_on_target_relative = $old_folders_on_target.Replace($target_path, $null) } Else { $old_folders_on_target_relative = @() }
+			If ($AllSourceFolders.Count) { $AllRelativeSourceFolders = $AllSourceFolders.Replace($SourcePath, $null) } Else { $AllRelativeSourceFolders = @() }
+			If ($AllTargetFolders.Count) { $AllRelativeTargetFolders = $AllTargetFolders.Replace($TargetPath, $null) } Else { $AllRelativeTargetFolders = @() }
+			If ($OldSourceFolders.Count) { $OldRelativeSourceFolders = $OldSourceFolders.Replace($SourcePath, $null) } Else { $OldRelativeSourceFolders = @() }
+			If ($OldTargetFolders.Count) { $OldRelativeTargetFolders = $OldTargetFolders.Replace($TargetPath, $null) } Else { $OldRelativeTargetFolders = @() }
 
 			# retrieve paths in both Path and Destination
-			$folders_in_both_paths = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$all_folders_on_source_relative, [string[]]$all_folders_on_target_relative))
+			$MatchedFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$AllRelativeSourceFolders, [string[]]$AllRelativeTargetFolders))
 
 			# remove old paths from Destination
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
 				# retrieve old paths only in Destination
-				$paths_to_remove_from_target = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$old_folders_on_target_relative, $folders_in_both_paths))
+				$ExpiredTargetFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeTargetFolders, $MatchedFolders))
 
 				# remove old paths only in Destination
-				ForEach ($folder_to_remove in $paths_to_remove_from_target) {
-					$folder_path_to_remove = Join-Path -Path $target_path -ChildPath $folder_to_remove
-					If ($PSCmdlet.ShouldProcess($folder_path_to_remove, 'remove folder')) { 
+				ForEach ($ExpiredTargetFolder in $ExpiredTargetFolders) {
+					$ExpiredTargetFolderPath = Join-Path -Path $TargetPath -ChildPath $ExpiredTargetFolder
+					If ($PSCmdlet.ShouldProcess($ExpiredTargetFolderPath, 'remove folder')) {
 						Try {
-							$null = Remove-Item -Path $folder_path_to_remove -Force -Verbose:$VerbosePreference
+							$null = Remove-Item -Path $ExpiredTargetFolderPath -Force -Verbose:$VerbosePreference
 						}
 						Catch {
-							Write-Output "ERROR: could not remove path '$folder_path_to_remove'"
+							Write-Output "ERROR: could not remove path '$ExpiredTargetFolderPath'"
 						}
 					}
 				}
@@ -566,17 +571,17 @@ Begin {
 			# remove old paths from Path
 			If ($Direction -eq 'Reverse' -or $Direction -eq 'Both') {
 				# retrieve old paths only in Path
-				$paths_to_remove_from_source = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$old_folders_on_source_relative, $folders_in_both_paths))
+				$ExpiredSourceFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeSourceFolders, $MatchedFolders))
 
 				# remove old paths only in Path
-				ForEach ($folder_to_remove in $paths_to_remove_from_source) {
-					$folder_path_to_remove = Join-Path -Path $source_path -ChildPath $folder_to_remove
-					If ($PSCmdlet.ShouldProcess($folder_path_to_remove, 'remove folder')) { 
+				ForEach ($ExpiredSourceFolder in $ExpiredSourceFolders) {
+					$ExpiredSourceFolderPath = Join-Path -Path $SourcePath -ChildPath $ExpiredSourceFolder
+					If ($PSCmdlet.ShouldProcess($ExpiredSourceFolderPath, 'remove folder')) {
 						Try {
-							$null = Remove-Item -Path $folder_path_to_remove -Force -Verbose:$VerbosePreference
+							$null = Remove-Item -Path $ExpiredSourceFolderPath -Force -Verbose:$VerbosePreference
 						}
 						Catch {
-							Write-Output "ERROR: could not remove path '$folder_path_to_remove'"
+							Write-Output "ERROR: could not remove path '$ExpiredSourceFolderPath'"
 						}
 					}
 				}
