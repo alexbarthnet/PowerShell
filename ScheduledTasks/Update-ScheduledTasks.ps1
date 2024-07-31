@@ -1168,14 +1168,14 @@ Process {
 				If ($JsonData.Count -eq 0) {
 					# clear JSON data
 					[string]::Empty | Set-Content -Path $Json
-					Write-Verbose -Verbose -Message "Removed '$TaskName' at '$Taskpath' from configuration file: '$Json'"
 				}
 				Else {
 					# export JSON data
 					$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-					Write-Verbose -Verbose -Message "Removed '$TaskName' at '$Taskpath' from configuration file: '$Json'"
-					$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 				}
+				# report state and display updated file
+				Write-Verbose -Verbose -Message "Removed '$TaskName' at '$Taskpath' from configuration file: '$Json'"
+				$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			Catch {
 				Write-Warning -Message "could not update configuration file: '$Json'"
@@ -1350,7 +1350,7 @@ Process {
 			$ExpectedTasks = [System.Collections.Generic.Dictionary[string, [System.Collections.Generic.List[string]]]]::new()
 
 			# process configuration file
-			:JsonEntry ForEach ($JsonEntry in $JsonData) {
+			:NextJsonEntry ForEach ($JsonEntry in $JsonData) {
 				# validate values present in JSON file
 				Switch ($true) {
 					([string]::IsNullOrEmpty($JsonEntry.TaskName)) {
