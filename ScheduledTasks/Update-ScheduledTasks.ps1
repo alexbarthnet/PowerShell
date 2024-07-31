@@ -138,9 +138,9 @@ Param(
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[switch]$Add,
 	[Parameter(Mandatory = $True, ParameterSetName = 'AddSelf')]
-	[switch]$Install,
+	[switch]$AddSelf,
 	[Parameter(Mandatory = $True, ParameterSetName = 'RemoveSelf')]
-	[switch]$Uninstall,
+	[switch]$RemoveSelf,
 	[Parameter(Mandatory = $True, ParameterSetName = 'Register')]
 	[switch]$Register,
 	[Parameter(Mandatory = $True, ParameterSetName = 'Unregister')]
