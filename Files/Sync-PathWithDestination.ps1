@@ -277,7 +277,7 @@ Begin {
 		}
 
 		# set direction
-		If ($Direction = 'Reverse') {
+		If ($Direction -eq 'Reverse') {
 			$SourcePath = $Target
 			$TargetPath = $Source
 		}
@@ -288,13 +288,13 @@ Begin {
 
 		# remove all files and folders from target if Purge is set
 		If ($Purge) {
-			Write-Output "Clearing '$TargetPath' before copy"
+			Write-Verbose -Message "Clearing '$TargetPath' before copy"
 			Try {
 				Get-ChildItem -Path $TargetPath -Recurse -Force | Remove-Item -Force
 			}
 			Catch {
-				"ERROR: Could not purge folder '$TargetPath'"
-				Return
+				Write-Warning -Message "Could not purge folder '$TargetPath'"
+				Return $_
 			}
 		}
 
