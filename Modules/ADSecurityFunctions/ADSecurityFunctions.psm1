@@ -187,10 +187,15 @@ Function Get-ADSecurityIdentifier {
 	Retrieve the security identifier for a security principal in Active Directory.
 
 	.PARAMETER Principal
-	A string containing a valid principal in either NTAccount or User Principal Name style.
+	A object representing a security principal in Active Directory. Must be one of the following object types:
+	 - a Security Identifier object
+	 - an NTAccount object 
+	 - an ADPrincipal-derived object such as an Active Directory user, computer, or group object
+	 - a string containing a Security Identifier in SDDL format
+	 - a string containing a value that can be translated into a Security Identifier object
 
 	.INPUTS
-	System.String.
+	System.String, System.Security.Principal.NTAccount, System.Security.Principal.SecurityIdentifier, Microsoft.ActiveDirectory.Management.ADPrincipal.
 
 	.OUTPUTS
 	System.Security.Principal.SecurityIdentifier.
@@ -213,37 +218,52 @@ Function Get-ADSecurityIdentifier {
 		[string]$Domain = [System.Environment]::UserDomainName
 	)
 
-	# verify the input
-	If ($Principal -isnot [System.String] -and $Principal -is [System.Security.Principal.SecurityIdentifier]) {
-		$Principal = $Principal.Value
+	# if input object is a SecurityIdentifier object...
+	If ($Principal -is [System.Security.Principal.SecurityIdentifier]) {
+		# return input object as-is
+		Return $Principal
+	}
+
+	# if input object is an NTAccount object...
+	If ($Principal -is [System.Security.Principal.NTAccount]) {
+		# return input object translated to SecurityIdentifier
+		Return $Principal.Translate([System.Security.Principal.SecurityIdentifier])
+	}
+
+	# if input object is an ADPrincipal object...
+	If ($Principal -is [Microsoft.ActiveDirectory.Management.ADPrincipal]) {
+		# return SID property from input object
+		Return $Principal.SID
+	}
+
+	# if input object is an ADPrincipal object...
+	If ($Principal -is [Microsoft.ActiveDirectory.Management.ADPrincipal]) {
+		# return SID property from input object
+		Return $Principal.SID
+	}
+
+	# if input object is not a string...
+	If ($Principal -isnot [System.String]) {
+		Write-Warning -Message "an unsupported object type was provided: $($Principal.GetType().FullName)"
+		Return $null
+	}
+
+	# if input object is a SID in SDDL format...
+	If ($Principal -match 'S-1-\d{1,2}-\d+') {
+		# return SecurityIdentifier created from input object
+		Return [System.Security.Principal.SecurityIdentifier]::new($Principal)
+	}
+
+	# if input object matches regex for well-known built-in groups that only translate on a domain controller...
+	switch -regex ($Principal) {
+		# well-known built-in SID that only translates on a domain controller
+		'(^|^\w+\\)Windows Authorization Access Group$' { 
+			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-560')
+		}
 	}
 
 	# translate principal to SID
-	Try {
-		# check for specific well-known SIDs or translate the SID
-		switch ($Principal) {
-			# well-known built-in SID that only translates on a domain controller
-			{ ($_ -eq 'Windows Authorization Access Group') -or ($_ -eq "$Domain\Windows Authorization Access Group") } {
-				Return [System.Security.Principal.SecurityIdentifier]('S-1-5-32-560')
-			}
-			# a SID in string format
-			{ ($_ -match 'S-1-\d{1,2}-\d+') } {
-				Return [System.Security.Principal.SecurityIdentifier]($Principal)
-			}
-			# a principal with domain prefix or suffix
-			{ ($_ -match '^[\w\s\.-]+\\[\w\s\.-]+\$*$') -or ($_ -match '^[\w\.-]+@[\w\.-]+$') } {
-				Return ([System.Security.Principal.NTAccount]($Principal)).Translate([System.Security.Principal.SecurityIdentifier])
-			}
-			# a principal without domain prefix or suffix
-			Default {
-				Return ([System.Security.Principal.NTAccount]($Domain, $Principal)).Translate([System.Security.Principal.SecurityIdentifier])
-			}
-		}
-	}
-	Catch {
-		# return error
-		Return $_
-	}
+	Return ([System.Security.Principal.NTAccount]::new($Principal)).Translate([System.Security.Principal.SecurityIdentifier])
 }
 
 Function Get-ADAccessRule {
@@ -1053,7 +1073,7 @@ Function New-ADAccessRule {
 	# if preset not provided...
 	Else {
 		# translate object name to GUID of schema class object, attribute object, or a control access right
-		If ($PSBoundParameters.ContainsKey('ObjectName')) {
+		If ($PSBoundParameters.ContainsKey('ObjectName') -and -not [string]::IsNullOrEmpty($script:ObjectName)) {
 			$objectType = Get-ADObjectTypeGuid -DisplayName $ObjectName
 		}
 		Else {
@@ -1061,7 +1081,7 @@ Function New-ADAccessRule {
 		}
 
 		# translate inheriting object name to GUID of schema class object
-		If ($PSBoundParameters.ContainsKey('InheritingObjectName')) {
+		If ($PSBoundParameters.ContainsKey('InheritingObjectName') -and -not [string]::IsNullOrEmpty($script:InheritingObjectName)) {
 			$inheritedObjectType = Get-ADObjectTypeGuid -DisplayName $InheritingObjectName -LimitToSchemaClassObjects
 		}
 		Else {
