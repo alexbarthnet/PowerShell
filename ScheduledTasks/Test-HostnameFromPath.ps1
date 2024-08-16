@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-Test if the content at a URI is the local hostname.
+Test if the content at a path is the local hostname.
 
 .DESCRIPTION
-Test if the content at a URI is the local hostname.
+Test if the content at a path is the local hostname.
 
 .PARAMETER Path
 The path with one or more files to evaluate.
@@ -18,10 +18,10 @@ String.
 Boolean.
 
 .EXAMPLE
-.\Test-HostnameAtUri.ps1 -Uri 'https://www.example.com/host/'
+.\Test-HostnameFoundAtPath.ps1 -Path 'C:\Content\path\item'
 
 .NOTES
-The URI must have a trailing backslash if the URI points to a folder rather than a file.
+The path may be a folder or a file. The file with the last write time is selected when the path is a folder.
 #>
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
@@ -34,101 +34,6 @@ Param(
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant()
 )
 
-Begin {
-	Function Get-UriWithIPAddressFromUriWithHostname {
-		Param(
-			# a URI object or a string that can be cast a URI object
-			[Parameter(Mandatory = $true)]
-			[System.Uri]$Uri,
-			# the DNS server to resolve the URI against
-			[Parameter(DontShow)][ValidateScript({ [System.Net.IPAddress]::TryParse($_, [ref][System.Net.IPAddress]::None) })]
-			[System.Net.IPAddress]$DnsServer = '1.1.1.1',
-			# the DNS record type to resolve
-			[Parameter(DontShow)][ValidateScript({ [Microsoft.DnsClient.Commands.RecordType].IsEnumDefined($_) })]
-			[string]$Type = 'A'
-		)
-
-		# define parameters
-		$ResolveDnsName = @{
-			Name        = $Uri.DnsSafeHost
-			Server      = $DnsServer.IPAddressToString
-			Type        = $Type
-			DnsOnly     = $True
-			NoHostsFile = $True
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# define object for retry loop
-		$ErrorList = [System.Collections.Generic.List[object]]::new()
-		$RetryCount = 0
-		$Unresolved = $true
-
-		# resolve hostname from URI with retry
-		While ($Unresolved -and $RetryCount -lt 5) {
-			# resolve hostname
-			Try {
-				$DnsName = Resolve-DnsName @ResolveDnsName
-			}
-			Catch {
-				# add error to error list
-				$ErrorList.Add($_)
-				# increment retry counter
-				$RetryCount++
-				# sleep for one second
-				Start-Sleep -Seconds 1
-			}
-			# verify hostname resolved to requested type
-			If ($DnsName.Where({ $_.Type -eq $Type }).Count -gt 0) {
-				$Unresolved = $false
-			}
-		}
-
-		# if hostname not resolved...
-		If ($Unresolved) {
-			Return $ErrorList
-		}
-
-		# filter results and extract IPAddress
-		$IPAddress = $DnsName.Where({ $_.Type -eq $Type }).IPAddress
-
-		# check for
-		switch ($IPAddress.Count) {
-			# if 0 records in IPAddress...
-			0 {
-				# warn and return null
-				Write-Warning -Message "could not resolve any DNS '$Type' records for DnsSafeHost '$($Uri.DnsSafeHost)' of Uri: $($Uri.AbsoluteUri)"
-				Return $null
-			}
-			# if 1 record in IPaddress...
-			1 {
-				# break out of switch and continue
-				Break
-			}
-			# if more than 1 record in IPaddress...
-			Default {
-				# select first address and continue
-				$IPAddress = $IPAddress[0]
-			}
-		}
-
-		# report IP address
-		Write-Verbose -Message "resolved IP address '$IPAddress' from URL: '$($Uri.AbsoluteUri)'"
-
-		# update URI with IP address
-		Try {
-			$Uri = [Uri]$Uri.AbsoluteUri.Replace($Uri.DnsSafeHost, $IPAddress)
-		}
-		Catch {
-			Write-Warning -Message "could not construct host URL from IP: '$($Uri.AbsoluteUri)'"
-			Return $_
-		}
-
-		# return updated URI
-		Write-Verbose -Message "constructed host URL from IP: '$($Uri.AbsoluteUri)'"
-		Return $Uri
-	}
-}
-
 Process {
 	# if path is a folder...
 	If (Test-Path -Path $Path -PathType 'Container') {
@@ -138,7 +43,7 @@ Process {
 		}
 		Catch {
 			Write-Warning -Message "could not retrieve content from latest file in path: '$Path'"
-			Return
+			Return $_
 		}
 	}
 
