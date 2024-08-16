@@ -218,47 +218,60 @@ Function Get-ADSecurityIdentifier {
 		[string]$Domain = [System.Environment]::UserDomainName
 	)
 
-	# if input object is a SecurityIdentifier object...
+	# if principal is a SecurityIdentifier object...
 	If ($Principal -is [System.Security.Principal.SecurityIdentifier]) {
-		# return input object as-is
+		# return principal as-is
 		Return $Principal
 	}
 
-	# if input object is an NTAccount object...
+	# if principal is an NTAccount object...
 	If ($Principal -is [System.Security.Principal.NTAccount]) {
-		# return input object translated to SecurityIdentifier
+		# return principal translated to SecurityIdentifier
 		Return $Principal.Translate([System.Security.Principal.SecurityIdentifier])
 	}
 
-	# if input object is an ADPrincipal object...
+	# if principal is an ADPrincipal object...
 	If ($Principal -is [Microsoft.ActiveDirectory.Management.ADPrincipal]) {
-		# return SID property from input object
+		# return SID property from principal
 		Return $Principal.SID
 	}
 
-	# if input object is an ADPrincipal object...
-	If ($Principal -is [Microsoft.ActiveDirectory.Management.ADPrincipal]) {
-		# return SID property from input object
-		Return $Principal.SID
-	}
-
-	# if input object is not a string...
+	# if principal is not a string...
 	If ($Principal -isnot [System.String]) {
 		Write-Warning -Message "an unsupported object type was provided: $($Principal.GetType().FullName)"
 		Return $null
 	}
 
-	# if input object is a SID in SDDL format...
-	If ($Principal -match 'S-1-\d{1,2}-\d+') {
-		# return SecurityIdentifier created from input object
+	# if principal is a SID in SDDL format...
+	If ($Principal -match '^S-1-\d{1,2}-\d+') {
+		# return SecurityIdentifier constructed from principal
 		Return [System.Security.Principal.SecurityIdentifier]::new($Principal)
 	}
 
-	# if input object matches regex for well-known built-in groups that only translate on a domain controller...
+	# if principal matches the name of a well-known SID that only translate on servers or domain controllers...
+	# reference: https://learn.microsoft.com/en-us/windows/win32/secauthz/well-known-sids
 	switch -regex ($Principal) {
-		# well-known built-in SID that only translates on a domain controller
+		# return SecurityIdentifier constructed from matching well-known SID
+		'(^|^\w+\\)Account Operators$' {
+			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-548')
+		}
+		'(^|^\w+\\)Server Operators$' {
+			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-549')
+		}
+		'(^|^\w+\\)Print Operators$' {
+			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-550')
+		}
+		'(^|^\w+\\)Pre–Windows 2000 Compatible Access$' {
+			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-554')
+		}
+		'(^|^\w+\\)Incoming Forest Trust Builders$' {
+			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-557')
+		}
 		'(^|^\w+\\)Windows Authorization Access Group$' { 
 			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-560')
+		}
+		'(^|^\w+\\)Terminal Server License Servers$' {
+			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-561')
 		}
 	}
 
