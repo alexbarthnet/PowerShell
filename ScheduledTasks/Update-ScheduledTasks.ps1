@@ -519,7 +519,7 @@ Begin {
 			}
 		}
 
-		# process source file names
+		# process source file names for copying
 		ForEach ($Source in $SourceFileList) {
 			# build target file path
 			$Target = $Source.Replace($SourceParentPath, $TargetParentPath)
@@ -575,6 +575,36 @@ Begin {
 
 			# report source file copied
 			Write-Verbose -Verbose -Message "Installed target file: $Target"
+		}
+
+		# process source file names for unblocking
+		ForEach ($Source in $SourceFileList) {
+			# build target file path
+			$Target = $Source.Replace($SourceParentPath, $TargetParentPath)
+
+			# check for alternate data stream for internet zone identifier
+			Try {
+				$TargetStreams = Get-Item -Path $Target -Stream *
+			}
+			Catch {
+				Write-Warning -Message "could not retrieve data streams for file: $Target"
+				Return $_
+			}
+
+			# if alternate data streams contain internet zone identifier...
+			If ($TargetStreams.Stream -contains 'Zone.Identifier') {
+				# remove alternate data stream
+				Try {
+					Unblock-File -Path $Target
+				}
+				Catch {
+					Write-Warning -Message "could not unblock file: $Target"
+					Return $_
+				}
+
+				# report target file unblocked
+				Write-Verbose -Verbose -Message "Unblocked target file: $Target"
+			}
 		}
 
 		# get files in target folder not in source file list
