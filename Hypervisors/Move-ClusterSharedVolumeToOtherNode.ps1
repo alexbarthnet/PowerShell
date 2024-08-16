@@ -35,12 +35,15 @@ Process {
 	# process cluster shared volumes
 	ForEach ($ClusterSharedVolume in $ClusterSharedVolumes) {
 		Try {
-			Move-ClusterSharedVolume -InputObject $ClusterSharedVolume
+			$MovedClusterSharedVolume = Move-ClusterSharedVolume -InputObject $ClusterSharedVolume
 		}
 		Catch {
 			Write-Warning -Message "could not move cluster shared volume: $($ClusterSharedVolume.Name)"
 			Return $_
 		}
+
+		# report complete
+		Write-Verbose -Verbose -Message "moved '$($MovedClusterSharedVolume.Name)' to cluster node: $($MovedClusterSharedVolume.OwnerNode.Name)"
 	}
 }
 
