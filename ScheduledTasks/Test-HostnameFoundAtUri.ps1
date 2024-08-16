@@ -18,7 +18,7 @@ Uri.
 Boolean.
 
 .EXAMPLE
-.\Test-HostnameAtUri.ps1 -Uri 'https://www.example.com/host/'
+.\Test-HostnameFoundAtUri.ps1 -Uri 'https://www.example.com/host/'
 
 .NOTES
 The URI must have a trailing backslash if the URI points to a folder rather than a file.
@@ -42,7 +42,7 @@ Begin {
 			[System.Uri]$Uri,
 			# the DNS server to resolve the URI against
 			[Parameter(DontShow)][ValidateScript({ [System.Net.IPAddress]::TryParse($_, [ref][System.Net.IPAddress]::None) })]
-			[System.Net.IPAddress[]]$DnsServer = @('8.8.8.8', '8.8.4.4', '1.1.1.1'),
+			[System.Net.IPAddress]$DnsServer = '1.1.1.1',
 			# the DNS record type to resolve
 			[Parameter(DontShow)][ValidateScript({ [Microsoft.DnsClient.Commands.RecordType].IsEnumDefined($_) })]
 			[string]$Type = 'A'
@@ -185,7 +185,7 @@ Process {
 		$UriContent = $WebRequest.Content.Trim().ToLowerInvariant()
 	}
 	Catch {
-		Write-Warning -Message "couold not parse content retrieved from URI: '$($Uri.AbsoluteUri)'"
+		Write-Warning -Message "could not parse content retrieved from URI: '$($Uri.AbsoluteUri)'"
 		Return $_
 	}
 
