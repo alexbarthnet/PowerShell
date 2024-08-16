@@ -1,4 +1,4 @@
-#requires -Modules TranscriptWithHostAndDate
+#requires -Modules TranscriptWithHostAndDate, FailoverClusters
 
 [CmdletBinding()]
 Param(
@@ -28,6 +28,9 @@ Process {
 		Write-Warning -Message 'could not retrieve cluster shared volumes'
 		Return $_
 	}
+
+	# declare count
+	Write-Verbose -Verbose -Message "found '$($ClusterSharedVolumes.Count)' cluster shared volumes"
 
 	# process cluster shared volumes
 	ForEach ($ClusterSharedVolume in $ClusterSharedVolumes) {
