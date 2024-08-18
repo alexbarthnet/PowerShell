@@ -2,8 +2,21 @@
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	[Parameter()]
-	[string]$TaskPath = '\CAU\PostUpdateTasks'
+	# path to post-update scheduled tasks
+	[Parameter(Position = 0)]
+	[string]$TaskPath = '\CAU\PostUpdateTasks\',
+	# switch to skip transcript logging
+	[Parameter(DontShow)]
+	[switch]$SkipTranscript,
+	# local host name
+	[Parameter(DontShow)]
+	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
+	# local domain name
+	[Parameter(DontShow)]
+	[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
+	# local DNS hostname
+	[Parameter(DontShow)]
+	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
 )
 
 Begin {
