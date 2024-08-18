@@ -984,7 +984,6 @@ Begin {
 			TaskName  = $TaskName
 			TaskPath  = $TaskPath
 			Action    = $Action
-			Trigger   = $Trigger
 			Settings  = $Settings
 			Principal = $Principal
 			Force     = $true
@@ -1405,7 +1404,6 @@ Process {
 					Argument  = [string]$Argument
 					UserId    = [string]$UserId
 					LogonType = [string]$LogonType
-					TriggerAt = [string]$TriggerAt.ToString('o')
 				}
 
 				# if NoTrigger not set...
