@@ -45,7 +45,7 @@ Process {
 	# process cluster shared volumes
 	ForEach ($ClusterVirtualMachine in $ClusterVirtualMachines) {
 		# report intent
-		Write-Verbose -Verbose -Message "moving '$($MovedClusterVirtualMachine.Name)' virtual machine"
+		Write-Verbose -Verbose -Message "moving '$($ClusterVirtualMachine.Name)' virtual machine"
 
 		# move virtual machine
 		Try {
