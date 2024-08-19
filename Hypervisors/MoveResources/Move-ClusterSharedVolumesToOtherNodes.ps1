@@ -44,6 +44,10 @@ Process {
 
 	# process cluster shared volumes
 	ForEach ($ClusterSharedVolume in $ClusterSharedVolumes) {
+		# report intent
+		Write-Verbose -Verbose -Message "moving '$($ClusterSharedVolume.Name)' cluster shared volume"
+
+		# move cluster shared volume
 		Try {
 			$MovedClusterSharedVolume = Move-ClusterSharedVolume -InputObject $ClusterSharedVolume
 		}

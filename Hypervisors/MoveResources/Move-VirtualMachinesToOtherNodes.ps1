@@ -44,11 +44,15 @@ Process {
 
 	# process cluster shared volumes
 	ForEach ($ClusterVirtualMachine in $ClusterVirtualMachines) {
+		# report intent
+		Write-Verbose -Verbose -Message "moving '$($MovedClusterVirtualMachine.Name)' virtual machine"
+
+		# move virtual machine
 		Try {
 			$MovedClusterVirtualMachine = Move-ClusterVirtualMachineRole -InputObject $ClusterVirtualMachine -MigrationType Live
 		}
 		Catch {
-			Write-Warning -Message "could not move cluster shared volume: $($ClusterVirtualMachine.Name)"
+			Write-Warning -Message "could not move virtual machine: $($ClusterVirtualMachine.Name)"
 			Return $_
 		}
 
