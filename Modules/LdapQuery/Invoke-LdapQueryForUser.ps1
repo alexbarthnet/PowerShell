@@ -1,4 +1,4 @@
-#Requires -module LdapQuery,ActiveDirectory
+#Requires -module LdapQuery, ActiveDirectory
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
@@ -7,7 +7,7 @@ Param(
 	[Parameter(Position = 1)]
 	[string]$SearchBase = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().GetDirectoryEntry().DistinguishedName,
 	[Parameter(Position = 2)]
-	[string]$Filter = "(&(objectCategory=computer)(objectClass=computer)(sAMAccountName=$([System.Environment]::MachineName)$))",
+	[string]$Filter = "(&(objectCategory=person)(objectClass=user)(sAMAccountName=$([System.Environment]::UserName.ToLower())))",
 	[Parameter(Position = 3)]
 	[string[]]$Attributes = '*',
 	[Parameter(Position = 4)][ValidateSet('Base', 'OneLevel', 'Subtree')]
@@ -25,14 +25,30 @@ Param(
 	[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Credential')]
 	[pscredential]$Credential,
 	[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Kerberos')]
-	[switch]$Kerberos,
-	[Parameter(DontShow)]
-	[guid]$QueryGuid = [System.Guid]::NewGuid()
+	[switch]$Kerberos
 )
 
-# invoke LDAP query with values for Active Directory domain of current user
+# define required parameters
+$InvokeLdapQuery = @{
+	Server      = $Server
+	SearchBase  = $SearchBase
+	Filter      = $Filter
+	Attributes  = $Attributes
+	SearchScope = $SearchScope
+	Port        = $Port
+	SizeLimit   = $SizeLimit
+	PageSize    = $PageSize
+	SSL         = $SSL
+}
+
+# define optional parameters
+If ($PSBoundParameters.ContainsKey('Certificate')) { $InvokeLdapQuery.Add('Certificate', $Certificate) }
+If ($PSBoundParameters.ContainsKey('Credential')) { $InvokeLdapQuery.Add('Credential', $Credential) }
+If ($PSBoundParameters.ContainsKey('Kerberos')) { $InvokeLdapQuery.Add('Kerberos', $Kerberos) }
+
+# invoke LDAP query
 Try {
-	Invoke-LdapQuery @PSBoundParameters
+	Invoke-LdapQuery @InvokeLdapQuery
 }
 Catch {
 	Return $_
