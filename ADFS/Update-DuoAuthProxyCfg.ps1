@@ -29,10 +29,10 @@ None. The script does not provide any actionable output.
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
 	# path to JSON configuration file
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ -PathType [Microsoft.PowerShell.Commands.TestPathType]::Leaf })]
+	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ -PathType ([Microsoft.PowerShell.Commands.TestPathType]::Leaf) })]
 	[string]$Path,
 	# child path to host folder
-	[Parameter(Dontshow)][ValidateScript({ Test-Path -Path $_ -PathType [Microsoft.PowerShell.Commands.TestPathType]::Leaf })]
+	[Parameter(Dontshow)][ValidateScript({ Test-Path -Path $_ -PathType ([Microsoft.PowerShell.Commands.TestPathType]::Leaf) })]
 	[string]$Destination = (Join-Path -Path ([System.Environment]::GetFolderPath('ProgramFiles')) -ChildPath 'Duo Security Authentication Proxy\conf\authproxy.cfg'),
 	# string containing algorithm for Get-FileHash
 	[Parameter(DontShow)][ValidateSet("SHA1", "SHA256", "SHA384", "SHA512", "MACTripleDES", "MD5", "RIPEMD160")]
@@ -84,8 +84,8 @@ Process {
 	}
 
 	# if hashes match...
-	If ($PathHash -eq $DestinationHash) {
-		Write-Verbose -Verbose -Message "found matching hashes for Path and Destination, skipping update of Duo Auth Proxy"
+	If ($PathHash.Hash -eq $DestinationHash.Hash) {
+		Write-Verbose -Verbose -Message "Found matching hashes for Path and Destination, skipping update of Duo Auth Proxy"
 		Return
 	}
 
