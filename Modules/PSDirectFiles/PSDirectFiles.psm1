@@ -11,15 +11,15 @@ Function Copy-PathFromPSDirect {
 
 	# retrieve VMs on local system
 	Try {
-		$VMs = Get-VM -ErrorAction 'Stop' | Where-Object { $_.Name -eq 'root1' }
+		$VMs = Get-VM -ErrorAction 'Stop' | Where-Object { $_.Name -eq $VMName }
 	}
 	Catch {
-		Write-Warning -Message "could call Get-VM: '$VMName'"
+		Write-Warning -Message 'could not call Get-VM'
 		Return $_
 	}
 
 	# if multiple VMs found...
-	If ( $VMs.Count -gt 1) {
+	If ($VMs.Count -gt 1) {
 		Write-Warning -Message "multiple VMs found by name: '$VMName'"
 		Return
 	}
@@ -127,15 +127,15 @@ Function Copy-PathToPSDirect {
 
 	# retrieve VMs on local system
 	Try {
-		$VMs = Get-VM -ErrorAction 'Stop' | Where-Object { $_.Name -eq 'root1' }
+		$VMs = Get-VM -ErrorAction 'Stop' | Where-Object { $_.Name -eq $VMName }
 	}
 	Catch {
-		Write-Warning -Message "could call Get-VM: '$VMName'"
+		Write-Warning -Message 'could call Get-VM'
 		Return $_
 	}
 
 	# if multiple VMs found...
-	If ( $VMs.Count -gt 1) {
+	If ($VMs.Count -gt 1) {
 		Write-Warning -Message "multiple VMs found by name: '$VMName'"
 		Return
 	}
