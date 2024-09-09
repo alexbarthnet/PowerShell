@@ -16,11 +16,27 @@ Begin {
 			Throw $_
 		}
 	}
+
+	# queue updates to IIS
+	Try {
+		Start-IISCommitDelay
+	}
+	Catch {
+		Throw $_
+	}
 }
 
 Process {
 	# create list of hashtables
 	$BindingsToUpdate = [System.Collections.Generic.List[hashtable]]::new()
+
+	# retrieve certificates from store
+	Try {
+		$Certificates = Get-ChildItem -Path $CertStoreLocation
+	}
+	Catch {
+		Return $_
+	}
 
 	# retrieve IIS sites
 	Try {
@@ -43,40 +59,42 @@ Process {
 				Continue NextIISSiteBinding
 			}
 
-			# if IIS Site binding lacks a certificate hash...
-			If ($null -eq $IISSiteBinding.CertificateHash) {
-				# warn about missing certificate hash
-				Write-Warning "could not find certificate hash for '$($IISSiteBinding.BindingInformation)' binding of '$($IISSite.Name)' site"
+			# if IIS Site binding certificate hash is empty...
+			If ([string]::IsNullOrEmpty($IISSiteBinding.Attributes['certificateHash'].Value)) {
+				# report empty certificate hash
+				Write-Warning -Message "could not find certificate hash for '$($IISSiteBinding.BindingInformation)' binding of '$($IISSite.Name)' site"
 				# continue to next IIS Site Binding
 				Continue NextIISSiteBinding
 			}
-
-			# convert CertificateHash byte array to Thumbprint string
-			$Thumbprint = [System.BitConverter]::ToString([byte[]]($IISSiteBinding.CertificateHash)).Replace('-', $null)
+			# if IIS Site binding certificate hash is not empty...
+			Else {
+				# retrieve thumbprint from 'certificateHash' attribute on IIS
+				$Thumbprint = $IISSiteBinding.Attributes['certificateHash'].Value
+			}
 
 			# retrieve certificate by thumbprint
-			$Certificate = Get-ChildItem -Path $CertStoreLocation | Where-Object { $_.Thumbprint -eq $Thumbprint }
+			$Certificate = $Certificates.Where({ $_.Thumbprint -eq $Thumbprint })
 
 			# if certificate not found...
 			If ($null -eq $Certificate) {
 				# warn about missing certificate hash then continue to next IIS Site Binding
-				Write-Warning "could not find certificate by thumbprint: $Thumbprint"
+				Write-Warning -Message "could not find certificate by thumbprint: $Thumbprint"
 				Continue NextIISSiteBinding
 			}
 
 			# get latest certificate with matching subject
-			$LatestCertificate = Get-ChildItem -Path $CertStoreLocation | Where-Object { $_.Subject -eq $Certificate.Subject } | Sort-Object -Property NotBefore | Select-Object -Last 1
+			$LatestCertificate = $Certificates.Where({ $_.GetNameInfo('SimpleName', $false) -eq $Certificate.GetNameInfo('SimpleName', $false) }) | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
 
 			# if certificate is latest...
 			If ($LatestCertificate.Thumbprint -eq $Certificate.Thumbprint) {
 				# report then continue to next IIS Site Binding
-				Write-Information "'$($IISSiteBinding.BindingInformation)' binding on '$($IISSite.Name)' site has latest certificate: $($Certificate.Thumbprint)"
+				Write-Information -MessageData "found '$($IISSiteBinding.BindingInformation)' binding on '$($IISSite.Name)' site with latest certificate: $($Certificate.Thumbprint)"
 				Continue NextIISSiteBinding
 			}
 			# if certificate is not latest...
 			Else {
-				# report
-				Write-Information "'$($IISSiteBinding.BindingInformation)' binding on '$($IISSite.Name)' site had old certificate: $($Certificate.Thumbprint)"
+				# report before updating hashtable
+				Write-Information -MessageData "found '$($IISSiteBinding.BindingInformation)' binding on '$($IISSite.Name)' site with old certificate: $($Certificate.Thumbprint)"
 			}
 
 			# create hashtable with values for binding to update
@@ -94,7 +112,7 @@ Process {
 	}
 
 	# process bindings to update
-	ForEach ($BindingToUpdate in $BindingsToUpdate) {
+	:NextBinding ForEach ($BindingToUpdate in $BindingsToUpdate) {
 		# define parameters for Remove-IISSiteBinding
 		$RemoveIISSiteBinding = @{
 			Name               = $BindingToUpdate.Name
@@ -108,7 +126,8 @@ Process {
 			Remove-IISSiteBinding @RemoveIISSiteBinding
 		}
 		Catch {
-			Write-Warning "could not remove '$($BindingToUpdate.BindingInformation)' binding from '$($BindingToUpdate.Name)' site: $($_.ToString())"
+			Write-Warning -Message "could not remove '$($BindingToUpdate.BindingInformation)' binding from '$($BindingToUpdate.Name)' site: $($_.ToString())"
+			Continue :NextBinding
 		}
 
 		# define parameters for New-IISSiteBinding
@@ -120,21 +139,29 @@ Process {
 			CertStoreLocation     = $BindingToUpdate.CertStoreLocation
 		}
 
-
 		# restore IIS Site Binding
 		Try {
 			New-IISSiteBinding @NewIISSiteBinding
 		}
 		Catch {
 			Write-Warning "could not add '$($BindingToUpdate.BindingInformation)' binding to '$($BindingToUpdate.Name)' site: $($_.ToString())"
+			Continue :NextBinding
 		}
 
 		# declare updated
-		Write-Information "'$($BindingToUpdate.BindingInformation)' binding on '$($BindingToUpdate.Name)' site has new certificate: $($BindingToUpdate.CertificateThumbprint)"
+		Write-Information "updated '$($BindingToUpdate.BindingInformation)' binding on '$($BindingToUpdate.Name)' site with new certificate: $($BindingToUpdate.CertificateThumbprint)"
 	}
 }
 
 End {
+	# commit updates to IIS
+	Try {
+		Stop-IISCommitDelay -Commit $true
+	}
+	Catch {
+		Throw $_
+	}
+
 	# if skip transcript not requested...
 	If (!$SkipTranscript) {
 		# stop transcript with default parameters
