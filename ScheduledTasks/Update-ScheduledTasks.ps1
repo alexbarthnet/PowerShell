@@ -718,59 +718,60 @@ Begin {
 			[string]$RunLevel
 		)
 
-		# create params for New-ScheduledTaskAction
-		$ScheduledTaskActionParams = @{
+		# define parameters for New-ScheduledTaskAction
+		$ScheduledTaskActionParameters = @{
 			Execute  = $Execute
 			Argument = $Argument
 		}
 
-		# create params for New-ScheduledTaskPrincipal
-		$ScheduledTaskPrincipalParams = @{
+		# define parameters for New-ScheduledTaskPrincipal
+		$ScheduledTaskPrincipalParameters = @{
 			UserId = $UserId
 		}
 
-		# add logon type if configured
+		# update parameters for New-ScheduledTaskPrincipal with LogonType if provided
 		If ($PSBoundParameters.ContainsKey('LogonType')) {
-			$ScheduledTaskPrincipalParams['LogonType'] = $LogonType
+			$ScheduledTaskPrincipalParameters['LogonType'] = $LogonType
 		}
 
-		# add run leve if configured
+		# update parameters for New-ScheduledTaskPrincipal with RunLevel if provided
 		If ($PSBoundParameters.ContainsKey('RunLevel')) {
-			$ScheduledTaskPrincipalParams['RunLevel'] = $RunLevel
+			$ScheduledTaskPrincipalParameters['RunLevel'] = $RunLevel
 		}
 
-		# create params for New-ScheduledTaskSettingsSet
-		$ScheduledTaskSettingsSetParams = @{
+		# define parameters for New-ScheduledTaskSettingsSet
+		$ScheduledTaskSettingsSetParameters = @{
 			AllowStartIfOnBatteries    = $true
 			DontStopIfGoingOnBatteries = $true
 		}
 
+		# update parameters for New-ScheduledTaskSettingsSet with ExecutionTimeLimit if provided
+		If ($PSBoundParameters.ContainsKey('ExecutionTimeLimit') -and $ExecutionTimeLimit -gt [timespan]::Zero) {
+			$ScheduledTaskSettingsSetParameters['ExecutionTimeLimit'] = $ExecutionTimeLimit
+		}
+
+
 		# if TriggerAt provided...
 		If ($PSBoundParameters.ContainsKey('TriggerAt')) {
-			# create params for New-ScheduledTaskTrigger
-			$ScheduledTaskTriggerParams = @{
+			# define parameters for New-ScheduledTaskTrigger
+			$ScheduledTaskTriggerParameters = @{
 				Once = $true
 				At   = $TriggerAt
 			}
 
-			# add execution time limit if configured
-			If ($PSBoundParameters.ContainsKey('ExecutionTimeLimit') -and $ExecutionTimeLimit -gt [timespan]::Zero) {
-				$ScheduledTaskSettingsSetParams['ExecutionTimeLimit'] = $ExecutionTimeLimit
-			}
-
-			# add random delay if configured
+			# update parameters for New-ScheduledTaskTrigger with RandomDelay if provided
 			If ($PSBoundParameters.ContainsKey('RandomDelay') -and $RandomDelay -gt [timespan]::Zero) {
-				$ScheduledTaskTriggerParams['RandomDelay'] = $RandomDelay
+				$ScheduledTaskTriggerParameters['RandomDelay'] = $RandomDelay
 			}
 
-			# add repetition interval if configured
+			# update parameters for New-ScheduledTaskTrigger with RepetitionInterval if provided
 			If ($PSBoundParameters.ContainsKey('RepetitionInterval') -and $RepetitionInterval -gt [timespan]::Zero) {
-				$ScheduledTaskTriggerParams['RepetitionInterval'] = $RepetitionInterval
+				$ScheduledTaskTriggerParameters['RepetitionInterval'] = $RepetitionInterval
 			}
 
 			# create scheduled task trigger
 			Try {
-				$Trigger = New-ScheduledTaskTrigger @ScheduledTaskTriggerParams
+				$Trigger = New-ScheduledTaskTrigger @ScheduledTaskTriggerParameters
 			}
 			Catch {
 				Return $_
@@ -782,7 +783,7 @@ Begin {
 
 		# create scheduled task action
 		Try {
-			$Action = New-ScheduledTaskAction @ScheduledTaskActionParams
+			$Action = New-ScheduledTaskAction @ScheduledTaskActionParameters
 		}
 		Catch {
 			Return $_
@@ -790,7 +791,7 @@ Begin {
 
 		# create scheduled task principal
 		Try {
-			$Principal = New-ScheduledTaskPrincipal @ScheduledTaskPrincipalParams
+			$Principal = New-ScheduledTaskPrincipal @ScheduledTaskPrincipalParameters
 		}
 		Catch {
 			Return $_
@@ -798,7 +799,7 @@ Begin {
 
 		# create scheduled task settings
 		Try {
-			$Settings = New-ScheduledTaskSettingsSet @ScheduledTaskSettingsSetParams
+			$Settings = New-ScheduledTaskSettingsSet @ScheduledTaskSettingsSetParameters
 		}
 		Catch {
 			Return $_
@@ -828,155 +829,159 @@ Begin {
 			Return $_
 		}
 
-		# reset boolean
-		$UnregisterScheduledTask = $false
-
-		# if scheduled task exists but trigger not defined...
-		If ($Existing -and -not $Trigger) {
-			# if scheduled task has triggers...
-			If ($Existing.Triggers.Count -gt 0) {
-				# request scheduled task be unregistered
-				$UnregisterScheduledTask = $true
+		# if scheduled task exists with triggers but trigger not created from provided parameters...
+		If ($Existing -and $Existing.Triggers.Count -gt 0 -and -not $Trigger) {
+			# unregister scheduled task
+			Try {
+				$null = Unregister-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath
 			}
+			Catch {
+				Write-Warning -Message "could not unregister existing scheduled task '$TaskName' at path '$TaskPath'"
+				Return $_
+			}
+
+			# report unregistered
+			Write-Verbose -Verbose -Message "Unregistered existing scheduled task '$TaskName' at path '$TaskPath'"
+
+			# clear existing scheduled task object
+			$Existing = $null
 		}
 
-		# if scheduled task exists and unregister not requested...
-		If ($Existing -and -not $UnregisterScheduledTask) {
+		# if scheduled task exists...
+		If ($Existing) {
 			# if action defined...
 			If ($Action) {
 				# reset booleans
-				$FixActions = $false
+				$UpdateAction = $false
 
-				# if action count on existing scheduled task is not 1...
+				# if actions count on existing scheduled task is not 1...
 				If ($Existing.Actions.Count -ne 1) {
-					$FixActions = $true
+					$UpdateAction = $true
 				}
-				# if action count on existing scheduled task is 1...
+				# if actions count on existing scheduled task is 1...
 				Else {
-					If ($Existing.Actions[0].Execute -ne $Action.Execute) { $FixActions = $true }
-					If ($Existing.Actions[0].Arguments -ne $Action.Arguments) { $FixActions = $true }
+					If ($Existing.Actions[0].Execute -ne $Action.Execute) { $UpdateAction = $true }
+					If ($Existing.Actions[0].Arguments -ne $Action.Arguments) { $UpdateAction = $true }
 				}
 
-				# update task action if necessary
-				If ($FixActions) {
+				# if task actions update requested...
+				If ($UpdateAction) {
+					# update task actions
 					Try {
-						Write-Verbose -Verbose -Message "Updating action for existing scheduled task '$TaskName' at path '$TaskPath'"
 						$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Action $Action
 					}
 					Catch {
 						Write-Warning -Message "could not update action for existing scheduled task '$TaskName' at path '$TaskPath'"
 						Return $_
 					}
+
+					# report task action updated
+					Write-Verbose -Verbose -Message "Updated action for existing scheduled task '$TaskName' at path '$TaskPath'"
 				}
 			}
 
 			# if principal is defined...
 			If ($Principal) {
 				# reset booleans
-				$FixPrincipal = $false
+				$UpdatePrincipal = $false
 
 				# if principal not present on existing scheduled task...
 				If ($null -eq $Existing.Principal) {
-					$FixPrincipal = $true
+					$UpdatePrincipal = $true
 				}
 				# if principal present on existing scheduled task...
 				Else {
-					If ($Existing.Principal.UserId -ne $Principal.UserId) { $FixPrincipal = $true }
-					If ($Existing.Principal.LogonType -ne $Principal.LogonType) { $FixPrincipal = $true }
-					If ($Existing.Principal.RunLevel -ne $Principal.RunLevel) { $FixPrincipal = $true }
+					If ($Existing.Principal.UserId -ne $Principal.UserId) { $UpdatePrincipal = $true }
+					If ($Existing.Principal.LogonType -ne $Principal.LogonType) { $UpdatePrincipal = $true }
+					If ($Existing.Principal.RunLevel -ne $Principal.RunLevel) { $UpdatePrincipal = $true }
 				}
 
-				# update task principal if necessary
-				If ($FixPrincipal) {
+				# if task principal update requested...
+				If ($UpdatePrincipal) {
+					# update task principal
 					Try {
-						Write-Verbose -Verbose -Message "Updating principal for existing scheduled task '$TaskName' at path '$TaskPath'"
 						$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Principal $Principal
 					}
 					Catch {
 						Write-Warning -Message "could not update principal for existing scheduled task '$TaskName' at path '$TaskPath'"
 						Return $_
 					}
+
+					# report task principal updated
+					Write-Verbose -Verbose -Message "Updated principal for existing scheduled task '$TaskName' at path '$TaskPath'"
 				}
 			}
 
 			# if settings are defined...
 			If ($Settings) {
 				# reset booleans
-				$FixSettings = $false
+				$UpdateSettings = $false
 
 				# if settings not present on existing scheduled task...
 				If ($null -eq $Existing.Settings) {
-					$FixSettings = $true
+					$UpdateSettings = $true
 				}
 				# if settings present on existing scheduled task...
 				Else {
-					If ($Existing.Settings.Enabled -ne $Settings.Enabled) { $FixSettings = $true }
-					If ($Existing.Settings.DisallowStartIfOnBatteries -ne $Settings.DisallowStartIfOnBatteries) { $FixSettings = $true }
-					If ($Existing.Settings.StopIfGoingOnBatteries -ne $Settings.StopIfGoingOnBatteries) { $FixSettings = $true }
-					If ($Existing.Settings.ExecutionTimeLimit -ne $Settings.ExecutionTimeLimit) { $FixSettings = $true }
+					If ($Existing.Settings.Enabled -ne $Settings.Enabled) { $UpdateSettings = $true }
+					If ($Existing.Settings.DisallowStartIfOnBatteries -ne $Settings.DisallowStartIfOnBatteries) { $UpdateSettings = $true }
+					If ($Existing.Settings.StopIfGoingOnBatteries -ne $Settings.StopIfGoingOnBatteries) { $UpdateSettings = $true }
+					If ($Existing.Settings.ExecutionTimeLimit -ne $Settings.ExecutionTimeLimit) { $UpdateSettings = $true }
 				}
 
-				# update task settings if necessary
-				If ($FixSettings) {
+				# if task settings update requested...
+				If ($UpdateSettings) {
+					# update task settings
 					Try {
-						Write-Verbose -Verbose -Message "Updating settings for existing scheduled task '$TaskName' at path '$TaskPath'"
 						$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Settings $Settings
 					}
 					Catch {
 						Write-Warning -Message "could not update settings for existing scheduled task '$TaskName' at path '$TaskPath'"
 						Return $_
 					}
+
+					# report task settings updated
+					Write-Verbose -Verbose -Message "Updated settings for existing scheduled task '$TaskName' at path '$TaskPath'"
 				}
 			}
 
 			# if trigger is defined...
 			If ($Trigger) {
 				# reset booleans
-				$FixTriggers = $false
+				$UpdateTrigger = $false
 
 				# if trigger count on existing scheduled task is not 1...
 				If ($Existing.Triggers.Count -ne 1) {
-					$FixTriggers = $true
+					$UpdateTrigger = $true
 				}
 				# if trigger count on existing scheduled task is 1...
 				Else {
-					If ($Existing.Triggers[0].CimClass.CimClassName -ne $Trigger.CimClass.CimClassName) { $FixTriggers = $true }
-					If ($Existing.Triggers[0].Enabled -ne $Trigger.Enabled) { $FixTriggers = $true }
-					If ($Existing.Triggers[0].RandomDelay -ne $Trigger.RandomDelay) { $FixTriggers = $true }
-					If ($Existing.Triggers[0].Repetition.Interval -ne $Trigger.Repetition.Interval) { $FixTriggers = $true }
-					If ([datetime]$Existing.Triggers[0].StartBoundary -ne [datetime]$Trigger.StartBoundary) { $FixTriggers = $true }
+					If ($Existing.Triggers[0].CimClass.CimClassName -ne $Trigger.CimClass.CimClassName) { $UpdateTrigger = $true }
+					If ($Existing.Triggers[0].Enabled -ne $Trigger.Enabled) { $UpdateTrigger = $true }
+					If ($Existing.Triggers[0].RandomDelay -ne $Trigger.RandomDelay) { $UpdateTrigger = $true }
+					If ($Existing.Triggers[0].Repetition.Interval -ne $Trigger.Repetition.Interval) { $UpdateTrigger = $true }
+					If ([datetime]$Existing.Triggers[0].StartBoundary -ne [datetime]$Trigger.StartBoundary) { $UpdateTrigger = $true }
 				}
 
-				# update task trigger if necessary
-				If ($FixTriggers) {
+				# if task trigger update requested...
+				If ($UpdateTrigger) {
+					# update task trigger
 					Try {
-						Write-Verbose -Verbose -Message "Updating trigger for existing scheduled task '$TaskName' at path '$TaskPath'"
 						$null = Set-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Trigger $Trigger
 					}
 					Catch {
 						Write-Warning -Message "could not update trigger for existing scheduled task '$TaskName' at path '$TaskPath'"
 						Return $_
 					}
+
+					# report task trigger updated
+					Write-Verbose -Verbose -Message "Updated trigger for existing scheduled task '$TaskName' at path '$TaskPath'"
 				}
 			}
 
 			# report then return
 			Write-Verbose -Verbose -Message "Verified existing scheduled task '$TaskName' at path '$TaskPath'"
 			Return
-		}
-
-		# if UnregisterScheduledTask requested...
-		If ($UnregisterScheduledTask) {
-			# unregister scheduled task
-			Try {
-				$null = Unregister-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath
-			}
-			Catch {
-				Return $_
-			}
-
-			# report unregistered
-			Write-Verbose -Verbose -Message "Unregistered existing scheduled task '$TaskName' at path '$TaskPath'"
 		}
 
 		# define required parameters for Register-ScheduledTask
@@ -1409,22 +1414,22 @@ Process {
 				# if NoTrigger not set...
 				If (!$script:NoTrigger) {
 					# add TriggerAt if NoTrigger not set
-					$JsonParameters['TriggerAt'] = $TriggerAt.ToString('o')
+					$JsonParameters['TriggerAt'] = $TriggerAt.ToString('s')
+				}
 
-					# add RandomDelay if provided as datetime value
-					If ($script:RandomDelay) {
-						$JsonParameters['RandomDelayTime'] = $TriggerAt.Add($RandomDelay).ToString('o')
-					}
+				# add RandomDelay if provided as datetime value
+				If ($script:RandomDelay) {
+					$JsonParameters['RandomDelay'] = $RandomDelay.ToString('c')
+				}
 
-					# add ExecutionTimeLimit if provided as datetime value
-					If ($script:ExecutionTimeLimit) {
-						$JsonParameters['ExecutionTimeLimitTime'] = $TriggerAt.Add($ExecutionTimeLimit).ToString('o')
-					}
+				# add ExecutionTimeLimit if provided as datetime value
+				If ($script:ExecutionTimeLimit) {
+					$JsonParameters['ExecutionTimeLimit'] = $ExecutionTimeLimit.ToString('c')
+				}
 
-					# add RepetitionInterval if provided as datetime value
-					If ($script:RepetitionInterval) {
-						$JsonParameters['RepetitionIntervalTime'] = $TriggerAt.Add($RepetitionInterval).ToString('o')
-					}
+				# add RepetitionInterval if provided as datetime value
+				If ($script:RepetitionInterval) {
+					$JsonParameters['RepetitionInterval'] = $RepetitionInterval.ToString('c')
 				}
 
 				# add RunLevel if provided
@@ -1448,7 +1453,7 @@ Process {
 				}
 
 				# add Updated as current datetime in IS0 8601 extended format
-				$JsonParameters['Updated'] = [datetime]::UtcNow.ToString('s')
+				$JsonParameters['Updated'] = [datetime]::Now.ToString('s')
 
 				# create custom object from hashtable
 				$JsonEntry = [pscustomobject]$JsonParameters
@@ -1574,12 +1579,24 @@ Process {
 						Write-Warning -Message 'optional value (TriggerAt) found in configuration file but cannot be parsed into a datetime object'
 						Continue NextJsonEntry
 					}
+					($null -ne $JsonEntry.RandomDelay -and -not [datetime]::TryParse($JsonEntry.RandomDelay, [ref][timespan]::Zero)) {
+						Write-Warning -Message 'optional value (RandomDelay) found in configuration file but cannot be parsed into a timespan object'
+						Continue NextJsonEntry
+					}
 					($null -ne $JsonEntry.RandomDelayTime -and -not [datetime]::TryParse($JsonEntry.RandomDelayTime, [ref][datetime]::Now)) {
 						Write-Warning -Message 'optional value (RandomDelayTime) found in configuration file but cannot be parsed into a datetime object'
 						Continue NextJsonEntry
 					}
+					($null -ne $JsonEntry.RepetitionInterval -and -not [datetime]::TryParse($JsonEntry.RepetitionInterval, [ref][timespan]::Zero)) {
+						Write-Warning -Message 'optional value (RepetitionInterval) found in configuration file but cannot be parsed into a timespan object'
+						Continue NextJsonEntry
+					}
 					($null -ne $JsonEntry.RepetitionIntervalTime -and -not [datetime]::TryParse($JsonEntry.RepetitionIntervalTime, [ref][datetime]::Now)) {
 						Write-Warning -Message 'optional value (RepetitionIntervalTime) found in configuration file but cannot be parsed into a datetime object'
+						Continue NextJsonEntry
+					}
+					($null -ne $JsonEntry.ExecutionTimeLimit -and -not [datetime]::TryParse($JsonEntry.ExecutionTimeLimit, [ref][timespan]::Zero)) {
+						Write-Warning -Message 'optional value (ExecutionTimeLimit) found in configuration file but cannot be parsed into a timespan object'
 						Continue NextJsonEntry
 					}
 					($null -ne $JsonEntry.ExecutionTimeLimitTime -and -not [datetime]::TryParse($JsonEntry.ExecutionTimeLimitTime, [ref][datetime]::Now)) {
@@ -1637,6 +1654,30 @@ Process {
 					$UpdateScheduledTaskFromJson['RunLevel'] = [string]$RunLevel
 				}
 
+				# define timespan values
+				$TimeSpanValues = 'RandomDelay', 'RepetitionInterval', 'ExecutionTimeLimit'
+
+				# process each timespan value
+				:NextTimeSpanValue ForEach ($TimeSpanValue in $TimeSpanValues) {
+					# if timespan value not defined in JSON...
+					If ($null -eq $JsonEntry.$TimeSpanValue) {
+						# continue to next timespan value
+						Continue NextTimeSpanValue
+					}
+
+					# parse timespan value to timespan
+					$TimeSpan = [timespan]::Parse($JsonEntry.$TimeSpanValue)
+
+					# if parsed timespan is a negative timespan...
+					If ($TimeSpan -lt [timespan]::Zero) {
+						# flip timespan with negate method
+						$Timespan = $Timespan.Negate()
+					}
+
+					# add timespan to hashtable
+					$UpdateScheduledTaskFromJson[$TimeSpanValue] = $TimeSpan
+				}
+
 				# if TriggerAt defined in JSON...
 				If ($null -ne $JsonEntry.TriggerAt) {
 					# parse TriggerAt to datetime
@@ -1645,70 +1686,41 @@ Process {
 					# add TriggerAt to hashtable
 					$UpdateScheduledTaskFromJson['TriggerAt'] = $TriggerAt
 
-					# if RandomDelayTime defined in JSON...
-					If ($null -ne $JsonEntry.RandomDelayTime) {
-						# parse RandomDelayTime to datetime
-						$RandomDelayTime = [datetime]::Parse($JsonEntry.RandomDelayTime)
+					# define values contingent on TriggerAt
+					$DependentValues = 'RandomDelayTime', 'RepetitionIntervalTime', 'ExecutionTimeLimitTime'
 
-						# if RandomDelayTime is before TriggerAt...
-						If ($RandomDelayTime -lt $TriggerAt) {
+					# process each dependent datetime value
+					:NextDependentValue ForEach ($DependentValue in $DependentValues) {
+						# if dependent datetime value not defined in JSON...
+						If ($null -eq $JsonEntry.$DependentValue) {
+							# continue to next dependent datetime value
+							Continue NextDependentValue
+						}
+
+						# define name of corresponding independent value
+						$IndependentValue = $DependentValue.TrimEnd('Time')
+
+						# if independent value already defined in JSON...
+						If ($null -ne $JsonEntry.$IndependentValue) {
 							# warn and continue
-							Write-Warning -Message "RandomDelayTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
-							Continue NextJsonEntry
+							Write-Warning -Message "skipping $DependentValue as $IndependentValue already defined"
+							Continue NextDependentValue
 						}
 
-						# get RandomDelay timespan by subtracting TriggerAt from RandomDelayTime
-						$RandomDelay = $RandomDelayTime.Subtract($TriggerAt)
+						# parse dependent datetime value to datetime
+						$DependentDateTime = [datetime]::Parse($JsonEntry.$DependentValue)
 
-						# if RandomDelay is not zero...
-						If ($RandomDelay -gt [timespan]::Zero) {
-							# add RandomDelay to hashtable
-							$UpdateScheduledTaskFromJson['RandomDelay'] = $RandomDelay
-						}
-					}
+						# get timespan by subtracting TriggerAt from parsed datetime
+						$TimeSpan = $DependentDateTime.Subtract($TriggerAt)
 
-					# if RepetitionIntervalTime defined in JSON...
-					If ($null -ne $JsonEntry.RepetitionIntervalTime) {
-						# parse RepetitionIntervalTime to datetime
-						$RepetitionIntervalTime = [datetime]::Parse($JsonEntry.RepetitionIntervalTime)
-
-						# if RepetitionIntervalTime is before TriggerAt...
-						If ($RepetitionIntervalTime -lt $TriggerAt) {
-							# warn and continue
-							Write-Warning -Message "RepetitionIntervalTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
-							Continue NextJsonEntry
+						# if computed timespan is a negative timespan...
+						If ($TimeSpan -lt [timespan]::Zero) {
+							# flip timespan with negate method
+							$Timespan = $Timespan.Negate()
 						}
 
-						# get RepetitionInterval timespan by subtracting TriggerAt from RepetitionIntervalTime
-						$RepetitionInterval = $RepetitionIntervalTime.Subtract($TriggerAt)
-
-						# if RepetitionInterval is not zero...
-						If ($RepetitionInterval -gt [timespan]::Zero) {
-							# add RepetitionInterval to hashtable
-							$UpdateScheduledTaskFromJson['RepetitionInterval'] = $RepetitionInterval
-						}
-					}
-
-					# if ExecutionTimeLimitTime defined in JSON...
-					If ($null -ne $JsonEntry.ExecutionTimeLimitTime) {
-						# parse ExecutionTimeLimitTime to datetime
-						$ExecutionTimeLimitTime = [datetime]::Parse($JsonEntry.ExecutionTimeLimitTime)
-
-						# if ExecutionTimeLimitTime is before TriggerAt...
-						If ($ExecutionTimeLimitTime -lt $TriggerAt) {
-							# warn and continue
-							Write-Warning -Message "ExecutionTimeLimitTime is before TriggerAt in task: '$($JsonEntry.TaskName)'"
-							Continue NextJsonEntry
-						}
-
-						# get ExecutionTimeLimit timespan by subtracting TriggerAt from ExecutionTimeLimitTime
-						$ExecutionTimeLimit = $ExecutionTimeLimitTime.Subtract($TriggerAt)
-
-						# if ExecutionTimeLimit is not zero...
-						If ($ExecutionTimeLimit -gt [timespan]::Zero) {
-							# add ExecutionTimeLimit to hashtable
-							$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = $ExecutionTimeLimit
-						}
+						# add timespan to hashtable for independent value
+						$UpdateScheduledTaskFromJson[$IndependentValue] = $TimeSpan
 					}
 				}
 
