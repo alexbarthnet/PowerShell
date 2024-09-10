@@ -193,21 +193,27 @@ Function Test-CmsInvalidSubject {
 Function Export-CmsCredentialCertificate {
 	<#
 	.SYNOPSIS
-	Exports a certificate for protecting credentials with CMS.
+	Exports the public key and PFX file for certificate protecting credentials with CMS.
 
 	.DESCRIPTION
-	Exports a certificate for protecting credentials with CMS. The exported certificate is protected using DPAPI.
+	Exports the public key and PFX file for certificate protecting credentials with CMS. The PFX file is protected using DPAPI.
+
+	.PARAMETER certificate
+	Specifies the certificate protecting credentials with CMS. Cannot be combined with the Thumbprint or Identity parameter.
 
 	.PARAMETER Thumbprint
-	Specifies the thumbprint of a certificate protecting a CMS credential. Cannot be combined with the Identity parameter.
+	Specifies the thumbprint of a certificate protecting credentials with CMS. Cannot be combined with the Certificate or Identity parameter.
 
 	.PARAMETER Identity
-	Specifies the identity of a CMS credential. Cannot be combined with the Thumbprint parameter.
+	Specifies the identity of a certificate protecting credentials with CMS. Cannot be combined with the Certificate or Thumbprint parameter.
 
 	.PARAMETER FilePath
+	Specifies the path for the exported public key.
+
+	.PARAMETER PfxFilePath
 	Specifies the path for the exported PFX file.
 
-	.PARAMETER Principals
+	.PARAMETER ProtectTo
 	Specifies one or more security principals.
 
 	.INPUTS
@@ -221,14 +227,18 @@ Function Export-CmsCredentialCertificate {
 
 	#>
 
-	[CmdletBinding(DefaultParameterSetName = 'Identity')]
+	[CmdletBinding(DefaultParameterSetName = 'Certificate')]
 	Param (
+		[Parameter(ParameterSetName = 'Certificate', Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
+		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
 		[Parameter(ParameterSetName = 'Thumbprint', Mandatory = $true, Position = 0)]
 		[string]$Thumbprint,
 		[Parameter(ParameterSetName = 'Identity', Mandatory = $true, Position = 0)]
 		[string]$Identity,
 		[Parameter(Mandatory = $true)]
 		[string]$FilePath,
+		[Parameter(Mandatory = $true)]
+		[string]$PfxFilePath,
 		[Parameter(Mandatory = $true)]
 		[object[]]$Principals,
 		[Parameter(DontShow)]
@@ -257,8 +267,9 @@ Function Export-CmsCredentialCertificate {
 			Throw $_
 		}
 	}
-	# if thumbprint not provided...
-	Else {
+
+	# if identity provided...
+	If ($PSBoundParameters.ContainsKey('Identity')) {
 		# define pattern as organizational unit of Identity followed by organization of CmsCredentials
 		$Pattern = "OU=$Identity, O=CmsCredentials$"
 		# retrieve latest certificate with matching subject
@@ -279,12 +290,29 @@ Function Export-CmsCredentialCertificate {
 	}
 
 	# define parameters for Export-PfxCertificate
+	$ExportCertificate = @{
+		Cert        = $Certificate
+		FilePath    = $FilePath
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+	}
+
+	# export certificate as .pfx
+	Try {
+		$null = Export-Certificate @ExportCertificate
+	}
+	Catch {
+		Write-Warning -Message "could not export CER file for certificate on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
+		Throw $_
+	}
+
+	# define parameters for Export-PfxCertificate
 	$ExportPfxCertificate = @{
 		Cert                  = $Certificate
-		FilePath              = $FilePath
-		ProtectTo             = $Principals
-		ChainOption           = 'EndEntityCertOnly'
-		CryptoAlgorithmOption = 'AES256_SHA256'
+		FilePath              = $PfxFilePath
+		ProtectTo             = $ProtectTo
+		ChainOption           = [Microsoft.CertificateServices.Commands.ExportChainOption]::EndEntityCertOnly
+		CryptoAlgorithmOption = [Microsoft.CertificateServices.Commands.CryptoAlgorithmOptions]::AES256_SHA256
+		ErrorAction           = [System.Management.Automation.ActionPreference]::Stop
 	}
 
 	# export certificate as .pfx
