@@ -193,19 +193,25 @@ Function Test-CmsInvalidSubject {
 Function Export-CmsCredentialCertificate {
 	<#
 	.SYNOPSIS
-	Exports the public key and PFX file for certificate protecting credentials with CMS.
+	Exports the public key and PFX file of a certificate for protecting credentials with CMS.
 
 	.DESCRIPTION
-	Exports the public key and PFX file for certificate protecting credentials with CMS. The PFX file is protected using DPAPI.
+	Exports the public key and PFX file of a certificate for protecting credentials with CMS. The PFX file is protected using DPAPI.
 
 	.PARAMETER Certificate
-	Specifies the certificate protecting credentials with CMS. Cannot be combined with the Thumbprint or Identity parameter.
+	Specifies a certificate for protecting credentials with CMS. Cannot be combined with the Thumbprint or Identity parameter.
 
 	.PARAMETER Thumbprint
-	Specifies the thumbprint of a certificate protecting credentials with CMS. Cannot be combined with the Certificate or Identity parameter.
+	Specifies the thumbprint of a certificate for protecting credentials with CMS. Cannot be combined with the Certificate or Identity parameter.
 
 	.PARAMETER Identity
-	Specifies the identity of a certificate protecting credentials with CMS. Cannot be combined with the Certificate or Thumbprint parameter.
+	Specifies the identity of a certificate for protecting credentials with CMS. Cannot be combined with the Certificate or Thumbprint parameter.
+
+	.PARAMETER ProtectTo
+	Specifies one or more security principals.
+
+	.PARAMETER Path
+	Specifies the path for the exported public key and PFX file when not overriden by the FilePath or PfxFilePath parameters.
 
 	.PARAMETER FilePath
 	Specifies the path for the exported public key.
@@ -213,11 +219,8 @@ Function Export-CmsCredentialCertificate {
 	.PARAMETER PfxFilePath
 	Specifies the path for the exported PFX file.
 
-	.PARAMETER ProtectTo
-	Specifies one or more security principals.
-
 	.INPUTS
-	None.
+	System.Security.Cryptography.X509Certificates.X509Certificate2.
 
 	.OUTPUTS
 	None.
@@ -235,12 +238,18 @@ Function Export-CmsCredentialCertificate {
 		[string]$Thumbprint,
 		[Parameter(ParameterSetName = 'Identity', Mandatory = $true, Position = 0)]
 		[string]$Identity,
-		[Parameter(Mandatory = $true)]
+		[Parameter(Mandatory = $true, Position = 1)]
+		[string[]]$ProtectTo,
+		[Parameter(Position = 2)]
+		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
+		[Parameter(Position = 3)]
 		[string]$FilePath,
-		[Parameter(Mandatory = $true)]
+		[Parameter(Position = 4)]
 		[string]$PfxFilePath,
-		[Parameter(Mandatory = $true)]
-		[object[]]$Principals,
+		[Parameter(Position = 5)]
+		[switch]$SkipPublicKey,
+		[Parameter(Position = 6)]
+		[switch]$SkipPfxFile,
 		[Parameter(DontShow)]
 		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
 		[Parameter(DontShow)]
@@ -289,39 +298,63 @@ Function Export-CmsCredentialCertificate {
 		}
 	}
 
-	# define parameters for Export-PfxCertificate
-	$ExportCertificate = @{
-		Cert        = $Certificate
-		FilePath    = $FilePath
-		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+	# if skip public key not requested...
+	If (!$SkipPublicKey) {
+		# if file path not provided...
+		If (!$PSBoundParameters.ContainsKey('FilePath')) {
+			#retrieve simple name from certificate
+			$ChildPath = $Certificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
+
+			# define FilePath as simple name with .cer extension in default path
+			$FilePath = Join-Path -Path $Path -ChildPath "$ChildPath.cer"
+		}
+
+		# define parameters for Export-PfxCertificate
+		$ExportCertificate = @{
+			Cert        = $Certificate
+			FilePath    = $FilePath
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# export certificate as .pfx
+		Try {
+			$null = Export-Certificate @ExportCertificate
+		}
+		Catch {
+			Write-Warning -Message "could not export public key for certificate on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
+			Throw $_
+		}
 	}
 
-	# export certificate as .pfx
-	Try {
-		$null = Export-Certificate @ExportCertificate
-	}
-	Catch {
-		Write-Warning -Message "could not export CER file for certificate on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
-		Throw $_
-	}
+	# if skip pfx file not requested...
+	If (!$SkipPfxFile) {
+		# if PfxFilePath not provided...
+		If (!$PSBoundParameters.ContainsKey('PfxFilePath')) {
+			#retrieve simple name from certificate
+			$ChildPath = $Certificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
 
-	# define parameters for Export-PfxCertificate
-	$ExportPfxCertificate = @{
-		Cert                  = $Certificate
-		FilePath              = $PfxFilePath
-		ProtectTo             = $ProtectTo
-		ChainOption           = [Microsoft.CertificateServices.Commands.ExportChainOption]::EndEntityCertOnly
-		CryptoAlgorithmOption = [Microsoft.CertificateServices.Commands.CryptoAlgorithmOptions]::AES256_SHA256
-		ErrorAction           = [System.Management.Automation.ActionPreference]::Stop
-	}
+			# define PfxFilePath as simple name with .pfx extension in default path
+			$PfxFilePath = Join-Path -Path $Path -ChildPath "$ChildPath.pfx"
+		}
 
-	# export certificate as .pfx
-	Try {
-		$null = Export-PfxCertificate @ExportPfxCertificate
-	}
-	Catch {
-		Write-Warning -Message "could not export PFX file for certificate on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
-		Throw $_
+		# define parameters for Export-PfxCertificate
+		$ExportPfxCertificate = @{
+			Cert                  = $Certificate
+			FilePath              = $PfxFilePath
+			ProtectTo             = $ProtectTo
+			ChainOption           = [Microsoft.CertificateServices.Commands.ExportChainOption]::EndEntityCertOnly
+			CryptoAlgorithmOption = [Microsoft.CertificateServices.Commands.CryptoAlgorithmOptions]::AES256_SHA256
+			ErrorAction           = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# export certificate as .pfx
+		Try {
+			$null = Export-PfxCertificate @ExportPfxCertificate
+		}
+		Catch {
+			Write-Warning -Message "could not export PFX file for certificate on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
+			Throw $_
+		}
 	}
 }
 
