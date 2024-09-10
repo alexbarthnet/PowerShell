@@ -198,7 +198,7 @@ Function Export-CmsCredentialCertificate {
 	.DESCRIPTION
 	Exports the public key and PFX file for certificate protecting credentials with CMS. The PFX file is protected using DPAPI.
 
-	.PARAMETER certificate
+	.PARAMETER Certificate
 	Specifies the certificate protecting credentials with CMS. Cannot be combined with the Thumbprint or Identity parameter.
 
 	.PARAMETER Thumbprint
