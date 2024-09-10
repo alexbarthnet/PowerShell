@@ -1241,6 +1241,9 @@ Function Show-CmsCredential {
 	PS> Show-CmsCredential
 
 	.EXAMPLE
+	PS> Show-CmsCredential -Thumbprint "0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b"
+
+	.EXAMPLE
 	PS> Show-CmsCredential -Identity "testcredential"
 
 	.EXAMPLE
@@ -1366,13 +1369,16 @@ Function Show-CmsCredential {
 		$Pattern = "Subject: $($Certificate.Subject)"
 		$SimpleMatch = $true
 	}
+
 	# if identity provided...
-	ElseIf ($PSBoundParameters.ContainsKey('Identity')) {
+	If ($PSBoundParameters.ContainsKey('Identity')) {
 		# define pattern as organizational unit of Identity followed by organization of CmsCredentials
 		$Pattern = "OU=$Identity, O=CmsCredentials$"
 		$SimpleMatch = $false
 	}
-	Else {
+
+	# if pattern not defined...
+	If (!$local:Pattern) {
 		# define pattern as organization of CmsCredentials
 		$Pattern = 'O=CmsCredentials$'
 		$SimpleMatch = $false
