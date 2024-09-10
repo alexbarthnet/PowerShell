@@ -1,12 +1,74 @@
 #Requires -Modules TranscriptWithHostAndDate,CmsCredentials
 
+Function ConvertTo-Collection {
+	Param (
+		[Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+		[object]$InputObject,
+		[switch]$Ordered
+	)
+
+	# if ordered...
+	If ($Ordered) {
+		# create an ordered dictionary
+		$Collection = [System.Collections.Specialized.OrderedDictionary]::new()
+	}
+	Else {
+		# create a hashtable
+		$Collection = [System.Collections.Hashtable]::new()
+	}
+
+	# process each property of input object
+	ForEach ($Property in $InputObject.PSObject.Properties) {
+		# if property contains multiple values...
+		If ($Property.Value.Count -gt 1) {
+			# define list for property values
+			$PropertyValues = [System.Collections.Generic.List[object]]::new($Property.Value.Count)
+			# process each property value
+			ForEach ($PropertyValue in $Property.Value) {
+				# if property value is a pscustomobject...
+				If ($PropertyValue -is [System.Management.Automation.PSCustomObject]) {
+					# convert property value into collection
+					$PropertyValueCollection = ConvertTo-Collection -InputObject $PropertyValue -Ordered:$Ordered
+					# add property value collection to list
+					$PropertyValues.Add($PropertyValueCollection)
+				}
+				# if property value is not a pscustomobject...
+				Else {
+					# add property value to list
+					$PropertyValues.Add($PropertyValue)
+				}
+			}
+			# convert list to array then add array to collection
+			$Collection[$Property.Name] = $PropertyValues.ToArray()
+		}
+		Else {
+			# if property value is a pscustomobject...
+			If ($Property.Value -is [System.Management.Automation.PSCustomObject]) {
+				# convert property value into collection
+				$PropertyValueCollection = ConvertTo-Collection -InputObject $Property.Value -Ordered:$Ordered
+				# add property name and value to collection
+				$Collection[$Property.Name] = $PropertyValueCollection
+			}
+			# if property value is not a pscustomobject...
+			Else {
+				# add property name and value to collection
+				$Collection[$Property.Name] = $Property.Value
+			}
+		}
+	}
+
+	# return collection
+	Return $Collection
+}
+
 Function Copy-PathFromPSDirect {
 	[CmdletBinding()]
 	param (
 		[string]$VMName,
 		[string]$Path,
 		[string]$Destination,
-		[switch]$Purge
+		[switch]$Purge,
+		[hashtable]$CmsCredentialParameters
 	)
 
 	# retrieve VMs on local system
@@ -30,9 +92,19 @@ Function Copy-PathFromPSDirect {
 		Return
 	}
 
+	# if CMS credential parameters provided...
+	If ($PSBoundParameters.ContainsKey('CmsCredentialParameters')) {
+		# define parameters for Get-CmsCredential using CMS credential parameters
+		$GetCmsCredential = $CmsCredentialParameters
+	}
+	Else {
+		# define parameters for Get-CmsCredential using VMName as Identity
+		$GetCmsCredential = @{ Identity = $VMName }
+	}
+
 	# retrieve VM credentials
 	Try {
-		$Credential = Get-CmsCredential -Identity $VMName
+		$Credential = Get-CmsCredential @GetCmsCredential
 	}
 	Catch {
 		Write-Warning -Message "could not unprotect credentials for VM: '$VMName'"
@@ -122,7 +194,8 @@ Function Copy-PathToPSDirect {
 		[string]$VMName,
 		[string]$Path,
 		[string]$Destination,
-		[switch]$Purge
+		[switch]$Purge,
+		[hashtable]$CmsCredentialParameters
 	)
 
 	# retrieve VMs on local system
@@ -146,9 +219,19 @@ Function Copy-PathToPSDirect {
 		Return
 	}
 
+	# if CMS credential parameters provided...
+	If ($PSBoundParameters.ContainsKey('CmsCredentialParameters')) {
+		# define parameters for Get-CmsCredential using CMS credential parameters
+		$GetCmsCredential = $CmsCredentialParameters
+	}
+	Else {
+		# define parameters for Get-CmsCredential using VMName as Identity
+		$GetCmsCredential = @{ Identity = $VMName }
+	}
+
 	# retrieve VM credentials
 	Try {
-		$Credential = Get-CmsCredential -Identity $VMName
+		$Credential = Get-CmsCredential @GetCmsCredential
 	}
 	Catch {
 		Write-Warning -Message "could not unprotect credentials for VM: '$VMName'"
@@ -263,6 +346,9 @@ Function Export-FilesWithPSDirect {
 		# copy parameter - clear destination on host first
 		[Parameter(ParameterSetName = 'Add')]
 		[switch]$Purge,
+		# credential parameters - hashtable with parameters for Get-CmsCredential
+		[Parameter(ParameterSetName = 'Add')]
+		[hashtable]$CmsCredentialParameters,
 		# switch to skip transcript logging
 		[Parameter(DontShow)]
 		[switch]$SkipTranscript,
@@ -368,12 +454,17 @@ Function Export-FilesWithPSDirect {
 			# add entry to configuration file
 			$Add {
 				Try {
-					# create hashtable for custom object
+					# create ordered dictionary for custom object
 					$JsonParameters = [ordered]@{
 						VMName      = $VMName
 						Path        = $Path
 						Destination = $Destination
 						Purge       = $Purge.ToBool()
+					}
+
+					# add CmsCredentialParameters if provided
+					If ($script:CmsCredentialParameters) {
+						$JsonParameters['CmsCredentialParameters'] = $CmsCredentialParameters
 					}
 
 					# create custom object from hashtable
@@ -424,12 +515,23 @@ Function Export-FilesWithPSDirect {
 							Write-Warning -Message "required value (Destination) not found in configuration file: $Json"; Continue JsonEntry
 						}
 						Default {
-							# define parameters
+							# define required parameters
 							$CopyPathFromPSDirect = @{
 								VMName      = $JsonEntry.VMName
 								Path        = $JsonEntry.Path
 								Destination = $JsonEntry.Destination
 								Purge       = $JsonEntry.Purge
+							}
+
+							# define optional parameters
+							If ($null -ne $JsonEntry.CmsCredentialParameters) {
+								Try {
+									$CopyPathFromPSDirect['CmsCredentialParameters'] = ConvertTo-Collection -InputObject $JsonEntry.CmsCredentialParameters
+								}
+								Catch {
+									Write-Warning -Message "could not convert CmsCredentialParameters to collection"
+									Return
+								}
 							}
 
 							# copy files from VM
@@ -491,6 +593,9 @@ Function Import-FilesWithPSDirect {
 		# copy parameter - clear destination on VM first
 		[Parameter(ParameterSetName = 'Add')]
 		[switch]$Purge,
+		# credential parameters - hashtable with parameters for Get-CmsCredential
+		[Parameter(ParameterSetName = 'Add')]
+		[hashtable]$CmsCredentialParameters,
 		# switch to skip transcript logging
 		[Parameter(DontShow)]
 		[switch]$SkipTranscript,
@@ -597,12 +702,17 @@ Function Import-FilesWithPSDirect {
 			# add entry to configuration file
 			$Add {
 				Try {
-					# create hashtable for custom object
+					# create ordered dictionary for custom object
 					$JsonParameters = [ordered]@{
 						VMName      = $VMName
 						Path        = $Path
 						Destination = $Destination
 						Purge       = $Purge.ToBool()
+					}
+
+					# add CmsCredentialParameters if provided
+					If ($script:CmsCredentialParameters) {
+						$JsonParameters['CmsCredentialParameters'] = $CmsCredentialParameters
 					}
 
 					# create custom object from hashtable
@@ -653,12 +763,23 @@ Function Import-FilesWithPSDirect {
 							Write-Warning -Message "required value (Destination) not found in configuration file: $Json"; Continue JsonEntry
 						}
 						Default {
-							# define parameters
+							# define required parameters
 							$CopyPathToPSDirect = @{
 								VMName      = $JsonEntry.VMName
 								Path        = $JsonEntry.Path
 								Destination = $JsonEntry.Destination
 								Purge       = $JsonEntry.Purge
+							}
+
+							# define optional parameters
+							If ($null -ne $JsonEntry.CmsCredentialParameters) {
+								Try {
+									$CopyPathToPSDirect['CmsCredentialParameters'] = ConvertTo-Collection -InputObject $JsonEntry.CmsCredentialParameters
+								}
+								Catch {
+									Write-Warning -Message "could not convert CmsCredentialParameters to collection"
+									Return
+								}
 							}
 
 							# copy files to VM
