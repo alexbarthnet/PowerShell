@@ -463,7 +463,7 @@ Function Export-FilesWithPSDirect {
 					}
 
 					# add CmsCredentialParameters if provided
-					If ($script:CmsCredentialParameters) {
+					If ($PSBoundParameters.ContainsKey('CmsCredentialParameters')) {
 						$JsonParameters['CmsCredentialParameters'] = $CmsCredentialParameters
 					}
 
@@ -711,7 +711,7 @@ Function Import-FilesWithPSDirect {
 					}
 
 					# add CmsCredentialParameters if provided
-					If ($script:CmsCredentialParameters) {
+					If ($PSBoundParameters.ContainsKey('CmsCredentialParameters')) {
 						$JsonParameters['CmsCredentialParameters'] = $CmsCredentialParameters
 					}
 
