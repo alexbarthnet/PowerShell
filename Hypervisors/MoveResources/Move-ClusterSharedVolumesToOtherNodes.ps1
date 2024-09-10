@@ -35,7 +35,7 @@ Process {
 		$ClusterSharedVolumes = Get-ClusterNode -Name $HostName | Get-ClusterSharedVolume | Sort-Object -Property 'Name'
 	}
 	Catch {
-		Write-Warning -Message "'could not retrieve cluster shared volumes on node: $HostName"
+		Write-Warning -Message "could not retrieve cluster shared volumes on node: $HostName"
 		Return $_
 	}
 
@@ -45,7 +45,7 @@ Process {
 	# process cluster shared volumes
 	ForEach ($ClusterSharedVolume in $ClusterSharedVolumes) {
 		# report intent
-		Write-Verbose -Verbose -Message "moving '$($ClusterSharedVolume.Name)' cluster shared volume"
+		Write-Verbose -Verbose -Message "starting migration for '$($ClusterSharedVolume.Name)' cluster shared volume"
 
 		# move cluster shared volume
 		Try {
@@ -57,7 +57,7 @@ Process {
 		}
 
 		# report complete
-		Write-Verbose -Verbose -Message "moved '$($MovedClusterSharedVolume.Name)' cluster shared volume to node: $($MovedClusterSharedVolume.OwnerNode.Name)"
+		Write-Verbose -Verbose -Message "finished migration for '$($MovedClusterSharedVolume.Name)' cluster shared volume to node: $($MovedClusterSharedVolume.OwnerNode.Name)"
 	}
 }
 

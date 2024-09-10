@@ -74,7 +74,7 @@ Process {
 		}
 
 		# report intent
-		Write-Verbose -Verbose -Message "moving '$($ClusterSharedVolume.Name)' cluster shared volume to node: $Node"
+		Write-Verbose -Verbose -Message "starting migration for '$($ClusterSharedVolume.Name)' cluster shared volume to node: $Node"
 
 		# move cluster shared volume to preferred owner
 		Try {
@@ -86,7 +86,7 @@ Process {
 		}
 
 		# report complete
-		Write-Verbose -Verbose -Message "moved '$($MovedClusterSharedVolume.Name)' cluster shared volume to node: $($MovedClusterSharedVolume.OwnerNode.Name)"
+		Write-Verbose -Verbose -Message "finished migration for '$($MovedClusterSharedVolume.Name)' cluster shared volume to node: $($MovedClusterSharedVolume.OwnerNode.Name)"
 	}
 }
 

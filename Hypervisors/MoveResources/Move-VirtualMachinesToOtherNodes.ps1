@@ -45,7 +45,7 @@ Process {
 	# process cluster shared volumes
 	ForEach ($ClusterVirtualMachine in $ClusterVirtualMachines) {
 		# report intent
-		Write-Verbose -Verbose -Message "moving '$($ClusterVirtualMachine.Name)' virtual machine"
+		Write-Verbose -Verbose -Message "starting migration for '$($ClusterVirtualMachine.Name)' virtual machine"
 
 		# move virtual machine
 		Try {
@@ -57,7 +57,7 @@ Process {
 		}
 
 		# report complete
-		Write-Verbose -Verbose -Message "moved '$($MovedClusterVirtualMachine.Name)' virtual machine to node: $($MovedClusterVirtualMachine.OwnerNode.Name)"
+		Write-Verbose -Verbose -Message "finished migration for '$($MovedClusterVirtualMachine.Name)' virtual machine to node: $($MovedClusterVirtualMachine.OwnerNode.Name)"
 	}
 }
 
