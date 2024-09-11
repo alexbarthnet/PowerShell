@@ -1086,7 +1086,7 @@ Function New-ADAccessRule {
 	# if preset not provided...
 	Else {
 		# translate object name to GUID of schema class object, attribute object, or a control access right
-		If ($PSBoundParameters.ContainsKey('ObjectName') -and -not [string]::IsNullOrEmpty($script:ObjectName)) {
+		If ($PSBoundParameters.ContainsKey('ObjectName') -and -not [string]::IsNullOrEmpty($local:ObjectName)) {
 			$objectType = Get-ADObjectTypeGuid -DisplayName $ObjectName
 		}
 		Else {
@@ -1094,7 +1094,7 @@ Function New-ADAccessRule {
 		}
 
 		# translate inheriting object name to GUID of schema class object
-		If ($PSBoundParameters.ContainsKey('InheritingObjectName') -and -not [string]::IsNullOrEmpty($script:InheritingObjectName)) {
+		If ($PSBoundParameters.ContainsKey('InheritingObjectName') -and -not [string]::IsNullOrEmpty($local:InheritingObjectName)) {
 			$inheritedObjectType = Get-ADObjectTypeGuid -DisplayName $InheritingObjectName -LimitToSchemaClassObjects
 		}
 		Else {
