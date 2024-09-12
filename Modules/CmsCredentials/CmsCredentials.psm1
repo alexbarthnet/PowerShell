@@ -1,3 +1,64 @@
+Function ConvertTo-Collection {
+	Param (
+		[Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+		[object]$InputObject,
+		[switch]$Ordered
+	)
+
+	# if ordered...
+	If ($Ordered) {
+		# create an ordered dictionary
+		$Collection = [System.Collections.Specialized.OrderedDictionary]::new()
+	}
+	Else {
+		# create a hashtable
+		$Collection = [System.Collections.Hashtable]::new()
+	}
+
+	# process each property of input object
+	ForEach ($Property in $InputObject.PSObject.Properties) {
+		# if property contains multiple values...
+		If ($Property.Value.Count -gt 1) {
+			# define list for property values
+			$PropertyValues = [System.Collections.Generic.List[object]]::new($Property.Value.Count)
+			# process each property value
+			ForEach ($PropertyValue in $Property.Value) {
+				# if property value is a pscustomobject...
+				If ($PropertyValue -is [System.Management.Automation.PSCustomObject]) {
+					# convert property value into collection
+					$PropertyValueCollection = ConvertTo-Collection -InputObject $PropertyValue -Ordered:$Ordered
+					# add property value collection to list
+					$PropertyValues.Add($PropertyValueCollection)
+				}
+				# if property value is not a pscustomobject...
+				Else {
+					# add property value to list
+					$PropertyValues.Add($PropertyValue)
+				}
+			}
+			# convert list to array then add array to collection
+			$Collection[$Property.Name] = $PropertyValues.ToArray()
+		}
+		Else {
+			# if property value is a pscustomobject...
+			If ($Property.Value -is [System.Management.Automation.PSCustomObject]) {
+				# convert property value into collection
+				$PropertyValueCollection = ConvertTo-Collection -InputObject $Property.Value -Ordered:$Ordered
+				# add property name and value to collection
+				$Collection[$Property.Name] = $PropertyValueCollection
+			}
+			# if property value is not a pscustomobject...
+			Else {
+				# add property name and value to collection
+				$Collection[$Property.Name] = $Property.Value
+			}
+		}
+	}
+
+	# return collection
+	Return $Collection
+}
+
 Function Get-CertificatePrivateKeyPath {
 	<#
 	.SYNOPSIS
@@ -241,14 +302,16 @@ Function Export-CmsCredentialCertificate {
 		[Parameter(Mandatory = $true, Position = 1)]
 		[string[]]$ProtectTo,
 		[Parameter(Position = 2)]
-		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
+		[string]$Path = $CmsCredentials['PathForCmsFiles'],
 		[Parameter(Position = 3)]
-		[string]$FilePath,
+		[string]$PfxPath = $CmsCredentials['PathForPfxFiles'],
 		[Parameter(Position = 4)]
-		[string]$PfxFilePath,
+		[string]$FilePath,
 		[Parameter(Position = 5)]
-		[switch]$SkipPublicKey,
+		[string]$PfxFilePath,
 		[Parameter(Position = 6)]
+		[switch]$SkipPublicKey,
+		[Parameter(Position = 7)]
 		[switch]$SkipPfxFile,
 		[Parameter(DontShow)]
 		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
@@ -305,7 +368,7 @@ Function Export-CmsCredentialCertificate {
 			#retrieve simple name from certificate
 			$ChildPath = $Certificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
 
-			# define FilePath as simple name with .cer extension in default path
+			# define FilePath as simple name with .cer extension in default cms file path
 			$FilePath = Join-Path -Path $Path -ChildPath "$ChildPath.cer"
 		}
 
@@ -333,8 +396,8 @@ Function Export-CmsCredentialCertificate {
 			#retrieve simple name from certificate
 			$ChildPath = $Certificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
 
-			# define PfxFilePath as simple name with .pfx extension in default path
-			$PfxFilePath = Join-Path -Path $Path -ChildPath "$ChildPath.pfx"
+			# define PfxFilePath as simple name with .pfx extension in default pfx file path
+			$PfxFilePath = Join-Path -Path $PfxPath -ChildPath "$ChildPath.pfx"
 		}
 
 		# define parameters for Export-PfxCertificate
@@ -562,7 +625,7 @@ Function Get-CmsCredential {
 		[Parameter(ParameterSetName = 'Identity', Position = 0, Mandatory)]
 		[string]$Identity,
 		[Parameter(ParameterSetName = 'Identity', Position = 1)]
-		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
+		[string]$Path = $CmsCredentials['PathForCmsFiles'],
 		[Parameter(Mandatory = $false)]
 		[switch]$AsPlainText,
 		[Parameter(Mandatory = $false)]
@@ -799,7 +862,7 @@ Function Protect-CmsCredential {
 		[Parameter(ParameterSetName = 'Identity', Position = 1)]
 		[string]$OutFile,
 		[Parameter(ParameterSetName = 'Identity')]
-		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
+		[string]$Path = $CmsCredentials['PathForCmsFiles'],
 		[Parameter(ParameterSetName = 'Identity')]
 		[switch]$Reset,
 		[Parameter(ParameterSetName = 'Identity')]
@@ -1075,7 +1138,7 @@ Function Remove-CmsCredential {
 		[Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'Identity')]
 		[string]$Identity,
 		[Parameter(Mandatory = $false)]
-		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
+		[string]$Path = $CmsCredentials['PathForCmsFiles'],
 		[Parameter(Mandatory = $false)]
 		[uint16]$SkipLast = 0,
 		[Parameter(Mandatory = $false)]
@@ -1297,7 +1360,7 @@ Function Show-CmsCredential {
 		[Parameter(Mandatory = $false, Position = 0, ParameterSetName = 'Identity')]
 		[string]$Identity,
 		[Parameter(Mandatory = $false)]
-		[string]$Path = (Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'),
+		[string]$Path = $CmsCredentials['PathForCmsFiles'],
 		[Parameter(Mandatory = $false)]
 		[string[]]$ComputerName,
 		[Parameter(DontShow)]
@@ -2066,6 +2129,188 @@ Function Show-CmsCredentialAccess {
 	}
 }
 
+Function Show-CmsCredentialSettings {
+	Param(
+		[Parameter(DontShow)]
+		[switch]$Export
+	)
+
+	# define the static path to CMS Credentials folder in the Program Data folder
+	$PathToDirectoryInProgramData = Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'
+
+	# define the static path to CMS Credentials file containing module defaults
+	$PathToFileWithModuleDefaults = Join-Path -Path $local:PathToDirectoryInProgramData -ChildPath 'CmsCredentials.json'
+
+	# retrieve content from file
+	Try {
+		$Content = Get-Content -Path $local:PathToFileWithModuleDefaults -Raw -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning -Message "could not read CmsCredentials settings file: $local:PathToFileWithModuleDefaults"
+		Return $_
+	}
+
+	# if content is null...
+	If ([string]::IsNullOrEmpty($local:Content)) {
+		Write-Warning -Message "found empty CmsCredentials settings file: $local:PathToFileWithModuleDefaults"
+		Return
+	}
+
+	# convert content from JSON to custom object
+	Try {
+		$JsonData = ConvertFrom-Json -InputObject $local:Content -ErrorAction 'SilentlyContinue'
+	}
+	Catch {
+		Write-Warning -Message "could not convert contents of CmsCredentials settings file: $local:PathToFileWithModuleDefaults"
+		Return
+	}
+
+	# convert custom object to collection
+	$Hashtable = ConvertTo-Collection -InputObject $local:JsonData -ErrorAction 'SilentlyContinue'
+
+	# if export...
+	If ($local:Export) {
+		New-Variable -Name 'CmsCredentials' -Value $local:Hashtable -Scope 'Global' -Force
+	}
+
+	# display custom object
+	$local:Hashtable
+}
+
+Function Write-CmsCredentialSettings {
+	Param(
+		[Parameter(Mandatory = $false)]
+		[string]$PathForCmsFiles,
+		[Parameter(Mandatory = $false)]
+		[string]$PathForPfxFiles,
+		[Parameter(Mandatory = $false)]
+		[switch]$Reset
+	)
+
+	# define the static path to CMS Credentials folder in the Program Data folder
+	$PathToDirectoryInProgramData = Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'
+
+	# define the static path to CMS Credentials file containing module defaults
+	$PathToFileWithModuleDefaults = Join-Path -Path $local:PathToDirectoryInProgramData -ChildPath 'CmsCredentials.json'
+
+	# if directory not found...
+	If (![System.IO.Directory]::Exists($local:PathToDirectoryInProgramData)) {
+		# create directory
+		Try {
+			$null = New-Item -ItemType 'Directory' -Path $local:PathToDirectoryInProgramData
+		}
+		Catch {
+			Write-Warning -Message "could not create directory for CmsCredentials: $local:PathToDirectoryInProgramData"
+			Return $_
+		}
+	}
+
+	# if file not found...
+	If (![System.IO.File]::Exists($local:PathToFileWithModuleDefaults)) {
+		# create folder
+		Try {
+			$null = New-Item -ItemType 'File' -Path $local:PathToFileWithModuleDefaults
+		}
+		Catch {
+			Write-Warning -Message "could not create file for CmsCredentials: $local:PathToFileWithModuleDefaults"
+			Return $_
+		}
+	}
+
+	# retrieve content from file
+	Try {
+		$Content = Get-Content -Path $local:PathToFileWithModuleDefaults -Raw -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning -Message "could not read settings file for CmsCredentials: $local:PathToFileWithModuleDefaults"
+		Return $_
+	}
+
+	# if content is not null...
+	If (![string]::IsNullOrEmpty($local:Content)) {
+		# convert content from JSON to custom object
+		$JsonData = ConvertFrom-Json -InputObject $local:Content -ErrorAction 'SilentlyContinue'
+	}
+
+	# if custom object exists...
+	If ($local:JsonData) {
+		# convert custom object to collection
+		$Hashtable = ConvertTo-Collection -InputObject $local:JsonData -ErrorAction 'SilentlyContinue'
+	}
+
+	# if collection not found...
+	If ($local:Reset -or -not $local:Hashtable) {
+		# create empty hashtable
+		$Hashtable = @{}
+	}
+
+	# define boolean for updates
+	$UpdateHashtable = $false
+
+	# define default values for supported parameters
+	$local:Parameters = @{
+		PathForCmsFiles = $local:PathToDirectoryInProgramData
+		PathForPfxFiles = $local:PathToDirectoryInProgramData
+	}
+
+	# process supported parameters
+	:NextParameter ForEach ($Parameter in $local:Parameters.Keys) {
+		# if value provided for parameter...
+		If ($PSBoundParameters.ContainsKey($Parameter) -and -not $local:Reset) {
+			# set parameter value to value from bound parameters
+			$local:ParameterValue = $PSBoundParameters[$Parameter]
+		}
+		# if value not provided for parameter...
+		Else {
+			# set parameter value to value from defaults
+			$local:ParameterValue = $local:Parameters[$Parameter]
+		}
+
+		# if existing value matches parameter value...
+		If ($local:Hashtable[$Parameter] -eq $local:ParameterValue) {
+			# continue to next parameter
+			Continue NextParameter
+		}
+		# if existing value does not match parameter value...
+		Else {
+			# set hashtable value to parameter value
+			$local:Hashtable[$Parameter] = $local:ParameterValue
+			# set boolean for update
+			$local:UpdateHashtable = $true
+		}
+	}
+
+	# if hashtable update requested...
+	If ($local:UpdateHashtable) {
+		# convert hashtable to JSON
+		Try {
+			$JsonText = $local:Hashtable | ConvertTo-Json -Depth 100 -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not convert settings to JSON for CmsCredentials: $local:PathToFileWithModuleDefaults"
+			Return $_
+		}
+
+		# save JSON to file
+		Try {
+			$local:JsonText | Set-Content -Path $local:PathToFileWithModuleDefaults -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not write settings file for CmsCredentials: $local:PathToFileWithModuleDefaults"
+			Return $_
+		}
+	}
+
+	# create private variable
+	Try {
+		New-Variable -Name 'CmsCredentials' -Value $local:Hashtable -Visibility 'Private' -Force
+	}
+	Catch {
+		Write-Warning -Message "could not create object while initializing CmsCredentials: $local:PathToFileWithModuleDefaults"
+		Return $_
+	}
+}
+
 # define functions to export
 $FunctionsToExport = @(
 	'Export-CmsCredentialCertificate'
@@ -2078,7 +2323,12 @@ $FunctionsToExport = @(
 	'Reset-CmsCredentialAccess'
 	'Revoke-CmsCredentialAccess'
 	'Show-CmsCredentialAccess'
+	'Show-CmsCredentialSettings'
+	'Write-CmsCredentialSettings'
 )
 
 # export module members
 Export-ModuleMember -Function $FunctionsToExport
+
+# initialize module
+Write-CmsCredentialSettings
