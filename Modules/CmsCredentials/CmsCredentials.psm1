@@ -578,20 +578,20 @@ Function Get-CmsCredential {
 	.DESCRIPTION
 	Retrieves a credential encrypted by a CMS certificate. The calling user must have read access to the private key that protects the credential.
 
+	.PARAMETER Identity
+	Specifies the identity of the CMS credential. Cannot be combined with the FilePath parameter.
+
 	.PARAMETER FilePath
 	Specifies the path to a CMS credential file. Cannot be combined with the Identity parameter.
 
-	.PARAMETER To
-	Specifies the CMS message recipient in one of the following formats:
-		* An actual certificate (as retrieved from the certificate provider).
-		* Path to the a file containing the certificate.
-		* Path to a directory containing the certificate.
-		* Thumbprint of the certificate (used to look in the certificate store).
-		* Subject name of the certificate (used to look in the certificate store).
-	Requires the FilePath parameter.
+	.PARAMETER Certificate
+	Specifies the X.509 certificate object that can decrypt the CMS credential file. Requires the FilePath parameter. Cannot be combined with the Identity, Thumbprint, or PfxFile parameters. The certificate object must have a private key and the current user must have access to the private key.
 
-	.PARAMETER Identity
-	Specifies the identity of the CMS credential. Cannot be combined with the FilePath parameter.
+	.PARAMETER Thumbprint
+	Specifies the thumbprint of an X.509 certificate that can decrypt the CMS credential file. Requires the FilePath parameter. Cannot be combined with the Identity, Certificate, or PfxFile parameters.
+
+	.PARAMETER PfxFile
+	Specifies the path to a PFX file that can decrypt the CMS credential file. Requires the FilePath parameter. Cannot be combined with the Identity, Certificate, or Thumbprint parameters.
 
 	.PARAMETER Path
 	Specifies the path to a folder containing CMS credential files. The default value is the 'C:\ProgramData\CmsCredentials' folder. Requires the Identity parameter.
@@ -618,12 +618,18 @@ Function Get-CmsCredential {
 
 	[CmdletBinding(DefaultParameterSetName = 'Identity')]
 	Param(
-		[Parameter(ParameterSetName = 'FilePath', Position = 0, Mandatory)]
-		[string]$FilePath,
-		[Parameter(ParameterSetName = 'FilePath', Position = 1)][ValidateScript({ $_ -is [System.Security.Cryptography.X509Certificates.X509Certificate2] -or $_ -is [System.String] })]
-		[object]$To,
 		[Parameter(ParameterSetName = 'Identity', Position = 0, Mandatory)]
 		[string]$Identity,
+		[Parameter(ParameterSetName = 'Certificate', Position = 0, Mandatory)]
+		[Parameter(ParameterSetName = 'Thumbprint', Position = 0, Mandatory)]
+		[Parameter(ParameterSetName = 'PfxFile', Position = 0, Mandatory)]
+		[string]$FilePath,
+		[Parameter(ParameterSetName = 'Certificate', Position = 1, Mandatory)]
+		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
+		[Parameter(ParameterSetName = 'Thumbprint', Position = 1, Mandatory)]
+		[string]$Thumbprint,
+		[Parameter(ParameterSetName = 'PfxFile', Position = 1, Mandatory)]
+		[string]$PfxFile,
 		[Parameter(ParameterSetName = 'Identity', Position = 1)]
 		[string]$Path = $CmsCredentials['PathForCmsFiles'],
 		[Parameter(Mandatory = $false)]
@@ -705,6 +711,33 @@ Function Get-CmsCredential {
 		Return $null
 	}
 
+	# if thumbprint provided...
+	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
+		# create path for certificate by thumbprint
+		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
+
+		# retrieve certificate by thumbprint
+		Try {
+			$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
+			Throw $_
+		}
+	}
+
+	# if PFX file provided...
+	If ($PSBoundParameters.ContainsKey('PfxFile')) {
+		# retrieve certificate by file path
+		Try {
+			$Certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($PfxFile)
+		}
+		Catch {
+			Write-Warning -Message "could not create certificate object on '$Hostname' from file with path: $PfxFile"
+			Throw $_
+		}
+	}
+
 	# if identity provided...
 	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-Path -Path $Path -PathType 'Container')) {
 		# define pattern as organizational unit of Identity followed by organization of CmsCredentials
@@ -717,7 +750,8 @@ Function Get-CmsCredential {
 			Write-Warning -Message "could not search for files for '$Identity' identity in path: $Path"
 			Throw $_
 		}
-		# if file not found...
+
+		# if CMS credential file not found...
 		If ([string]::IsNullOrEmpty($local:FilePath)) {
 			# declare and return
 			Write-Warning -Message "could not locate credential file for '$Identity' identity in path: $Path"
@@ -732,8 +766,8 @@ Function Get-CmsCredential {
 	}
 
 	# define optional parameters for Unprotect-CmsMessage
-	If ($PSBoundParameters.ContainsKey('To')) {
-		$UnprotectCmsMessage['To'] = $local:To
+	If ($local:Certificate) {
+		$UnprotectCmsMessage['To'] = $local:Certificate
 	}
 
 	# decrypt content of credential file
