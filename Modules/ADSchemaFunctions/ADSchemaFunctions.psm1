@@ -702,7 +702,7 @@ Function Set-ADAttribute {
 				# check -whatif before removing values
 				If ($PSCmdlet.ShouldProcess($object_to_update.Name, "Remove $Attribute")) {
 					Try {
-						Set-AdObject -Server $Server -Identity $object_to_update.DistinguishedName -Remove @{ $Attribute = $attr_values_to_rem }
+						Set-ADObject -Server $Server -Identity $object_to_update.DistinguishedName -Remove @{ $Attribute = $attr_values_to_rem }
 						$function_error += $null
 						$function_reply += "removed-value(s)-from-$Attribute"
 					}
