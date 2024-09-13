@@ -80,7 +80,7 @@ Function Add-ADSchemaAttributes {
 			# create strings for schema object
 			$ad_attribute_text = ($ad_attribute_definition.adminTextPrefix + $ad_attribute_suffix)
 			$ad_attribute_id = "$OIDPrefix.$ad_attribute_suffix"
-	
+
 			# create attribute hashtable for schema object
 			$ad_attributes_object = @{
 				lDAPDisplayName  = $ad_attribute_name
@@ -108,7 +108,7 @@ Function Add-ADSchemaAttributes {
 				Catch {
 					Write-Error "Attribute '$($ad_attribute_name)' was NOT created"
 					Return $_
-				}	
+				}
 			}
 			Else {
 				Write-Host "Attribute '$($ad_attribute_name)' WOULD have been created"
@@ -144,7 +144,7 @@ Function Add-ADSchemaAttributesToClass {
 	# verify class
 	Try {
 		$ad_class_path = "CN=$Class,$Schema"
-		$ad_class_object = Get-ADObject -Server $Server -Identity $ad_class_path -Properties mayContain    
+		$ad_class_object = Get-ADObject -Server $Server -Identity $ad_class_path -Properties mayContain
 	}
 	Catch {
 		Write-Error 'Class '$Class' does NOT exist'
@@ -181,12 +181,12 @@ Function Add-ADSchemaAttributesToClass {
 				Catch {
 					Write-Error "Attribute '$ad_attribute_name' was NOT added to the MayContain of '$Class'"
 					Return $_
-				}	
+				}
 			}
 			Else {
 				Write-Host "Attribute '$ad_attribute_name' WOULD have been added to the MayContain of '$Class'"
 			}
-		}		
+		}
 	}
 
 	# force refresh of schema after update
@@ -213,7 +213,7 @@ Function Add-ADSchemaClass {
 	switch ($Type) {
 		'aux' {
 			$ad_class_definition = [PSCustomObject]@{
-				adminTextPrefix     = 'custom-auxiliary-class-'	
+				adminTextPrefix     = 'custom-auxiliary-class-'
 				objectClass         = 'classSchema'
 				objectClassCategory = 3
 				rdnAttId            = '2.5.4.3'
@@ -236,14 +236,14 @@ Function Add-ADSchemaClass {
 	If ($IncludeSuffixInName) {
 		$ad_class_name = "$NamePrefix$((Get-Culture).TextInfo.ToTitleCase($Type.ToLower()))$ad_class_suffix"
 	}
-	Else { 
+	Else {
 		$ad_class_name = "$NamePrefix$((Get-Culture).TextInfo.ToTitleCase($Type.ToLower()))Class"
 	}
 
 	#check if class exists
 	Try {
 		$ad_class_path = "CN=$ad_class_name,$Schema"
-		$ad_class_found = Get-ADObject -Server $Server -Identity $ad_class_path 
+		$ad_class_found = Get-ADObject -Server $Server -Identity $ad_class_path
 		Write-Host "Class '$($ad_class_found.Name)' was ALREADY created"
 	}
 	Catch {
@@ -339,7 +339,7 @@ Function Add-ADSchemaClassToParent {
 			Catch {
 				Write-Error "Class '$Class' was NOT added as an auxiliary class of '$ParentClass'"
 				Return $_
-			}	
+			}
 		}
 		Else {
 			Write-Host "Class '$Class' WOULD have been added as an auxiliary class of '$ParentClass'"
@@ -374,7 +374,7 @@ Function Get-ADSchemaClass {
 	# check class hashtable for requested class
 	If ($ad_schema_classes[$ObjectClass] -is [Microsoft.ActiveDirectory.Management.ADObject] -and -not $Reset) {
 		# return existing schema object for requested class
-		Return $ad_schema_classes[$ObjectClass]	
+		Return $ad_schema_classes[$ObjectClass]
 	}
 	Else {
 		# define query for requested class
@@ -428,7 +428,7 @@ Function Get-ADSchemaClassAncestry {
 
 		# verify requested class exists
 		If ($null -ne $ad_schema_class_object) {
-			# set requested class as focus of first loop iteration 
+			# set requested class as focus of first loop iteration
 			$ad_schema_class_for_loop = $ObjectClass
 
 			# populate class ancestry hashtable with ancestry for requested class
@@ -533,15 +533,15 @@ Function Get-ADSchemaAttribute {
 	# check attribute hashtable for requested attribute
 	If ($ad_schema_attributes[$Attribute] -is [Microsoft.ActiveDirectory.Management.ADObject] -and -not $Reset) {
 		# return existing schema object for requested attribute
-		Return $ad_schema_attributes[$Attribute]	
+		Return $ad_schema_attributes[$Attribute]
 	}
 	Else {
 		# define query for requested attribute
 		$ad_schema_attribute_ldapquery = "(&(objectCategory=attributeSchema)(objectClass=attributeSchema)(lDAPDisplayName=$Attribute))"
-		
+
 		# retrieve schema object for requested attribute
-		$ad_schema_object = Get-ADObject -Server $Server -SearchBase $ad_nc_schema -LDAPFilter $ad_schema_attribute_ldapquery -Properties *
-		
+		$ad_schema_object = Get-ADObject -Server $Server -SearchBase $SchemaNamingContext -LDAPFilter $ad_schema_attribute_ldapquery -Properties *
+
 		# verify requested attribute exists
 		If ($null -ne $ad_schema_object) {
 			# populate attribute hashtable with schema object for requested attribute
@@ -586,7 +586,7 @@ Function Set-ADAttribute {
 		$object_attribute = (Get-ADSchemaClassAttributes -Server $Server -ObjectClass $object_to_update.objectClass)[$Attribute]
 		If ($null -eq $object_attribute) {
 			$function_error += $null
-			$function_reply += "ERROR-attribute-not-valid-for-object"
+			$function_reply += 'ERROR-attribute-not-valid-for-object'
 		}
 	}
 	Catch {
@@ -640,7 +640,7 @@ Function Set-ADAttribute {
 					Try {
 						Set-AdObject -Server $Server -Identity $object_to_update.DistinguishedName -Replace @{ $Attribute = $attribute_singlevalue }
 						$function_error += $null
-						$function_reply += "replaced-joined-values-on-$Attribute"	
+						$function_reply += "replaced-joined-values-on-$Attribute"
 					}
 					Catch {
 						$function_error += $_
@@ -658,14 +658,14 @@ Function Set-ADAttribute {
 					Try {
 						Set-AdObject -Server $Server -Identity $object_to_update.DistinguishedName -Replace @{ $Attribute = $AttributeValues }
 						$function_error += $null
-						$function_reply += "replaced-value-on-$Attribute"	
+						$function_reply += "replaced-value-on-$Attribute"
 					}
 					Catch {
 						$function_error += $_
 						$function_reply += "ERROR-replacing-value-on-$Attribute"
 					}
 				}
-			} 
+			}
 		}
 		# update multi-valued attribute with either one or more requested values or one or more existing values
 		Else {
@@ -717,11 +717,11 @@ Function Set-ADAttribute {
 
 	# report actions if requested
 	If ($Report) {
-		[PSCustomObject]@{ 
+		[PSCustomObject]@{
 			FQDN    = $object_to_update.DistinguishedName
 			Error   = $function_error
 			Message = $function_reply
-		}	
+		}
 	}
 }
 
