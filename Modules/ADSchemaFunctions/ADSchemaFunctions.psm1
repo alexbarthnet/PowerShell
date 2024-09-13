@@ -603,7 +603,7 @@ Function Set-ADAttribute {
 				# check -whatif before clearing attribute
 				If ($PSCmdlet.ShouldProcess($object_to_update.Name, "Clear $Attribute")) {
 					Try {
-						Set-AdObject -Server $Server -Identity $object_to_update.DistinguishedName -Clear $Attribute	
+						Set-ADObject -Server $Server -Identity $object_to_update.DistinguishedName -Clear $Attribute
 						$function_error += $null
 						$function_reply += "cleared-$Attribute"
 					}
@@ -623,7 +623,7 @@ Function Set-ADAttribute {
 				# check -whatif before adding attribute
 				If ($PSCmdlet.ShouldProcess($object_to_update.Name, "Add $Attribute")) {
 					Try {
-						Set-AdObject -Server $Server -Identity $object_to_update.DistinguishedName -Add @{ $Attribute = $attribute_singlevalue }
+						Set-ADObject -Server $Server -Identity $object_to_update.DistinguishedName -Add @{ $Attribute = $attribute_singlevalue }
 						$function_error += $null
 						$function_reply += "added-joined-values-to-$Attribute"
 					}
@@ -638,7 +638,7 @@ Function Set-ADAttribute {
 				# check -whatif before replacing attribute
 				If ($PSCmdlet.ShouldProcess($object_to_update.Name, "Replace $Attribute")) {
 					Try {
-						Set-AdObject -Server $Server -Identity $object_to_update.DistinguishedName -Replace @{ $Attribute = $attribute_singlevalue }
+						Set-ADObject -Server $Server -Identity $object_to_update.DistinguishedName -Replace @{ $Attribute = $attribute_singlevalue }
 						$function_error += $null
 						$function_reply += "replaced-joined-values-on-$Attribute"
 					}
@@ -656,7 +656,7 @@ Function Set-ADAttribute {
 				# check -whatif before replacing attribute
 				If ($PSCmdlet.ShouldProcess($object_to_update.Name, "Replace $Attribute")) {
 					Try {
-						Set-AdObject -Server $Server -Identity $object_to_update.DistinguishedName -Replace @{ $Attribute = $AttributeValues }
+						Set-ADObject -Server $Server -Identity $object_to_update.DistinguishedName -Replace @{ $Attribute = $AttributeValues }
 						$function_error += $null
 						$function_reply += "replaced-value-on-$Attribute"
 					}
@@ -686,7 +686,7 @@ Function Set-ADAttribute {
 				# check -whatif before adding values
 				If ($PSCmdlet.ShouldProcess($object_to_update.Name, "Add $Attribute")) {
 					Try {
-						Set-AdObject -Server $Server -Identity $object_to_update.DistinguishedName -Add @{ $Attribute = $attr_values_to_add }
+						Set-ADObject -Server $Server -Identity $object_to_update.DistinguishedName -Add @{ $Attribute = $attr_values_to_add }
 						$function_error += $null
 						$function_reply += "added-value(s)-to-$Attribute"
 					}
