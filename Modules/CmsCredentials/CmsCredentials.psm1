@@ -951,6 +951,15 @@ Function Protect-CmsCredential {
 	If ($PSBoundParameters.ContainsKey('Identity')) {
 		# if reset not requested...
 		If (!$local:Reset) {
+			# retrieve CMS certificates
+			Try {
+				$Certificates = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop'
+			}
+			Catch {
+				Write-Warning -Message "could not search for certificate in '$CertStoreLocation' on '$Hostname' with identity: $Identity"
+				Throw $_
+			}
+
 			# define pattern that:
 			# - starts with common name of a GUID
 			# - includes organizational unit of Identity
@@ -959,7 +968,7 @@ Function Protect-CmsCredential {
 
 			# retrieve latest certificate where subject matches pattern
 			Try {
-				$To = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_.Subject -Pattern $Pattern -Quiet } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
+				$Certificate = $Certificates.Where({ $_.Subject -match $Pattern }) | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
 			}
 			Catch {
 				Write-Warning -Message "could not search for certificate in '$CertStoreLocation' on '$Hostname' with identity: $Identity"
