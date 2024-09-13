@@ -815,17 +815,17 @@ Function Protect-CmsCredential {
 	.PARAMETER Credential
 	Specifies the PSCredential object to protect with CMS.
 
-	.PARAMETER To
-	Specifies one or more CMS message recipients, identified in any of the following formats:
-		* An actual certificate (as retrieved from the certificate provider).
-		* Path to the file containing the certificate.
-		* Path to a directory containing the certificate.
-		* Thumbprint of the certificate (used to look in the certificate store).
-		* Subject name of the certificate (used to look in the certificate store).
-	Cannot be combined with the Identity parameter.
-
 	.PARAMETER Identity
-	Specifies the identity for the CMS credential. Cannot be combined with the To parameter. A new CMS certificate will be created if an existing CMS certificate for the provided identify is not found.
+	Specifies the identity of a new or existing CMS certificate. Cannot be combined with the Certificate, Thumbprint, or PfxFile parameters. A new CMS certificate will be created if the provided identify does not map to an existing certificate and the Reset parameter is not set.
+
+	.PARAMETER Certificate
+	Specifies the X.509 certificate object that will encrypt the credential. Cannot be combined with the Thumbprint, PfxFile, or Identity parameters.
+
+	.PARAMETER Thumbprint
+	Specifies the thumbprint of the X.509 certificate that will encrypt the credential. Cannot be combined with the Certificate, PfxFile, or Identity parameters.
+
+	.PARAMETER PfxFile
+	Specifies the path to a PFX file that will encrypt the credential. Cannot be combined with the Certificate, Thumbprint, or Identity parameters.
 
 	.PARAMETER OutFile
 	Specifies the path for the CMS credential file.
@@ -852,14 +852,20 @@ Function Protect-CmsCredential {
 
 	[CmdletBinding(DefaultParameterSetName = 'Identity')]
 	Param (
-		[Parameter(ValueFromPipeline = $true, Mandatory = $true)]
+		[Parameter(ValueFromPipeline = $true, Position = 0, Mandatory = $true)]
 		[pscredential]$Credential,
-		[Parameter(ParameterSetName = 'Explicit', Position = 0, Mandatory = $true)][ValidateScript({ $_ -is [System.Security.Cryptography.X509Certificates.X509Certificate2] -or $_ -is [System.String] })]
-		[object]$To,
-		[Parameter(ParameterSetName = 'Identity', Position = 0, Mandatory = $true)]
+		[Parameter(ParameterSetName = 'Identity', Position = 1, Mandatory = $true)]
 		[string]$Identity,
-		[Parameter(ParameterSetName = 'Explicit', Position = 1, Mandatory = $true)]
-		[Parameter(ParameterSetName = 'Identity', Position = 1)]
+		[Parameter(ParameterSetName = 'Certificate', Position = 1, Mandatory = $true)]
+		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
+		[Parameter(ParameterSetName = 'Thumbprint', Position = 1, Mandatory = $true)]
+		[string]$Thumbprint,
+		[Parameter(ParameterSetName = 'PfxFile', Position = 1, Mandatory = $true)]
+		[string]$PfxFile,
+		[Parameter(ParameterSetName = 'Identity', Position = 2)]
+		[Parameter(ParameterSetName = 'Certificate', Position = 2, Mandatory = $true)]
+		[Parameter(ParameterSetName = 'Thumbprint', Position = 2, Mandatory = $true)]
+		[Parameter(ParameterSetName = 'PfxFile', Position = 2, Mandatory = $true)]
 		[string]$OutFile,
 		[Parameter(ParameterSetName = 'Identity')]
 		[string]$Path = $CmsCredentials['PathForCmsFiles'],
@@ -962,10 +968,10 @@ Function Protect-CmsCredential {
 		}
 
 		# if certificate not found...
-		If (!$local:To) {
+		If (!$local:Certificate) {
 			# create new certificate for identity
 			Try {
-				$To = New-CmsCredentialCertificate -Identity $Identity
+				$Certificate = New-CmsCredentialCertificate -Identity $Identity
 			}
 			Catch {
 				Write-Warning -Message "could not create certificate on '$Hostname' with identity: $Identity"
@@ -989,10 +995,10 @@ Function Protect-CmsCredential {
 
 			# create file name from certificate
 			Try {
-				$FileName = $To.GetNameInfo('SimpleName', $false)
+				$FileName = $Certificate.GetNameInfo('SimpleName', $false)
 			}
 			Catch {
-				Write-Warning -Message "could not create filename on '$Hostname' from certificate subject: $($To.Subject)"
+				Write-Warning -Message "could not create filename on '$Hostname' from certificate subject: $($Certificate.Subject)"
 				Throw $_
 			}
 
@@ -1001,15 +1007,38 @@ Function Protect-CmsCredential {
 		}
 	}
 
-	# if recipient is a certificate...
-	If ($To -is [System.Security.Cryptography.X509Certificates.X509Certificate2]) {
-		# define recipient string as subject of certificate
-		$RecipientString = $To.Subject
+	# if thumbprint provided...
+	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
+		# create path for certificate by thumbprint
+		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
+
+		# retrieve certificate by thumbprint
+		Try {
+			$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
+			Throw $_
+		}
 	}
-	# if recipient is not a certificate...
-	Else {
-		# define recipient string as value of recipient
-		$RecipientString = $To
+
+	# if PFX file provided...
+	If ($PSBoundParameters.ContainsKey('PfxFile')) {
+		# retrieve certificate by file path
+		Try {
+			$Certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($PfxFile)
+		}
+		Catch {
+			Write-Warning -Message "could not create certificate object on '$Hostname' from file with path: $PfxFile"
+			Throw $_
+		}
+	}
+
+	# if certificate subject is null or empty...
+	If ([string]::IsNullOrEmpty($Certificate.Subject)) {
+		# define recipient string as subject of certificate
+		Write-Warning -Message 'found certificate with an empty subject; certificates used by Protect-CmsCredential must have a subject'
+		Return
 	}
 
 	# if CMS credential file found...
@@ -1031,10 +1060,10 @@ Function Protect-CmsCredential {
 
 	# encrypt credentials to recipient
 	Try {
-		Protect-CmsMessage -To $To -Content $Content -OutFile $OutFile -ErrorAction 'Stop'
+		Protect-CmsMessage -To $Certificate -Content $Content -OutFile $OutFile -ErrorAction 'Stop'
 	}
 	Catch {
-		Write-Warning -Message "could not encrypt credential on '$Hostname' for recipient(s): $RecipientString"
+		Write-Warning -Message "could not encrypt credential on '$Hostname' for recipient(s): $($Certificate.Subject)"
 		Throw $_
 	}
 
@@ -1065,23 +1094,22 @@ Function Protect-CmsCredential {
 		Throw $_
 	}
 
-		# if skip cleanup not requested...
-		If (!$local:SkipCleanup) {
-			# define parameters for Remove-CmsCredential
-			$RemoveCmsCredential = @{
-				Identity = $Identity
-				Path     = $Path
-				SkipLast = 1
-			}
+	# if identity provided and skip cleanup not requested...
+	If ($PSBoundParameters.ContainsKey('Identity') -and -not $local:SkipCleanup) {
+		# define parameters for Remove-CmsCredential
+		$RemoveCmsCredential = @{
+			Identity = $Identity
+			Path     = $Path
+			SkipLast = 1
+		}
 
-			# remove old CMS certificate and files
-			Try {
-				Remove-CmsCredential @RemoveCmsCredential
-			}
-			Catch {
-				Write-Warning -Message "could not remove old CMS certificates and files on '$Hostname' for identity: $Identity"
-				Throw $_
-			}
+		# remove old CMS certificate and files
+		Try {
+			Remove-CmsCredential @RemoveCmsCredential
+		}
+		Catch {
+			Write-Warning -Message "could not remove old CMS certificates and files on '$Hostname' for identity: $Identity"
+			Throw $_
 		}
 	}
 }
