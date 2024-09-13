@@ -25,7 +25,7 @@ None. The script reports the actions taken and does not provide any actionable o
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
 	# path to JSON configuration file
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
+	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
 	[string]$Json,
 	# switch to skip transcript logging
 	[Parameter(DontShow)]
