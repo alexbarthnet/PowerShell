@@ -1514,14 +1514,14 @@ Function Show-CmsCredential {
 	$List = [System.Collections.Generic.List[System.Object]]::new()
 
 	# add credential files to list
-	ForEach ($CredentialFile in $local:CredentialFiles) {
+	:NextCredentialFile ForEach ($CredentialFile in $local:CredentialFiles) {
 		# retrieve subject from credential file
 		$Subject = (Select-String -InputObject $CredentialFile -Pattern $Pattern -SimpleMatch:$SimpleMatch -List).Line.Replace('Subject: ', $null)
 		# if subject contains invalid characters...
 		If (Test-CmsInvalidSubject -Subject $Subject) {
 			# warn and continue
 			Write-Warning -Message "the subject in the certificate file on '$Hostname' with '$($CredentialFile.FullName)' path contains one or more of the following invalid characters: '\' (backslash)"
-			Continue
+			Continue NextCredentialFile
 		}
 		# retrieve CommonName from subject in credential file
 		$CommonName = $Subject.Split(', ', [System.StringSplitOptions]::RemoveEmptyEntries).Where({ $_.StartsWith('CN=') }).Replace('CN=', $null)
@@ -1550,14 +1550,14 @@ Function Show-CmsCredential {
 	}
 
 	# add credential certificates to list
-	ForEach ($CredentialCert in $local:CredentialCerts) {
+	:NextCredentialCert ForEach ($CredentialCert in $local:CredentialCerts) {
 		# retrieve subject from certificate
 		$Subject = $CredentialCert.Subject
 		# if subject contains invalid characters...
 		If (Test-CmsInvalidSubject -Subject $Subject) {
 			# warn and continue
 			Write-Warning -Message "the subject of the certificate on '$Hostname' with '$($CredentialCert.Thumbprint)' thumbprint contains one or more of the following invalid characters: '\' (backslash)"
-			Continue
+			Continue NextCredentialCert
 		}
 		# retrieve CommonName from subject in credential certificate
 		$CommonName = $Subject.Split(', ', [System.StringSplitOptions]::RemoveEmptyEntries).Where({ $_.StartsWith('CN=') }).Replace('CN=', $null)
