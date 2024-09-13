@@ -1038,34 +1038,32 @@ Function Protect-CmsCredential {
 		Throw $_
 	}
 
-	# if identity provided...
-	If ($PSBoundParameters.ContainsKey('Identity')) {
-		# retrieve content of credential file
-		Try {
-			$Content = Get-Content -Path $OutFile -Raw -ErrorAction 'Stop'
-		}
-		Catch {
-			Write-Warning -Message "could not read credential file on '$Hostname' with path: $OutFile"
-			Throw $_
-		}
+	# retrieve content of credential file
+	Try {
+		$Content = Get-Content -Path $OutFile -Raw -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning -Message "could not read credential file on '$Hostname' with path: $OutFile"
+		Throw $_
+	}
 
-		# insert subject line into content of credential file
-		Try {
-			$Value = $Content.Insert(0, "Subject: $($To.Subject)`r`n")
-		}
-		Catch {
-			Write-Warning -Message "could not insert certificate subject into credential file on '$Hostname' with path: $OutFile"
-			Throw $_
-		}
+	# insert subject line into content of credential file
+	Try {
+		$Value = $Content.Insert(0, "Subject: $($Certificate.Subject)`r`n")
+	}
+	Catch {
+		Write-Warning -Message "could not insert certificate subject into credential file on '$Hostname' with path: $OutFile"
+		Throw $_
+	}
 
-		# save updated content to credential file
-		Try {
-			Set-Content -Path $OutFile -Value $Value -Encoding 'UTF8' -ErrorAction 'Stop'
-		}
-		Catch {
-			Write-Warning -Message "could not update credential file on '$Hostname' with path: $OutFile"
-			Throw $_
-		}
+	# save updated content to credential file
+	Try {
+		Set-Content -Path $OutFile -Value $Value -Encoding 'UTF8' -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning -Message "could not update credential file on '$Hostname' with path: $OutFile"
+		Throw $_
+	}
 
 		# if skip cleanup not requested...
 		If (!$local:SkipCleanup) {
