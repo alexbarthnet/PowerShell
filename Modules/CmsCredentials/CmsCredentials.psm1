@@ -739,12 +739,28 @@ Function Get-CmsCredential {
 	}
 
 	# if identity provided...
-	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-Path -Path $Path -PathType 'Container')) {
+	If ($PSBoundParameters.ContainsKey('Identity')) {
+		# if path is not a folder...
+		If (!(Test-Path -Path $Path -PathType 'Container')) {
+			Write-Warning -Message "could not locate credential file for '$Identity' identity in path: $Path"
+			Return $null
+		}
+
+		# retrieve CMS credential files
+		Try {
+			$CredentialFiles = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not search for certificate in '$CertStoreLocation' on '$Hostname' with identity: $Identity"
+			Throw $_
+		}
+
 		# define pattern as organizational unit of Identity followed by organization of CmsCredentials
 		$Pattern = "OU=$Identity, O=CmsCredentials$"
-		# retrieve latest credential file with matching subject
+
+		# retrieve latest CMS credential file with matching subject
 		Try {
-			$FilePath = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_ -Pattern $Pattern -Quiet } | Sort-Object -Property 'LastWriteTime' | Select-Object -Last 1 -ExpandProperty 'FullName'
+			$FilePath = $CredentialFiles | Where-Object { Select-String -InputObject $_ -Pattern $Pattern -Quiet } | Sort-Object -Property 'LastWriteTime' | Select-Object -Last 1 -ExpandProperty 'FullName'
 		}
 		Catch {
 			Write-Warning -Message "could not search for files for '$Identity' identity in path: $Path"
