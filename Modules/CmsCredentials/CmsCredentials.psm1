@@ -1669,7 +1669,7 @@ Function Update-CmsCredentialAccess {
 		# define parameters for Invoke-Function
 		$InvokeFunction = @{
 			ComputerName          = $ComputerName
-			AdditionalFunctions   = 'Test-CmsInvalidIdentity', 'Test-CmsInvalidSubject'
+			AdditionalFunctions   = 'Test-CmsInvalidIdentity', 'Test-CmsInvalidSubject', 'Get-CertificatePrivateKeyPath'
 			PrerequisiteFunctions = 'Initialize-CmsCredentialSettings'
 		}
 
@@ -1746,85 +1746,84 @@ Function Update-CmsCredentialAccess {
 	# create list for SIDs
 	$SecurityIdentifiers = [System.Collections.Generic.List[System.Security.Principal.SecurityIdentifier]]::new()
 
+	# create list for required SIDs
+	$RequiredSecurityIdentifiers = [System.Collections.Generic.List[System.Security.Principal.SecurityIdentifier]]::new()
+
+	# update list for required SIDs with NT AUTHORITY\SYSTEM
+	$RequiredSecurityIdentifiers.Add([System.Security.Principal.SecurityIdentifier]::new('S-1-5-18'))
+
+	# update list for required SIDs with BUILTIN\Administrators
+	$RequiredSecurityIdentifiers.Add([System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
+
 	# get SIDs
-	switch ($Mode) {
-		'Reset' {
-			# add NT AUTHORITY\SYSTEM
-			$SecurityIdentifiers.Add([System.Security.Principal.SecurityIdentifier]::new('S-1-5-18'))
-			# add BUILTIN\Administrators
-			$SecurityIdentifiers.Add([System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
+	:NextPrincipal ForEach ($Principal in $Principals) {
+		# if principal is SID object...
+		If ($Principal -is [System.Security.Principal.SecurityIdentifier]) {
+			$SecurityIdentifiers.Add($Principal)
+			Continue NextPrincipal
 		}
-		Default {
-			:NextPrincipal ForEach ($Principal in $Principals) {
-				# if principal is SID object...
-				If ($Principal -is [System.Security.Principal.SecurityIdentifier]) {
-					$SecurityIdentifiers.Add($Principal)
-					Continue NextPrincipal
-				}
 
-				# if principal is a well-known built-in principal that only translates on a domain controller...
-				If ($Principal -eq 'Windows Authorization Access Group' -or $Principal -match '^w+\\Windows Authorization Access Group$') {
-					# create SID for well-known built-in principal
-					Try {
-						$SecurityIdentifier = [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-560')
-					}
-					Catch {
-						Throw $_
-					}
+		# if principal is a well-known built-in principal that only translates on a domain controller...
+		If ($Principal -eq 'Windows Authorization Access Group' -or $Principal -match '^w+\\Windows Authorization Access Group$') {
+			# create SID for well-known built-in principal
+			Try {
+				$SecurityIdentifier = [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-560')
+			}
+			Catch {
+				Throw $_
+			}
 
-					# add SID to list and continue
-					$SecurityIdentifiers.Add($SecurityIdentifier)
-					Continue NextPrincipal
-				}
+			# add SID to list and continue
+			$SecurityIdentifiers.Add($SecurityIdentifier)
+			Continue NextPrincipal
+		}
 
-				# if principal is a SID in string format...
-				If ($Principal -match '^S-1-\d{1,2}-\d+') {
-					# create SID from string
-					Try {
-						$SecurityIdentifier = [System.Security.Principal.SecurityIdentifier]::new($Principal)
-					}
-					Catch {
-						Throw $_
-					}
+		# if principal is a SID in string format...
+		If ($Principal -match '^S-1-\d{1,2}-\d+') {
+			# create SID from string
+			Try {
+				$SecurityIdentifier = [System.Security.Principal.SecurityIdentifier]::new($Principal)
+			}
+			Catch {
+				Throw $_
+			}
 
-					# add SID to list and continue
-					$SecurityIdentifiers.Add($SecurityIdentifier)
-					Continue NextPrincipal
-				}
+			# add SID to list and continue
+			$SecurityIdentifiers.Add($SecurityIdentifier)
+			Continue NextPrincipal
+		}
 
-				# if principal is in NT Domain or User Principal Name format...
-				If ($Principal -match '^[\w\s\.-]+\\[\w\s\.-]+$' -or $Principal -match '^[\w\.-]+@[\w\.-]+$') {
-					# create NT account from principal
-					Try {
-						$NTAccount = [System.Security.Principal.NTAccount]::new($Principal)
-					}
-					Catch {
-						Throw $_
-					}
-				}
-				# if principal is any other format...
-				Else {
-					# create NT account for principal with user domain prefixed
-					Try {
-						$NTAccount = [System.Security.Principal.NTAccount]::new("$([System.Environment]::UserDomainName)\$Principal")
-					}
-					Catch {
-						Throw $_
-					}
-				}
-
-				# translate NT account to SID
-				Try {
-					$SecurityIdentifier = $NTAccount.Translate([System.Security.Principal.SecurityIdentifier])
-				}
-				Catch {
-					Throw $_
-				}
-
-				# add SID to list and continue
-				$SecurityIdentifiers.Add($SecurityIdentifier)
+		# if principal is in NT Domain or User Principal Name format...
+		If ($Principal -match '^[\w\s\.-]+\\[\w\s\.-]+$' -or $Principal -match '^[\w\.-]+@[\w\.-]+$') {
+			# create NT account from principal
+			Try {
+				$NTAccount = [System.Security.Principal.NTAccount]::new($Principal)
+			}
+			Catch {
+				Throw $_
 			}
 		}
+		# if principal is any other format...
+		Else {
+			# create NT account for principal with user domain prefixed
+			Try {
+				$NTAccount = [System.Security.Principal.NTAccount]::new("$([System.Environment]::UserDomainName)\$Principal")
+			}
+			Catch {
+				Throw $_
+			}
+		}
+
+		# translate NT account to SID
+		Try {
+			$SecurityIdentifier = $NTAccount.Translate([System.Security.Principal.SecurityIdentifier])
+		}
+		Catch {
+			Throw $_
+		}
+
+		# add SID to list and continue
+		$SecurityIdentifiers.Add($SecurityIdentifier)
 	}
 
 	# process SIDs
@@ -1833,12 +1832,6 @@ Function Update-CmsCredentialAccess {
 			ForEach ($IdentityReference in $AclObject.Access.IdentityReference) {
 				# remove rule for IdentityReference
 				$AclObject.PurgeAccessRules($IdentityReference)
-			}
-			ForEach ($SecurityIdentifier in $SecurityIdentifiers) {
-				# create 'FullControl' rule for SID
-				$AccessRule = [System.Security.AccessControl.FileSystemAccessRule]::new($SecurityIdentifier, 'FullControl', 'Allow')
-				# add rule to ACL
-				$AclObject.AddAccessRule($AccessRule)
 			}
 		}
 		'Grant' {
@@ -1866,6 +1859,14 @@ Function Update-CmsCredentialAccess {
 			)
 			Return
 		}
+	}
+
+	# ensure required SIDs are on ACL
+	ForEach ($SecurityIdentifier in $RequiredSecurityIdentifiers) {
+		# create 'FullControl' rule for SID
+		$AccessRule = [System.Security.AccessControl.FileSystemAccessRule]::new($SecurityIdentifier, 'FullControl', 'Allow')
+		# add rule to ACL
+		$AclObject.AddAccessRule($AccessRule)
 	}
 
 	# update ACL on private key
