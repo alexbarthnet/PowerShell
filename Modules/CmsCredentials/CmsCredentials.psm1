@@ -1,71 +1,14 @@
-Function ConvertTo-Collection {
-	Param (
-		[Parameter(Mandatory = $true, ValueFromPipeline = $true)]
-		[object]$InputObject,
-		[switch]$Ordered
-	)
-
-	# if ordered...
-	If ($Ordered) {
-		# create an ordered dictionary
-		$Collection = [System.Collections.Specialized.OrderedDictionary]::new()
-	}
-	Else {
-		# create a hashtable
-		$Collection = [System.Collections.Hashtable]::new()
-	}
-
-	# process each property of input object
-	ForEach ($Property in $InputObject.PSObject.Properties) {
-		# if property contains multiple values...
-		If ($Property.Value.Count -gt 1) {
-			# define list for property values
-			$PropertyValues = [System.Collections.Generic.List[object]]::new($Property.Value.Count)
-			# process each property value
-			ForEach ($PropertyValue in $Property.Value) {
-				# if property value is a pscustomobject...
-				If ($PropertyValue -is [System.Management.Automation.PSCustomObject]) {
-					# convert property value into collection
-					$PropertyValueCollection = ConvertTo-Collection -InputObject $PropertyValue -Ordered:$Ordered
-					# add property value collection to list
-					$PropertyValues.Add($PropertyValueCollection)
-				}
-				# if property value is not a pscustomobject...
-				Else {
-					# add property value to list
-					$PropertyValues.Add($PropertyValue)
-				}
-			}
-			# convert list to array then add array to collection
-			$Collection[$Property.Name] = $PropertyValues.ToArray()
-		}
-		Else {
-			# if property value is a pscustomobject...
-			If ($Property.Value -is [System.Management.Automation.PSCustomObject]) {
-				# convert property value into collection
-				$PropertyValueCollection = ConvertTo-Collection -InputObject $Property.Value -Ordered:$Ordered
-				# add property name and value to collection
-				$Collection[$Property.Name] = $PropertyValueCollection
-			}
-			# if property value is not a pscustomobject...
-			Else {
-				# add property name and value to collection
-				$Collection[$Property.Name] = $Property.Value
-			}
-		}
-	}
-
-	# return collection
-	Return $Collection
-}
-
 Function Invoke-Function {
 	Param(
 		[Parameter(Mandatory = $true, ValueFromPipeline = $true)]
 		[string[]]$ComputerName,
+		[Parameter(Mandatory = $false, Position = 0)]
 		[string]$Function = (Get-PSCallStack)[0].FunctionName,
+		[Parameter(Mandatory = $false)]
 		[hashtable]$Parameters = (Get-Variable -Name 'PSBoundParameters' -Scope 1 -ValueOnly),
+		[Parameter(Mandatory = $false)]
 		[string[]]$AdditionalFunctions,
+		[Parameter(Mandatory = $false)]
 		[string[]]$PrerequisiteFunctions,
 		[Parameter(DontShow)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
@@ -1723,59 +1666,23 @@ Function Update-CmsCredentialAccess {
 
 	# if computername provided...
 	If ($PSBoundParameters.ContainsKey('ComputerName')) {
-		# remove ComputerName parameter from bound parameters
-		$null = $PSBoundParameters.Remove('ComputerName')
-
-		# define required functions
-		$FunctionNames = 'Test-CmsInvalidIdentity', 'Get-CertificatePrivateKeyPath', 'Update-CmsCredentialAccess'
-
-		# define list for function script blocks
-		$FunctionScriptBlocks = [System.Collections.Generic.List[System.String]]::new()
-
-		# add script block for required functions to list
-		ForEach ($FunctionName in $FunctionNames) {
-			# get function definition
-			Try {
-				$FunctionDefinition = (Get-Command -Name $FunctionName -ErrorAction 'Stop').Definition
-			}
-			Catch {
-				Write-Warning -Message "could not retrieve definition on '$Hostname' for function: $FunctionName"
-				Throw $_
-			}
-			# create function script block and add to list
-			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
+		# define parameters for Invoke-Function
+		$InvokeFunction = @{
+			ComputerName          = $ComputerName
+			AdditionalFunctions   = 'Test-CmsInvalidIdentity', 'Test-CmsInvalidSubject'
+			PrerequisiteFunctions = 'Initialize-CmsCredentialSettings'
 		}
 
-		# update access to credential on remote computer
-		ForEach ($RemoteComputerName in $ComputerName) {
-			# if remote computer name is local computer name...
-			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
-				# set include local computer then continue
-				$local:IncludeLocalComputer = $true
-				Continue
-			}
-			# run function on remote computer
-			Try {
-				Invoke-Command -ComputerName $RemoteComputerName -ScriptBlock {
-					# import functions
-					ForEach ($FunctionScriptBlock in $using:FunctionScriptBlocks) {
-						. ([ScriptBlock]::Create($FunctionScriptBlock))
-					}
-					# run functions
-					Update-CmsCredentialAccess @using:PSBoundParameters
-				}
-			}
-			Catch {
-				Write-Warning -Message "could not invoke function(s) on '$RemoteComputerName' computer: $($_.Exception.Message)"
-				Throw $_
-			}
+		# invoke function remotely
+		Try {
+			Invoke-Function @InvokeFunction
+		}
+		Catch {
+			Throw $_
 		}
 
-		# if include local computer not set...
-		If ($null -eq $local:IncludeLocalComputer) {
-			# return after running function on remote computers
-			Return
-		}
+		# return calling Invoke-Function
+		Return
 	}
 
 	# if thumbprint provided...
@@ -2217,6 +2124,12 @@ Function Initialize-CmsCredentialSettings {
 	# define the static path to CMS Credentials file containing module defaults
 	$PathToFileWithModuleDefaults = Join-Path -Path $local:PathToDirectoryInProgramData -ChildPath 'CmsCredentials.json'
 
+	# create hashtable with default values for supported parameters
+	$Hashtable = @{
+		PathForCmsFiles = $local:PathToDirectoryInProgramData
+		PathForPfxFiles = $local:PathToDirectoryInProgramData
+	}
+
 	# if file found...
 	If ([System.IO.File]::Exists($local:PathToFileWithModuleDefaults)) {
 		# retrieve content from file
@@ -2241,31 +2154,26 @@ Function Initialize-CmsCredentialSettings {
 				Write-Warning -Message "could not create custom object from contents of CmsCredentials settings file at '$local:PathToFileWithModuleDefaults' path on host: $local:Hostname"
 			}
 
-			# if custom object 
+			# if custom object exists...
 			If ($null -ne $local:JsonData) {
-				# convert custom object to hashtable
-				Try {
-					$Hashtable = ConvertTo-Collection -InputObject $local:JsonData -ErrorAction 'SilentlyContinue'
-				}
-				Catch {
-					Write-Warning -Message "could not create hashtable from contents of CmsCredentials settings file at '$local:PathToFileWithModuleDefaults' path on host: $local:Hostname"
+				# process hashtable keys
+				ForEach ($Key in $Hashtable.Keys) {
+					# if value exists in custom object...
+					If ($null -ne $JsonData.$Key) {
+						# and value hashtable does not match value in custom object...
+						If ($Hashtable.$Key -ne $Hashtable.$Key) {
+							# update hashtable with value in custom object
+							$Hashtable.$Key = $JsonData.$Key
+						}
+					}
 				}
 			}
 		}
 	}
 
-	# if hashtable not found...
-	If ($null -eq $local:Hashtable) {
-		# create hashtable with default values for supported parameters
-		$Hashtable = @{
-			PathForCmsFiles = $local:PathToDirectoryInProgramData
-			PathForPfxFiles = $local:PathToDirectoryInProgramData
-		}
-	}
-
 	# create private variable from hashtable
 	Try {
-		New-Variable -Name 'CmsCredentials' -Value $local:Hashtable -Scope Global -Force
+		New-Variable -Name 'CmsCredentials' -Value $local:Hashtable -Scope 'Global' -Force
 	}
 	Catch {
 		Write-Warning -Message "could not create object while initializing CmsCredentials on host: $local:Hostname"
@@ -2322,20 +2230,49 @@ Function Show-CmsCredentialSettings {
 }
 
 Function Write-CmsCredentialSettings {
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param(
 		[Parameter(Mandatory = $false)]
+		[string[]]$ComputerName,
+		[Parameter(Mandatory = $false, ParameterSetName = 'Default')]
 		[string]$PathForCmsFiles,
-		[Parameter(Mandatory = $false)]
+		[Parameter(Mandatory = $false, ParameterSetName = 'Default')]
 		[string]$PathForPfxFiles,
-		[Parameter(Mandatory = $false)]
+		[Parameter(Mandatory = $false, ParameterSetName = 'Reset')]
 		[switch]$Reset
 	)
+
+	# if computername provided...
+	If ($PSBoundParameters.ContainsKey('ComputerName')) {
+		# define parameters for Invoke-Function
+		$InvokeFunction = @{
+			ComputerName          = $ComputerName
+			PrerequisiteFunctions = 'Initialize-CmsCredentialSettings'
+		}
+
+		# invoke function remotely
+		Try {
+			Invoke-Function @InvokeFunction
+		}
+		Catch {
+			Throw $_
+		}
+
+		# return calling Invoke-Function
+		Return
+	}
 
 	# define the static path to CMS Credentials folder in the Program Data folder
 	$PathToDirectoryInProgramData = Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'CmsCredentials'
 
 	# define the static path to CMS Credentials file containing module defaults
 	$PathToFileWithModuleDefaults = Join-Path -Path $local:PathToDirectoryInProgramData -ChildPath 'CmsCredentials.json'
+
+	# create hashtable with default values for supported parameters
+	$Hashtable = @{
+		PathForCmsFiles = $local:PathToDirectoryInProgramData
+		PathForPfxFiles = $local:PathToDirectoryInProgramData
+	}
 
 	# if directory not found...
 	If (![System.IO.Directory]::Exists($local:PathToDirectoryInProgramData)) {
@@ -2361,108 +2298,85 @@ Function Write-CmsCredentialSettings {
 		}
 	}
 
-	# retrieve content from file
+	# if file found and Reset not requested...
+	If ([System.IO.File]::Exists($local:PathToFileWithModuleDefaults) -and -not $local:Reset) {
+		# retrieve content from file
+		Try {
+			$Content = Get-Content -Path $local:PathToFileWithModuleDefaults -Raw -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not read CmsCredentials settings file at '$local:PathToFileWithModuleDefaults' path on host: $local:Hostname"
+		}
+
+		# if file is empty...
+		If ([string]::IsNullOrEmpty($local:Content)) {
+			Write-Warning -Message "found empty CmsCredentials settings file at '$local:PathToFileWithModuleDefaults' path on host: $local:Hostname"
+		}
+		# if file is not empty...
+		Else {
+			# convert file content from JSON to custom object
+			Try {
+				$JsonData = ConvertFrom-Json -InputObject $local:Content -ErrorAction 'Stop'
+			}
+			Catch {
+				Write-Warning -Message "could not create custom object from contents of CmsCredentials settings file at '$local:PathToFileWithModuleDefaults' path on host: $local:Hostname"
+			}
+
+			# if custom object exists...
+			If ($null -ne $local:JsonData) {
+				# define boolean for updates
+				$HashtableUpdated = $false
+
+				# process hashtable keys
+				ForEach ($Key in $Hashtable.Keys) {
+					# if value exists in custom object...
+					If ($null -ne $JsonData.$Key) {
+						# and value hashtable does not match value in custom object...
+						If ($Hashtable.$Key -ne $JsonData.$Key) {
+							# update hashtable with value in custom object
+							$Hashtable.$Key = $JsonData.$Key
+							# record hashtable was updated
+							$HashtableUpdated = $true
+						}
+					}
+				}
+
+				# if hashtable not updated...
+				If (!$HashtableUpdated) {
+					# return as no changes found to existing file
+					Return
+				}
+			}
+		}
+	}
+
+	# convert hashtable to JSON
 	Try {
-		$Content = Get-Content -Path $local:PathToFileWithModuleDefaults -Raw -ErrorAction 'Stop'
+		$JsonText = $local:Hashtable | ConvertTo-Json -Depth 100 -ErrorAction 'Stop'
 	}
 	Catch {
-		Write-Warning -Message "could not read CmsCredentials settings file at '$local:PathToFileWithModuleDefaults' path on host: $local:Hostname"
+		Write-Warning -Message "could not convert settings to JSON for CmsCredentials: $local:PathToFileWithModuleDefaults"
+		Return $_
 	}
 
-	# if file is not empty...
-	If (![string]::IsNullOrEmpty($local:Content)) {
-		# convert file content from JSON to custom object
+	# save JSON to file
+	Try {
+		Set-Content -Path $local:PathToFileWithModuleDefaults -Value $local:JsonText -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning -Message "could not write settings file for CmsCredentials: $local:PathToFileWithModuleDefaults"
+		Return $_
+	}
+
+	# if CmsCredentials already initialized...
+	If ($null -ne $global:CmsCredentials) {
+		# re-initialize CmsCredetntials
 		Try {
-			$JsonData = ConvertFrom-Json -InputObject $local:Content -ErrorAction 'Stop'
+			Initialize-CmsCredentialSettings
 		}
 		Catch {
-			Write-Warning -Message "could not create custom object from contents of CmsCredentials settings file at '$local:PathToFileWithModuleDefaults' path on host: $local:Hostname"
-		}
-
-		# if custom object 
-		If ($null -ne $local:JsonData) {
-			# convert custom object to hashtable
-			Try {
-				$Hashtable = ConvertTo-Collection -InputObject $local:JsonData -ErrorAction 'Stop'
-			}
-			Catch {
-				Write-Warning -Message "could not create hashtable from contents of CmsCredentials settings file at '$local:PathToFileWithModuleDefaults' path on host: $local:Hostname"
-			}
-		}
-	}
-
-	# if hashtable not found...
-	If ($local:Reset -or -not $local:Hashtable) {
-		# create empty hashtable
-		$Hashtable = @{}
-	}
-
-	# define boolean for updates
-	$UpdateHashtable = $false
-
-	# define default values for supported parameters
-	$Parameters = @{
-		PathForCmsFiles = $local:PathToDirectoryInProgramData
-		PathForPfxFiles = $local:PathToDirectoryInProgramData
-	}
-
-	# process supported parameters
-	:NextParameter ForEach ($Parameter in $local:Parameters.Keys) {
-		# if value provided for parameter...
-		If ($PSBoundParameters.ContainsKey($Parameter) -and -not $local:Reset) {
-			# set parameter value to value from bound parameters
-			$ParameterValue = $PSBoundParameters[$Parameter]
-		}
-		# if value not provided for parameter...
-		Else {
-			# set parameter value to value from defaults
-			$ParameterValue = $local:Parameters[$Parameter]
-		}
-
-		# if existing value matches parameter value...
-		If ($local:Hashtable[$Parameter] -eq $local:ParameterValue) {
-			# continue to next parameter
-			Continue NextParameter
-		}
-		# if existing value does not match parameter value...
-		Else {
-			# set hashtable value to parameter value
-			$Hashtable[$Parameter] = $local:ParameterValue
-			# set boolean for update
-			$UpdateHashtable = $true
-		}
-	}
-
-	# if hashtable update requested...
-	If ($local:UpdateHashtable) {
-		# convert hashtable to JSON
-		Try {
-			$JsonText = $local:Hashtable | ConvertTo-Json -Depth 100 -ErrorAction 'Stop'
-		}
-		Catch {
-			Write-Warning -Message "could not convert settings to JSON for CmsCredentials: $local:PathToFileWithModuleDefaults"
+			Write-Warning -Message "could not re-initialize CmsCredentials: $local:PathToFileWithModuleDefaults"
 			Return $_
-		}
-
-		# save JSON to file
-		Try {
-			$local:JsonText | Set-Content -Path $local:PathToFileWithModuleDefaults -ErrorAction 'Stop'
-		}
-		Catch {
-			Write-Warning -Message "could not write settings file for CmsCredentials: $local:PathToFileWithModuleDefaults"
-			Return $_
-		}
-
-		# if CmsCredentials already initialized...
-		If ($null -ne $global:CmsCredentials) {
-			# re-initialize CmsCredetntials
-			Try {
-				Initialize-CmsCredentialSettings
-			}
-			Catch {
-				Write-Warning -Message "could not re-initialize CmsCredentials: $local:PathToFileWithModuleDefaults"
-				Return $_
-			}
 		}
 	}
 }
