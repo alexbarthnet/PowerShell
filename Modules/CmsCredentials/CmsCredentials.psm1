@@ -729,6 +729,7 @@ Function Get-CmsCredential {
 	Param(
 		[Parameter(ParameterSetName = 'Identity', Position = 0, Mandatory)]
 		[string]$Identity,
+		[Parameter(ParameterSetName = 'FilePath', Position = 0, Mandatory, ValueFromPipeline)]
 		[Parameter(ParameterSetName = 'Certificate', Position = 0, Mandatory)]
 		[Parameter(ParameterSetName = 'Thumbprint', Position = 0, Mandatory)]
 		[Parameter(ParameterSetName = 'PfxFile', Position = 0, Mandatory)]
@@ -739,12 +740,15 @@ Function Get-CmsCredential {
 		[string]$Thumbprint,
 		[Parameter(ParameterSetName = 'PfxFile', Position = 1, Mandatory)]
 		[string]$PfxFile,
-		[Parameter(ParameterSetName = 'Identity', Position = 1)]
-		[string]$Path = $CmsCredentials['PathForCmsFiles'],
 		[Parameter(Mandatory = $false)]
 		[switch]$AsPlainText,
-		[Parameter(Mandatory = $false)]
+		[Parameter(ParameterSetName = 'Identity')]
+		[Parameter(ParameterSetName = 'Thumbprint')]
 		[string[]]$ComputerName,
+		[Parameter(DontShow)]
+		[string]$Path = $CmsCredentials['PathForCmsFiles'],
+		[Parameter(DontShow)]
+		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
 		[Parameter(DontShow)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
@@ -981,21 +985,21 @@ Function Protect-CmsCredential {
 		[string]$Thumbprint,
 		[Parameter(ParameterSetName = 'PfxFile', Position = 1, Mandatory = $true)]
 		[string]$PfxFile,
-		[Parameter(ParameterSetName = 'Identity', Position = 2)]
 		[Parameter(ParameterSetName = 'Certificate', Position = 2, Mandatory = $true)]
 		[Parameter(ParameterSetName = 'Thumbprint', Position = 2, Mandatory = $true)]
 		[Parameter(ParameterSetName = 'PfxFile', Position = 2, Mandatory = $true)]
 		[string]$OutFile,
 		[Parameter(ParameterSetName = 'Identity')]
-		[string]$Path = $CmsCredentials['PathForCmsFiles'],
-		[Parameter(ParameterSetName = 'Identity')]
 		[switch]$Reset,
 		[Parameter(ParameterSetName = 'Identity')]
 		[switch]$SkipCleanup,
-		[Parameter(Mandatory = $false)]
+		[Parameter(ParameterSetName = 'Identity')]
+		[Parameter(ParameterSetName = 'Thumbprint')]
 		[string[]]$ComputerName,
 		[Parameter(Mandatory = $false)]
 		[switch]$Force,
+		[Parameter(DontShow)]
+		[string]$Path = $CmsCredentials['PathForCmsFiles'],
 		[Parameter(DontShow)]
 		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
 		[Parameter(DontShow)]
