@@ -59,6 +59,113 @@ Function ConvertTo-Collection {
 	Return $Collection
 }
 
+Function Invoke-Function {
+	Param(
+		[Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+		[string[]]$ComputerName,
+		[string]$Function = (Get-PSCallStack)[0].FunctionName,
+		[hashtable]$Parameters = (Get-Variable -Name 'PSBoundParameters' -Scope 1 -ValueOnly),
+		[string[]]$AdditionalFunctions,
+		[string[]]$PrerequisiteFunctions,
+		[Parameter(DontShow)]
+		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
+	)
+
+	# if parameters contains computer name...
+	If ($Parameters.ContainsKey('ComputerName')) {
+		# remove ComputerName parameter from parameters
+		$null = $Parameters.Remove('ComputerName')
+	}
+
+	# create list for function names and populate with primary function
+	$FunctionNames = [System.Collections.Generic.List[System.String]]::new()
+
+	# add function name to list
+	$FunctionNames.Add($Function)
+
+	# add additional functions to list
+	ForEach ($AdditionalFunction in $local:AdditionalFunctions) {
+		# if function not already in list...
+		If (!$local:FunctionNames.Contains($AdditionalFunction)) {
+			$local:FunctionNames.Add($AdditionalFunction)
+		}
+	}
+
+	# add prerequisite functions to list
+	ForEach ($PrerequisiteFunction in $local:PrerequisiteFunctions) {
+		# if function not already in list...
+		If (!$local:FunctionNames.Contains($PrerequisiteFunction)) {
+			$local:FunctionNames.Add($PrerequisiteFunction)
+		}
+	}
+
+	# create list for function script blocks
+	$FunctionScriptBlocks = [System.Collections.Generic.List[System.String]]::new()
+
+	# process each function
+	ForEach ($FunctionName in $local:FunctionNames) {
+		# get function definition
+		Try {
+			$FunctionDefinition = (Get-Command -Name $FunctionName -CommandType 'Function' -ErrorAction 'Stop').Definition
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve definition for '$FunctionName' function on host: $local:Hostname"
+			Throw $_
+		}
+
+		# if function definition is empty...
+		If ([string]::IsNullOrEmpty($local:FunctionDefinition)) {
+			Write-Warning -Message "found empty definition for '$FunctionName' function on host: $local:Hostname"
+			Return
+		}
+
+		# create function script block and add to list
+		$local:FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
+	}
+
+	# show credential on remote computer
+	:NextRemoteComputer ForEach ($RemoteComputerName in $local:ComputerName) {
+		# if remote computer name is local computer name...
+		If ($RemoteComputerName.Split('.')[0] -eq $local:Hostname) {
+			# run prerequisite functions
+			ForEach ($PrerequisiteFunction in $local:PrerequisiteFunctions) {
+				& $PrerequisiteFunction
+			}
+
+			# run function
+			& $local:Function @local:Parameters
+
+			# continue to next remote computer
+			Continue NextRemoteComputer
+		}
+
+		# define script for Invoke-Command
+		$ScriptBlock = {
+			# import functions
+			ForEach ($FunctionScriptBlock in $using:FunctionScriptBlocks) {
+				. ([ScriptBlock]::Create($FunctionScriptBlock))
+			}
+
+			# run prerequisite functions
+			ForEach ($PrerequisiteFunction in $using:PrerequisiteFunctions) {
+				& $PrerequisiteFunction
+			}
+
+			# run function
+			& $using:Function @using:Parameters
+		}
+
+		# run function on remote computer
+		Try {
+			Invoke-Command -ComputerName $local:RemoteComputerName -ScriptBlock $local:ScriptBlock
+		}
+		Catch {
+			Write-Warning -Message "could not invoke function(s) on '$local:RemoteComputerName' computer: $($_.Exception.Message)"
+			Throw $_
+		}
+	}
+}
+
 Function Get-CertificatePrivateKeyPath {
 	<#
 	.SYNOPSIS
@@ -2214,10 +2321,10 @@ Function Show-CmsCredentialAccess {
 	}
 }
 
-Function Show-CmsCredentialSettings {
+Function Initialize-CmsCredentialSettings {
 	Param(
 		[Parameter(DontShow)]
-		[switch]$Export
+		[string]$HostName = ([System.Environment]::Machinename).ToLowerInvariant()
 	)
 
 	# define the static path to CMS Credentials folder in the Program Data folder
@@ -2226,40 +2333,108 @@ Function Show-CmsCredentialSettings {
 	# define the static path to CMS Credentials file containing module defaults
 	$PathToFileWithModuleDefaults = Join-Path -Path $local:PathToDirectoryInProgramData -ChildPath 'CmsCredentials.json'
 
-	# retrieve content from file
+	# if file found...
+	If ([System.IO.File]::Exists($local:PathToFileWithModuleDefaults)) {
+		# retrieve content from file
+		Try {
+			$Content = Get-Content -Path $local:PathToFileWithModuleDefaults -Raw -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not read CmsCredentials settings file at '$local:PathToFileWithModuleDefaults' path on host: $local:Hostname"
+		}
+
+		# if file is empty...
+		If ([string]::IsNullOrEmpty($local:Content)) {
+			Write-Warning -Message "found empty CmsCredentials settings file at '$local:PathToFileWithModuleDefaults' path on host: $local:Hostname"
+		}
+		# if file is not empty...
+		Else {
+			# convert file content from JSON to custom object
+			Try {
+				$JsonData = ConvertFrom-Json -InputObject $local:Content -ErrorAction 'Stop'
+			}
+			Catch {
+				Write-Warning -Message "could not create custom object from contents of CmsCredentials settings file at '$local:PathToFileWithModuleDefaults' path on host: $local:Hostname"
+			}
+
+			# if custom object 
+			If ($null -ne $local:JsonData) {
+				# convert custom object to hashtable
+				Try {
+					$Hashtable = ConvertTo-Collection -InputObject $local:JsonData -ErrorAction 'SilentlyContinue'
+				}
+				Catch {
+					Write-Warning -Message "could not create hashtable from contents of CmsCredentials settings file at '$local:PathToFileWithModuleDefaults' path on host: $local:Hostname"
+				}
+			}
+		}
+	}
+
+	# if hashtable not found...
+	If ($null -eq $local:Hashtable) {
+		# create hashtable with default values for supported parameters
+		$Hashtable = @{
+			PathForCmsFiles = $local:PathToDirectoryInProgramData
+			PathForPfxFiles = $local:PathToDirectoryInProgramData
+		}
+	}
+
+	# create private variable from hashtable
 	Try {
-		$Content = Get-Content -Path $local:PathToFileWithModuleDefaults -Raw -ErrorAction 'Stop'
+		New-Variable -Name 'CmsCredentials' -Value $local:Hashtable -Scope Global -Force
 	}
 	Catch {
-		Write-Warning -Message "could not read CmsCredentials settings file: $local:PathToFileWithModuleDefaults"
+		Write-Warning -Message "could not create object while initializing CmsCredentials on host: $local:Hostname"
 		Return $_
 	}
+}
 
-	# if content is null...
-	If ([string]::IsNullOrEmpty($local:Content)) {
-		Write-Warning -Message "found empty CmsCredentials settings file: $local:PathToFileWithModuleDefaults"
+Function Show-CmsCredentialSettings {
+	Param(
+		[Parameter(Mandatory = $false)]
+		[string[]]$ComputerName,
+		[Parameter(DontShow)]
+		[string]$HostName = ([System.Environment]::Machinename).ToLowerInvariant()
+	)
+
+	# if computername provided...
+	If ($PSBoundParameters.ContainsKey('ComputerName')) {
+		# define parameters for Invoke-Function
+		$InvokeFunction = @{
+			ComputerName          = $ComputerName
+			PrerequisiteFunctions = 'Initialize-CmsCredentialSettings'
+		}
+
+		# invoke function remotely
+		Try {
+			Invoke-Function @InvokeFunction
+		}
+		Catch {
+			Throw $_
+		}
+
+		# return calling Invoke-Function
 		Return
 	}
 
-	# convert content from JSON to custom object
-	Try {
-		$JsonData = ConvertFrom-Json -InputObject $local:Content -ErrorAction 'SilentlyContinue'
-	}
-	Catch {
-		Write-Warning -Message "could not convert contents of CmsCredentials settings file: $local:PathToFileWithModuleDefaults"
-		Return
+	# if CmsCredential settings object exists...
+	If ($global:CmsCredentials -isnot [hashtable]) {
+		# initialize CMS Credential settings
+		Initialize-CmsCredentialSettings
 	}
 
-	# convert custom object to collection
-	$Hashtable = ConvertTo-Collection -InputObject $local:JsonData -ErrorAction 'SilentlyContinue'
-
-	# if export...
-	If ($local:Export) {
-		New-Variable -Name 'CmsCredentials' -Value $local:Hashtable -Scope 'Global' -Force
-	}
+	# create custom object from hashtable
+	$JsonData = [pscustomobject]$global:CmsCredentials
 
 	# display custom object
-	$local:Hashtable
+	$local:JsonData | Format-Table -Property @(
+		# display current hostname as computername
+		@{Name = 'ComputerName'; Expression = { $HostName } }
+		# display path for CMS files
+		@{Name = 'PathForCmsFiles'; Expression = { $_.PathForCmsFiles } }
+		# display path for CMS files
+		@{Name = 'PathForPfxFiles'; Expression = { $_.PathForCmsFiles } }
+	)
 }
 
 Function Write-CmsCredentialSettings {
@@ -2307,23 +2482,32 @@ Function Write-CmsCredentialSettings {
 		$Content = Get-Content -Path $local:PathToFileWithModuleDefaults -Raw -ErrorAction 'Stop'
 	}
 	Catch {
-		Write-Warning -Message "could not read settings file for CmsCredentials: $local:PathToFileWithModuleDefaults"
-		Return $_
+		Write-Warning -Message "could not read CmsCredentials settings file at '$local:PathToFileWithModuleDefaults' path on host: $local:Hostname"
 	}
 
-	# if content is not null...
+	# if file is not empty...
 	If (![string]::IsNullOrEmpty($local:Content)) {
-		# convert content from JSON to custom object
-		$JsonData = ConvertFrom-Json -InputObject $local:Content -ErrorAction 'SilentlyContinue'
+		# convert file content from JSON to custom object
+		Try {
+			$JsonData = ConvertFrom-Json -InputObject $local:Content -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not create custom object from contents of CmsCredentials settings file at '$local:PathToFileWithModuleDefaults' path on host: $local:Hostname"
+		}
+
+		# if custom object 
+		If ($null -ne $local:JsonData) {
+			# convert custom object to hashtable
+			Try {
+				$Hashtable = ConvertTo-Collection -InputObject $local:JsonData -ErrorAction 'Stop'
+			}
+			Catch {
+				Write-Warning -Message "could not create hashtable from contents of CmsCredentials settings file at '$local:PathToFileWithModuleDefaults' path on host: $local:Hostname"
+			}
+		}
 	}
 
-	# if custom object exists...
-	If ($local:JsonData) {
-		# convert custom object to collection
-		$Hashtable = ConvertTo-Collection -InputObject $local:JsonData -ErrorAction 'SilentlyContinue'
-	}
-
-	# if collection not found...
+	# if hashtable not found...
 	If ($local:Reset -or -not $local:Hashtable) {
 		# create empty hashtable
 		$Hashtable = @{}
@@ -2333,7 +2517,7 @@ Function Write-CmsCredentialSettings {
 	$UpdateHashtable = $false
 
 	# define default values for supported parameters
-	$local:Parameters = @{
+	$Parameters = @{
 		PathForCmsFiles = $local:PathToDirectoryInProgramData
 		PathForPfxFiles = $local:PathToDirectoryInProgramData
 	}
@@ -2343,12 +2527,12 @@ Function Write-CmsCredentialSettings {
 		# if value provided for parameter...
 		If ($PSBoundParameters.ContainsKey($Parameter) -and -not $local:Reset) {
 			# set parameter value to value from bound parameters
-			$local:ParameterValue = $PSBoundParameters[$Parameter]
+			$ParameterValue = $PSBoundParameters[$Parameter]
 		}
 		# if value not provided for parameter...
 		Else {
 			# set parameter value to value from defaults
-			$local:ParameterValue = $local:Parameters[$Parameter]
+			$ParameterValue = $local:Parameters[$Parameter]
 		}
 
 		# if existing value matches parameter value...
@@ -2359,9 +2543,9 @@ Function Write-CmsCredentialSettings {
 		# if existing value does not match parameter value...
 		Else {
 			# set hashtable value to parameter value
-			$local:Hashtable[$Parameter] = $local:ParameterValue
+			$Hashtable[$Parameter] = $local:ParameterValue
 			# set boolean for update
-			$local:UpdateHashtable = $true
+			$UpdateHashtable = $true
 		}
 	}
 
@@ -2384,15 +2568,18 @@ Function Write-CmsCredentialSettings {
 			Write-Warning -Message "could not write settings file for CmsCredentials: $local:PathToFileWithModuleDefaults"
 			Return $_
 		}
-	}
 
-	# create private variable
-	Try {
-		New-Variable -Name 'CmsCredentials' -Value $local:Hashtable -Visibility 'Private' -Force
-	}
-	Catch {
-		Write-Warning -Message "could not create object while initializing CmsCredentials: $local:PathToFileWithModuleDefaults"
-		Return $_
+		# if CmsCredentials already initialized...
+		If ($null -ne $global:CmsCredentials) {
+			# re-initialize CmsCredetntials
+			Try {
+				Initialize-CmsCredentialSettings
+			}
+			Catch {
+				Write-Warning -Message "could not re-initialize CmsCredentials: $local:PathToFileWithModuleDefaults"
+				Return $_
+			}
+		}
 	}
 }
 
@@ -2408,6 +2595,7 @@ $FunctionsToExport = @(
 	'Reset-CmsCredentialAccess'
 	'Revoke-CmsCredentialAccess'
 	'Show-CmsCredentialAccess'
+	'Initialize-CmsCredentialSettings'
 	'Show-CmsCredentialSettings'
 	'Write-CmsCredentialSettings'
 )
