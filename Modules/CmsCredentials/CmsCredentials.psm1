@@ -780,36 +780,44 @@ Function Get-CmsCredential {
 		Return
 	}
 
-	# if file path provided and path is not a file...
-	If ($PSBoundParameters.ContainsKey('FilePath') -and -not (Test-Path -Path $FilePath -PathType 'Leaf')) {
-		# declare and return
-		Write-Warning -Message "could not locate credential file with path: $FilePath"
-		Return $null
+	# if file path provided...
+	If ($PSBoundParameters.ContainsKey('FilePath')) {
+		# if file path is not a file...
+		If (![System.IO.File]::Exists($local:PfxFile)) {
+			Write-Warning -Message "could not locate credential file with '$local:FilePath' path on host: $local:Hostname"
+			Return $null
+		}
 	}
 
 	# if thumbprint provided...
 	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
 		# create path for certificate by thumbprint
-		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
+		$CertificatePath = Join-Path -Path $local:CertStoreLocation -ChildPath $local:Thumbprint
 
 		# retrieve certificate by thumbprint
 		Try {
 			$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
+			Write-Warning -Message "could not locate certificate with '$local:Thumbprint' thumbprint in '$local:CertStoreLocation' on host: $local:Hostname"
 			Throw $_
 		}
 	}
 
 	# if PFX file provided...
 	If ($PSBoundParameters.ContainsKey('PfxFile')) {
+		# if PFX file is not a file...
+		If (![System.IO.File]::Exists($local:PfxFile)) {
+			Write-Warning -Message "could not locate PFX file with '$local:PfxFile' path on host: $local:Hostname"
+			Return $null
+		}
+
 		# retrieve certificate by file path
 		Try {
-			$Certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($PfxFile)
+			$Certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($local:PfxFile)
 		}
 		Catch {
-			Write-Warning -Message "could not create certificate object on '$Hostname' from file with path: $PfxFile"
+			Write-Warning -Message "could not create certificate object from file with '$local:PfxFile' path on host: $local:Hostname"
 			Throw $_
 		}
 	}
@@ -817,35 +825,62 @@ Function Get-CmsCredential {
 	# if identity provided...
 	If ($PSBoundParameters.ContainsKey('Identity')) {
 		# if path is not a folder...
-		If (!(Test-Path -Path $Path -PathType 'Container')) {
-			Write-Warning -Message "could not locate credential file for '$Identity' identity in path: $Path"
+		If (!([System.IO.Directory]::Exists($local:Path))) {
+			Write-Warning -Message "could not locate folder for credential files with '$local:Path' path on host: $local:Hostname"
 			Return $null
 		}
 
 		# retrieve CMS credential files
 		Try {
-			$CredentialFiles = Get-ChildItem -Path $Path -Filter '*.txt' -File -ErrorAction 'Stop'
+			$CredentialFiles = Get-ChildItem -Path $local:Path -Filter '*.txt' -File -ErrorAction 'Stop' | Sort-Object -Property 'LastWriteTime' -Descending
 		}
 		Catch {
-			Write-Warning -Message "could not search for certificate in '$CertStoreLocation' on '$Hostname' with identity: $Identity"
+			Write-Warning -Message "could not retrieve credential files from '$local:Path' path on host: $local:Hostname"
 			Throw $_
 		}
 
-		# define pattern as organizational unit of Identity followed by organization of CmsCredentials
-		$Pattern = "OU=$Identity, O=CmsCredentials$"
+		# define subject as the tail of an X.509 distinguished name with organizational unit of the Identity followed by organization of CmsCredentials
+		$Subject = "OU=$local:Identity, O=CmsCredentials"
 
 		# retrieve latest CMS credential file with matching subject
-		Try {
-			$FilePath = $CredentialFiles | Where-Object { Select-String -InputObject $_ -Pattern $Pattern -Quiet } | Sort-Object -Property 'LastWriteTime' | Select-Object -Last 1 -ExpandProperty 'FullName'
-		}
-		Catch {
-			Write-Warning -Message "could not search for files for '$Identity' identity in path: $Path"
-			Throw $_
+		:CredentialFiles ForEach ($CredentialFile in $CredentialFiles) {
+			# create stream reader
+			Try {
+				$StreamReader = [System.IO.StreamReader]::new($CredentialFile.FullName)
+			}
+			Catch {
+				Write-Warning -Message "could not open credential file with '$($CredentialFile.FullName)' path on host: $local:Hostname"
+				Throw $_
+			}
+
+			# retrieve first line
+			Try {
+				$FirstLine = $StreamReader.ReadLine()
+			}
+			Catch {
+				Write-Warning -Message "could not read first line of credential file with '$($CredentialFile.FullName)' path on host: $local:Hostname"
+				Throw $_
+			}
+
+			# close stream reader
+			Try {
+				$StreamReader.Close()
+			}
+			Catch {
+				Write-Warning -Message "could not open credential file with '$($CredentialFile.FullName)' path on host: $local:Hostname"
+				Throw $_
+			}
+
+			# if first line ends with subject...
+			If ($FirstLine.EndsWith($local:Subject, [System.StringComparison]::InvariantCultureIgnoreCase)) {
+				# set file path and break out of foreach loop
+				$FilePath = $CredentialFile.FullName
+				Break CredentialFiles
+			}
 		}
 
 		# if CMS credential file not found...
 		If ([string]::IsNullOrEmpty($local:FilePath)) {
-			# declare and return
 			Write-Warning -Message "could not locate credential file for '$Identity' identity in path: $Path"
 			Return $null
 		}
@@ -853,7 +888,7 @@ Function Get-CmsCredential {
 
 	# define required parameters for Unprotect-CmsMessage
 	$UnprotectCmsMessage = @{
-		Path        = $FilePath
+		Path        = $local:FilePath
 		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 	}
 
@@ -1040,10 +1075,10 @@ Function Protect-CmsCredential {
 		If (!$local:Reset) {
 			# retrieve CMS certificates
 			Try {
-				$Certificates = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop'
+				$Certificates = Get-ChildItem -Path $local:CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop'
 			}
 			Catch {
-				Write-Warning -Message "could not search for certificate in '$CertStoreLocation' on '$Hostname' with identity: $Identity"
+				Write-Warning -Message "could not retrieve Document Encryption certificates in '$local:CertStoreLocation' on host: $local:Hostname"
 				Throw $_
 			}
 
@@ -1055,10 +1090,10 @@ Function Protect-CmsCredential {
 
 			# retrieve latest certificate where subject matches pattern
 			Try {
-				$Certificate = $Certificates.Where({ $_.Subject -match $Pattern }) | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
+				$Certificate = $Certificates.Where({ $_.Subject -match $local:Pattern }) | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
 			}
 			Catch {
-				Write-Warning -Message "could not search for certificate in '$CertStoreLocation' on '$Hostname' with identity: $Identity"
+				Write-Warning -Message "could not search for Document Encryption certificate with '$local:Identity' identity in '$local:CertStoreLocation' on host: $local:Hostname"
 				Throw $_
 			}
 		}
@@ -1067,53 +1102,44 @@ Function Protect-CmsCredential {
 		If (!$local:Certificate) {
 			# create new certificate for identity
 			Try {
-				$Certificate = New-CmsCredentialCertificate -Identity $Identity
+				$Certificate = New-CmsCredentialCertificate -Identity $local:Identity
 			}
 			Catch {
-				Write-Warning -Message "could not create certificate on '$Hostname' with identity: $Identity"
+				Write-Warning -Message "could not create certificate for '$local:Identity' identity on host: $local:Hostname"
 				Throw $_
 			}
 		}
 
-		# if outfile parameter not provided...
-		If (!$local:OutFile) {
-			# if folder path not found...
-			If (!(Test-Path -Path $Path -PathType 'Container')) {
-				# create path
-				Try {
-					$null = New-Item -ItemType Directory -Path $Path -Verbose -ErrorAction 'Stop'
-				}
-				Catch {
-					Write-Warning -Message "could not create folder on '$Hostname' with path: $Path"
-					Throw $_
-				}
-			}
-
-			# create file name from certificate
+		# if folder path not found...
+		If (!(Test-Path -Path $local:Path -PathType 'Container')) {
+			# create path
 			Try {
-				$FileName = $Certificate.GetNameInfo('SimpleName', $false)
+				$null = New-Item -ItemType Directory -Path $local:Path -Verbose -ErrorAction 'Stop'
 			}
 			Catch {
-				Write-Warning -Message "could not create filename on '$Hostname' from certificate subject: $($Certificate.Subject)"
+				Write-Warning -Message "could not create folder with '$local:Path' on host: $local:Hostname"
 				Throw $_
 			}
-
-			# define CMS file path
-			$OutFile = Join-Path -Path $Path -ChildPath "$FileName.txt"
 		}
+
+		# create file name from certificate
+		$FileName = $Certificate.GetNameInfo('SimpleName', $false)
+
+		# define CMS file path
+		$OutFile = Join-Path -Path $local:Path -ChildPath "$local:FileName.txt"
 	}
 
 	# if thumbprint provided...
 	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
 		# create path for certificate by thumbprint
-		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
+		$CertificatePath = Join-Path -Path $local:CertStoreLocation -ChildPath $local:Thumbprint
 
 		# retrieve certificate by thumbprint
 		Try {
-			$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
+			$Certificate = Get-Item -Path $local:CertificatePath -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
+			Write-Warning -Message "could not locate certificate with '$local:Thumbprint' in '$local:CertStoreLocation' on host: '$local:Hostname'"
 			Throw $_
 		}
 	}
@@ -1122,10 +1148,10 @@ Function Protect-CmsCredential {
 	If ($PSBoundParameters.ContainsKey('PfxFile')) {
 		# retrieve certificate by file path
 		Try {
-			$Certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($PfxFile)
+			$Certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($local:PfxFile)
 		}
 		Catch {
-			Write-Warning -Message "could not create certificate object on '$Hostname' from file with path: $PfxFile"
+			Write-Warning -Message "could not create certificate object from '$local:PfxFile' path on host: $local:Hostname"
 			Throw $_
 		}
 	}
@@ -1350,7 +1376,7 @@ Function Remove-CmsCredential {
 		}
 	}
 	Else {
-		Write-Warning -Message "could not locate store for credential certificates on '$Hostname' with path: $CertStoreLocation"
+		Write-Warning -Message "could not locate certificate store with '$CertStoreLocation' path on host: $Hostname"
 	}
 
 	# if path to credential files found...
@@ -1367,7 +1393,7 @@ Function Remove-CmsCredential {
 		}
 	}
 	Else {
-		Write-Warning -Message "could not locate folder for credential files on '$Hostname' with path: $Path"
+		Write-Warning -Message "could not locate folder for credential files with '$Path' path on host: $Hostname"
 	}
 
 	# remove old credential certificates
@@ -1376,7 +1402,7 @@ Function Remove-CmsCredential {
 			Remove-Item -Path $Item.PSPath -Force -Verbose -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not remove certificate on '$Hostname' with path: $($Item.PSPath)"
+			Write-Warning -Message "could not remove certificate with '$($Item.PSPath)' path on host: $Hostname"
 			Throw $_
 		}
 	}
@@ -1387,7 +1413,7 @@ Function Remove-CmsCredential {
 			Remove-Item -Path $Item.PSPath -Force -Verbose -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not remove file on '$Hostname' with path: $($Item.PSPath)"
+			Write-Warning -Message "could not remove file with '$($Item.PSPath)' path on host: $Hostname"
 			Throw $_
 		}
 	}
