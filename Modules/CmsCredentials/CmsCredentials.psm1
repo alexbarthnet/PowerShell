@@ -306,7 +306,7 @@ Function Test-CmsInvalidIdentity {
 	System.Boolean.
 
 	#>
-	[CmdletBinding()]
+
 	Param (
 		[Parameter(Mandatory = $true, Position = 0)]
 		[string]$Identity,
@@ -314,13 +314,18 @@ Function Test-CmsInvalidIdentity {
 		[string]$Pattern = '[\\,="]' # '[^\w\s\.\-]'
 	)
 
-	# test pattern against identity
-	If (Select-String -InputObject $Identity -Pattern $Pattern -Quiet) {
+	# test length
+	If ([string]::IsNullOrEmpty($Identity) -or $Identity.Length -gt 64) {
 		Return $true
 	}
-	Else {
-		Return $false
+
+	# test pattern against identity
+	If (Select-String -InputObject $local:Identity -Pattern $local:Pattern -Quiet) {
+		Return $true
 	}
+
+	# return false if no tests passed
+	Return $false
 }
 
 Function Test-CmsInvalidSubject {
@@ -341,7 +346,7 @@ Function Test-CmsInvalidSubject {
 	System.Boolean.
 
 	#>
-	[CmdletBinding()]
+
 	Param (
 		[Parameter(Mandatory = $true, Position = 0)]
 		[string]$Subject,
@@ -350,7 +355,7 @@ Function Test-CmsInvalidSubject {
 	)
 
 	# test pattern against identity
-	If (Select-String -InputObject $Subject -Pattern $Pattern -Quiet) {
+	If (Select-String -InputObject $local:Subject -Pattern $local:Pattern -Quiet) {
 		Return $true
 	}
 	Else {
@@ -426,10 +431,10 @@ Function Export-CmsCredentialCertificate {
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
-	# if identity contains invalid characters...
+	# if identity is too long or contains invalid characters...
 	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-CmsInvalidIdentity -Identity $Identity)) {
 		# warn and return
-		Write-Warning -Message "the value provided for the Identity parameter contains one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
+		Write-Warning -Message "the value provided for the Identity parameter contains more than 64 characters or one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
 		Return
 	}
 
@@ -573,10 +578,10 @@ Function New-CmsCredentialCertificate {
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
-	# if identity contains invalid characters...
-	If (Test-CmsInvalidIdentity -Identity $Identity) {
+	# if identity is too long or contains invalid characters...
+	If (Test-CmsInvalidIdentity -Identity $local:Identity) {
 		# warn and return
-		Write-Warning -Message "the value provided for the Identity parameter contains one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
+		Write-Warning -Message "the value provided for the Identity parameter contains more than 64 characters or one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
 		Return
 	}
 
@@ -747,10 +752,9 @@ Function Get-CmsCredential {
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
-	# if identity contains invalid characters...
+	# if identity is too long or contains invalid characters...
 	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-CmsInvalidIdentity -Identity $Identity)) {
-		# warn and return
-		Write-Warning -Message "the value provided for the Identity parameter contains one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
+		Write-Warning -Message "the value provided for the Identity parameter contains more than 64 characters or one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
 		Return $null
 	}
 
@@ -1004,10 +1008,10 @@ Function Protect-CmsCredential {
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
-	# if identity contains invalid characters...
+	# if identity is too long or contains invalid characters...
 	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-CmsInvalidIdentity -Identity $Identity)) {
 		# warn and return
-		Write-Warning -Message "the value provided for the Identity parameter contains one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
+		Write-Warning -Message "the value provided for the Identity parameter contains more than 64 characters or one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
 		Return
 	}
 
@@ -1269,10 +1273,10 @@ Function Remove-CmsCredential {
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
-	# if identity contains invalid characters...
+	# if identity is too long or contains invalid characters...
 	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-CmsInvalidIdentity -Identity $Identity)) {
 		# warn and return
-		Write-Warning -Message "the value provided for the Identity parameter contains one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
+		Write-Warning -Message "the value provided for the Identity parameter contains more than 64 characters or one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
 		Return
 	}
 
@@ -1453,10 +1457,10 @@ Function Show-CmsCredential {
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
-	# if identity contains invalid characters...
+	# if identity is too long or contains invalid characters...
 	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-CmsInvalidIdentity -Identity $Identity)) {
 		# warn and return
-		Write-Warning -Message "the value provided for the Identity parameter contains one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
+		Write-Warning -Message "the value provided for the Identity parameter contains more than 64 characters or one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
 		Return
 	}
 
@@ -1686,10 +1690,10 @@ Function Update-CmsCredentialAccess {
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
-	# if identity contains invalid characters...
+	# if identity is too long or contains invalid characters...
 	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-CmsInvalidIdentity -Identity $Identity)) {
 		# warn and return
-		Write-Warning -Message "the value provided for the Identity parameter contains one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
+		Write-Warning -Message "the value provided for the Identity parameter contains more than 64 characters or one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
 		Return
 	}
 
