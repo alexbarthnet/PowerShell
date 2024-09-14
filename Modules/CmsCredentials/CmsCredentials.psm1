@@ -756,59 +756,23 @@ Function Get-CmsCredential {
 
 	# if computername provided...
 	If ($PSBoundParameters.ContainsKey('ComputerName')) {
-		# remove ComputerName parameter from bound parameters
-		$null = $PSBoundParameters.Remove('ComputerName')
-
-		# define required functions
-		$FunctionNames = 'Test-CmsInvalidIdentity', 'Get-CmsCredential'
-
-		# define list for function script blocks
-		$FunctionScriptBlocks = [System.Collections.Generic.List[System.String]]::new()
-
-		# add script block for required functions to list
-		ForEach ($FunctionName in $FunctionNames) {
-			# get function definition
-			Try {
-				$FunctionDefinition = (Get-Command -Name $FunctionName -ErrorAction 'Stop').Definition
-			}
-			Catch {
-				Write-Warning -Message "could not retrieve definition on '$Hostname' for function: $FunctionName"
-				Throw $_
-			}
-			# create function script block and add to list
-			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
+		# define parameters for Invoke-Function
+		$InvokeFunction = @{
+			ComputerName          = $ComputerName
+			AdditionalFunctions   = 'Test-CmsInvalidIdentity'
+			PrerequisiteFunctions = 'Initialize-CmsCredentialSettings'
 		}
 
-		# get credential on remote computer
-		ForEach ($RemoteComputerName in $ComputerName) {
-			# if remote computer name is local computer name...
-			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
-				# set include local computer then continue
-				$local:IncludeLocalComputer = $true
-				Continue
-			}
-			# run function on remote computer
-			Try {
-				Invoke-Command -ComputerName $RemoteComputerName -ScriptBlock {
-					# import functions
-					ForEach ($FunctionScriptBlock in $using:FunctionScriptBlocks) {
-						. ([ScriptBlock]::Create($FunctionScriptBlock))
-					}
-					# run functions
-					Get-CmsCredential @using:PSBoundParameters
-				}
-			}
-			Catch {
-				Write-Warning -Message "could not invoke function(s) on '$RemoteComputerName' computer: $($_.Exception.Message)"
-				Throw $_
-			}
+		# invoke function remotely
+		Try {
+			Invoke-Function @InvokeFunction
+		}
+		Catch {
+			Throw $_
 		}
 
-		# if include local computer not set...
-		If ($null -eq $local:IncludeLocalComputer) {
-			# return after running function on remote computers
-			Return
-		}
+		# return calling Invoke-Function
+		Return
 	}
 
 	# if file path provided and path is not a file...
@@ -1049,59 +1013,23 @@ Function Protect-CmsCredential {
 
 	# if computername provided...
 	If ($PSBoundParameters.ContainsKey('ComputerName')) {
-		# remove ComputerName parameter from bound parameters
-		$null = $PSBoundParameters.Remove('ComputerName')
-
-		# define required functions
-		$FunctionNames = 'Test-CmsInvalidIdentity', 'Test-CmsInvalidSubject', 'New-CmsCredentialCertificate', 'Protect-CmsCredential', 'Remove-CmsCredential'
-
-		# define list for function script blocks
-		$FunctionScriptBlocks = [System.Collections.Generic.List[System.String]]::new()
-
-		# add script block for required functions to list
-		ForEach ($FunctionName in $FunctionNames) {
-			# get function definition
-			Try {
-				$FunctionDefinition = (Get-Command -Name $FunctionName -ErrorAction 'Stop').Definition
-			}
-			Catch {
-				Write-Warning -Message "could not retrieve definition on '$Hostname' for function: $FunctionName"
-				Throw $_
-			}
-			# create function script block and add to list
-			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
+		# define parameters for Invoke-Function
+		$InvokeFunction = @{
+			ComputerName          = $ComputerName
+			AdditionalFunctions   = 'Test-CmsInvalidIdentity', 'Test-CmsInvalidSubject', 'New-CmsCredentialCertificate', 'Remove-CmsCredential'
+			PrerequisiteFunctions = 'Initialize-CmsCredentialSettings'
 		}
 
-		# protect credential on remote computer
-		ForEach ($RemoteComputerName in $ComputerName) {
-			# if remote computer name is local computer name...
-			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
-				# set include local computer then continue
-				$local:IncludeLocalComputer = $true
-				Continue
-			}
-			# run function on remote computer
-			Try {
-				Invoke-Command -ComputerName $RemoteComputerName -ScriptBlock {
-					# import functions
-					ForEach ($FunctionScriptBlock in $using:FunctionScriptBlocks) {
-						. ([ScriptBlock]::Create($FunctionScriptBlock))
-					}
-					# run functions
-					Protect-CmsCredential @using:PSBoundParameters
-				}
-			}
-			Catch {
-				Write-Warning -Message "could not invoke function(s) on '$RemoteComputerName' computer: $($_.Exception.Message)"
-				Throw $_
-			}
+		# invoke function remotely
+		Try {
+			Invoke-Function @InvokeFunction
+		}
+		Catch {
+			Throw $_
 		}
 
-		# if include local computer not set...
-		If ($null -eq $local:IncludeLocalComputer) {
-			# return after running function on remote computers
-			Return
-		}
+		# return calling Invoke-Function
+		Return
 	}
 
 	# if identity provided...
@@ -1350,59 +1278,23 @@ Function Remove-CmsCredential {
 
 	# if computername provided...
 	If ($PSBoundParameters.ContainsKey('ComputerName')) {
-		# remove ComputerName parameter from bound parameters
-		$null = $PSBoundParameters.Remove('ComputerName')
-
-		# define required functions
-		$FunctionNames = 'Test-CmsInvalidIdentity', 'Remove-CmsCredential'
-
-		# define list for function script blocks
-		$FunctionScriptBlocks = [System.Collections.Generic.List[System.String]]::new()
-
-		# add script block for required functions to list
-		ForEach ($FunctionName in $FunctionNames) {
-			# get function definition
-			Try {
-				$FunctionDefinition = (Get-Command -Name $FunctionName -ErrorAction 'Stop').Definition
-			}
-			Catch {
-				Write-Warning -Message "could not retrieve definition on '$Hostname' for function: $FunctionName"
-				Throw $_
-			}
-			# create function script block and add to list
-			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
+		# define parameters for Invoke-Function
+		$InvokeFunction = @{
+			ComputerName          = $ComputerName
+			AdditionalFunctions   = 'Test-CmsInvalidIdentity', 'Test-CmsInvalidSubject'
+			PrerequisiteFunctions = 'Initialize-CmsCredentialSettings'
 		}
 
-		# remove credential on remote computer
-		ForEach ($RemoteComputerName in $ComputerName) {
-			# if remote computer name is local computer name...
-			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
-				# set include local computer then continue
-				$local:IncludeLocalComputer = $true
-				Continue
-			}
-			# run function on remote computer
-			Try {
-				Invoke-Command -ComputerName $RemoteComputerName -ScriptBlock {
-					# import functions
-					ForEach ($FunctionScriptBlock in $using:FunctionScriptBlocks) {
-						. ([ScriptBlock]::Create($FunctionScriptBlock))
-					}
-					# run functions
-					Remove-CmsCredential @using:PSBoundParameters
-				}
-			}
-			Catch {
-				Write-Warning -Message "could not invoke function(s) on '$RemoteComputerName' computer: $($_.Exception.Message)"
-				Throw $_
-			}
+		# invoke function remotely
+		Try {
+			Invoke-Function @InvokeFunction
+		}
+		Catch {
+			Throw $_
 		}
 
-		# if include local computer not set...
-		If ($null -eq $local:IncludeLocalComputer) {
-			# return after running function on remote computers
-			Return
-		}
+		# return calling Invoke-Function
+		Return
 	}
 
 	# if thumbprint provided...
@@ -1570,59 +1462,23 @@ Function Show-CmsCredential {
 
 	# if computername provided...
 	If ($PSBoundParameters.ContainsKey('ComputerName')) {
-		# remove ComputerName parameter from bound parameters
-		$null = $PSBoundParameters.Remove('ComputerName')
-
-		# define required functions
-		$FunctionNames = 'Test-CmsInvalidIdentity', 'Test-CmsInvalidSubject', 'Show-CmsCredential'
-
-		# define list for function script blocks
-		$FunctionScriptBlocks = [System.Collections.Generic.List[System.String]]::new()
-
-		# add script block for required functions to list
-		ForEach ($FunctionName in $FunctionNames) {
-			# get function definition
-			Try {
-				$FunctionDefinition = (Get-Command -Name $FunctionName -ErrorAction 'Stop').Definition
-			}
-			Catch {
-				Write-Warning -Message "could not retrieve definition on '$Hostname' for function: $FunctionName"
-				Throw $_
-			}
-			# create function script block and add to list
-			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
+		# define parameters for Invoke-Function
+		$InvokeFunction = @{
+			ComputerName          = $ComputerName
+			AdditionalFunctions   = 'Test-CmsInvalidIdentity', 'Test-CmsInvalidSubject'
+			PrerequisiteFunctions = 'Initialize-CmsCredentialSettings'
 		}
 
-		# show credential on remote computer
-		ForEach ($RemoteComputerName in $ComputerName) {
-			# if remote computer name is local computer name...
-			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
-				# set include local computer then continue
-				$local:IncludeLocalComputer = $true
-				Continue
-			}
-			# run function on remote computer
-			Try {
-				Invoke-Command -ComputerName $RemoteComputerName -ScriptBlock {
-					# import functions
-					ForEach ($FunctionScriptBlock in $using:FunctionScriptBlocks) {
-						. ([ScriptBlock]::Create($FunctionScriptBlock))
-					}
-					# run functions
-					Show-CmsCredential @using:PSBoundParameters
-				}
-			}
-			Catch {
-				Write-Warning -Message "could not invoke function(s) on '$RemoteComputerName' computer: $($_.Exception.Message)"
-				Throw $_
-			}
+		# invoke function remotely
+		Try {
+			Invoke-Function @InvokeFunction
+		}
+		Catch {
+			Throw $_
 		}
 
-		# if include local computer not set...
-		If ($null -eq $local:IncludeLocalComputer) {
-			# return after running function on remote computers
-			Return
-		}
+		# return calling Invoke-Function
+		Return
 	}
 
 	# if thumbprint provided...
