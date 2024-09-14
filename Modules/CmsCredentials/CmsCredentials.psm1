@@ -697,22 +697,19 @@ Function Get-CmsCredential {
 	Specifies the path to a CMS credential file. Cannot be combined with the Identity parameter.
 
 	.PARAMETER Certificate
-	Specifies the X.509 certificate object that can decrypt the CMS credential file. Requires the FilePath parameter. Cannot be combined with the Identity, Thumbprint, or PfxFile parameters. The certificate object must have a private key and the current user must have access to the private key.
+	Specifies the X.509 certificate object that encrypted the CMS credential file. Requires the FilePath parameter and cannot be combined with the Thumbprint or PfxFile parameters.
 
 	.PARAMETER Thumbprint
-	Specifies the thumbprint of an X.509 certificate that can decrypt the CMS credential file. Requires the FilePath parameter. Cannot be combined with the Identity, Certificate, or PfxFile parameters.
+	Specifies the thumbprint of the X.509 certificate that encrypted the CMS credential file. Requires the FilePath parameter and cannot be combined with the Certificate or PfxFile parameters.
 
 	.PARAMETER PfxFile
-	Specifies the path to a PFX file that can decrypt the CMS credential file. Requires the FilePath parameter. Cannot be combined with the Identity, Certificate, or Thumbprint parameters.
-
-	.PARAMETER Path
-	Specifies the path to a folder containing CMS credential files. The default value is the 'C:\ProgramData\CmsCredentials' folder. Requires the Identity parameter.
-
-	.PARAMETER AsPlainText
-	Specifies the credential should be returned as a plain-text password. The credential will be returned a PSCustomObject with Username and Password properties.
+	Specifies the path to the PFX file that encrypted the CMS credential file. Requires the FilePath parameter and cannot be combined with the Certificate or Thumbprint parameters.
 
 	.PARAMETER ComputerName
-	Specifies the name of one or more remote computers.
+	Specifies the name of one or more remote computers. Requires the Identity or Thumbprint parameters.
+
+	.PARAMETER AsPlainText
+	Specifies the credential should be returned as a plain-text password. The credential will be returned as a PSCustomObject with Username and Password properties.
 
 	.INPUTS
 	None.
@@ -953,10 +950,7 @@ Function Protect-CmsCredential {
 	Specifies the path to a PFX file that will encrypt the credential. Cannot be combined with the Certificate, Thumbprint, or Identity parameters.
 
 	.PARAMETER OutFile
-	Specifies the path for the CMS credential file.
-
-	.PARAMETER Path
-	Specifies the path for the folder where the CMS credential file will be created when the OutFile parameter is not provided. The default value is 'C:\ProgramData\CmsCredentials'. The folder is created when it does not exist and the OutFile parameter is not provided.
+	Specifies the path for the CMS credential file. Requires the Certificate, Thumbprint, or PfxFile parameters.
 
 	.PARAMETER Reset
 	Switch to create a new CMS certificate and credential file for the provided identity. Requires the Identity parameter.
@@ -965,7 +959,7 @@ Function Protect-CmsCredential {
 	Switch to skip removal of old CMS certificates and credential files for the provided identity. Requires the Identity parameter.
 
 	.PARAMETER ComputerName
-	Specifies the name of one or more remote computers.
+	Specifies the name of one or more remote computers. Requires the Identity or Thumbprint parameters.
 
 	.INPUTS
 	None.
