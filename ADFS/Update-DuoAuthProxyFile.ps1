@@ -68,9 +68,21 @@ Begin {
 }
 
 Process {
+	# get info of path parameter
+	Try {
+		$PathInfo = [System.IO.FileInfo]::new($Path)
+	}
+	Catch {
+		Write-Warning -Message "could not get info for file at Path: $Path"
+		Return $_
+	}
+
+	# get base path from path info
+	$BasePath = $PathInfo.DirectoryName
+
 	# get main files from base folder
 	Try {
-		$MainFiles = Get-ChildItem -Path $Path -Filter 'main*.txt'
+		$MainFiles = Get-ChildItem -Path $BasePath -Filter 'main*.txt'
 	}
 	Catch {
 		Write-Warning -Message "could not retrieve main files from Path: $SitePath"
@@ -79,37 +91,37 @@ Process {
 
 	# if main files not found...
 	If (!$MainFiles) {
-		Write-Warning -Message "could not retrieve required main files from either '$Path' base path"
+		Write-Warning -Message "could not retrieve required main files from '$BasePath' base path"
 		Return $_
 	}
 
 	# get client files from base folder
 	Try {
-		$ClientFiles = Get-ChildItem -Path $Path -Filter 'client*.txt'
+		$ClientFiles = Get-ChildItem -Path $BasePath -Filter 'client*.txt'
 	}
 	Catch {
-		Write-Warning -Message "could not retrieve client files from '$Path' base path"
+		Write-Warning -Message "could not retrieve client files from '$BasePath' base path"
 		Return $_
 	}
 
 	# if client files not found...
 	If (!$ClientFiles) {
-		Write-Warning -Message "could not retrieve required client files from either '$Path' base path"
+		Write-Warning -Message "could not retrieve required client files from '$BasePath' base path"
 		Return $_
 	}
 
 	# get server files from base folder
 	Try {
-		$ServerFiles = Get-ChildItem -Path $Path -Filter '*server*.txt'
+		$ServerFiles = Get-ChildItem -Path $BasePath -Filter '*server*.txt'
 	}
 	Catch {
-		Write-Warning -Message "could not retrieve server files from '$Path' base path"
+		Write-Warning -Message "could not retrieve server files from '$BasePath' base path"
 		Return $_
 	}
 
 	# if server files not found...
 	If (!$ServerFiles) {
-		Write-Warning -Message "could not retrieve required server files from either '$Path' base path"
+		Write-Warning -Message "could not retrieve required server files from '$BasePath' base path"
 		Return $_
 	}
 
@@ -141,7 +153,7 @@ Process {
 	$BaseContent = $BaseContent.TrimStart("`r`n")
 
 	# define path to base configuration file
-	$BaseFilePath = Join-Path -Path $Path -ChildPath 'authproxy.cfg'
+	$BaseFilePath = Join-Path -Path $BasePath -ChildPath $PathInfo.Name
 
 	# if base configuration file does not exist...
 	If (![System.IO.File]::Exists($BaseFilePath)) {
@@ -179,7 +191,7 @@ Process {
 	### start site-specific configuration
 
 	# define site-specific folder path
-	$SitePath = Join-Path -Path $Path -ChildPath $SiteName
+	$SitePath = Join-Path -Path $BasePath -ChildPath $SiteName
 
 	# test for site-specific folder path
 	$SiteFound = Test-Path -Path $SitePath -PathType 'Container'
@@ -214,7 +226,7 @@ Process {
 		}
 
 		# define site-specific configuration file
-		$SiteFilePath = Join-Path -Path $SitePath -ChildPath 'authproxy.cfg'
+		$SiteFilePath = Join-Path -Path $SitePath -ChildPath $PathInfo.Name
 
 		# create empty content string for site-specific content
 		$SiteContent = [string]::Empty
