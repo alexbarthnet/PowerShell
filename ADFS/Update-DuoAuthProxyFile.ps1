@@ -29,7 +29,7 @@ None. The script does not provide any actionable output.
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
 	# path to JSON configuration file
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
+	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
 	[string]$Path,
 	# switch to skip transcript logging
 	[Parameter(Mandatory = $false)]
