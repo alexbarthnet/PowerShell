@@ -150,12 +150,30 @@ Process {
 	}
 
 	# get content of existing base configuration file
-	$BaseFileContent = Get-Content -Path $BaseFilePath -Raw
+	Try {
+		$BaseFileContent = Get-Content -Path $BaseFilePath -Raw
+	}
+	Catch {
+		Write-Warning -Message "could not retrieve content from base configuration file: $BaseFilePath"
+		Return $_
+	}
 
+	# if base text does matches base configuration file content...
+	If ($BaseContent -eq $BaseFileContent) {
+		Write-Verbose -Verbose -Message "found current configuration in base configuration file: $BaseFilePath"
+	}
 	# if base text does not match base configuration file content...
-	If ($BaseContent -ne $BaseFileContent) {
+	Else {
 		# update default file with default text
-		Set-Content -Path $BaseFilePath -Value $BaseContent
+		Try {
+			Set-Content -Path $BaseFilePath -Value $BaseContent
+		}
+		Catch {
+			Write-Warning -Message "could not update base configuration file: $BaseFilePath"
+			Return $_
+		}
+		# declare updated
+		Write-Verbose -Verbose -Message "updated configuration in base configuration file: $BaseFilePath"
 	}
 
 	### start site-specific configuration
@@ -286,12 +304,30 @@ Process {
 		}
 
 		# get content of existing site-specific file
-		$SiteFileContent = Get-Content -Path $SiteFilePath -Raw
+		Try {
+			$SiteFileContent = Get-Content -Path $SiteFilePath -Raw
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve content from site-specific file: $SiteFilePath"
+			Return $_
+		}
 
+		# if site-specific text matches site-specific file content...
+		If ($SiteContent -eq $SiteFileContent) {
+			Write-Verbose -Verbose -Message "found current configuration in site-specific file: $SiteFilePath"
+		}
 		# if site-specific text does not match site-specific file content...
-		If ($SiteContent -ne $SiteFileContent) {
+		Else {
 			# update site-specific file with site-specific text
-			Set-Content -Path $SiteFilePath -Value $SiteContent
+			Try {
+				Set-Content -Path $SiteFilePath -Value $SiteContent
+			}
+			Catch {
+				Write-Warning -Message "could not update site-specific file: $SiteFilePath"
+				Return $_
+			}
+			# declare updated
+			Write-Verbose -Verbose -Message "updated configuration in site-specific file: $SiteFilePath"
 		}
 	}
 }
