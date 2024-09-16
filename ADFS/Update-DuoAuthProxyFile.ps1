@@ -143,6 +143,12 @@ Process {
 	# define path to base configuration file
 	$BaseFilePath = Join-Path -Path $Path -ChildPath 'authproxy.cfg'
 
+	# if base configuration file does not exist...
+	If (![System.IO.File]::Exists($BaseFilePath)) {
+		# create base configuration file
+		$null = New-Item -ItemType 'File' -Path $BaseFilePath
+	}
+
 	# get content of existing base configuration file
 	$BaseFileContent = Get-Content -Path $BaseFilePath -Raw
 
@@ -272,6 +278,12 @@ Process {
 
 		# define path to site-specific file
 		$SiteFilePath = Join-Path -Path $SitePath -ChildPath 'authproxy.cfg'
+
+		# if site-specific file does not exist...
+		If (![System.IO.File]::Exists($SiteFilePath)) {
+			# create site-specific file
+			$null = New-Item -ItemType 'File' -Path $SiteFilePath
+		}
 
 		# get content of existing site-specific file
 		$SiteFileContent = Get-Content -Path $SiteFilePath -Raw
