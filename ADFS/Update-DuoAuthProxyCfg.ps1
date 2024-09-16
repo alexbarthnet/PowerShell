@@ -2,7 +2,7 @@
 
 <#
 .SYNOPSIS
-Updates the Duo Authentication Proxy configuration file and restarts the service when required.
+Updates the Duo Authentication Proxy configuration file.
 
 .DESCRIPTION
 Updates the Duo Authentication Proxy configuration file and restarts the service when the existing configuration file does not match the provided configuration file
@@ -85,7 +85,7 @@ Process {
 
 	# if hashes match...
 	If ($PathHash.Hash -eq $DestinationHash.Hash) {
-		Write-Verbose -Verbose -Message "Found matching hashes for Path and Destination, skipping update of Duo Auth Proxy"
+		Write-Verbose -Verbose -Message 'Found matching hashes for Path and Destination, skipping update of Duo Auth Proxy'
 		Return
 	}
 
@@ -103,7 +103,7 @@ Process {
 		Restart-Service -Name 'DuoAuthProxy' -Force -Verbose
 	}
 	Catch {
-		Write-Warning -Message "could not restart DuoAuthProxy service"
+		Write-Warning -Message 'could not restart DuoAuthProxy service'
 		Return $_
 	}
 }
