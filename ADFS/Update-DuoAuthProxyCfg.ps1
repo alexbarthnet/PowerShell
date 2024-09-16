@@ -29,17 +29,20 @@ None. The script does not provide any actionable output.
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
 	# path to JSON configuration file
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ -PathType ([Microsoft.PowerShell.Commands.TestPathType]::Leaf) })]
+	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
 	[string]$Path,
 	# child path to host folder
-	[Parameter(Dontshow)][ValidateScript({ Test-Path -Path $_ -PathType ([Microsoft.PowerShell.Commands.TestPathType]::Leaf) })]
+	[Parameter(Dontshow)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
 	[string]$Destination = (Join-Path -Path ([System.Environment]::GetFolderPath('ProgramFiles')) -ChildPath 'Duo Security Authentication Proxy\conf\authproxy.cfg'),
 	# string containing algorithm for Get-FileHash
-	[Parameter(DontShow)][ValidateSet("SHA1", "SHA256", "SHA384", "SHA512", "MACTripleDES", "MD5", "RIPEMD160")]
+	[Parameter(DontShow)][ValidateSet('SHA1', 'SHA256', 'SHA384', 'SHA512', 'MACTripleDES', 'MD5', 'RIPEMD160')]
 	[string]$Algorithm = 'SHA512',
 	# switch to skip transcript logging
 	[Parameter(DontShow)]
 	[switch]$SkipTranscript,
+	# local site name
+	[Parameter(DontShow)]
+	[string]$SiteName = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySite]::GetComputerSite().Name,
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -65,6 +68,29 @@ Begin {
 }
 
 Process {
+	# get info of path parameter
+	Try {
+		$PathInfo = [System.IO.FileInfo]::new($Path)
+	}
+	Catch {
+		Write-Warning -Message "could not get hash of file at Path: $Path"
+		Return $_
+	}
+
+	# define site-specific folder path
+	$SitePath = Join-Path -Path $PathInfo.DirectoryName -ChildPath $SiteName
+
+	# if site folder exists...
+	If (Test-Path -Path $SitePath -PathType 'Container') {
+		# define site-specific folder path
+		$SiteFile = Join-Path -Path $SitePath -ChildPath $PathInfo.Name
+
+		# if site-specific file exists...
+		If (Test-Path -Path $SiteFile -PathType 'Leaf') {
+			$Path = $SiteFile
+		}
+	}
+
 	# get file hash of path
 	Try {
 		$PathHash = Get-FileHash -Path $Path -Algorithm $Algorithm -Verbose
