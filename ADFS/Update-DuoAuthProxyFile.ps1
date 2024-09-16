@@ -178,7 +178,7 @@ Process {
 	Else {
 		# update default file with default text
 		Try {
-			Set-Content -Path $BaseFilePath -Value $BaseContent
+			Set-Content -Path $BaseFilePath -Value $BaseContent -NoNewLine
 		}
 		Catch {
 			Write-Warning -Message "could not update base configuration file: $BaseFilePath"
@@ -332,7 +332,7 @@ Process {
 		Else {
 			# update site-specific file with site-specific text
 			Try {
-				Set-Content -Path $SiteFilePath -Value $SiteContent
+				Set-Content -Path $SiteFilePath -Value $SiteContent -NoNewline
 			}
 			Catch {
 				Write-Warning -Message "could not update site-specific file: $SiteFilePath"
