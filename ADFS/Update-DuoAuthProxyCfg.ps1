@@ -73,7 +73,7 @@ Process {
 		$PathInfo = [System.IO.FileInfo]::new($Path)
 	}
 	Catch {
-		Write-Warning -Message "could not get hash of file at Path: $Path"
+		Write-Warning -Message "could not get info for file at Path: $Path"
 		Return $_
 	}
 
