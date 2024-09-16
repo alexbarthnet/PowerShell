@@ -111,7 +111,7 @@ Process {
 
 	# if hashes match...
 	If ($PathHash.Hash -eq $DestinationHash.Hash) {
-		Write-Verbose -Verbose -Message 'Skipping update of Duo Auth Proxy: found matching hashes for '$Path' Path and '$Destination' Destination'
+		Write-Verbose -Verbose -Message "Skipping update of Duo Auth Proxy: found matching hashes for '$Path' Path and '$Destination' Destination"
 		Return
 	}
 
