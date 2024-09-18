@@ -1102,15 +1102,15 @@ Function Protect-CmsCredential {
 	# if certificate subject is null or empty...
 	If ([string]::IsNullOrEmpty($Certificate.Subject)) {
 		# define recipient string as subject of certificate
-		Write-Warning -Message 'found certificate with an empty subject; certificates used by Protect-CmsCredential must have a subject'
+		Write-Warning -Message 'found an invalid certificate: the subject field is empty'
 		Return
 	}
 
 	# if CMS credential file found...
 	If (Test-Path -Path $OutFile -PathType 'Leaf') {
 		# if force and reset not set...
-		If (!$local:Force -and !$local:Reset) {
-			Write-Warning -Message "existing credential file found; continue to overwrite file on '$Hostname' with path: $OutFile" -WarningAction 'Inquire'
+		If (!$local:Force -and -not $local:Reset) {
+			Write-Warning -Message "existing credential file found; continue to overwrite file with '$OutFile' path on host: $local:Hostname" -WarningAction 'Inquire'
 		}
 	}
 
@@ -1119,7 +1119,7 @@ Function Protect-CmsCredential {
 		$Content = $Credential.GetNetworkCredential() | Select-Object -Property 'UserName', 'Password', 'Domain' | ConvertTo-Json -ErrorAction 'Stop'
 	}
 	Catch {
-		Write-Warning -Message "could not convert custom object on '$Hostname' for identity: $Identity"
+		Write-Warning -Message "could not create JSON string from credential object on host: $local:Hostname"
 		Throw $_
 	}
 
@@ -1128,7 +1128,7 @@ Function Protect-CmsCredential {
 		Protect-CmsMessage -To $Certificate -Content $Content -OutFile $OutFile -ErrorAction 'Stop'
 	}
 	Catch {
-		Write-Warning -Message "could not encrypt credential on '$Hostname' for recipient(s): $($Certificate.Subject)"
+		Write-Warning -Message "could not encrypt credential to certificate with '$($Certificate.Subject)' subject on host: $local:Hostname"
 		Throw $_
 	}
 
@@ -1137,7 +1137,7 @@ Function Protect-CmsCredential {
 		$Content = Get-Content -Path $OutFile -Raw -ErrorAction 'Stop'
 	}
 	Catch {
-		Write-Warning -Message "could not read credential file on '$Hostname' with path: $OutFile"
+		Write-Warning -Message "could not read credential file with '$OutFile' path on host: $local:Hostname"
 		Throw $_
 	}
 
@@ -1155,7 +1155,7 @@ Function Protect-CmsCredential {
 		Set-Content -Path $OutFile -Value $Value -Encoding 'UTF8' -ErrorAction 'Stop'
 	}
 	Catch {
-		Write-Warning -Message "could not update credential file on '$Hostname' with path: $OutFile"
+		Write-Warning -Message "could not update credential file with '$OutFile' path on host: $local:Hostname"
 		Throw $_
 	}
 
@@ -1173,7 +1173,7 @@ Function Protect-CmsCredential {
 			Remove-CmsCredential @RemoveCmsCredential
 		}
 		Catch {
-			Write-Warning -Message "could not remove old CMS certificates and files on '$Hostname' for identity: $Identity"
+			Write-Warning -Message "could not remove old CMS certificates and files for '$local:Identity' identity on host: $local:Hostname"
 			Throw $_
 		}
 	}
