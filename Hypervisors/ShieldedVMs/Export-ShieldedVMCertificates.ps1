@@ -14,9 +14,12 @@ Param(
 	# one or more Windows domain prinicpals granted access to exported PFX files
 	[Parameter(ParameterSetName = 'Default', Mandatory = $true, Position = 1)]
 	[string[]]$ProtectTo,
-	# overwrite existing PFX files
+	# switch to overwrite existing PFX files
 	[Parameter(Mandatory = $false)]
 	[switch]$Force,
+	# path to certificate store containing Shielded VM certificates
+	[Parameter(DontShow)]
+	[string]$CertStoreLocation = 'Cert:\LocalMachine\Shielded VM Local Certificates',
 	# switch to skip transcript logging
 	[Parameter(DontShow)]
 	[switch]$SkipTranscript,
@@ -200,20 +203,20 @@ Process {
 		# if named parameter set name defined...
 		If ($PSBoundParameters.ContainsKey('ParameterSetName')) {
 			# get parameters available in named parameter set
-			$Parameters = $ParameterSets.Where({ $_.Name -eq $ParameterSetName }).Parameters
+			$ParametersFromScript = $ParameterSets.Where({ $_.Name -eq $ParameterSetName }).Parameters
 		}
 		# if default parameter set name defined...
 		ElseIf ($ParameterSets.IsDefault) {
 			# get parameters in default parameter set
-			$Parameters = $ParameterSets.Where({ $_.IsDefault }).Parameters
+			$ParametersFromScript = $ParameterSets.Where({ $_.IsDefault }).Parameters
 		}
 		Else {
 			# get parameters
-			$Parameters = $ParameterSets.Parameters
+			$ParametersFromScript = $ParameterSets.Parameters
 		}
 
 		# get parameter names from property names in PSCustomObject for parameters not defined at runtime
-		$ParameterNames = $Parameters.Where({ $ParametersFromJsonObject.PSObject.Properties.Name.Contains($_.Name) -and -not $PSBoundParameters.ContainsKey($_.Name) }).Name
+		$ParameterNames = $ParametersFromScript.Where({ $ParametersFromJsonObject.PSObject.Properties.Name.Contains($_.Name) -and -not $PSBoundParameters.ContainsKey($_.Name) }).Name
 
 		# define parameters from JSON
 		ForEach ($ParameterName in $ParameterNames) {
@@ -234,11 +237,8 @@ Process {
 		}
 	}
 
-	# define certificate store
-	$CertStoreLocation = 'Cert:\LocalMachine\Shielded VM Local Certificates'
-
 	# create CertStoreLocation if not found
-	If (-not (Test-Path -Path $CertStoreLocation)) {
+	If (!(Test-Path -Path $CertStoreLocation)) {
 		Try {
 			$null = New-Item -Path $CertStoreLocation -ItemType 'Directory' -ErrorAction 'Stop'
 		}
