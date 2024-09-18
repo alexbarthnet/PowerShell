@@ -726,7 +726,7 @@ Function Get-CmsCredential {
 	# if file path provided...
 	If ($PSBoundParameters.ContainsKey('FilePath')) {
 		# if file path is not a file...
-		If (![System.IO.File]::Exists($local:PfxFile)) {
+		If (![System.IO.File]::Exists($local:FilePath)) {
 			Write-Warning -Message "could not locate credential file with '$local:FilePath' path on host: $local:Hostname"
 			Return $null
 		}
