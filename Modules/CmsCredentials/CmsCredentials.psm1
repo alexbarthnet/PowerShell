@@ -1106,6 +1106,18 @@ Function Protect-CmsCredential {
 		Return
 	}
 
+	# if folder path not found...
+	If (!(Test-Path -Path $local:Path -PathType 'Container')) {
+		# create path
+		Try {
+			$null = New-Item -ItemType Directory -Path $local:Path -Verbose -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not create folder with '$local:Path' on host: $local:Hostname"
+			Throw $_
+		}
+	}
+
 	# if CMS credential file found...
 	If (Test-Path -Path $OutFile -PathType 'Leaf') {
 		# if force and reset not set...
