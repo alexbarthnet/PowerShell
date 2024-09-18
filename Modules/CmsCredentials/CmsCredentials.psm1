@@ -1153,12 +1153,12 @@ Function Protect-CmsCredential {
 		Throw $_
 	}
 
-	# insert subject line into content of credential file
+	# insert subject and thumbprint lines into content of credential file
 	Try {
-		$Value = $Content.Insert(0, "Subject: $($Certificate.Subject)`r`n")
+		$Value = $Content.Insert(0, "Subject: $($Certificate.Subject)`r`nThumbprint: $($Certificate.Thumbprint)`r`n")
 	}
 	Catch {
-		Write-Warning -Message "could not insert certificate subject into credential file on '$Hostname' with path: $OutFile"
+		Write-Warning -Message "could not insert certificate subject and thumbprint into credential file with '$OutFile' path on host: $local:Hostname"
 		Throw $_
 	}
 
