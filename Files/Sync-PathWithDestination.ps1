@@ -153,6 +153,14 @@ Param(
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'Run')]
 	[uint64]$LastSyncTime,
+	# function parameters - commands to run before sync starts
+	[Parameter(ParameterSetName = 'Add')]
+	[Parameter(ParameterSetName = 'Run')]
+	[string[]]$PreSyncCommands,
+	# function parameters - commands to run after sync completes
+	[Parameter(ParameterSetName = 'Add')]
+	[Parameter(ParameterSetName = 'Run')]
+	[string[]]$PostSyncCommands,
 	# switch to skip transcript logging
 	[Parameter(DontShow)]
 	[switch]$SkipTranscript,
@@ -968,6 +976,16 @@ Process {
 					LastSyncTime      = 0
 				}
 
+				# if pre-sync commands provided...
+				If ($PSBoundParameters.ContainsKey('PreSyncCommands')) {
+					$JsonParameters['PreSyncCommands'] = [string[]]$PreSyncCommands
+				}
+
+				# if post-sync commands provided...
+				If ($PSBoundParameters.ContainsKey('PostSyncCommands')) {
+					$JsonParameters['PostSyncCommands'] = [string[]]$PostSyncCommands
+				}
+
 				# add current time as FileDateTimeUniversal
 				$JsonParameters['Updated'] = (Get-Date -Format FileDateTimeUniversal)
 
@@ -1043,12 +1061,32 @@ Process {
 					$SyncItemsInPathWithDestination['WhatIf'] = $true
 				}
 
+				# commands to run before syncing items
+				ForEach ($Command in $JsonEntry.PreSyncCommands) {
+					Try {
+						Invoke-Expression -Command $Command
+					}
+					Catch {
+						Return $_
+					}
+				}
+
 				# sync items in path with destination
 				Try {
 					Sync-ItemsInPathWithDestination @SyncItemsInPathWithDestination
 				}
 				Catch {
 					Return $_
+				}
+
+				# commands to run after syncing items
+				ForEach ($Command in $JsonEntry.PostSyncCommands) {
+					Try {
+						Invoke-Expression -Command $Command
+					}
+					Catch {
+						Return $_
+					}
 				}
 			}
 		}
