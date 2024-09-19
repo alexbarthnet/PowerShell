@@ -109,6 +109,217 @@ Function Invoke-Function {
 	}
 }
 
+Function Find-CmsCertificate {
+	<#
+	.SYNOPSIS
+	Retrieves a certificate used to protect a credential with CMS.
+
+	.DESCRIPTION
+	Retrieves a certificate used to protect a credential with CMS.
+
+	.PARAMETER Identity
+	Specifies the identity of an existing CMS certificate. Cannot be combined with the Thumbprint or PfxFile parameters.
+
+	.PARAMETER Thumbprint
+	Specifies the thumbprint of an existing CMS certificate. Cannot be combined with the Identity or PfxFile parameters.
+
+	.PARAMETER PfxFile
+	Specifies the path to a PFX file containing an existing CMS certificate. Cannot be combined with the Identity or Thumbprint parameters.
+
+	.PARAMETER All
+	Specifies that all matching CMS certificates should be returned. Requires the Identity parameter.
+
+	.PARAMETER Password
+	Specifies the password to the PFX file as a secure string. Requires the PfxFile parameter.
+
+	.INPUTS
+	None.
+
+	.OUTPUTS
+	System.Security.Cryptography.X509Certificates.X509Certificate2
+
+	.EXAMPLE
+	PS> Find-CmsCertificate -Identity "testcredential"
+
+	#>
+
+	[CmdletBinding(DefaultParameterSetName = 'Identity')]
+	Param(
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'Identity')]
+		[string]$Identity,
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'Thumbprint')]
+		[string]$Thumbprint,
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'PfxFile')]
+		[string]$PfxFile,
+		[Parameter(Position = 1, Mandatory = $false, ParameterSetName = 'Identity')]
+		[switch]$All,
+		[Parameter(Position = 1, Mandatory = $false, ParameterSetName = 'PfxFile')]
+		[securestring]$Password,
+		[Parameter(Mandatory = $false)]
+		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
+		[Parameter(DontShow)]
+		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
+	)
+
+	# if an identity provided...
+	If ($PSBoundParameters.ContainsKey('Identity')) {
+		# define parameters string for reporting
+		$Parameters = "with '{0}' identity in '{1}' store" -f $local:Identity, $local:CertStoreLocation
+
+		# retrieve CMS certificates
+		Try {
+			$Certificates = Get-ChildItem -Path $local:CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve Document Encryption certificates from '$local:CertStoreLocation' store on host: $local:Hostname"
+			Throw $_
+		}
+
+		# define pattern matches a GUID
+		$Pattern = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+
+		# define a string that starts with an organizational unit of Identity and ends with with organization of CmsCredentials
+		$Tail = "OU=$Identity, O=CmsCredentials"
+
+		# filter certificate where subject matches pattern and ends with tail
+		Try {
+			$MatchingCertificates = $local:Certificates.Where({ $_.GetNameInfo('SimpleName', $false) -match $local:Pattern -and $_.Subject.EndsWith($local:Tail, [System.StringComparer]::InvariantCultureIgnoreCase) })
+		}
+		Catch {
+			Write-Warning -Message "could not filter retrieved certificates on host: $local:Hostname"
+			Throw $_
+		}
+
+		# if all certificates requested...
+		If ($PSBoundParameters.ContainsKey('All')) {
+			# return all matching certificates
+			Return $MatchingCertificates
+		}
+
+		# retrieve latest certificate
+		Try {
+			$Certificate = $local:MatchingCertificates | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
+		}
+		Catch {
+			Write-Warning -Message "could not sort or select Document Encryption certificate in '$local:CertStoreLocation' on host: $local:Hostname"
+			Throw $_
+		}
+	}
+
+	# if thumbprint provided...
+	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
+		# define parameters string for reporting
+		$Parameters = "with '{0}' thumbprint in '{1}' store" -f $local:Thumbprint, $local:CertStoreLocation
+
+		# create path for certificate by thumbprint
+		$CertificatePath = Join-Path -Path $local:CertStoreLocation -ChildPath $local:Thumbprint
+
+		# retrieve certificate by thumbprint
+		Try {
+			$Certificate = Get-Item -Path $local:CertificatePath -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not locate certificate $local:Parameters on host: $local:Hostname"
+			Throw $_
+		}
+	}
+
+	# if PFX file provided...
+	If ($PSBoundParameters.ContainsKey('PfxFile')) {
+		# define parameters string for reporting
+		$Parameters = "from '{0}' path" -f $local:PfxFile
+
+		# if PFX file is not a file...
+		If (![System.IO.File]::Exists($local:PfxFile)) {
+			Write-Warning -Message "could not locate PFX file $local:Parameters on host: $local:Hostname"
+			Return $null
+		}
+
+		# define required parameters for Get-PfxData
+		$GetPfxData = @{
+			FilePath    = $local:PfxFile
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# define optional parameters for Get-PfxData
+		If ($PSBoundParameters.ContainsKey('Password')) {
+			$GetPfxData.Add('Password', $local:Password)
+		}
+
+		# get PFX data from PFX file
+		Try {
+			$PfxData = Get-PfxData @local:GetPfxData
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve PFX data $local:Parameters on host: $local:Hostname"
+			Throw $_
+		}
+
+		# filter certificate by EKU
+		Try {
+			$local:MatchingCertificates = $local:PfxData.EndEntityCertificates.Where({ $_.EnhancedKeyUsageList.FriendlyName -contains 'Document Encryption' })
+		}
+		Catch {
+			Write-Warning -Message "could not filter for Document Encryption certificates in PFX data $local:Parameters on host: $local:Hostname"
+			Throw $_
+		}
+
+		# retrieve latest certificate
+		Try {
+			$Certificate = $local:MatchingCertificates | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
+		}
+		Catch {
+			Write-Warning -Message "could not create certificate object $local:Parameters on host: $local:Hostname"
+			Throw $_
+		}
+	}
+
+	# if certificate not found...
+	If (!$local:Certificate) {
+		Return $null
+	}
+
+	# define invalid subject string...
+	$InvalidSubject = [System.Collections.Generic.List[System.String]]::new()
+
+	# if invalid certificate subject found...
+	switch ($local:Certificate.Subject) {
+		# empty string
+		{ [string]::IsNullOrEmpty($_) } {
+			$InvalidSubject.Add('empty string')
+		}
+		# escaped backslash
+		{ $_.Contains('\\') } {
+			$InvalidSubject.Add('escaped backslash')
+		}
+		# escaped comma
+		{ $_.Contains('\,') } {
+			$InvalidSubject.Add('escaped comma')
+		}
+		# escaped equal sign
+		{ $_.Contains('\=') } {
+			$InvalidSubject.Add('escaped equal sign')
+		}
+		# escaped double quotation mark
+		{ $_.Contains('\"') } {
+			$InvalidSubject.Add('escaped double quotes')
+		}
+		# escaped single quotation mark
+		{ $_.Contains('\''') } {
+			$InvalidSubject.Add('escaped single quotes')
+		}
+	}
+
+	# if invalid subject defined...
+	If ($local:InvalidSubject.Count) {
+		Write-Warning -Message "found certificate with an invalid subject ($($local:InvalidSubject -join ', ') $local:Parameters on host: $local:Hostname"
+		Return $null
+	}
+
+	# return certificate
+	Return $local:Certificate
+}
+
 Function Get-CertificatePrivateKeyPath {
 	<#
 	.SYNOPSIS
@@ -2358,6 +2569,7 @@ Function Write-CmsCredentialSettings {
 
 # define functions to export
 $FunctionsToExport = @(
+	'Find-CmsCertificate'
 	'Export-CmsCredentialCertificate'
 	'New-CmsCredentialCertificate'
 	'Get-CmsCredential'
