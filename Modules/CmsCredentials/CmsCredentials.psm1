@@ -530,59 +530,21 @@ Function New-CmsCredentialCertificate {
 
 	# if computername provided...
 	If ($PSBoundParameters.ContainsKey('ComputerName')) {
-		# remove ComputerName parameter from bound parameters
-		$null = $PSBoundParameters.Remove('ComputerName')
-
-		# define required functions
-		$FunctionNames = 'Test-CmsInvalidIdentity', 'New-CmsCredentialCertificate'
-
-		# define list for function script blocks
-		$FunctionScriptBlocks = [System.Collections.Generic.List[System.String]]::new()
-
-		# add script block for required functions to list
-		ForEach ($FunctionName in $FunctionNames) {
-			# get function definition
-			Try {
-				$FunctionDefinition = (Get-Command -Name $FunctionName -ErrorAction 'Stop').Definition
-			}
-			Catch {
-				Write-Warning -Message "could not retrieve definition on '$Hostname' for function: $FunctionName"
-				Throw $_
-			}
-			# create function script block and add to list
-			$FunctionScriptBlocks.Add("function $FunctionName {$FunctionDefinition}")
+		# define parameters for Invoke-Function
+		$InvokeFunction = @{
+			ComputerName = $ComputerName
 		}
 
-		# create certificate for credential on remote computer
-		ForEach ($RemoteComputerName in $ComputerName) {
-			# if remote computer name is local computer name...
-			If ($RemoteComputerName -match "^$Hostname($|\..*)") {
-				# set include local computer then continue
-				$local:IncludeLocalComputer = $true
-				Continue
-			}
-			# run function on remote computer
-			Try {
-				Invoke-Command -ComputerName $RemoteComputerName -ScriptBlock {
-					# import functions
-					ForEach ($FunctionScriptBlock in $using:FunctionScriptBlocks) {
-						. ([ScriptBlock]::Create($FunctionScriptBlock))
-					}
-					# run functions
-					New-CmsCredentialCertificate @using:PSBoundParameters
-				}
-			}
-			Catch {
-				Write-Warning -Message "could not invoke function(s) on '$RemoteComputerName' computer: $($_.Exception.Message)"
-				Throw $_
-			}
+		# invoke function remotely
+		Try {
+			Invoke-Function @InvokeFunction
+		}
+		Catch {
+			Throw $_
 		}
 
-		# if include local computer not set...
-		If ($null -eq $local:IncludeLocalComputer) {
-			# return after running function on remote computers
-			Return
-		}
+		# return calling Invoke-Function
+		Return
 	}
 
 	# define certificate values
