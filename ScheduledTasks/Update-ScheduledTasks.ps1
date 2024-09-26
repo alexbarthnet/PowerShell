@@ -2578,7 +2578,7 @@ Process {
 						Write-Warning -Message 'optional value (TriggerAt) found in configuration file but cannot be parsed into a datetime object'
 						Continue NextJsonEntry
 					}
-					($null -ne $JsonEntry.RandomDelay -and -not [datetime]::TryParse($JsonEntry.RandomDelay, [ref][timespan]::Zero)) {
+					($null -ne $JsonEntry.RandomDelay -and -not [timespan]::TryParse($JsonEntry.RandomDelay, [ref][timespan]::Zero)) {
 						Write-Warning -Message 'optional value (RandomDelay) found in configuration file but cannot be parsed into a timespan object'
 						Continue NextJsonEntry
 					}
@@ -2586,7 +2586,7 @@ Process {
 						Write-Warning -Message 'optional value (RandomDelayTime) found in configuration file but cannot be parsed into a datetime object'
 						Continue NextJsonEntry
 					}
-					($null -ne $JsonEntry.RepetitionInterval -and -not [datetime]::TryParse($JsonEntry.RepetitionInterval, [ref][timespan]::Zero)) {
+					($null -ne $JsonEntry.RepetitionInterval -and -not [timespan]::TryParse($JsonEntry.RepetitionInterval, [ref][timespan]::Zero)) {
 						Write-Warning -Message 'optional value (RepetitionInterval) found in configuration file but cannot be parsed into a timespan object'
 						Continue NextJsonEntry
 					}
@@ -2594,7 +2594,7 @@ Process {
 						Write-Warning -Message 'optional value (RepetitionIntervalTime) found in configuration file but cannot be parsed into a datetime object'
 						Continue NextJsonEntry
 					}
-					($null -ne $JsonEntry.ExecutionTimeLimit -and -not [datetime]::TryParse($JsonEntry.ExecutionTimeLimit, [ref][timespan]::Zero)) {
+					($null -ne $JsonEntry.ExecutionTimeLimit -and -not [timespan]::TryParse($JsonEntry.ExecutionTimeLimit, [ref][timespan]::Zero)) {
 						Write-Warning -Message 'optional value (ExecutionTimeLimit) found in configuration file but cannot be parsed into a timespan object'
 						Continue NextJsonEntry
 					}
