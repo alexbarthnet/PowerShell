@@ -1382,6 +1382,15 @@ Begin {
 		}
 	}
 
+	# create variable for parameters of transcript functions
+	New-Variable -Name 'TranscriptParameters' -Value @{} -Scope 'Script' -Force
+
+	# create variable for parameters of text output functions
+	New-Variable -Name 'TextOutputParameters' -Value @{} -Scope 'Script' -Force
+
+	# create variable for active path of text output file
+	New-Variable -Name 'TextOutputActivePath' -Value ([string]::Empty) -Scope 'Script' -Force
+
 	## end TranscriptForCommand functions
 
 	Function Compare-CimInstance {
