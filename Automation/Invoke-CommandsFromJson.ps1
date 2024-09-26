@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-Run a PowerShell command with optional parameters from a JSON file.
+Run one or more PowerShell commands with optional parameters from a JSON file.
 
 .DESCRIPTION
-Run a PowerShell command with optional parameters from a JSON file. The command can be an existing cmdlet, function, or script.
+Run one or more PowerShell commands with optional parameters from a JSON file. The commands can be existing cmdlets, functions, or scripts.
 
 .PARAMETER Json
 The path to a JSON file containing the configuration for this script.
