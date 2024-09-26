@@ -875,7 +875,7 @@ Begin {
 
 		# remove new lines from message
 		Try {
-			$MessageWithoutNewLines = $Message.Replace("`r`n", ' ').Replace("`n", ' ').Replace("`r", ' ')
+			$MessageWithoutNewLines = $Message.Replace("`r`n", '   ').Replace("`n", '   ')
 		}
 		Catch {
 			$PSCmdlet.ThrowTerminatingError($_)
