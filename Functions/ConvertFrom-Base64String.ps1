@@ -7,9 +7,9 @@ Function ConvertFrom-Base64String {
 	)
 
 	Switch ($Encoding) {
-		{ 'Unicode' } { [System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($String)); Break }
-		{ 'ASCII' } { [System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String($String)); Break }
-		{ 'UTF8' } { [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($String)); Break }
+		'Unicode' { [System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($String)); Break }
+		'ASCII' { [System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String($String)); Break }
+		'UTF8' { [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($String)); Break }
 		Default { Write-Error -Message 'Unsupported or unknown encoding format' }
 	}
 }
