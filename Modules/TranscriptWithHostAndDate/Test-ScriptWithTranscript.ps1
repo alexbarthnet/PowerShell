@@ -100,16 +100,23 @@ Process {
 	Try {
 		# insert commands here
 		$PSCallStack = Get-PSCallStack
-		# write to transcript example
-		Write-TranscriptWithHostAndDate -Message 'retrieved PSCallStack'
-		# write verbose to transcript example
+		# if information preference is ignore...
+		If ($InformationPreference -eq 'Ignore') {
+			# example write to information output stream written to transcript only via Write-Information
+			Write-Information -Message 'retrieved PSCallStack'
+		}
+		Else {
+			# example write to information output stream written to transcript and console via Write-Host
+			Write-Host -Object 'retrieved PSCallStack'
+		}
+		# example write to verbose output stream written to transcript and displayed on the console
 		If ($VerbosePreference -eq 'Continue') {
-			Write-VerboseToTranscriptWithHostAndDate -Message $PSCallStack.ToString()
+			Write-Verbose -Message $PSCallStack.ToString()
 		}
 	}
 	Catch {
 		# write to transcript example for warning
-		Write-WarningToTranscriptWithHostAndDate -Message $_.ToString()
+		Write-Warning -Message $_.ToString()
 		# use return to hand errors to the calling function or console
 		Return $_
 		# avoid using Throw in the Process section; calling Throw will terminate the script, skip the End block, and skip transcript cleanup
