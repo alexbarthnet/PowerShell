@@ -103,7 +103,7 @@ Function Invoke-Function {
 			Invoke-Command -ComputerName $local:RemoteComputerName -ScriptBlock $local:ScriptBlock
 		}
 		Catch {
-			Write-Warning -Message "could not invoke function(s) on '$local:RemoteComputerName' computer: $($_.Exception.Message)"
+			Write-Warning -Message "could not invoke $local:Function function on remote host: $local:RemoteComputerName"
 			Throw $_
 		}
 	}
