@@ -1624,7 +1624,7 @@ Process {
 
 				# call script or function with parameters
 				Try {
-					& $JsonEntry.Command @Parameters
+					. $JsonEntry.Command @Parameters
 				}
 				Catch {
 					Write-Warning -Message "exception caught calling '$($JsonEntry.Command)' $CommandType command: $($_.Exception.ToString())"
