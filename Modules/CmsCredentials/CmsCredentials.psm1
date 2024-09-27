@@ -1187,7 +1187,7 @@ Function Protect-CmsCredential {
 	)
 
 	# if identity is too long or contains invalid characters...
-	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-CmsInvalidIdentity -Identity $Identity)) {
+	If ($PSBoundParameters.ContainsKey('Identity') -and (Test-CmsInvalidIdentity -Identity $local:Identity)) {
 		# warn and return
 		Write-Warning -Message "the value provided for the Identity parameter contains more than 64 characters or one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
 		Return
@@ -1252,7 +1252,7 @@ Function Protect-CmsCredential {
 		If (!$local:Reset) {
 			# find CMS certificate with identity
 			Try {
-				$Certificate = Find-CmsCertificate -Identity $local:Identity -CertStoreLocation $local:CertStoreLocation
+				$Certificate = Find-CmsCertificate -Identity $local:Identity -CertStoreLocation $local:CertStoreLocation -AllowEmptyReturn
 			}
 			Catch {
 				Throw $_
