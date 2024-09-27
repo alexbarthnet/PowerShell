@@ -1046,70 +1046,70 @@ Function Get-CmsCredential {
 
 	# decrypt content of credential file
 	Try {
-		$InputObject = Unprotect-CmsMessage @UnprotectCmsMessage
+		$InputObject = Unprotect-CmsMessage @local:UnprotectCmsMessage
 	}
 	Catch {
-		Write-Warning -Message "could not decrypt content in file: '$FilePath'"
+		Write-Warning -Message "could not decrypt content in file with '$local:FilePath' path on host: $local:Hostname"
 		Throw $_
 	}
 
 	# convert content from JSON string into custom object
 	Try {
-		$PSCustomObject = ConvertFrom-Json -InputObject $InputObject -ErrorAction 'Stop'
+		$PSCustomObject = ConvertFrom-Json -InputObject $local:InputObject -ErrorAction 'Stop'
 	}
 	Catch {
-		Write-Warning -Message "could not convert decrypted content in file: '$FilePath'"
+		Write-Warning -Message "could not convert decrypted content in file with '$local:FilePath' path on host: $local:Hostname"
 		Throw $_
 	}
 
 	# verify username property
-	If ($null -eq $PSCustomObject.Username) {
-		Write-Warning -Message "could not locate 'Username' property on '$Hostname' in file: '$FilePath'"
+	If ($null -eq $local:PSCustomObject.Username) {
+		Write-Warning -Message "could not locate 'Username' property in file with '$local:FilePath' path on host: $local:Hostname"
 		Throw [System.Management.Automation.ItemNotFoundException]
 	}
 
 	# verify password property
-	If ($null -eq $PSCustomObject.Password) {
-		Write-Warning -Message "could not locate 'Password' property on '$Hostname' in file: '$FilePath'"
+	If ($null -eq $local:PSCustomObject.Password) {
+		Write-Warning -Message "could not locate 'Password' property in file with '$local:FilePath' path on host: $local:Hostname"
 		Throw [System.Management.Automation.ItemNotFoundException]
 	}
 
 	# if plain text requested...
 	If ($local:AsPlainText) {
 		# return the PSCustomObject as-is
-		Return $PSCustomObject
+		Return $local:PSCustomObject
 	}
 
 	# if domain not included in credential...
-	If ([string]::IsNullOrEmpty($PSCustomObject.Domain)) {
+	If ([string]::IsNullOrEmpty($local:PSCustomObject.Domain)) {
 		# retrieve username from object as-is
-		$Username = $PSCustomObject.Username
+		$Username = $local:PSCustomObject.Username
 	}
 	Else {
 		# combine domain and username from object
-		$Username = $PSCustomObject.Domain, $PSCustomObject.Username -join '\'
+		$Username = $local:PSCustomObject.Domain, $local:PSCustomObject.Username -join '\'
 	}
 
 	# convert password property into secure string
 	Try {
-		$SecureString = ConvertTo-SecureString -String $PSCustomObject.Password -AsPlainText -Force -ErrorAction 'Stop'
+		$SecureString = ConvertTo-SecureString -String $local:PSCustomObject.Password -AsPlainText -Force -ErrorAction 'Stop'
 	}
 	Catch {
-		Write-Warning -Message "could not convert 'Password' property on '$Hostname' to a SecureString"
+		Write-Warning -Message "could not convert 'Password' property to a SecureString on host: $local:Hostname"
 		Throw $_
 	}
 
 	# create PSCredential object
 	Try {
-		$PSCredential = [System.Management.Automation.PSCredential]::new($Username, $SecureString)
+		$PSCredential = [System.Management.Automation.PSCredential]::new($local:Username, $local:SecureString)
 	}
 	Catch {
-		Write-Warning -Message "could not create PSCredential object on '$Hostname' for identity: $Identity"
+		Write-Warning -Message "could not create PSCredential object on host: $local:Hostname"
 		Throw $_
 	}
 
 	# return PSCredential object
-	Return $PSCredential
+	Return $local:PSCredential
 }
 
 Function Protect-CmsCredential {
@@ -1199,7 +1199,7 @@ Function Protect-CmsCredential {
 	If ($PSBoundParameters.ContainsKey('ComputerName')) {
 		# define parameters for Invoke-Function
 		$InvokeFunction = @{
-			ComputerName          = $ComputerName
+			ComputerName          = $local:ComputerName
 			AdditionalFunctions   = 'Test-CmsInvalidIdentity', 'Test-CmsInvalidSubject', 'New-CmsCredentialCertificate', 'Remove-CmsCredential'
 			PrerequisiteFunctions = 'Initialize-CmsCredentialSettings'
 		}
@@ -1311,7 +1311,7 @@ Function Protect-CmsCredential {
 	}
 
 	# if folder path not found...
-	If (!(Test-Path -Path $local:Path -PathType 'Container')) {
+	If (![System.IO.Directory]::Exists($local:Path)) {
 		# create path
 		Try {
 			$null = New-Item -ItemType Directory -Path $local:Path -Verbose -ErrorAction 'Stop'
@@ -1323,10 +1323,10 @@ Function Protect-CmsCredential {
 	}
 
 	# if CMS credential file found...
-	If (Test-Path -Path $OutFile -PathType 'Leaf') {
+	If ([System.IO.File]::Exists($local:OutFile)) {
 		# if force and reset not set...
-		If (!$local:Force -and -not $local:Reset) {
-			Write-Warning -Message "existing credential file found; continue to overwrite file with '$OutFile' path on host: $local:Hostname" -WarningAction 'Inquire'
+		If (!$local:Force -and !$local:Reset) {
+			Write-Warning -Message "existing credential file found; continue to overwrite file with '$local:OutFile' path on host: $local:Hostname" -WarningAction 'Inquire'
 		}
 	}
 
@@ -1341,7 +1341,7 @@ Function Protect-CmsCredential {
 
 	# encrypt credentials to recipient
 	Try {
-		Protect-CmsMessage -To $Certificate -Content $Content -OutFile $OutFile -ErrorAction 'Stop'
+		Protect-CmsMessage -To $local:Certificate -Content $local:Content -OutFile $local:OutFile -ErrorAction 'Stop'
 	}
 	Catch {
 		Write-Warning -Message "could not encrypt credential to certificate with '$($Certificate.Subject)' subject on host: $local:Hostname"
