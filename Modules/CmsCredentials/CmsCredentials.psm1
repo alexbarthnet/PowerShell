@@ -70,9 +70,9 @@ Function Invoke-Function {
 	:NextRemoteComputer ForEach ($RemoteComputerName in $local:ComputerName) {
 		# if remote computer name is local computer name...
 		If ($RemoteComputerName.Split('.')[0] -eq $local:Hostname) {
-			# run prerequisite functions
+			# run prerequisite functions on local computer
 			ForEach ($PrerequisiteFunction in $local:PrerequisiteFunctions) {
-				& $PrerequisiteFunction
+				. $PrerequisiteFunction
 			}
 
 			# run function
@@ -91,11 +91,11 @@ Function Invoke-Function {
 
 			# run prerequisite functions
 			ForEach ($PrerequisiteFunction in $using:PrerequisiteFunctions) {
-				& $PrerequisiteFunction
+				. $PrerequisiteFunction
 			}
 
 			# run function
-			& $using:Function @using:Parameters
+			. $using:Function @using:Parameters
 		}
 
 		# run function on remote computer
