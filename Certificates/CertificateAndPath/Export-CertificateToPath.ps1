@@ -160,13 +160,13 @@ Begin {
 			$Built = $X509Chain.Build($Certificate)
 		}
 		Catch {
-			Write-Host "ERROR: building certificate chain for '$($Certificate.Subject)'"
+			Write-Warning -Message "building certificate chain for '$($Certificate.Subject)'"
 			Throw $_
 		}
 
 		# if chain was not built...
 		If ($Built -eq $false) {
-			Write-Host "ERROR: unable to build certificate chain for '$($Certificate.Subject)'"
+			Write-Warning -Message "unable to build certificate chain for '$($Certificate.Subject)'"
 			Return
 		}
 
@@ -215,7 +215,7 @@ Begin {
 				Write-Host " - exported certificate file to : $FilePath"
 			}
 			Catch {
-				Write-Host "ERROR: exporting certificate for: '$($ChainElement.Subject)'"
+				Write-Warning -Message "exporting certificate for: '$($ChainElement.Subject)'"
 				Continue ChainElement
 			}
 		}
@@ -287,7 +287,7 @@ Begin {
 			Write-Host " - exported PFX file to         : $FilePath"
 		}
 		Catch {
-			Write-Host "ERROR: exporting PFX file for: '$($Certificate.Subject)'"
+			Write-Warning -Message "exporting PFX file for: '$($Certificate.Subject)'"
 			Throw $_
 		}
 	}
@@ -318,7 +318,7 @@ Begin {
 		# if no exportable certificates found...
 		If ($Certificates.Count -eq 0) {
 			# declare and return
-			Write-Host "`nERROR: no certificates found with subject: $Subject"
+			Write-Warning -Message "no certificates found with subject: $Subject"
 			Return
 		}
 
@@ -373,7 +373,7 @@ Process {
 			$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 		}
 		Catch {
-			Write-Output "`nERROR: could not read configuration file: '$Json'"
+			Write-Warning -Message "could not read configuration file: '$Json'"
 			Return $_
 		}
 	}
@@ -386,7 +386,7 @@ Process {
 				$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
 			}
 			Catch {
-				Write-Output "`nERROR: could not create configuration file: '$Json'"
+				Write-Warning -Message "could not create configuration file: '$Json'"
 				Return $_
 			}
 			# ...create JSON data object as empty array
@@ -395,7 +395,7 @@ Process {
 		# ...and Add not set...
 		Else {
 			# ...report and return
-			Write-Output "`nERROR: could not find configuration file: '$Json'"
+			Write-Warning -Message "could not find configuration file: '$Json'"
 			Return
 		}
 	}
@@ -404,17 +404,17 @@ Process {
 	switch ($true) {
 		# show configuration file
 		$Show {
-			Write-Output "`nDisplaying '$Json'"
+			Write-Host "`nDisplaying '$Json'"
 			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 		# clear configuration file
 		$Clear {
 			Try {
 				[string]::Empty | Set-Content -Path $Json
-				Write-Output "`nCleared configuration file: '$Json'"
+				Write-Host "`nCleared configuration file: '$Json'"
 			}
 			Catch {
-				Write-Output "`nERROR: could not clear configuration file: '$Json'"
+				Write-Warning -Message "could not clear configuration file: '$Json'"
 				Return $_
 			}
 		}
@@ -424,16 +424,16 @@ Process {
 				$JsonData = $JsonData | Where-Object { $_.Subject -ne $Subject }
 				If ($null -eq $JsonData) {
 					[string]::Empty | Set-Content -Path $Json
-					Write-Output "`nRemoved '$Subject' from configuration file: '$Json'"
+					Write-Host "`nRemoved '$Subject' from configuration file: '$Json'"
 				}
 				Else {
 					$JsonData | ConvertTo-Json | Set-Content -Path $Json
-					Write-Output "`nRemoved '$Subject' from configuration file: '$Json'"
+					Write-Host "`nRemoved '$Subject' from configuration file: '$Json'"
 				}
 				$JsonData | Format-List
 			}
 			Catch {
-				Write-Output "`nERROR: could not update configuration file: '$Json'"
+				Write-Warning -Message "could not update configuration file: '$Json'"
 				Return $_
 			}
 		}
@@ -462,11 +462,11 @@ Process {
 				# add datum to data
 				$JsonData += $JsonDatum
 				$JsonData | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-				Write-Output "`nAdded '$Subject' to configuration file: '$Json'"
+				Write-Host "`nAdded '$Subject' to configuration file: '$Json'"
 				$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			Catch {
-				Write-Output "`nERROR: could not update configuration file: '$Json'"
+				Write-Warning -Message "could not update configuration file: '$Json'"
 				Return $_
 			}
 		}
@@ -479,7 +479,7 @@ Process {
 
 			# validate $Result values
 			If ([string]::IsNullOrEmpty($cert_name) -or [string]::IsNullOrEmpty($cert_date) -or [string]::IsNullOrEmpty($cert_hash)) {
-				Write-Host "ERROR: one or more values from `$Result was null or empty"
+				Write-Warning -Message "one or more values from `$Result was null or empty"
 				Return
 			}
 
@@ -492,7 +492,7 @@ Process {
 			# if configuration file is empty...
 			If ($JsonData.Count -eq 0) {
 				# ...announce error and return
-				Write-Output "ERROR: no entries found in input file: $Json"
+				Write-Warning -Message "no entries found in input file: $Json"
 				Return
 			}
 			# if configuration file is not empty...
@@ -510,7 +510,7 @@ Process {
 			# if default entry not found in configuration file...
 			If ($null -eq $Defined) {
 				# ...announce error and return
-				Write-Output "ERROR: unable to locate matching subject or '_default' entry with valid path and principals"
+				Write-Warning -Message "unable to locate matching subject or '_default' entry with valid path and principals"
 				Return
 			}
 
@@ -545,7 +545,7 @@ Process {
 				Export-PfxCertificateToPrincipals @ExportPfxCertificateToPrincipals
 			}
 			Catch {
-				Write-Output 'ERROR: unable to export PFX certificate'
+				Write-Warning -Message "unable to export PFX certificate: $($_.ToString())"
 				Return $_
 			}
 		}
@@ -555,7 +555,7 @@ Process {
 
 			# check entry count in configuration file
 			If ($JsonData.Count -eq 0) {
-				Write-Host "ERROR: no entries found in configuration file: $Json"
+				Write-Warning -Message "no entries found in configuration file: $Json"
 				Return
 			}
 
@@ -563,13 +563,13 @@ Process {
 			:JsonDatum ForEach ($JsonDatum in $JsonData) {
 				switch ($true) {
 					([string]::IsNullOrEmpty($JsonDatum.Subject)) {
-						Write-Host "ERROR: required entry (Subject) not found in configuration file: $Json"; Continue :JsonDatum
+						Write-Warning -Message "required entry (Subject) not found in configuration file: $Json"; Continue :JsonDatum
 					}
 					([string]::IsNullOrEmpty($JsonDatum.Path)) {
-						Write-Host "ERROR: required entry (Path) not found in configuration file: $Json"; Continue :JsonDatum
+						Write-Warning -Message "required entry (Path) not found in configuration file: $Json"; Continue :JsonDatum
 					}
 					([string]::IsNullOrEmpty($JsonDatum.Principals)) {
-						Write-Host "ERROR: required entry (Principals) not found in configuration file: $Json"; Continue :JsonDatum
+						Write-Warning -Message "required entry (Principals) not found in configuration file: $Json"; Continue :JsonDatum
 					}
 					Default {
 						# declare JSON entry contents
@@ -589,7 +589,7 @@ Process {
 							Export-PfxCertificateToFolder @ExportPfxCertificateToFolder
 						}
 						Catch {
-							Write-Host 'ERROR: could not export certificate:' $_.ToString()
+							Write-Warning -Message "could not export certificate: $($_.ToString())"
 							Continue :JsonDatum
 						}
 					}
