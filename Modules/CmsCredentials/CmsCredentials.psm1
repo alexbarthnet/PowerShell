@@ -59,7 +59,7 @@ Function Invoke-Function {
 		# if function definition is empty...
 		If ([string]::IsNullOrEmpty($local:FunctionDefinition)) {
 			Write-Warning -Message "found empty definition for '$FunctionName' function on host: $local:Hostname"
-			Throw [System.Management.Automation.ErrorRecord]::new([System.ArgumentException]::new(), "Function definition is an empty string", 'InvalidData', $FunctionName)
+			Throw [System.Management.Automation.ErrorRecord]::new([System.ArgumentException]::new(), 'Function definition is an empty string', 'InvalidData', $FunctionName)
 		}
 
 		# create function script block and add to list
