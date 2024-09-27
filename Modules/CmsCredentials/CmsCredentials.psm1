@@ -789,7 +789,7 @@ Function New-CmsCredentialCertificate {
 		}
 		Default {
 			# declare and return null
-			Write-Warning 'CmsCredentials cannot create self-signed certificates on non-Windows platforms'
+			Write-Warning -Message 'CmsCredentials cannot create self-signed certificates on non-Windows platforms'
 			Return $null
 		}
 	}
@@ -1861,7 +1861,7 @@ Function Update-CmsCredentialAccess {
 		# define parameters for Invoke-Function
 		$InvokeFunction = @{
 			ComputerName          = $ComputerName
-			AdditionalFunctions   = 'Test-CmsInvalidIdentity', 'Test-CmsInvalidSubject', 'Get-CertificatePrivateKeyPath'
+			AdditionalFunctions   = 'Find-CmsCertificate', 'Test-CmsInvalidIdentity', 'Get-CertificatePrivateKeyPath'
 			PrerequisiteFunctions = 'Initialize-CmsCredentialSettings'
 		}
 
