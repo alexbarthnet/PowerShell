@@ -1869,35 +1869,30 @@ Function Update-CmsCredentialAccess {
 
 	# if thumbprint provided...
 	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
-		# create path for certificate by thumbprint
-		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
-		# retrieve certificate by thumbprint
+		# find CMS certificate with thumbprint
 		Try {
-			$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
+			$Certificate = Find-CmsCertificate -Thumbprint $local:Thumbprint -CertStoreLocation $local:CertStoreLocation
 		}
 		Catch {
-			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
 			Throw $_
 		}
 	}
-	# if thumbprint not provided...
-	Else {
-		# define pattern as organizational unit of Identity followed by organization of CmsCredentials
-		$Pattern = "OU=$Identity, O=CmsCredentials$"
-		# retrieve latest certificate with matching subject
+
+	# if identity provided...
+	If ($PSBoundParameters.ContainsKey('Identity')) {
+		# find CMS certificate with identity
 		Try {
-			$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_.Subject -Pattern $Pattern -Quiet } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
+			$Certificate = Find-CmsCertificate -Identity $local:Identity -CertStoreLocation $local:CertStoreLocation
 		}
 		Catch {
 			Throw $_
 		}
+	}
 
-		# if certificate not found...
-		If ($null -eq $local:Certificate) {
-			# declare and return
-			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with identity: $Identity"
-			Throw [System.Management.Automation.ItemNotFoundException]
-		}
+	# if certificate not found...
+	If (!$local:Certificate) {
+		# return without warning; warnings provided by Find-CmsCertificate
+		Return
 	}
 
 	# retrieve private key path
@@ -1913,7 +1908,7 @@ Function Update-CmsCredentialAccess {
 	If ($null -eq $local:Path) {
 		# declare and return
 		Write-Warning -Message "could not locate private key for certificate on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
-		Throw [System.Management.Automation.ItemNotFoundException]
+		Return
 	}
 
 	# retrieve private key permissions
