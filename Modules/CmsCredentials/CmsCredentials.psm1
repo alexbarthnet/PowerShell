@@ -1900,14 +1900,14 @@ Function Update-CmsCredentialAccess {
 		$Path = Get-CertificatePrivateKeyPath -Certificate $Certificate
 	}
 	Catch {
-		Write-Warning -Message "could not retrieve path to private key for certificate on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
+		Write-Warning -Message "could not retrieve path to private key for certificate with $($local:Certificate.Thumbprint)' thumbprint on host: $local:Hostname"
 		Throw $_
 	}
 
 	# if private key path not found...
 	If ($null -eq $local:Path) {
 		# declare and return
-		Write-Warning -Message "could not locate private key for certificate on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
+		Write-Warning -Message "could not locate private key for certificate with $($local:Certificate.Thumbprint)' thumbprint on host: $local:Hostname"
 		Return
 	}
 
@@ -1916,7 +1916,7 @@ Function Update-CmsCredentialAccess {
 		$AclObject = Get-Acl -Path $Path -ErrorAction 'Stop'
 	}
 	Catch {
-		Write-Warning -Message "could not retrieve ACL for private key of certificate on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
+		Write-Warning -Message "could not retrieve ACL for private key of certificate with $($local:Certificate.Thumbprint)' thumbprint on host: $local:Hostname"
 		Throw $_
 	}
 
@@ -2051,7 +2051,7 @@ Function Update-CmsCredentialAccess {
 		Set-Acl -Path $Path -AclObject $AclObject -ErrorAction 'Stop'
 	}
 	Catch {
-		Write-Warning -Message "could not update ACL for private key of certificate on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
+		Write-Warning -Message "could not update ACL for private key of certificate with $($local:Certificate.Thumbprint)' thumbprint on host: $local:Hostname"
 		Throw $_
 	}
 }
