@@ -861,6 +861,8 @@ Function Get-CmsCredential {
 		[Parameter(ParameterSetName = 'Identity')]
 		[Parameter(ParameterSetName = 'Thumbprint')]
 		[string[]]$ComputerName,
+		[Parameter(ParameterSetName = 'PfxFile')]
+		[securestring]$Password,
 		[Parameter(DontShow)]
 		[string]$Path = $CmsCredentials['PathForCmsFiles'],
 		[Parameter(DontShow)]
@@ -928,9 +930,38 @@ Function Get-CmsCredential {
 			Return $null
 		}
 
-		# retrieve certificate by file path
+		# define required parameters for Get-PfxData
+		$GetPfxData = @{
+			FilePath    = $local:FilePath
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# define optional parameters for Get-PfxData
+		If ($PSBoundParameters.ContainsKey('Password')) {
+			$GetPfxData.Add('Password', $local:Password)
+		}
+
+		# get PFX data from PFX file
 		Try {
-			$Certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($local:PfxFile)
+			$PfxData = Get-PfxData @GetPfxData
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve PFX data from file with '$local:PfxFile' path on host: $local:Hostname"
+			Throw $_
+		}
+
+		# filter certificate by EKU
+		Try {
+			$MatchingCertificates = $local:PfxData.EndEntityCertificates.Where({ $_.EnhancedKeyUsageList.FriendlyName -contains 'Document Encryption' })
+		}
+		Catch {
+			Write-Warning -Message "could not filter for Document Encryption certificates in PFX data from file with '$local:PfxFile' path on host: $local:Hostname"
+			Throw $_
+		}
+
+		# retrieve latest certificate
+		Try {
+			$Certificate = $MatchingCertificates | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
 		}
 		Catch {
 			Write-Warning -Message "could not create certificate object from file with '$local:PfxFile' path on host: $local:Hostname"
