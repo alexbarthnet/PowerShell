@@ -592,17 +592,17 @@ Function Export-CmsCredentialCertificate {
 		[Parameter(Mandatory = $true, Position = 1)]
 		[string[]]$ProtectTo,
 		[Parameter(Position = 2)]
-		[string]$Path = $CmsCredentials['PathForCmsFiles'],
-		[Parameter(Position = 3)]
-		[string]$PfxPath = $CmsCredentials['PathForPfxFiles'],
-		[Parameter(Position = 4)]
 		[string]$FilePath,
-		[Parameter(Position = 5)]
+		[Parameter(Position = 3)]
 		[string]$PfxFilePath,
-		[Parameter(Position = 6)]
+		[Parameter(Position = 4)]
 		[switch]$SkipPublicKey,
-		[Parameter(Position = 7)]
+		[Parameter(Position = 5)]
 		[switch]$SkipPfxFile,
+		[Parameter(DontShow)]
+		[string]$Path = $CmsCredentials['PathForCmsFiles'],
+		[Parameter(DontShow)]
+		[string]$PfxPath = $CmsCredentials['PathForPfxFiles'],
 		[Parameter(DontShow)]
 		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
 		[Parameter(DontShow)]
@@ -618,83 +618,81 @@ Function Export-CmsCredentialCertificate {
 
 	# if thumbprint provided...
 	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
-		# create path for certificate by thumbprint
-		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
-		# retrieve certificate by thumbprint
+		# find CMS certificate with thumbprint
 		Try {
-			$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
+			$Certificate = Find-CmsCertificate -Thumbprint $local:Thumbprint -CertStoreLocation $local:CertStoreLocation
 		}
 		Catch {
-			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
 			Throw $_
 		}
 	}
 
 	# if identity provided...
 	If ($PSBoundParameters.ContainsKey('Identity')) {
-		# define pattern as organizational unit of Identity followed by organization of CmsCredentials
-		$Pattern = "OU=$Identity, O=CmsCredentials$"
-		# retrieve latest certificate with matching subject
+		# find CMS certificate with identity
 		Try {
-			$Certificate = Get-ChildItem -Path $CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop' | Where-Object { Select-String -InputObject $_.Subject -Pattern $Pattern -Quiet } | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
+			$Certificate = Find-CmsCertificate -Identity $local:Identity -CertStoreLocation $local:CertStoreLocation
 		}
 		Catch {
-			Write-Warning -Message "could not search for certificate in '$CertStoreLocation' on '$Hostname' with identity: $Identity"
 			Throw $_
-		}
-
-		# if certificate not found...
-		If ($null -eq $local:Certificate) {
-			# declare and return
-			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with identity: $Identity"
-			Throw [System.Management.Automation.ItemNotFoundException]
 		}
 	}
 
+	# if certificate not found...
+	If (!$local:Certificate) {
+		# return without warning; warnings provided by Find-CmsCertificate
+		Return
+	}
+
 	# if skip public key not requested...
-	If (!$SkipPublicKey) {
-		# if file path not provided...
+	If (!$local:SkipPublicKey) {
+		# if FilePath not provided...
 		If (!$PSBoundParameters.ContainsKey('FilePath')) {
 			#retrieve simple name from certificate
-			$ChildPath = $Certificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
+			$ChildPath = $local:Certificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
 
 			# define FilePath as simple name with .cer extension in default cms file path
-			$FilePath = Join-Path -Path $Path -ChildPath "$ChildPath.cer"
+			$FilePath = Join-Path -Path $local:Path -ChildPath "$local:ChildPath.cer"
 		}
 
 		# define parameters for Export-PfxCertificate
 		$ExportCertificate = @{
-			Cert        = $Certificate
-			FilePath    = $FilePath
+			Cert        = $local:Certificate
+			FilePath    = $local:FilePath
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
 
 		# export certificate as .pfx
 		Try {
-			$null = Export-Certificate @ExportCertificate
+			$null = Export-Certificate @local:ExportCertificate
 		}
 		Catch {
-			Write-Warning -Message "could not export public key for certificate on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
+			Write-Warning -Message "could not export public key for certificate with '$($local:Certificate.Thumbprint)' thumbprint on host: $local:Hostname"
 			Throw $_
+		}
+
+		# if FilePath not provided...
+		If (!$PSBoundParameters.ContainsKey('FilePath')) {
+			Write-Host "exported public key for certificate with '$($local:Certificate.Thumbprint)' thumbprint to path: $local:FilePath"
 		}
 	}
 
 	# if skip pfx file not requested...
-	If (!$SkipPfxFile) {
+	If (!$local:SkipPfxFile) {
 		# if PfxFilePath not provided...
 		If (!$PSBoundParameters.ContainsKey('PfxFilePath')) {
 			#retrieve simple name from certificate
-			$ChildPath = $Certificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
+			$ChildPath = $local:Certificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
 
 			# define PfxFilePath as simple name with .pfx extension in default pfx file path
-			$PfxFilePath = Join-Path -Path $PfxPath -ChildPath "$ChildPath.pfx"
+			$PfxFilePath = Join-Path -Path $local:PfxPath -ChildPath "$local:ChildPath.pfx"
 		}
 
 		# define parameters for Export-PfxCertificate
 		$ExportPfxCertificate = @{
-			Cert                  = $Certificate
-			FilePath              = $PfxFilePath
-			ProtectTo             = $ProtectTo
+			Cert                  = $local:Certificate
+			FilePath              = $local:PfxFilePath
+			ProtectTo             = $local:ProtectTo
 			ChainOption           = [Microsoft.CertificateServices.Commands.ExportChainOption]::EndEntityCertOnly
 			CryptoAlgorithmOption = [Microsoft.CertificateServices.Commands.CryptoAlgorithmOptions]::AES256_SHA256
 			ErrorAction           = [System.Management.Automation.ActionPreference]::Stop
@@ -702,11 +700,16 @@ Function Export-CmsCredentialCertificate {
 
 		# export certificate as .pfx
 		Try {
-			$null = Export-PfxCertificate @ExportPfxCertificate
+			$null = Export-PfxCertificate @local:ExportPfxCertificate
 		}
 		Catch {
-			Write-Warning -Message "could not export PFX file for certificate on '$Hostname' with thumbprint: $($Certificate.Thumbprint)"
+			Write-Warning -Message "could not export PFX file for certificate with '$($local:Certificate.Thumbprint)' thumbprint on host: $local:Hostname"
 			Throw $_
+		}
+
+		# if PfxFilePath not provided...
+		If (!$PSBoundParameters.ContainsKey('PfxFilePath')) {
+			Write-Host "exported PFX file for certificate with '$($local:Certificate.Thumbprint)' thumbprint to path: $local:PfxFilePath"
 		}
 	}
 }
