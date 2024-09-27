@@ -129,6 +129,9 @@ Function Find-CmsCertificate {
 	.PARAMETER All
 	Specifies that all matching CMS certificates should be returned. Requires the Identity parameter.
 
+	.PARAMETER AllowEmptyReturn
+	Specifies that no error should be returned when no CMS certificates are found. Requires the Identity parameter.
+
 	.PARAMETER Password
 	Specifies the password to the PFX file as a secure string. Requires the PfxFile parameter.
 
@@ -145,21 +148,102 @@ Function Find-CmsCertificate {
 
 	[CmdletBinding(DefaultParameterSetName = 'Identity')]
 	Param(
-		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'Identity')]
-		[string]$Identity,
 		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'Thumbprint')]
 		[string]$Thumbprint,
 		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'PfxFile')]
 		[string]$PfxFile,
-		[Parameter(Position = 1, Mandatory = $false, ParameterSetName = 'Identity')]
-		[switch]$All,
 		[Parameter(Position = 1, Mandatory = $false, ParameterSetName = 'PfxFile')]
 		[securestring]$Password,
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'Identity')]
+		[string]$Identity,
+		[Parameter(Position = 1, Mandatory = $false, ParameterSetName = 'Identity')]
+		[switch]$All,
 		[Parameter(Mandatory = $false)]
 		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
+		[Parameter(Mandatory = $false)]
+		[switch]$AllowEmptyReturn,
 		[Parameter(DontShow)]
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
+
+	# if thumbprint provided...
+	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
+		# define parameters string for reporting
+		$Parameters = "with '{0}' thumbprint in '{1}' store" -f $local:Thumbprint, $local:CertStoreLocation
+
+		# create path for certificate by thumbprint
+		$CertificatePath = Join-Path -Path $local:CertStoreLocation -ChildPath $local:Thumbprint
+
+		# retrieve certificate by thumbprint
+		Try {
+			$Certificate = Get-Item -Path $local:CertificatePath -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not locate certificate $local:Parameters on host: $local:Hostname"
+			Throw $_
+		}
+	}
+
+	# if PFX file provided...
+	If ($PSBoundParameters.ContainsKey('PfxFile')) {
+		# define parameters string for reporting
+		$Parameters = "from '{0}' path" -f $local:PfxFile
+
+		# retrieve PFX file by path
+		Try {
+			$null = Get-Item -Path $local:PfxFile -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not locate PFX file $local:Parameters on host: $local:Hostname"
+			Throw $_
+		}
+
+		# define required parameters for Get-PfxData
+		$GetPfxData = @{
+			FilePath    = $local:PfxFile
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# define optional parameters for Get-PfxData
+		If ($PSBoundParameters.ContainsKey('Password')) {
+			$GetPfxData.Add('Password', $local:Password)
+		}
+
+		# get PFX data from PFX file
+		Try {
+			$PfxData = Get-PfxData @local:GetPfxData
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve PFX data $local:Parameters on host: $local:Hostname"
+			Throw $_
+		}
+
+		# filter certificate by EKU
+		Try {
+			$local:MatchingCertificates = $local:PfxData.EndEntityCertificates.Where({ $_.EnhancedKeyUsageList.FriendlyName -contains 'Document Encryption' })
+		}
+		Catch {
+			Write-Warning -Message "could not filter for Document Encryption certificates in PFX data $local:Parameters on host: $local:Hostname"
+			Throw $_
+		}
+
+		# retrieve latest certificate
+		Try {
+			$Certificate = $local:MatchingCertificates | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
+		}
+		Catch {
+			Write-Warning -Message "could not create certificate object $local:Parameters on host: $local:Hostname"
+			Throw $_
+		}
+
+		# if allow empty return not requested...
+		If (!$local:AllowEmptyReturn) {
+			# create exception
+			$Exception = [System.Management.Automation.ItemNotFoundException]::new("Find-CmsCertificate : Could not find a Document Encryption certificate in PFX file '$PfxFile'")
+			# throw error record with exception
+			Throw [System.Management.Automation.ErrorRecord]::new($Exception, 'CertificateNotFound', [System.Management.Automation.ErrorCategory]::ObjectNotFound, $PfxFile)
+		}
+	}
 
 	# if an identity provided...
 	If ($PSBoundParameters.ContainsKey('Identity')) {
@@ -204,73 +288,13 @@ Function Find-CmsCertificate {
 			Write-Warning -Message "could not sort or select Document Encryption certificate in '$local:CertStoreLocation' on host: $local:Hostname"
 			Throw $_
 		}
-	}
 
-	# if thumbprint provided...
-	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
-		# define parameters string for reporting
-		$Parameters = "with '{0}' thumbprint in '{1}' store" -f $local:Thumbprint, $local:CertStoreLocation
-
-		# create path for certificate by thumbprint
-		$CertificatePath = Join-Path -Path $local:CertStoreLocation -ChildPath $local:Thumbprint
-
-		# retrieve certificate by thumbprint
-		Try {
-			$Certificate = Get-Item -Path $local:CertificatePath -ErrorAction 'Stop'
-		}
-		Catch {
-			Write-Warning -Message "could not locate certificate $local:Parameters on host: $local:Hostname"
-			Throw $_
-		}
-	}
-
-	# if PFX file provided...
-	If ($PSBoundParameters.ContainsKey('PfxFile')) {
-		# define parameters string for reporting
-		$Parameters = "from '{0}' path" -f $local:PfxFile
-
-		# if PFX file is not a file...
-		If (![System.IO.File]::Exists($local:PfxFile)) {
-			Write-Warning -Message "could not locate PFX file $local:Parameters on host: $local:Hostname"
-			Return $null
-		}
-
-		# define required parameters for Get-PfxData
-		$GetPfxData = @{
-			FilePath    = $local:PfxFile
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# define optional parameters for Get-PfxData
-		If ($PSBoundParameters.ContainsKey('Password')) {
-			$GetPfxData.Add('Password', $local:Password)
-		}
-
-		# get PFX data from PFX file
-		Try {
-			$PfxData = Get-PfxData @local:GetPfxData
-		}
-		Catch {
-			Write-Warning -Message "could not retrieve PFX data $local:Parameters on host: $local:Hostname"
-			Throw $_
-		}
-
-		# filter certificate by EKU
-		Try {
-			$local:MatchingCertificates = $local:PfxData.EndEntityCertificates.Where({ $_.EnhancedKeyUsageList.FriendlyName -contains 'Document Encryption' })
-		}
-		Catch {
-			Write-Warning -Message "could not filter for Document Encryption certificates in PFX data $local:Parameters on host: $local:Hostname"
-			Throw $_
-		}
-
-		# retrieve latest certificate
-		Try {
-			$Certificate = $local:MatchingCertificates | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
-		}
-		Catch {
-			Write-Warning -Message "could not create certificate object $local:Parameters on host: $local:Hostname"
-			Throw $_
+		# if allow empty return not requested...
+		If (!$local:AllowEmptyReturn) {
+			# create exception
+			$Exception = [System.Management.Automation.ItemNotFoundException]::new("Find-CmsCertificate : Could not find a certificate with Identity '$Identity'")
+			# throw error record with exception
+			Throw [System.Management.Automation.ErrorRecord]::new($Exception, 'CertificateNotFound', [System.Management.Automation.ErrorCategory]::ObjectNotFound, $Identity)
 		}
 	}
 
