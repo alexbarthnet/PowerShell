@@ -366,51 +366,51 @@ Function Get-CertificatePrivateKeyPath {
 	# if thumbprint provided...
 	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
 		# create path for certificate by thumbprint
-		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint
+		$CertificatePath = Join-Path -Path $local:CertStoreLocation -ChildPath $local:Thumbprint
 		# retrieve certificate by thumbprint
 		Try {
-			$Certificate = Get-Item -Path $CertificatePath -ErrorAction 'Stop'
+			$Certificate = Get-Item -Path $local:CertificatePath -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not locate certificate in '$CertStoreLocation' on '$Hostname' with thumbprint: $Thumbprint"
+			Write-Warning -Message "could not locate certificate with '$($local:Certificate.Thumbprint)' thumbprint in '$local:CertStoreLocation' store on host: $local:Hostname"
 			Throw $_
 		}
 	}
 
 	# if certificate does not have a private key...
-	If (!$Certificate.HasPrivateKey) {
-		Write-Warning -Message "could not locate private key on '$Hostname' for certificate with thumbprint: $($Certificate.Thumbprint)"
+	If (!$local:Certificate.HasPrivateKey) {
+		Write-Warning -Message "could not locate private key for certificate with '$($local:Certificate.Thumbprint)' thumbprint on host: $local:Hostname"
 		Return $null
 	}
 
 	# retrieve algorithm for keypair
-	$Algorithm = $Certificate.PublicKey.Oid.FriendlyName
+	$Algorithm = $local:Certificate.PublicKey.Oid.FriendlyName
 
 	# retrieve private key using algorithm-specific method
-	switch ($Algorithm) {
+	switch ($local:Algorithm) {
 		'DSA' {
-			$PrivateKey = [System.Security.Cryptography.X509Certificates.DSACertificateExtensions]::GetDSAPrivateKey($Certificate)
+			$PrivateKey = [System.Security.Cryptography.X509Certificates.DSACertificateExtensions]::GetDSAPrivateKey($local:Certificate)
 		}
 		'ECDsa' {
-			$PrivateKey = [System.Security.Cryptography.X509Certificates.ECDsaCertificateExtensions]::GetECDsaPrivateKey($Certificate)
+			$PrivateKey = [System.Security.Cryptography.X509Certificates.ECDsaCertificateExtensions]::GetECDsaPrivateKey($Clocal:ertificate)
 		}
 		'RSA' {
-			$PrivateKey = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($Certificate)
+			$PrivateKey = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($local:Certificate)
 		}
 		Default {
-			Write-Warning -Message "found unsupported '$Algorithm' algorithm on '$Hostname' for certificate with thumbprint: $($Certificate.Thumbprint)"
+			Write-Warning -Message "found unsupported '$local:Algorithm' algorithm for certificate with '$($local:Certificate.Thumbprint)' thumbprint on host: $local:Hostname"
 			Return $null
 		}
 	}
 
 	# if private key was not retrieved...
 	If ($null -eq $local:PrivateKey) {
-		Write-Verbose -Message "could not retrieve private key on '$Hostname' for certificate with thumbprint: $($Certificate.Thumbprint)"
+		Write-Verbose -Message "could not retrieve private key for certificate with '$($local:Certificate.Thumbprint)' thumbprint on host: $local:Hostname"
 		Return $null
 	}
 
 	# retrieve private key unique name
-	$UniqueName = $PrivateKey.Key.UniqueName
+	$UniqueName = $local:PrivateKey.Key.UniqueName
 
 	# if certificate is machine key...
 	If ($PrivateKey.Key.IsMachineKey) {
@@ -425,19 +425,19 @@ Function Get-CertificatePrivateKeyPath {
 
 	# search key container for private key file
 	Try {
-		$PrivateKeyPath = Get-ChildItem -Path $Path -Recurse -Filter $UniqueName | Select-Object -First 1 -ExpandProperty 'FullName'
+		$PrivateKeyPath = Get-ChildItem -Path $local:Path -Recurse -Filter $local:UniqueName | Select-Object -First 1 -ExpandProperty 'FullName'
 	}
 	Catch {
-		Write-Warning -Message "could not search '$Path' path on '$Hostname' for object with unique name: $UniqueName"
+		Write-Warning -Message "could not search '$local:Path' path for object with '$local:UniqueName' unique name on host: $local:Hostname"
 		Throw $_
 	}
 
 	# if private key file found...
-	If ($PrivateKeyPath) {
-		Return $PrivateKeyPath
+	If ($local:PrivateKeyPath) {
+		Return $local:PrivateKeyPath
 	}
 	Else {
-		Write-Warning -Message "could not find path to private key on '$Hostname' for certificate with thumbprint: $($Certificate.Thumbprint)"
+		Write-Warning -Message "could not find path to private key for certificate with '$($local:Certificate.Thumbprint)' thumbprint on host: $local:Hostname"
 		Return $null
 	}
 }
