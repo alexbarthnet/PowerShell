@@ -29,6 +29,9 @@ Hashtable with parameters for the command.
 .PARAMETER Order
 An unsigned 16-bit integer representing the order that the command will be run when multiple commands are defined in a JSON file. The first command is assigned a value of 1 and each additional command is assigned an incrementing value. Providing a value that is already assigned will prompt the user to overwrite the command assigned the provided value.
 
+.PARAMETER Variable
+A string containing the name of the variable to store the output of a command.
+
 .INPUTS
 String. The path to a JSON file.
 
@@ -94,6 +97,9 @@ Param(
 	# script parameter - expression for evaluating command
 	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
 	[string]$Expression,
+	# script parameter - variable for storing output of command
+	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
+	[string]$Variable,
 	# script parameter - order of command
 	[Parameter(Mandatory = $False, ParameterSetName = 'Remove')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
@@ -1457,6 +1463,11 @@ Process {
 				$JsonParameters['Expression'] = [string]$Expression
 			}
 
+			# add Variable if provided
+			If ($script:Variable) {
+				$JsonParameters['Variable'] = [string]$Variable
+			}
+
 			# add current time as FileDateTimeUniversal
 			$JsonParameters['Updated'] = (Get-Date -Format FileDateTimeUniversal)
 
@@ -1519,6 +1530,10 @@ Process {
 					}
 					($null -ne $JsonEntry.Parameters -and $JsonEntry.Parameters -isnot [System.Management.Automation.PSCustomObject]) {
 						Write-Warning -Message 'optional value (Parameters) found in configuration file but was not parsed into a PSCustomObject object'
+						Continue NextJsonEntry
+					}
+					($null -ne $JsonEntry.Variable -and $JsonEntry.Variable -match '[^\w]') {
+						Write-Warning -Message 'optional value (Variable) found in configuration file but contained a character not in 0-9A-Za-z_'
 						Continue NextJsonEntry
 					}
 				}
@@ -1622,13 +1637,35 @@ Process {
 					Continue NextJsonEntry
 				}
 
-				# call script or function with parameters
-				Try {
-					. $JsonEntry.Command @Parameters
+				# if variable defined...
+				If ($JsonEntry.Variable) {
+					# call script or function with parameters
+					Try {
+						$OutputObject = . $JsonEntry.Command @Parameters
+					}
+					Catch {
+						Write-Warning -Message "exception caught calling '$($JsonEntry.Command)' $CommandType command and saving output to object: $($_.Exception.ToString())"
+						$ExceptionCaught = $true
+					}
+					# save output object to named variable
+					Try {
+						New-Variable -Name $JsonEntry.Variable -Value $OutputObject -Scope 'script' -Force
+					}
+					Catch {
+						Write-Warning -Message "exception caught saving output from '$($JsonEntry.Command)' $CommandType command to '$($JsonEntry.Variable)' variable: $($_.Exception.ToString())"
+						$ExceptionCaught = $true
+					}
 				}
-				Catch {
-					Write-Warning -Message "exception caught calling '$($JsonEntry.Command)' $CommandType command: $($_.Exception.ToString())"
-					$ExceptionCaught = $true
+				# if variable not defined...
+				Else {
+					# call script or function with parameters
+					Try {
+						. $JsonEntry.Command @Parameters
+					}
+					Catch {
+						Write-Warning -Message "exception caught calling '$($JsonEntry.Command)' $CommandType command: $($_.Exception.ToString())"
+						$ExceptionCaught = $true
+					}
 				}
 
 				# stop transcript for command
