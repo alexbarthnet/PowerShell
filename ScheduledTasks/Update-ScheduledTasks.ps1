@@ -241,7 +241,7 @@ Param(
 
 Begin {
 	## begin TranscriptForCommand functions
-	
+
 	Function Start-TranscriptForCommand {
 		<#
 		.SYNOPSIS
@@ -1356,6 +1356,155 @@ Begin {
 				# write message to text output file
 				Try {
 					Write-TextOutputFile -Message $Message -Stream 'Warning'
+				}
+				Catch {
+					# do nothing
+				}
+			}
+
+			# process steppable pipeline
+			Try {
+				$SteppablePipeline.Process($_)
+			}
+			Catch {
+				$PSCmdlet.ThrowTerminatingError($_)
+			}
+		}
+
+		End {
+			# stop steppable pipeline
+			Try {
+				$SteppablePipeline.End()
+			}
+			Catch {
+				$PSCmdlet.ThrowTerminatingError($_)
+			}
+		}
+	}
+
+	Function Write-Error {
+		# [System.Management.Automation.ProxyCommand]::Create([System.Management.Automation.CommandMetaData]::new((Get-Command -Name Write-Error)))
+
+		<#
+		.ForwardHelpTargetName Microsoft.PowerShell.Utility\Write-Error
+		.ForwardHelpCategory Cmdlet
+		#>
+
+		[CmdletBinding(DefaultParameterSetName = 'NoException', HelpUri = 'https://go.microsoft.com/fwlink/?LinkID=113425', RemotingCapability = 'None')]
+		param(
+			[Parameter(ParameterSetName = 'WithException', Mandatory = $true)]
+			[System.Exception]
+			${Exception},
+
+			[Parameter(ParameterSetName = 'WithException')]
+			[Parameter(ParameterSetName = 'NoException', Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
+			[Alias('Msg')]
+			[AllowEmptyString()]
+			[AllowNull()]
+			[string]
+			${Message},
+
+			[Parameter(ParameterSetName = 'ErrorRecord', Mandatory = $true)]
+			[System.Management.Automation.ErrorRecord]
+			${ErrorRecord},
+
+			[Parameter(ParameterSetName = 'NoException')]
+			[Parameter(ParameterSetName = 'WithException')]
+			[System.Management.Automation.ErrorCategory]
+			${Category},
+
+			[Parameter(ParameterSetName = 'WithException')]
+			[Parameter(ParameterSetName = 'NoException')]
+			[string]
+			${ErrorId},
+
+			[Parameter(ParameterSetName = 'NoException')]
+			[Parameter(ParameterSetName = 'WithException')]
+			[System.Object]
+			${TargetObject},
+
+			[string]
+			${RecommendedAction},
+
+			[Alias('Activity')]
+			[string]
+			${CategoryActivity},
+
+			[Alias('Reason')]
+			[string]
+			${CategoryReason},
+
+			[Alias('TargetName')]
+			[string]
+			${CategoryTargetName},
+
+			[Alias('TargetType')]
+			[string]
+			${CategoryTargetType}
+		)
+
+		Begin {
+			# create steppable pipeline
+			Try {
+				# get command information from execution context
+				$Command = $ExecutionContext.InvokeCommand.GetCommand('Microsoft.PowerShell.Utility\Write-Error', [System.Management.Automation.CommandTypes]::Cmdlet)
+
+				# create empty object for TryGetValue
+				$OutBuffer = $null
+
+				# if bound parameters contains 'OutBuffer' parameter...
+				If ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$OutBuffer)) {
+					# set OutBuffer to 1
+					$PSBoundParameters['OutBuffer'] = 1
+				}
+
+				# define script block for steppable pipeline
+				$ScriptBlock = { & $Command @PSBoundParameters }
+
+				# create steppable pipeline from script block
+				$SteppablePipeline = $ScriptBlock.GetSteppablePipeline($myInvocation.CommandOrigin)
+
+				# start steppable pipeline
+				$SteppablePipeline.Begin($PSCmdlet)
+			}
+			Catch {
+				$PSCmdlet.ThrowTerminatingError($_)
+			}
+		}
+
+		Process {
+			# if text output file exists...
+			If ([System.IO.File]::Exists($script:TextOutputActivePath)) {
+				# if Message provided...
+				If ($PSCmdlet.ParameterSetName -eq 'NoException') {
+					$ErrorMessage = $Message
+				}
+				# if Exception provided...
+				ElseIf ($PSCmdlet.ParameterSetName -eq 'WithException') {
+					# if Exception contains an inner exception...
+					If ($Exception.InnerException) {
+						$ErrorMessage = '[{0}]; {1}' -f $Exception.InnerException.GetType().FullName, $Exception.InnerException.Message
+					}
+					# if Exception does not contain an inner exception...
+					Else {
+						$ErrorMessage = '[{0}]; {1}' -f $Exception.GetType().FullName, $Exception.Message
+					}
+				}
+				# if ErrorRecord provided...
+				ElseIf ($PSCmdlet.ParameterSetName -eq 'ErrorRecord') {
+					# if exception in ErrorRecord contains an inner exception...
+					If ($ErrorRecord.Exception.InnerException) {
+						$ErrorMessage = '[{0}]; {1}' -f $ErrorRecord.Exception.InnerException.GetType().FullName, $ErrorRecord.Exception.InnerException.Message
+					}
+					# if exception in ErrorRecord does not contain an inner exception...
+					Else {
+						$ErrorMessage = '[{0}]; {1}' -f $ErrorRecord.Exception.GetType().FullName, $ErrorRecord.Exception.Message
+					}
+				}
+
+				# write message to text output file
+				Try {
+					Write-TextOutputFile -Message $ErrorMessage -Stream 'Error'
 				}
 				Catch {
 					# do nothing
