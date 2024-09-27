@@ -1159,8 +1159,6 @@ Function Protect-CmsCredential {
 	Param (
 		[Parameter(ValueFromPipeline = $true, Position = 0, Mandatory = $true)]
 		[pscredential]$Credential,
-		[Parameter(ParameterSetName = 'Identity', Position = 1, Mandatory = $true)]
-		[string]$Identity,
 		[Parameter(ParameterSetName = 'Certificate', Position = 1, Mandatory = $true)]
 		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
 		[Parameter(ParameterSetName = 'Thumbprint', Position = 1, Mandatory = $true)]
@@ -1171,6 +1169,8 @@ Function Protect-CmsCredential {
 		[Parameter(ParameterSetName = 'Thumbprint', Position = 2, Mandatory = $true)]
 		[Parameter(ParameterSetName = 'PfxFile', Position = 2, Mandatory = $true)]
 		[string]$OutFile,
+		[Parameter(ParameterSetName = 'Identity', Position = 1, Mandatory = $true)]
+		[string]$Identity,
 		[Parameter(ParameterSetName = 'Identity')]
 		[switch]$Reset,
 		[Parameter(ParameterSetName = 'Identity')]
@@ -1200,7 +1200,7 @@ Function Protect-CmsCredential {
 		# define parameters for Invoke-Function
 		$InvokeFunction = @{
 			ComputerName          = $local:ComputerName
-			AdditionalFunctions   = 'Test-CmsInvalidIdentity', 'Test-CmsInvalidSubject', 'New-CmsCredentialCertificate', 'Remove-CmsCredential'
+			AdditionalFunctions   = 'Find-CmsCertificate', 'New-CmsCredentialCertificate', 'Remove-CmsCredential', 'Test-CmsInvalidIdentity'
 			PrerequisiteFunctions = 'Initialize-CmsCredentialSettings'
 		}
 
@@ -1216,31 +1216,47 @@ Function Protect-CmsCredential {
 		Return
 	}
 
+	# if certificate provided...
+	If ($PSBoundParameters.ContainsKey('Certificate')) {
+		# if certificate subject is null or empty...
+		If ([string]::IsNullOrEmpty($Certificate.Subject)) {
+			# warn and return
+			Write-Warning -Message 'provided certificate has an invalid subject: the subject is empty'
+			Return
+		}
+	}
+
+	# if thumbprint provided...
+	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
+		# find CMS certificate with thumbprint
+		Try {
+			$Certificate = Find-CmsCertificate -Thumbprint $local:Thumbprint -CertStoreLocation $local:CertStoreLocation
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
+	# if PFX file provided...
+	If ($PSBoundParameters.ContainsKey('PfxFile')) {
+		# find CMS certificate from PFX file
+		Try {
+			$Certificate = Find-CmsCertificate -PfxFile $local:PfxFile
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
 	# if identity provided...
 	If ($PSBoundParameters.ContainsKey('Identity')) {
 		# if reset not requested...
 		If (!$local:Reset) {
-			# retrieve CMS certificates
+			# find CMS certificate with identity
 			Try {
-				$Certificates = Get-ChildItem -Path $local:CertStoreLocation -DocumentEncryptionCert -ErrorAction 'Stop'
+				$Certificate = Find-CmsCertificate -Identity $local:Identity -CertStoreLocation $local:CertStoreLocation
 			}
 			Catch {
-				Write-Warning -Message "could not retrieve Document Encryption certificates in '$local:CertStoreLocation' on host: $local:Hostname"
-				Throw $_
-			}
-
-			# define pattern that:
-			# - starts with common name of a GUID
-			# - includes organizational unit of Identity
-			# - concludes with organization of CmsCredentials
-			$Pattern = "^CN=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}, OU=$Identity, O=CmsCredentials$"
-
-			# retrieve latest certificate where subject matches pattern
-			Try {
-				$Certificate = $Certificates.Where({ $_.Subject -match $local:Pattern }) | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
-			}
-			Catch {
-				Write-Warning -Message "could not search for Document Encryption certificate with '$local:Identity' identity in '$local:CertStoreLocation' on host: $local:Hostname"
 				Throw $_
 			}
 		}
@@ -1257,56 +1273,16 @@ Function Protect-CmsCredential {
 			}
 		}
 
-		# if folder path not found...
-		If (!(Test-Path -Path $local:Path -PathType 'Container')) {
-			# create path
-			Try {
-				$null = New-Item -ItemType Directory -Path $local:Path -Verbose -ErrorAction 'Stop'
-			}
-			Catch {
-				Write-Warning -Message "could not create folder with '$local:Path' on host: $local:Hostname"
-				Throw $_
-			}
-		}
-
 		# create file name from certificate
-		$FileName = $Certificate.GetNameInfo('SimpleName', $false)
+		$FileName = $local:Certificate.GetNameInfo('SimpleName', $false)
 
 		# define CMS file path
 		$OutFile = Join-Path -Path $local:Path -ChildPath "$local:FileName.txt"
 	}
 
-	# if thumbprint provided...
-	If ($PSBoundParameters.ContainsKey('Thumbprint')) {
-		# create path for certificate by thumbprint
-		$CertificatePath = Join-Path -Path $local:CertStoreLocation -ChildPath $local:Thumbprint
-
-		# retrieve certificate by thumbprint
-		Try {
-			$Certificate = Get-Item -Path $local:CertificatePath -ErrorAction 'Stop'
-		}
-		Catch {
-			Write-Warning -Message "could not locate certificate with '$local:Thumbprint' in '$local:CertStoreLocation' on host: '$local:Hostname'"
-			Throw $_
-		}
-	}
-
-	# if PFX file provided...
-	If ($PSBoundParameters.ContainsKey('PfxFile')) {
-		# retrieve certificate by file path
-		Try {
-			$Certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($local:PfxFile)
-		}
-		Catch {
-			Write-Warning -Message "could not create certificate object from '$local:PfxFile' path on host: $local:Hostname"
-			Throw $_
-		}
-	}
-
-	# if certificate subject is null or empty...
-	If ([string]::IsNullOrEmpty($Certificate.Subject)) {
-		# define recipient string as subject of certificate
-		Write-Warning -Message 'found an invalid certificate: the subject field is empty'
+	# if certificate not found...
+	If (!$local:Certificate) {
+		# return without warning; warnings provided by Find-CmsCertificate or New-CmsCredentialCertificate
 		Return
 	}
 
