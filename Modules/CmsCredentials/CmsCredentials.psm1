@@ -1286,26 +1286,6 @@ Function Protect-CmsCredential {
 		Return
 	}
 
-	# if folder path not found...
-	If (![System.IO.Directory]::Exists($local:Path)) {
-		# create path
-		Try {
-			$null = New-Item -ItemType Directory -Path $local:Path -Verbose -ErrorAction 'Stop'
-		}
-		Catch {
-			Write-Warning -Message "could not create folder with '$local:Path' on host: $local:Hostname"
-			Throw $_
-		}
-	}
-
-	# if CMS credential file found...
-	If ([System.IO.File]::Exists($local:OutFile)) {
-		# if force and reset not set...
-		If (!$local:Force -and !$local:Reset) {
-			Write-Warning -Message "existing credential file found; continue to overwrite file with '$local:OutFile' path on host: $local:Hostname" -WarningAction 'Inquire'
-		}
-	}
-
 	# convert network credential to JSON string
 	Try {
 		$Content = $Credential.GetNetworkCredential() | Select-Object -Property 'UserName', 'Password', 'Domain' | ConvertTo-Json -ErrorAction 'Stop'
@@ -1317,37 +1297,47 @@ Function Protect-CmsCredential {
 
 	# encrypt credentials to recipient
 	Try {
-		Protect-CmsMessage -To $local:Certificate -Content $local:Content -OutFile $local:OutFile -ErrorAction 'Stop'
+		$CmsMessage = Protect-CmsMessage -To $local:Certificate -Content $local:Content -ErrorAction 'Stop'
 	}
 	Catch {
 		Write-Warning -Message "could not encrypt credential to certificate with '$($Certificate.Subject)' subject on host: $local:Hostname"
 		Throw $_
 	}
 
-	# retrieve content of credential file
+	# insert subject and thumbprint lines into content of credential file
 	Try {
-		$Content = Get-Content -Path $OutFile -Raw -ErrorAction 'Stop'
+		$Value = $local:CmsMessage.Insert(0, "Subject: $($local:Certificate.Subject)`r`nThumbprint: $($local:Certificate.Thumbprint)`r`n")
 	}
 	Catch {
-		Write-Warning -Message "could not read credential file with '$OutFile' path on host: $local:Hostname"
+		Write-Warning -Message "could not prefix encrypted credential with certificate subject and thumbprint on host: $local:Hostname"
 		Throw $_
 	}
 
-	# insert subject and thumbprint lines into content of credential file
-	Try {
-		$Value = $Content.Insert(0, "Subject: $($Certificate.Subject)`r`nThumbprint: $($Certificate.Thumbprint)`r`n")
+	# if CMS credential file found...
+	If ([System.IO.File]::Exists($local:OutFile)) {
+		# if force and reset not set...
+		If (!$local:Force -and !$local:Reset) {
+			Write-Warning -Message "existing file found; continue to overwrite file with '$local:OutFile' path on host: $local:Hostname" -WarningAction 'Inquire'
+		}
 	}
-	Catch {
-		Write-Warning -Message "could not insert certificate subject and thumbprint into credential file with '$OutFile' path on host: $local:Hostname"
-		Throw $_
+	# if CMS credential file not found...
+	Else {
+		# create file and path to file
+		Try {
+			$null = New-Item -Path $local:OutFile -Force -ItemType 'File' -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not create file with '$local:OutFile' path on host: $local:Hostname"
+			Throw $_
+		}
 	}
 
 	# save updated content to credential file
 	Try {
-		Set-Content -Path $OutFile -Value $Value -Encoding 'UTF8' -ErrorAction 'Stop'
+		Set-Content -Path $local:OutFile -Value $local:Value -Encoding 'UTF8' -ErrorAction 'Stop'
 	}
 	Catch {
-		Write-Warning -Message "could not update credential file with '$OutFile' path on host: $local:Hostname"
+		Write-Warning -Message "could not save encrypted credential to file with '$local:OutFile' path on host: $local:Hostname"
 		Throw $_
 	}
 
@@ -1355,8 +1345,8 @@ Function Protect-CmsCredential {
 	If ($PSBoundParameters.ContainsKey('Identity') -and -not $local:SkipCleanup) {
 		# define parameters for Remove-CmsCredential
 		$RemoveCmsCredential = @{
-			Identity = $Identity
-			Path     = $Path
+			Identity = $local:Identity
+			Path     = $local:Path
 			SkipLast = 1
 		}
 
