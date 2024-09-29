@@ -1,4 +1,4 @@
-#Requires -Modules WebApplicationProxy,TranscriptWithHostAndDate,CmsCredential
+#Requires -Modules WebApplicationProxy,CmsCredential
 
 <#
 .SYNOPSIS
@@ -24,18 +24,6 @@ None. The script reports the actions taken and does not provide any actionable o
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	# path to JSON configuration file
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
-	[string]$Json,
-	# switch to skip transcript logging
-	[Parameter(DontShow)]
-	[switch]$SkipTranscript,
-	# name in transcript files
-	[Parameter(DontShow)]
-	[string]$TranscriptName,
-	# path to transcript files
-	[Parameter(DontShow)]
-	[string]$TranscriptPath,
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -44,7 +32,10 @@ Param(
 	[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
 	# local DNS hostname
 	[Parameter(DontShow)]
-	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
+	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.'),
+	# path to JSON configuration file
+	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
+	[string]$Json
 )
 
 Begin {
@@ -219,22 +210,6 @@ Begin {
 			Throw $_
 		}
 	}
-
-	# if running...
-	If ($PSCmdlet.ParameterSetName -eq 'Default') {
-		# define hashtable for transcript functions
-		$TranscriptWithHostAndDate = @{}
-		# define parameters for transcript functions
-		If ($PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptWithHostAndDate['TranscriptName'] = $PSBoundParameters['TranscriptName'] }
-		If ($PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptWithHostAndDate['TranscriptPath'] = $PSBoundParameters['TranscriptPath'] }
-		# start transcript with parameters
-		Try {
-			Start-TranscriptWithHostAndDate @TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
-	}
 }
 
 Process {
@@ -278,7 +253,6 @@ Process {
 			Return
 		}
 	}
-
 
 	# verify services are running
 	Write-Host 'Verifying WAP services'
@@ -389,19 +363,6 @@ Process {
 		Catch {
 			Write-Warning "could not update '$($WebApplicationProxyApplication.Name)' WAP application certificate: $($_.Exception.Message)"
 			Return $_
-		}
-	}
-}
-
-End {
-	# if running...
-	If ($PSCmdlet.ParameterSetName -eq 'Default') {
-		# stop transcript with parameters
-		Try {
-			Stop-TranscriptWithHostAndDate @TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
 		}
 	}
 }
