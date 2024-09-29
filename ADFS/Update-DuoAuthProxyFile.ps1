@@ -1,20 +1,12 @@
-#requires -Modules TranscriptWithHostAndDate
-
 <#
 .SYNOPSIS
-Updates the Duo Authentication Proxy configuration file.
+Updates a common Duo Authentication Proxy configuration file from files containing individual configuration sections.
 
 .DESCRIPTION
-Updates the Duo Authentication Proxy configuration file and restarts the service when the existing configuration file does not match the provided configuration file
+Updates a common Duo Authentication Proxy configuration file from files containing individual configuration sections.
 
 .PARAMETER Path
 The path to the shared Duo Authentication Proxy configuration file.
-
-.PARAMETER Destination
-The path to the local Duo Authentication Proxy configuration file. The default value is 'Duo Security Authentication Proxy\conf\authproxy.cfg' in the Program Files directory.
-
-.PARAMETER Algorithm
-The algorithm for comparing hashes of the shared and local Duo Authentication Proxy configuration files. The default value is 'SHA512' and the permitted values are the values permitted for the Algorithm parameter of the Get-FileHash function.
 
 .INPUTS
 System.String. The path to the shared Duo Authentication Proxy configuration file.
@@ -28,18 +20,9 @@ None. The script does not provide any actionable output.
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	# path to JSON configuration file
+	# path to Duo Authentication Proxy configuration file
 	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
 	[string]$Path,
-	# switch to skip transcript logging
-	[Parameter(Mandatory = $false)]
-	[switch]$SkipSiteSpecificFiles,
-	# string containing algorithm for Get-FileHash
-	[Parameter(DontShow)][ValidateSet('SHA1', 'SHA256', 'SHA384', 'SHA512', 'MACTripleDES', 'MD5', 'RIPEMD160')]
-	[string]$Algorithm = 'SHA512',
-	# switch to skip transcript logging
-	[Parameter(DontShow)]
-	[switch]$SkipTranscript,
 	# local site name
 	[Parameter(DontShow)]
 	[string]$SiteName = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySite]::GetComputerSite().Name,
@@ -53,19 +36,6 @@ Param(
 	[Parameter(DontShow)]
 	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
 )
-
-Begin {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# start transcript with default parameters
-		Try {
-			Start-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
-	}
-}
 
 Process {
 	# get info of path parameter
@@ -85,14 +55,14 @@ Process {
 		$MainFiles = Get-ChildItem -Path $BasePath -Filter 'main*.txt'
 	}
 	Catch {
-		Write-Warning -Message "could not retrieve main files from Path: $SitePath"
+		Write-Warning -Message "could not retrieve main files from Path: $BasePath"
 		Return $_
 	}
 
 	# if main files not found...
 	If (!$MainFiles) {
 		Write-Warning -Message "could not retrieve required main files from '$BasePath' base path"
-		Return $_
+		Return
 	}
 
 	# get client files from base folder
@@ -340,19 +310,6 @@ Process {
 			}
 			# declare updated
 			Write-Verbose -Verbose -Message "updated configuration in site-specific file: $SiteFilePath"
-		}
-	}
-}
-
-End {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# stop transcript with default parameters
-		Try {
-			Stop-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
 		}
 	}
 }

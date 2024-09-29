@@ -1,11 +1,9 @@
-#requires -Modules TranscriptWithHostAndDate
-
 <#
 .SYNOPSIS
-Updates the Duo Authentication Proxy configuration file.
+Updates the local Duo Authentication Proxy configuration file from a shared location.
 
 .DESCRIPTION
-Updates the Duo Authentication Proxy configuration file and restarts the service when the existing configuration file does not match the provided configuration file
+Updates the local Duo Authentication Proxy configuration file from a shared location and restarts the service when the existing configuration file does not match the provided configuration file
 
 .PARAMETER Path
 The path to the shared Duo Authentication Proxy configuration file.
@@ -28,18 +26,15 @@ None. The script does not provide any actionable output.
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	# path to JSON configuration file
+	# path to shared Duo Authentication Proxy configuration file
 	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
 	[string]$Path,
-	# child path to host folder
+	# path to local Duo Authentication Proxy configuration file
 	[Parameter(Dontshow)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
 	[string]$Destination = (Join-Path -Path ([System.Environment]::GetFolderPath('ProgramFiles')) -ChildPath 'Duo Security Authentication Proxy\conf\authproxy.cfg'),
 	# string containing algorithm for Get-FileHash
 	[Parameter(DontShow)][ValidateSet('SHA1', 'SHA256', 'SHA384', 'SHA512', 'MACTripleDES', 'MD5', 'RIPEMD160')]
 	[string]$Algorithm = 'SHA512',
-	# switch to skip transcript logging
-	[Parameter(DontShow)]
-	[switch]$SkipTranscript,
 	# local site name
 	[Parameter(DontShow)]
 	[string]$SiteName = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySite]::GetComputerSite().Name,
@@ -53,19 +48,6 @@ Param(
 	[Parameter(DontShow)]
 	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
 )
-
-Begin {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# start transcript with default parameters
-		Try {
-			Start-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
-	}
-}
 
 Process {
 	# get info of path parameter
@@ -131,18 +113,5 @@ Process {
 	Catch {
 		Write-Warning -Message 'could not restart DuoAuthProxy service'
 		Return $_
-	}
-}
-
-End {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# stop transcript with default parameters
-		Try {
-			Stop-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
 	}
 }
