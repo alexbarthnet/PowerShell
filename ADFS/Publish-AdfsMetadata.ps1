@@ -5,15 +5,10 @@
 Publishes ADFS modified metadata and public signing certificate to a folder.
 
 .DESCRIPTION
-Publishes ADFS modified metadata and public signing certificate to a folder. Metadata has been modified to better support SAML single logout in specific circumstances.
+Publishes ADFS modified metadata and public signing certificate to a folder. The ADFS metadata is modified to provide better support for SAML single logout in specific circumstances.
 
-.PARAMETER Json
-The path to a JSON file containing the configuration for the ADFS service. The following values are required:
- - FQDN - the FQDN of the ADFS service
- - Path - the parent path for the files
-
-.PARAMETER ChildPath
-The child path for the metadata files and certificate. The full path is formed by joining the path from the JSON file and the value of this parameter.
+.PARAMETER Path
+The folder path for the modified metadata files and public signing certificate.
 
 .INPUTS
 None.
@@ -27,232 +22,110 @@ None. The script reports the actions taken and does not provide any actionable o
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	# path to JSON configuration file
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
-	[string]$Json,
-	# child path to metadata folder
-	[Parameter(DontShow)]
-	[string]$ChildPath = 'metadata',
-	# switch to skip transcript logging
-	[Parameter(DontShow)]
-	[switch]$SkipTranscript,
-	# name in transcript files
-	[Parameter(DontShow)]
-	[string]$TranscriptName,
-	# path to transcript files
-	[Parameter(DontShow)]
-	[string]$TranscriptPath,
-	# local host name
-	[Parameter(DontShow)]
-	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
-	# local domain name
-	[Parameter(DontShow)]
-	[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
-	# local DNS hostname
-	[Parameter(DontShow)]
-	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
+	# path for metadata files
+	[Parameter(Position = 0, Mandatory = $True)]
+	[string]$Path
 )
 
 Begin {
-	Function Start-TranscriptWithHostAndDate {
+	Function Export-AdfsCertificate {
 		Param(
-			# name for transcript file
-			[Parameter()]
-			[string]$TranscriptName,
-			# path for transcript file
-			[Parameter()]
-			[string]$TranscriptPath,
-			# log start time
-			[Parameter(DontShow)]
-			[string]$TranscriptTime = ([datetime]::Now.ToString('yyyyMMddHHmmss')),
-			# local hostname
-			[Parameter(DontShow)]
-			[string]$TranscriptHost = ([System.Environment]::MachineName)
+			[Parameter(Mandatory = $true)][ValidateSet('Service-Communications', 'Token-Decrypting', 'Token-Signing')]
+			[string]$CertificateType,
+			[string]$FilePath
 		)
 
-		# define default transcript name as basename of running script
-		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
-			$TranscriptName = (Get-PSCallStack)[1].Command -replace '\.ps1$'
+		# retrieve ADFS certificate
+		Try {
+			$AdfsCertificate = Get-AdfsCertificate -CertificateType $CertificateType | Where-Object { $_.IsPrimary }
+		}
+		Catch {
+			Write-Warning "could not retrieve certificate with type: $CertificateType"
+			Return $_
 		}
 
-		# define default transcript path as named folder under transcripts folder in common application data folder
-		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
-			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
-		}
-
-		# verify transcript path
-		If (!(Test-Path -Path $TranscriptPath -PathType 'Container')) {
-			# define parameters for New-Item
-			$NewItem = @{
-				Path        = $TranscriptPath
-				ItemType    = 'Directory'
-				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-			}
-
-			# create transcript path
+		# if file path exists...
+		If ([System.IO.File]::Exists($FilePath)) {
+			# create certificate from path
 			Try {
-				$null = New-Item @NewItem
+				$Certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($FilePath)
 			}
 			Catch {
-				Throw $_
+				Write-Warning "found invalid file at file path: $FilePath"
+			}
+
+			# if thumbprints match...
+			If ($Certificate -is [System.Security.Cryptography.X509Certificates.X509Certificate2] -and $Certificate.Thumbprint -eq $AdfsCertificate.Certificate.Thumbprint) {
+				Write-Host "Found current '$CertificateType' ADFS certificate already at path: $FilePath"
+				Return
 			}
 		}
 
-		# build transcript file name with defined prefix, hostname, transcript name and current datetime
-		$TranscriptFile = "PowerShell_transcript.$TranscriptHost.$TranscriptName.$TranscriptTime.txt"
-
-		# define parameters for Start-Transcript
-		$StartTranscript = @{
-			Path        = Join-Path -Path $TranscriptPath -ChildPath $TranscriptFile
-			Force       = $true
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# start transcript
-		Try	{
-			$null = Start-Transcript @StartTranscript
-		}
-		Catch {
-			Throw $_
-		}
-	}
-
-	Function Stop-TranscriptWithHostAndDate {
-		Param(
-			# name for transcript file
-			[Parameter()]
-			[string]$TranscriptName,
-			# path of transcript files
-			[Parameter()]
-			[string]$TranscriptPath,
-			# minimum number of transcript files for removal
-			[Parameter(DontShow)]
-			[uint16]$TranscriptCount = 7,
-			# minimum age of transcript files for removal
-			[Parameter(DontShow)]
-			[double]$TranscriptDays = 7,
-			# datetime for transcript files for removal
-			[Parameter(DontShow)]
-			[datetime]$TranscriptDate = ([datetime]::Now.AddDays(-$TranscriptDays)),
-			# local hostname
-			[Parameter(DontShow)]
-			[string]$TranscriptHost = ([System.Environment]::MachineName)
-		)
-
-		# define default transcript name as basename of running script
-		If (!$PSBoundParameters.ContainsKey('TranscriptName')) {
-			$TranscriptName = (Get-PSCallStack)[1].Command -replace '\.ps1$'
-		}
-
-		# define default transcript path as named folder under transcripts folder in common application data folder
-		If (!$PSBoundParameters.ContainsKey('TranscriptPath')) {
-			$TranscriptPath = [System.Environment]::GetFolderPath('CommonApplicationData'), 'PowerShell_transcript', $TranscriptName -join '\'
-			# LEGACY: re-define default transcript path as string array containing current path and original path in common application data folder
-			[string[]]$TranscriptPath = @([System.Environment]::GetFolderPath('CommonApplicationData'), $TranscriptPath)
-		}
-
-		# define filter using default transcript prefix, hostname, and script name
-		$TranscriptFilter = "PowerShell_transcript.$TranscriptHost.$TranscriptName*"
-
-		# get transcript files matching filter
-		$TranscriptFiles = Get-ChildItem -Path $TranscriptPath -Filter $TranscriptFilter -ErrorAction 'SilentlyContinue'
-
-		# split transcript files on transcript date
-		$NewFiles, $OldFiles = $TranscriptFiles.Where({ $_.LastWriteTime -ge $TranscriptDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
-
-		# if count of files after transcript date is less than to cleanup threshold...
-		If ($NewFiles.Count -lt $TranscriptCount) {
-			# declare skip
-			Write-Verbose -Message "Skipping transcript file cleanup; count of transcripts ($($NewFiles.Count)) would be below minimum transcript count ($TranscriptCount)" -Verbose
-		}
-		Else {
-			# declare cleanup
-			Write-Verbose -Message "Removing any transcript files matching '$TranscriptFilter' that are older than '$TranscriptDays' days from: $TranscriptPath" -Verbose
-			# remove old transcript files
-			ForEach ($OldFile in ($OldFiles | Sort-Object -Property FullName)) {
-				Try {
-					Remove-Item -Path $OldFile.FullName -Force -Verbose -ErrorAction Stop
-				}
-				Catch {
-					$_
-				}
-			}
-		}
-
-		# stop transcript
+		# export ADFS certificate
 		Try {
-			$null = Stop-Transcript
-		}
-		Catch {
-			Throw $_
-		}
-	}
-
-	# if running...
-	If ($PSCmdlet.ParameterSetName -eq 'Default') {
-		# define hashtable for transcript functions
-		$TranscriptWithHostAndDate = @{}
-		# define parameters for transcript functions
-		If ($PSBoundParameters.ContainsKey('TranscriptName')) { $TranscriptWithHostAndDate['TranscriptName'] = $PSBoundParameters['TranscriptName'] }
-		If ($PSBoundParameters.ContainsKey('TranscriptPath')) { $TranscriptWithHostAndDate['TranscriptPath'] = $PSBoundParameters['TranscriptPath'] }
-		# start transcript with parameters
-		Try {
-			Start-TranscriptWithHostAndDate @TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
-	}
-}
-
-Process {
-	# retrieve JSON data
-	Try {
-		$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
-	}
-	Catch {
-		Write-Host 'ERROR: retrieving ADFS JSON file'
-		Return
-	}
-
-	# test FQDN from JSON data
-	If ([string]::IsNullOrEmpty($JsonData.Fqdn)) {
-		Write-Host 'FQDN was not found in ADFS JSON file'
-		Return
-	}
-
-	# test path from JSON data
-	If ([string]::IsNullOrEmpty($JsonData.Path)) {
-		Write-Host 'Path was not found in ADFS JSON file'
-		Return
-	}
-
-	# define path
-	$Path = Join-Path -Path $JsonData.Path -ChildPath $ChildPath
-
-	# verify path
-	If (Test-Path -Path $Path -PathType Container) {
-		# report path
-		Write-Host "Found metadata path: $Path"
-	}
-	Else {
-		# create path
-		Try {
-			$null = New-Item -ItemType 'Directory' -Path $Path -ErrorAction Stop
+			$null = Export-Certificate -FilePath $FilePath -Cert $AdfsCertificate.Certificate
 		}
 		Catch {
 			Return $_
 		}
-		# report path created
-		Write-Host "Created metadata path: $Path"
+
+		# declare state and return
+		Write-Host "Exported '$CertificateType' ADFS certificate to path: $FilePath"
+		Return
 	}
 
-	# get ADFS role
+	Function Get-AdfsEndpointLocalUrl {
+		Param(
+			# local host name
+			[Parameter(DontShow)]
+			[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
+			# local domain name
+			[Parameter(DontShow)]
+			[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
+			# local DNS hostname
+			[Parameter(DontShow)]
+			[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.'),
+			# ADFS endpoint address path
+			[Parameter(Mandatory = $true)]
+			[string]$AddressPath
+		)
+
+		# retrieve ADFS endpoint
+		Try {
+			$AdfsEndpoint = Get-AdfsEndpoint -AddressPath $AddressPath -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning "could not retrieve ADFS endpoint for address path: $AddressPath"
+			Return $_
+		}
+
+		# retrieve URL from ADFS endpoint
+		If ($AdfsEndpoint.FullUrl -isnot [System.Uri]) {
+			Write-Warning 'found FullUrl on requested endpoint is not a Uri object'
+			Return
+		}
+
+		# get URL for metadata against local server
+		Try {
+			$Uri = $AdfsEndpoint.FullUrl.OriginalString.Replace($AdfsEndpoint.FullUrl.DnsSafeHost, $DnsHostName) -as [System.Uri]
+		}
+		Catch {
+			Write-Warning "could not create local URL for 'Federation Metadata' endpoint"
+			Return $_
+		}
+
+		# return URL
+		Return $Uri
+	}
+}
+
+Process {
+	# retrieve ADFS role
 	Try {
 		$Role = Get-AdfsSyncProperties | Select-Object -ExpandProperty 'Role'
 	}
 	Catch {
-		Write-Host 'ERROR: retrieving ADFS sync properties'
+		Write-Warning 'could not retrieve ADFS sync properties'
 		Return $_
 	}
 
@@ -266,72 +139,63 @@ Process {
 			Return
 		}
 		Default {
-			Write-Host "Unknown ADFS server role: $Role"
+			Write-Warning "found unknown ADFS server role: $Role"
 			Return
 		}
 	}
 
-	# build dependent paths
-	$FilePath = Join-Path -Path $Path -ChildPath 'token-signing.crt'
+	# if path not found...
+	If (![System.IO.Directory]::Exists($Path)) {
+		# create path
+		Try {
+			$null = New-Item -Path $Path -Force -ItemType 'Directory' -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning "could not create path: $local:Path"
+			Return $_
+		}
+	}
 
-	# retrieve token signing certificate
-	Try {
-		$AdfsCertificate = Get-AdfsCertificate -CertificateType 'Token-Signing' | Select-Object -ExpandProperty 'Certificate' | Sort-Object -Property NotBefore | Select-Object -Last 1
-		Write-Host "Retrieved token signing certificate with thumbprint: $($AdfsCertificate.Thumbprint)"
-	}
-	Catch {
-		Return $_
-	}
+	# define certificate type
+	$CertificateType = 'Token-Signing'
+
+	# define file path from certificate type
+	$ChildPath = '{0}.crt' -f $CertificateType.ToLower()
+	$FilePath = Join-Path -Path $Path -ChildPath $ChildPath
 
 	# export token signing certificate
 	Try {
-		$null = $AdfsCertificate | Export-Certificate -Force -FilePath $FilePath
-		Write-Host "Exported token signing certificate to path: $FilePath"
+		Export-AdfsCertificate -CertificateType $CertificateType -FilePath $FilePath
 	}
 	Catch {
 		Return $_
 	}
 
-	# get ADFS endpoints
+	# retrieve primary endpoint
 	Try {
-		$ADFSEndpoint = Get-ADFSEndpoint -ErrorAction Stop
-		Write-Host 'Retrieved endpoint data from ADFS'
+		$AdfsEndpoint = Get-AdfsEndpoint -AddressPath '/adfs/ls/'
 	}
 	Catch {
+		Write-Warning 'could not retrieve ADFS primary endpoint'
+		Return
+	}
+
+	# retrieve URL from primary endpoint
+	$Uri = $AdfsEndpoint.FullUrl
+
+	# retrieve metadata endpoint
+	Try {
+		$UriForRestMethod = Get-AdfsEndpointLocalUrl -AddressPath '/FederationMetadata/2007-06/FederationMetadata.xml'
+	}
+	Catch {
+		Write-Warning 'could not retrieve ADFS metadata endpoint with local hostname'
 		Return $_
-	}
-
-	# get URL for metadata
-	$UriForMetadata = ($ADFSEndpoint | Where-Object Protocol -EQ 'Federation Metadata').FullUrl.ToString()
-
-	# test URL for endpoint
-	If ([string]::IsNullOrEmpty($UriForMetadata)) {
-		Write-Warning "could not find URL for 'Federation Metadata' in endpoint data"
-		Return
-	}
-
-	# get URL for endpoint
-	$UriForEndpoint = ($ADFSEndpoint | Where-Object Protocol -EQ 'SAML 2.0/WS-Federation').FullUrl.ToString()
-
-	# test URL for endpoint
-	If ([string]::IsNullOrEmpty($UriForEndpoint)) {
-		Write-Warning "could not find URL for 'SAML 2.0/WS-Federation' in endpoint data"
-		Return
-	}
-
-	# get URL for rest method against local server
-	$UriForRestMethod = $UriForMetadata.Replace($JsonData.Fqdn, $DnsHostName)
-
-	# test URL for SAML
-	If ($UriForRestMethod -eq $UriForEndpoint) {
-		Write-Warning "could not create local URL for 'SAML 2.0/WS-Federation' endpoint"
-		Return
 	}
 
 	# define parameters for Invoke-WebRequest
 	$InvokeRestMethod = @{
 		Uri                = $UriForRestMethod
-		Headers            = @{'host' = $JsonData.Fqdn }
+		Headers            = @{'host' = $Uri.DnsSafeHost }
 		UseBasicParsing    = $true
 		MaximumRedirection = 0
 		ErrorAction        = [System.Management.Automation.ActionPreference]::Stop
@@ -339,55 +203,83 @@ Process {
 
 	# get local URL for metadata
 	Try {
-		$RestMethod = Invoke-RestMethod @InvokeRestMethod
-		Write-Host "Retrieved XML from local metadata endpoint: $UriForRestMethod"
+		$XmlFromRestMethod = Invoke-RestMethod @InvokeRestMethod
 	}
 	Catch {
 		Return $_
 	}
 
-	# build hashtable of bindings and suffixes
-	$CustomMetadata = @{
-		Post     = 'logout.aspx'
-		Redirect = '?wa=wsignout1.0'
+	# define hashtable of bindings and location suffixes
+	$BindingLocations = @{
+		'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect' = '{0}{1}' -f $Uri, '?wa=wsignout1.0'
+		'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST'     = '{0}{1}' -f $Uri, 'logout.aspx'
 	}
 
 	# process custom metadata
-	ForEach ($Binding in $CustomMetadata.Keys) {
-		# copy original metadata
-		$XmlFromRest = $RestMethod
+	ForEach ($Binding in $BindingLocations.Keys) {
+		# retrieve binding-specific URI for SingleLogoutService
+		$XmlElement = $XmlFromRestMethod.EntityDescriptor.IDPSSODescriptor.SingleLogoutService | Where-Object { $_.Binding -eq $Binding }
 
-		# retrieve binding-specific URI for SingleLogoutService then append binding-specific suffix to URI
-		$XmlFromRest.GetElementsByTagName('IDPSSODescriptor').GetElementsByTagName('SingleLogoutService') | Where-Object { $_.Binding -match $Binding } | ForEach-Object { $_.Location = ($UriForEndpoint + $CustomMetadata[$Binding]) }
+		# update location for binding-specific URI
+		$XmlElement.Location = $BindingLocations[$Binding]
+	}
 
-		# define binding-specific child paths for XML files
-		$XmlChildPaths = @("saml-single-logout-$($Binding.ToLowerInvariant()).xml", "custom-logout-$($Binding.ToLowerInvariant()).xml")
+	# define templates for binding-specific child paths for XML files
+	$ChildPaths = @('saml-single-logout.xml', 'custom-logout.xml')
 
-		# process child paths for XML files
-		ForEach ($XmlChildPath in $XmlChildPaths) {
-			# create full path for XML file
-			$XmlPath = Join-Path -Path $Path -ChildPath $XmlChildPath
-			# write XML file
-			Try {
-				$XmlFromRest.Save($XmlPath)
-				Write-Host "Wrote metadata file: $XmlPath"
-			}
-			Catch {
-				Return $_
+	# process child paths for XML files
+	:NextChildPath ForEach ($ChildPath in $ChildPaths) {
+		# create file path
+		$FilePath = Join-Path -Path $Path -ChildPath $ChildPath
+
+		# if path exists...
+		If ([System.IO.File]::Exists($FilePath)) {
+			# create XML object
+			$XmlFromFileSystem = [System.Xml.XmlDocument]::new()
+
+			# load XML file
+			$XmlFromFileSystem.Load($FilePath)
+
+			# define comparison boolean
+			$XmlFilesMatch = $true
+
+			# compare XML objects for Application Service Role Descriptor 
+			$XmlElement1 = $XmlFromFileSystem.EntityDescriptor.RoleDescriptor | Where-Object { $_.type -eq 'fed:ApplicationServiceType' }
+			$XmlElement2 = $XmlFromRestMethod.EntityDescriptor.RoleDescriptor | Where-Object { $_.type -eq 'fed:ApplicationServiceType' }
+			If ($XmlElement1.OuterXML -ne $XmlElement2.OuterXML) { $XmlFilesMatch = $false }
+
+			# compare XML objects for Security Token Service Role Descriptor 
+			$XmlElement1 = $XmlFromFileSystem.EntityDescriptor.RoleDescriptor | Where-Object { $_.type -eq 'fed:SecurityTokenServiceType' }
+			$XmlElement2 = $XmlFromRestMethod.EntityDescriptor.RoleDescriptor | Where-Object { $_.type -eq 'fed:SecurityTokenServiceType' }
+			If ($XmlElement1.OuterXML -ne $XmlElement2.OuterXML) { $XmlFilesMatch = $false }
+
+			# compare XML objects for SP SSO Descriptor
+			$XmlElement1 = $XmlFromFileSystem.EntityDescriptor.SPSSODescriptor
+			$XmlElement2 = $XmlFromRestMethod.EntityDescriptor.SPSSODescriptor
+			If ($XmlElement1.OuterXML -ne $XmlElement2.OuterXML) { $XmlFilesMatch = $false }
+
+			# compare XML objects for IDP SSO Descriptor
+			$XmlElement1 = $XmlFromFileSystem.EntityDescriptor.IDPSSODescriptor
+			$XmlElement2 = $XmlFromRestMethod.EntityDescriptor.IDPSSODescriptor
+			If ($XmlElement1.OuterXML -ne $XmlElement2.OuterXML) { $XmlFilesMatch = $false }
+
+			# if XML update required
+			If ($XmlFilesMatch) {
+				Write-Host "Found current metadata file for '$Binding' binding at path: $FilePath"
+				Continue NextChildPath
 			}
 		}
-	}
-}
 
-End {
-	# if running...
-	If ($PSCmdlet.ParameterSetName -eq 'Default') {
-		# stop transcript with parameters
+		# write XML file
 		Try {
-			Stop-TranscriptWithHostAndDate @TranscriptWithHostAndDate
+			$XmlFromRestMethod.Save($FilePath)
 		}
 		Catch {
-			Throw $_
+			Write-Warning "could not write updated metadata file for '$Binding' binding to path: $FilePath"
+			Return $_
 		}
+	
+		# report write
+		Write-Host "Wrote updated metadata file for '$Binding' binding to path: $FilePath"
 	}
 }
