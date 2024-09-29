@@ -42,7 +42,7 @@ Param(
 # if hostname provided...
 If ($PSCmdlet.ParameterSetName -eq 'Hostname') {
 	# create URI object
-	$Uri = [System.Uri]::new("$Prefix$Hostname$Suffix")
+	$Uri = '{0}{1}{2}' -f $Prefix, $Hostname, $Suffix -as [System.Uri]
 }
 
 # request metadata
