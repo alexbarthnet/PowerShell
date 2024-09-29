@@ -1,19 +1,12 @@
-#requires -Modules TranscriptWithHostAndDate
-
 <#
 .SYNOPSIS
-Updates a 'script host' file with the name of the server actively servicing requests to ADFS.
+Updates the local 'ActiveScriptHost' file with the name of the server actively servicing requests to ADFS.
 
 .DESCRIPTION
-Updates a 'script host' file with the name of the server actively servicing requests to ADFS. This file is leveraged by other scripts to determine an effective 'FSMO' equivalent on ADFS servers without reliance upon the static primary/secondary server configuration.
+Updates the local 'ActiveScriptHost' file with the name of the server actively servicing requests to ADFS. See the Notes for more details.
 
-.PARAMETER Json
-The path to a JSON file containing the configuration for the ADFS service. The following values are required:
- - FQDN - the FQDN of the ADFS service
- - Path - the parent path for the files
-
-.PARAMETER ChildPath
-The child path for the 'script host' file. The full path is formed by joining the path from the JSON file and the value of this parameter.
+.PARAMETER Path
+The path to the folder containing the 'script host' files.
 
 .INPUTS
 None.
@@ -22,20 +15,17 @@ None.
 None. The script reports the actions taken and does not provide any actionable output.
 
 .EXAMPLE
-.\Update-AdfsScriptHost.ps1 -Json C:\Content\adfs\config.json -ChildPath 'host'
+.\Update-AdfsScriptHost.ps1 -Path C:\Content\adfs\host
+
+.NOTES
+This script is a key element in 'ActiveScriptHost' process that provides an effective "FSMO" to scripts run on ADFS server. This process assumes the following:
+ 1. The ADFS servers and Web Application Proxy servers are able to access a common file location. 
+ 2. The ADFS servers are load balanced in an active/passive fashion with a consistent active node.
+
 #>
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	# path to JSON configuration file
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ -PathType [Microsoft.PowerShell.Commands.TestPathType]::Leaf })]
-	[string]$Json,
-	# child path to host folder
-	[Parameter(Dontshow)]
-	[string]$ChildPath = 'host',
-	# switch to skip transcript logging
-	[Parameter(DontShow)]
-	[switch]$SkipTranscript,
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -44,7 +34,16 @@ Param(
 	[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
 	# local DNS hostname
 	[Parameter(DontShow)]
-	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
+	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.'),
+	# path for script host files
+	[Parameter(Position = 0, Mandatory = $True)]
+	[string]$Path,
+	# path for constructed uri
+	[Parameter(Position = 1)]
+	[string]$UriPath = '/host',
+	# path for specific script host file
+	[Parameter(Position = 2)]
+	[string]$FilePath = (Join-Path -Path $Path -ChildPath "$HostName.txt")
 )
 
 Begin {
@@ -110,7 +109,7 @@ Begin {
 		}
 
 		# report IP address
-		Write-Host "Resolved IP address '$IPAddress' from URL: '$($Uri.AbsoluteUri)'"
+		Write-Host "Resolved IP address '$IPAddress' from URL: $($Uri.AbsoluteUri)"
 
 		# update URI with IP address
 		Try {
@@ -125,90 +124,106 @@ Begin {
 		# return updated URI
 		Return $Uri
 	}
-
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# start transcript with default parameters
-		Try {
-			Start-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
-	}
 }
 
 Process {
-	# retrieve JSON data
-	Try {
-		$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
-	}
-	Catch {
-		Write-Host 'ERROR: retrieving ADFS JSON file'
-		Return $_
-	}
-
-	# if Uri not in JSON data...
-	If ([string]::IsNullOrEmpty($JsonData.Uri)) {
-		Write-Warning -Message 'could not find Uri property in JSON file'
-		Return
-	}
-
-	# if Path not in JSON data...
-	If ([string]::IsNullOrEmpty($JsonData.Path)) {
-		Write-Warning -Message 'could not find Path property in JSON file'
-		Return
-	}
-
-	# cast Uri property to Uri object
-	Try {
-		$Uri = [uri]$JsonData.Uri
-	}
-	Catch {
-		Write-Warning -Message 'could not cast Uri property in JSON file to Uri object'
-		Return $_
-	}
-
-	# record hostname from original Uri
-	$UriHostName = $Uri.DnsSafeHost
-
-	# build primary path
-	$Path = Join-Path -Path $JsonData.Path -ChildPath $ChildPath
-
-	# verify path
-	If (-not (Test-Path -Path $Path)) {
+	# if path not found...
+	If (![System.IO.Directory]::Exists($Path)) {
+		# create path
 		Try {
-			$null = New-Item -ItemType 'Directory' -Path $Path -ErrorAction Stop
+			$null = New-Item -Path $Path -Force -ItemType 'Directory' -ErrorAction 'Stop'
 		}
 		Catch {
+			Write-Warning "could not create path: $local:Path"
 			Return $_
 		}
 	}
 
-	# define path of specific host file
-	$FilePath = Join-Path -Path $Path -ChildPath "$HostName.txt"
+	# if file not found...
+	If (![System.IO.File]::Exists($local:FilePath)) {
+		# create script host file
+		Try {
+			$null = New-Item -Path $local:FilePath -Force -ItemType 'File' -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning "could not create script host file: '$local:FilePath"
+			Return $_
+		}
+	}
 
-	# get content of hosts file
+	# retrieve proxy configuration
 	Try {
-		$HostsFileContent = Get-Content -Path "$env:SystemRoot\System32\drivers\etc\hosts"
+		$WebApplicationProxyConfiguration = Get-WebApplicationProxyConfiguration
 	}
 	Catch {
-		Write-Warning 'Error retrieving hosts file'
+		Write-Warning "could not retrieve Web Application Proxy Application on host: $local:Hostname"
 		Return $_
 	}
 
-	# if hosts contains an entry with hostname from Uri...
-	If ($HostsFileContent -match "^[^#].*$($Uri.DnsSafeHost)$") {
-		# report matching hosts entry found
-		Write-Verbose -Message 'hosts file contains entry with hostname from the provided URI; resolving hostname to IP via DNS to build alternate URI'
-		# record hostname from original Uri
-		$UriHostName = $Uri.DnsSafeHost
-		# resolve host in URI to IP Address to workaround potential hosts file resolution of ADFS servers
+	# retrieve ADFS URL
+	If ([string]::IsNullOrEmpty($local:WebApplicationProxyConfiguration.ADFSUrl)) {
+		Write-Warning "found empty ADFS URL in Web Application Proxy Application on host: $local:Hostname"
+		Return
+	}
+
+	# create URI builder from ADFS URL
+	Try {
+		$UriBuilder = [System.UriBuilder]::new($local:WebApplicationProxyConfiguration.ADFSUrl)
+	}
+	Catch {
+		Write-Warning "could not create UriBuilder from ADFS URL on host: $local:Hostname"
+		Return $_
+	}
+
+	# update path in URI builder
+	Try {
+		$UriBuilder.Path = $UriPath
+	}
+	Catch {
+		Write-Warning "could not update Path in UriBuilder on host: $local:Hostname"
+		Return $_
+	}
+
+	# get Uri from URI builder
+	Try {
+		$Uri = $UriBuilder.Uri
+	}
+	Catch {
+		Write-Warning -Message "could create Uri from UriBuilder on host: $local:Hostname"
+		Return $_
+	}
+
+	# get content of hosts file
+	Try {
+		$Content = Get-Content -Path "$env:SystemRoot\System32\drivers\etc\hosts"
+	}
+	Catch {
+		Write-Warning "could not retrieve hosts file on host: $local:Hostname"
+		Return $_
+	}
+
+	# process hosts file content
+	:NextLine ForEach ($Line in $Content) {
+		# if line is commented out...
+		If ($Line.StartsWith('#')) {
+			# continue to the next line
+			Continue NextLine
+		}
+		# if line ends with the hostname...
+		If ($Line -match "\s$($Uri.DnsSafeHost)$") {
+			# set URI with IP address required
+			$UriWithIPAddressRequired = $true
+		}
+	}
+
+	# if URI with IP address required...
+	If ($local:UriWithIPAddressRequired) {
+		# retrieve updated URI with hostname for ADFS service replaced with IP address of ADFS service to address hosts file configuration for non-split-brain DNS
 		Try {
-			$Uri = Get-UriWithIPAddressFromUriWithHostname -Uri $Uri
+			$Uri = Get-UriWithIPAddressFromUriWithHostname -Uri $local:Uri
 		}
 		Catch {
-			Write-Warning 'could not create new Uri with IPaddress from original Uri'
+			Write-Warning 'could not create new Uri with IP address from original Uri'
 			Return $_
 		}
 	}
@@ -216,7 +231,7 @@ Process {
 	# define parameters for Invoke-WebRequest
 	$InvokeWebRequest = @{
 		Uri                = $Uri
-		Headers            = @{ 'host' = $UriHostName }
+		Headers            = @{ 'host' = $UriBuilder.Host }
 		UseBasicParsing    = $true
 		MaximumRedirection = 0
 		ErrorAction        = [System.Management.Automation.ActionPreference]::Stop
@@ -225,76 +240,51 @@ Process {
 	# retrieve content from URI
 	Try {
 		$WebRequest = Invoke-WebRequest @InvokeWebRequest
-		Write-Host "Retrieved response from host URL: '$($Uri.AbsoluteUri)'"
 	}
 	Catch {
-		Write-Warning "Error retrieving response from host URL: '$($Uri.AbsoluteUri)'"
+		Write-Warning "could not retrieve response from URL: $($Uri.AbsoluteUri)"
 		Return $_
+	}
+
+	# if content empty...
+	If ([string]::IsNullOrEmpty($WebRequest.Content)) {
+		Write-Warning "found empty content at host URL: $($Uri.AbsoluteUri)"
+		Return
 	}
 
 	# parse response
 	Try {
-		$ActiveHost = $WebRequest.Content.Trim().ToLowerInvariant()
-		Write-Host "Parsed response from host URL: '$($Uri.AbsoluteUri)'"
+		$ActiveHost = $WebRequest.Content.Trim()
 	}
 	Catch {
-		Write-Warning "Error parsing response from host URL: '$($Uri.AbsoluteUri)'"
+		Write-Warning "could not parse response from host URL: $($Uri.AbsoluteUri)"
 		Return $_
 	}
 
-	# create empty string for current host
-	$CurrentHost = [string]::Empty
-
-	# test file
-	If (Test-Path -Path $FilePath) {
-		# retrieve current host from file
-		Try {
-			$CurrentHost = Get-Content -Path $FilePath
-			Write-Host "Retrieved script host from file: '$FilePath'"
-		}
-		Catch {
-			Write-Warning "Error retrieving script host from file: '$FilePath'"
-			Return $_
-		}
+	# retrieve current host from file
+	Try {
+		$CurrentHost = Get-Content -Path $FilePath
 	}
-	Else {
-		# create script host file and variable
-		Try {
-			$null = New-Item -ItemType 'File' -Path $FilePath
-			Write-Host "Created script host file: '$FilePath'"
-		}
-		Catch {
-			Write-Warning "Error creating script host file: '$FilePath"
-			Return $_
-		}
+	Catch {
+		Write-Warning "Error retrieving script host from file: '$FilePath'"
+		Return $_
 	}
 
 	# check current host and active host
-	If ($CurrentHost -eq $ActiveHost) {
-		Write-Host "'$ActiveHost' is active host and script host; no change required"
+	If ([string]::IsNullOrEmpty($CurrentHost) -or $CurrentHost -ne $ActiveHost) {
+		Write-Host "Verified script host file: active script host is '$ActiveHost'"
 		Return
 	}
 
 	# update host name
 	Try {
 		Set-Content -Path $FilePath -Value $ActiveHost
-		Write-Host "'$ActiveHost' is new script host; replaced old script host: '$CurrentHost' "
 	}
 	Catch {
 		Write-Warning "Error updating script host file: '$FilePath"
 		Return $_
 	}
-}
 
-End {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# stop transcript with default parameters
-		Try {
-			Stop-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
-	}
+	# declare state
+	Write-Host "Updated script host file: replaced '$CurrentHost' with new script host: $ActiveHost"
 }
