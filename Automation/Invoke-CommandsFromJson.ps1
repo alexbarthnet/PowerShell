@@ -83,12 +83,13 @@ Param(
 	[switch]$Show,
 	[Parameter(Mandatory = $True, ParameterSetName = 'Clear')]
 	[switch]$Clear,
-	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'RemoveByCommand')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'RemoveByOrder')]
 	[switch]$Remove,
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[switch]$Add,
 	# script parameter - command to run
-	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'RemoveByCommand')]
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[string]$Command,
 	# script parameter - parameters for command
@@ -101,7 +102,7 @@ Param(
 	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
 	[string]$Variable,
 	# script parameter - order of command
-	[Parameter(Mandatory = $False, ParameterSetName = 'Remove')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'RemoveByOrder')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
 	[uint16]$Order = 1,
 	# local host name
@@ -1544,21 +1545,33 @@ Process {
 		# remove entry from configuration file
 		$Remove {
 			# if order provided...
-			If ($PSBoundParameters.ContainsKey('Order')) {
-				# remove existing entry by primary key(s)...
-				$JsonData = [array]($JsonData.Where({ $_.Command -ne $Command -and $_.Order -ne $Order }))
-			}
-			# if order not provided...
-			Else {
+			If ($PSBoundParameters.ContainsKey('Command')) {
+				# define report parameter 
+				$ParametersForReporting = "Command of '$Command'"
 				# remove existing entry by primary key(s)...
 				$JsonDataToRemove = [array]($JsonData.Where({ $_.Command -eq $Command }))
 				# if JSON data empty...
 				If ($JsonDataToRemove.Count -gt 1) {
 					# warn and inquire
-					Write-Warning -Message "Found multiple entries with '$Command' in configuration file: '$Json' `nAll matching entries will be removed" -WarningAction 'Inquire'
+					Write-Warning "Found multiple entries with $ParametersForReporting in configuration file: '$Json' `nAll matching entries will be removed" -WarningAction 'Inquire'
 				}
 				# remove existing entry by primary key(s)...
 				$JsonData = [array]($JsonData.Where({ $_.Command -ne $Command }))
+			}
+
+			# if order provided...
+			If ($PSBoundParameters.ContainsKey('Order')) {
+				# define report parameter 
+				$ParametersForReporting = "Order of '$Order'"
+				# remove existing entry by primary key(s)...
+				$JsonDataToRemove = [array]($JsonData.Where({ $_.Order -eq $Order }))
+				# if JSON data empty...
+				If ($JsonDataToRemove.Count -gt 1) {
+					# warn and inquire
+					Write-Warning -Message "Found multiple entries with $ParametersForReporting in configuration file: '$Json' `nAll matching entries will be removed" -WarningAction 'Inquire'
+				}
+				# remove existing entry by primary key(s)...
+				$JsonData = [array]($JsonData.Where({ $_.Order -ne $Order }))
 			}
 
 			# update JSON file
@@ -1567,19 +1580,20 @@ Process {
 				If ($JsonData.Count -eq 0) {
 					# clear JSON data
 					[string]::Empty | Set-Content -Path $Json
-					Write-Verbose -Verbose -Message "Removed '$Command' from configuration file: '$Json'"
 				}
 				Else {
 					# export JSON data
 					$JsonData | Sort-Object -Property 'Order', 'Command' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-					Write-Verbose -Verbose -Message "Removed '$Command' from configuration file: '$Json'"
-					$JsonData | Sort-Object -Property 'Order', 'Command' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 				}
 			}
 			Catch {
 				Write-Warning -Message "could not update configuration file: '$Json'"
 				Return $_
 			}
+
+			# report and display JSON contents
+			Write-Host "Removed $ParametersForReporting from configuration file: '$Json'"
+			$JsonData | Sort-Object -Property 'Order', 'Command' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 		# add entry to configuration file
 		$Add {
