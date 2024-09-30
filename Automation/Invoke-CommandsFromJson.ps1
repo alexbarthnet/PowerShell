@@ -105,6 +105,10 @@ Param(
 	[Parameter(Mandatory = $True, ParameterSetName = 'RemoveByOrder')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
 	[uint16]$Order = 1,
+	# switch parameter to skip transcript logging
+	[switch]$SkipTranscript,
+	# switch parameter to skip text output logging
+	[switch]$SkipTextOutput,
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -1485,6 +1489,17 @@ Begin {
 		# return collection
 		Return $Collection
 	}
+
+	# if default parameter set and skip transcript not requested...
+	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $SkipTranscript) {
+		# stop transcript with default parameters
+		Try {
+			Start-TranscriptForCommand -SkipTextOutput:$SkipTextOutput
+		}
+		Catch {
+			Throw $_
+		}
+	}
 }
 
 Process {
@@ -1668,14 +1683,6 @@ Process {
 		}
 		# process entries in configuration file
 		Default {
-			# start transcript with default parameters
-			Try {
-				Start-TranscriptForCommand
-			}
-			Catch {
-				Throw $_
-			}
-
 			# declare start
 			Write-Host "Calling commands from '$Json'"
 
@@ -1871,14 +1878,19 @@ Process {
 					Continue NextJsonEntry
 				}
 			}
+		}
+	}
+}
 
-			# stop transcript with default parameters
-			Try {
-				Stop-TranscriptForCommand
-			}
-			Catch {
-				Throw $_
-			}
+End {
+	# if default parameter set and skip transcript not requested...
+	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $SkipTranscript) {
+		# stop transcript with default parameters
+		Try {
+			Stop-TranscriptForCommand
+		}
+		Catch {
+			Throw $_
 		}
 	}
 }
