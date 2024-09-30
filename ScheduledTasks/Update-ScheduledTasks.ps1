@@ -2503,143 +2503,154 @@ Process {
 		$Clear {
 			Try {
 				[string]::Empty | Set-Content -Path $Json
-				Write-Verbose -Verbose -Message "Cleared configuration file: '$Json'"
 			}
 			Catch {
 				Write-Warning -Message "could not clear configuration file: '$Json'"
 				Return $_
 			}
+
+			# report
+			Write-Host "Cleared configuration file: '$Json'"
 		}
 		# remove entry from configuration file
 		$Remove {
-			Try {
-				# remove existing entry by primary key(s)...
-				$JsonData = [array]($JsonData.Where({ $_.TaskName -ne $TaskName -and $_.TaskPath -ne $TaskPath }))
-				# if JSON data empty...
-				If ($JsonData.Count -eq 0) {
-					# clear JSON data
+			# remove existing entry by primary key(s)...
+			$JsonData = [array]($JsonData.Where({ $_.TaskName -ne $TaskName -and $_.TaskPath -ne $TaskPath }))
+
+			# if JSON data empty...
+			If ($JsonData.Count -eq 0) {
+				# clear JSON data
+				Try {
 					[string]::Empty | Set-Content -Path $Json
 				}
-				Else {
-					# export JSON data
+				Catch {
+					Write-Warning -Message "could not clear last entry from configuration file: '$Json'"
+					Return $_
+				}
+			}
+			# if JSON data is not empty...
+			Else {
+				# update JSON file
+				Try {
 					$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 				}
-				# report state and display JSON file
-				Write-Verbose -Verbose -Message "Removed '$TaskName' at '$Taskpath' from configuration file: '$Json'"
-				$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+				Catch {
+					Write-Warning -Message "could not remove entry from configuration file: '$Json'"
+					Return $_
+				}
 			}
-			Catch {
-				Write-Warning -Message "could not update configuration file: '$Json'"
-				Return $_
-			}
+
+			# report and display JSON contents
+			Write-Host "Removed '$TaskName' at '$Taskpath' from configuration file: '$Json'"
+			$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 		# add entry to configuration file
 		$Add {
+			# validate task path before standardizing input
 			Try {
-				# validate task path
-				Try {
-					$TaskPathIsValid = Test-ScheduledTaskPath -TaskPath $TaskPath
-				}
-				Catch {
-					Write-Warning -Message "could not validate TaskPath value: $TaskPath"
-					Return
-				}
-
-				# if task name not 'Update-ScheduledTasks' and task path is not valid...
-				If ($TaskName -ne 'Update-ScheduledTasks' -and -not $TaskPathIsValid) {
-					Write-Warning -Message "the provided TaskPath is not permitted: '$TaskPath'"
-					Return
-				}
-
-				# verify task path starts with \
-				If (!$TaskPath.StartsWith('\')) {
-					$TaskPath = "\$TaskPath"
-				}
-
-				# verify task path ends with \
-				If (!$TaskPath.EndsWith('\')) {
-					$TaskPath = "$TaskPath\"
-				}
-
-				# create ordered dictionary for custom object
-				$JsonParameters = [ordered]@{
-					TaskName  = [string]$TaskName
-					TaskPath  = [string]$TaskPath
-					Execute   = [string]$Execute
-					Argument  = [string]$Argument
-					UserId    = [string]$UserId
-					LogonType = [string]$LogonType
-				}
-
-				# if NoTrigger not set...
-				If (!$script:NoTrigger) {
-					# add TriggerAt if NoTrigger not set
-					$JsonParameters['TriggerAt'] = $TriggerAt.ToString('s')
-				}
-
-				# add RandomDelay if provided as datetime value
-				If ($script:RandomDelay) {
-					$JsonParameters['RandomDelay'] = $RandomDelay.ToString('c')
-				}
-
-				# add ExecutionTimeLimit if provided as datetime value
-				If ($script:ExecutionTimeLimit) {
-					$JsonParameters['ExecutionTimeLimit'] = $ExecutionTimeLimit.ToString('c')
-				}
-
-				# add RepetitionInterval if provided as datetime value
-				If ($script:RepetitionInterval) {
-					$JsonParameters['RepetitionInterval'] = $RepetitionInterval.ToString('c')
-				}
-
-				# add RunLevel if provided
-				If ($script:RunLevel) {
-					$JsonParameters['RunLevel'] = [string]$RunLevel
-				}
-
-				# add Modules if provided
-				If ($script:Modules) {
-					$JsonParameters['Modules'] = [string[]]$Modules
-				}
-
-				# add Certificates if provided
-				If ($script:Certificates) {
-					$JsonParameters['Certificates'] = [string[]]$Certificates
-				}
-
-				# add Expression if provided
-				If ($script:Expression) {
-					$JsonParameters['Expression'] = [string]$Expression
-				}
-
-				# add Updated as current datetime in IS0 8601 extended format
-				$JsonParameters['Updated'] = [datetime]::Now.ToString('s')
-
-				# create custom object from hashtable
-				$JsonEntry = [pscustomobject]$JsonParameters
-
-				# if existing entry has same primary key(s)...
-				If ($JsonData.Where({ $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath })) {
-					# inquire before removing existing entry
-					Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction 'Inquire'
-					# remove existing entry with same primary key(s)
-					$JsonData = [array]($JsonData.Where({ $_.TaskName -ne $TaskName -and $_.TaskPath -ne $TaskPath }))
-				}
-
-				# add entry to data
-				$JsonData += $JsonEntry
-
-				# export JSON data
-				$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-
-				# report state and display JSON file
-				Write-Verbose -Verbose -Message "Added '$TaskName' at '$Taskpath' to configuration file: '$Json'"
-				$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+				$TaskPathIsValid = Test-ScheduledTaskPath -TaskPath $TaskPath
 			}
 			Catch {
-				Write-Warning -Message "could not update configuration file: '$Json'"
+				Write-Warning -Message "could not validate TaskPath value: $TaskPath"
+				Return
+			}
+
+			# if task name not 'Update-ScheduledTasks' and task path is not valid...
+			If ($TaskName -ne 'Update-ScheduledTasks' -and -not $TaskPathIsValid) {
+				Write-Warning -Message "the provided TaskPath is not permitted: '$TaskPath'"
+				Return
+			}
+
+			# verify task path starts with \
+			If (!$TaskPath.StartsWith('\')) {
+				$TaskPath = "\$TaskPath"
+			}
+
+			# verify task path ends with \
+			If (!$TaskPath.EndsWith('\')) {
+				$TaskPath = "$TaskPath\"
+			}
+
+			# if existing entry has same primary key(s)...
+			If ($JsonData.Where({ $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath })) {
+				# inquire before removing existing entry
+				Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction 'Inquire'
+				# remove existing entry with same primary key(s)
+				$JsonData = [array]($JsonData.Where({ $_.TaskName -ne $TaskName -and $_.TaskPath -ne $TaskPath }))
+			}
+
+			# create ordered dictionary for custom object
+			$JsonParameters = [ordered]@{
+				TaskName  = [string]$TaskName
+				TaskPath  = [string]$TaskPath
+				Execute   = [string]$Execute
+				Argument  = [string]$Argument
+				UserId    = [string]$UserId
+				LogonType = [string]$LogonType
+			}
+
+			# if NoTrigger not set...
+			If (!$script:NoTrigger) {
+				# add TriggerAt if NoTrigger not set
+				$JsonParameters['TriggerAt'] = $TriggerAt.ToString('s')
+			}
+
+			# add RandomDelay if provided as datetime value
+			If ($script:RandomDelay) {
+				$JsonParameters['RandomDelay'] = $RandomDelay.ToString('c')
+			}
+
+			# add ExecutionTimeLimit if provided as datetime value
+			If ($script:ExecutionTimeLimit) {
+				$JsonParameters['ExecutionTimeLimit'] = $ExecutionTimeLimit.ToString('c')
+			}
+
+			# add RepetitionInterval if provided as datetime value
+			If ($script:RepetitionInterval) {
+				$JsonParameters['RepetitionInterval'] = $RepetitionInterval.ToString('c')
+			}
+
+			# add RunLevel if provided
+			If ($script:RunLevel) {
+				$JsonParameters['RunLevel'] = [string]$RunLevel
+			}
+
+			# add Modules if provided
+			If ($script:Modules) {
+				$JsonParameters['Modules'] = [string[]]$Modules
+			}
+
+			# add Certificates if provided
+			If ($script:Certificates) {
+				$JsonParameters['Certificates'] = [string[]]$Certificates
+			}
+
+			# add Expression if provided
+			If ($script:Expression) {
+				$JsonParameters['Expression'] = [string]$Expression
+			}
+
+			# add Updated as current datetime in IS0 8601 extended format
+			$JsonParameters['Updated'] = [datetime]::Now.ToString('s')
+
+			# create custom object from hashtable
+			$JsonEntry = [pscustomobject]$JsonParameters
+
+			# add entry to data
+			$JsonData += $JsonEntry
+
+			# update JSON file
+			Try {
+				$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
+			}
+			Catch {
+				Write-Warning "could not add entry to configuration file: '$Json'"
 				Return $_
 			}
+
+			# report and display JSON contents
+			Write-Verbose -Verbose -Message "Added '$TaskName' at '$Taskpath' to configuration file: '$Json'"
+			$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 		# process entries in configuration file
 		Default {
