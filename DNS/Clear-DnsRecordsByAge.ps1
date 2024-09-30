@@ -35,6 +35,18 @@ None. The script reports on actions taken and does not provide any actionable ou
 
 [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Default')]
 Param (
+	# local host name
+	[Parameter(DontShow)]
+	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
+	# local domain name
+	[Parameter(DontShow)]
+	[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
+	# local DNS hostname
+	[Parameter(DontShow)]
+	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.'),
+	# primary domain controller for current domain
+	[Parameter(DontShow)]
+	[string]$PdcRoleOwner = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
 	# names of zones for DNS record cleanup
 	[Parameter(ParameterSetName = 'Default', Mandatory = $true, ValueFromPipeline = $true)]
 	[string[]]$ZoneName,
@@ -49,22 +61,7 @@ Param (
 	[uint16]$OlderThanUnits = 30,
 	# second part of time for DNS record cleanup
 	[Parameter(Position = 1)][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
-	[string]$OlderThanType = 'Days',
-	# infrastructure master for current domain
-	[Parameter(DontShow)]
-	[string]$InfrastructureRoleOwner = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().InfrastructureRoleOwner.Name,
-	# switch to skip transcript logging
-	[Parameter(DontShow)]
-	[switch]$SkipTranscript,
-	# local host name
-	[Parameter(DontShow)]
-	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
-	# local domain name
-	[Parameter(DontShow)]
-	[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
-	# local DNS hostname
-	[Parameter(DontShow)]
-	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
+	[string]$OlderThanType = 'Days'
 )
 
 Begin {
@@ -129,7 +126,7 @@ Process {
 
 	# get AD-integrated primary DNS zones with dynamic update enabled
 	Try {
-		$DnsServerZones = Get-DnsServerZone -ComputerName $InfrastructureRoleOwner | Where-Object { $_.IsDsIntegrated -and $_.ZoneName -notlike '_msdcs.*' -and $_.ZoneType -eq 'Primary' -and $_.DynamicUpdate -in 'Secure', 'Unsecure' }
+		$DnsServerZones = Get-DnsServerZone -ComputerName $PdcRoleOwner | Where-Object { $_.IsDsIntegrated -and $_.ZoneName -notlike '_msdcs.*' -and $_.ZoneType -eq 'Primary' -and $_.DynamicUpdate -in 'Secure', 'Unsecure' }
 	}
 	Catch {
 		Write-Warning -Message "could not retrieve DNS zones: $($_.Exeception.Message)"
@@ -164,7 +161,7 @@ Process {
 
 		# get DNS records
 		Try {
-			$DnsServerResourceRecords = Get-DnsServerResourceRecord -ComputerName $InfrastructureRoleOwner -ZoneName $DnsServerZone.ZoneName | Where-Object { $_.TimeStamp -gt 0 -and $_.Timestamp -lt $PreviousDate } | Sort-Object -Property RecordType, HostName
+			$DnsServerResourceRecords = Get-DnsServerResourceRecord -ComputerName $PdcRoleOwner -ZoneName $DnsServerZone.ZoneName | Where-Object { $_.TimeStamp -gt 0 -and $_.Timestamp -lt $PreviousDate } | Sort-Object -Property RecordType, HostName
 		}
 		Catch {
 			Write-Warning -Message "could not retrieve DNS records: $($_.Exeception.Message)"
@@ -200,7 +197,7 @@ Process {
 			If ($PSCmdlet.ShouldProcess("$($DnsServerResourceRecord.HostName).$($DnsServerResourceRecord.ZoneName)", 'Remove-DnsServerResourceRecord')) {
 				# remove record
 				Try {
-					Remove-DnsServerResourceRecord -ComputerName $InfrastructureRoleOwner -ZoneName $DnsServerZone.ZoneName -InputObject $DnsServerResourceRecord -Force
+					Remove-DnsServerResourceRecord -ComputerName $PdcRoleOwner -ZoneName $DnsServerZone.ZoneName -InputObject $DnsServerResourceRecord -Force
 				}
 				Catch {
 					Write-Warning -Message "could not remove record: $($_.ToString())"
