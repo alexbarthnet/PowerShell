@@ -2326,8 +2326,8 @@ Begin {
 		Return
 	}
 
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
+	# if default parameter set and skip transcript not requested...
+	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $SkipTranscript) {
 		# start transcript with default parameters
 		Try {
 			Start-TranscriptForCommand -SkipTextOutput:$SkipTextOutput
@@ -2962,8 +2962,8 @@ Process {
 }
 
 End {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
+	# if default parameter set and skip transcript not requested...
+	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $SkipTranscript) {
 		# stop transcript with default parameters
 		Try {
 			Stop-TranscriptForCommand
