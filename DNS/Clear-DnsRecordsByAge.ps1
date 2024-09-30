@@ -16,11 +16,8 @@ Swith parameter to cleanup all AD-integrated primary DNS lookup zones with Dynam
 .PARAMETER ExcludeReverseLookupZones
 Swith parameter to exclude reverse lookup zones from cleanup. Cannot be combined with the ZoneName parameter.
 
-.PARAMETER OlderThanUnits
-The number of datetime units to create the computed datetime. The default value is '30'
-
-.PARAMETER OlderThanType
-The type of datetime units to create the computed datetime. The supported values are 'Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', and 'Years'. The default value is 'Days'
+.PARAMETER TimeSpan
+The timespan to used to create the computed datetime. The default value is '60 days'
 
 .INPUTS
 System.String[]. One or more DNS lookup zones can be submitted via the pipeline.
@@ -29,7 +26,7 @@ System.String[]. One or more DNS lookup zones can be submitted via the pipeline.
 None. The script reports on actions taken and does not provide any actionable output.
 
 .EXAMPLE
-.\Clear-DnsRecordsByAge.ps1 -AllZones -OlderThanUnits 90 -OlderThanType 'Days'
+.\Clear-DnsRecordsByAge.ps1 -AllZones -TimeSpan (New-Timespan -Days 30)
 
 #>
 
@@ -56,12 +53,8 @@ Param (
 	# switch to exclude reverse lookup zones
 	[Parameter(ParameterSetName = 'AllZones')]
 	[switch]$ExcludeReverseLookupZones,
-	# first part of time for DNS record cleanup
-	[Parameter(Position = 0)][ValidateRange(1, 65535)]
-	[uint16]$OlderThanUnits = 30,
-	# second part of time for DNS record cleanup
-	[Parameter(Position = 1)][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
-	[string]$OlderThanType = 'Days'
+	# timespan of for DNS record cleanup
+	[timespan]$TimeSpan = [timespan]::FromDays(60)
 )
 
 Begin {
@@ -85,21 +78,89 @@ Begin {
 		Return $false
 	}
 
-	Function Get-PreviousDate {
-		Param (
-			[Parameter(Mandatory = $true, Position = 0)][ValidateRange(1, 65535)]
-			[uint16]$OlderThanUnits,
-			[Parameter(Mandatory = $true, Position = 1)][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
-			[string]$OlderThanType
+	Function Get-TimeSpanAsFormattedString {
+		Param(
+			[Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+			[timespan]$TimeSpan
 		)
-		Switch ($OlderThanType) {
-			'Seconds' { Return (Get-Date).AddSeconds(-1 * $OlderThanUnits) }
-			'Minutes' { Return (Get-Date).AddMinutes(-1 * $OlderThanUnits) }
-			'Hours' { Return (Get-Date).AddHours(-1 * $OlderThanUnits) }
-			'Days' { Return (Get-Date).AddDays(-1 * $OlderThanUnits) }
-			'Weeks' { Return (Get-Date).AddWeeks(-1 * $OlderThanUnits) }
-			'Months' { Return (Get-Date).AddMonths(-1 * $OlderThanUnits) }
-			'Years' { Return (Get-Date).AddYears(-1 * $OlderThanUnits) }
+
+		# create list
+		$StringList = [System.Collections.Generic.List[System.String]]::new()
+
+		# if Days is not zero...
+		If ($TimeSpan.Days) {
+			# if Days is one or negative one...
+			If ($TimeSpan.Days -eq 1 -or $TimeSpan.Days -eq -1) {
+				$StringList.Add('{0} day' -f $TimeSpan.Days)
+			}
+			# if Days is not one or negative one...
+			Else {
+				$StringList.Add('{0} days' -f $TimeSpan.Days)
+			}
+		}
+
+		# if Hours is not zero...
+		If ($TimeSpan.Hours) {
+			# if Hours is one or negative one...
+			If ($TimeSpan.Hours -eq 1 -or $TimeSpan.Hours -eq -1) {
+				$StringList.Add('{0} hour' -f $TimeSpan.Hours)
+			}
+			# if Hours is not one or negative one...
+			Else {
+				$StringList.Add('{0} hours' -f $TimeSpan.Hours)
+			}
+		}
+
+		# if Minutes is not zero...
+		If ($TimeSpan.Minutes) {
+			# if Minutes is one or negative one...
+			If ($TimeSpan.Minutes -eq 1 -or $TimeSpan.Minutes -eq -1) {
+				$StringList.Add('{0} minute' -f $TimeSpan.Minutes)
+			}
+			# if Minutes is not one or negative one...
+			Else {
+				$StringList.Add('{0} minutes' -f $TimeSpan.Minutes)
+			}
+		}
+
+		# if Seconds is not zero...
+		If ($TimeSpan.Seconds) {
+			# if Seconds is one or negative one...
+			If ($TimeSpan.Seconds -eq 1 -or $TimeSpan.Seconds -eq -1) {
+				$StringList.Add('{0} second' -f $TimeSpan.Seconds)
+			}
+			# if Seconds is not one or negative one...
+			Else {
+				$StringList.Add('{0} seconds' -f $TimeSpan.Seconds)
+			}
+		}
+
+		# if Milliseconds is not zero...
+		If ($TimeSpan.Milliseconds) {
+			# if Milliseconds is one or negative one...
+			If ($TimeSpan.Milliseconds -eq 1 -or $TimeSpan.Milliseconds -eq -1) {
+				$StringList.Add('{0} millisecond' -f $TimeSpan.Milliseconds)
+			}
+			# if Milliseconds is not one or negative one...
+			Else {
+				$StringList.Add('{0} milliseconds' -f $TimeSpan.Milliseconds)
+			}
+		}
+
+		# join strings together
+		$String = $StringList -join ', '
+
+		# format string
+		switch ($StringList.Count) {
+			1 { 
+				Return $String
+			}
+			2 { 
+				Return $String.Replace(', ', ' and ')
+			}
+			Default {
+				Return $String.Insert($String.LastIndexOf(',')+1, ' and')
+			}
 		}
 	}
 }
@@ -118,11 +179,16 @@ Process {
 	$DnsRecordsErrored = 0
 	$DnsRecordsInTotal = 0
 
-	# get date from inputs
-	$PreviousDate = Get-PreviousDate -OlderThanUnits $OlderThanUnits -OlderThanType $OlderThanType
+	# ensure timespan is positive
+	If ($TimeSpan -lt [timespan]::Zero) {
+		$TimeSpan = $TimeSpan.Negate()
+	}
+	
+	# get date from timespan
+	$PreviousDate = [datetime]::Now.Subtract($TimeSpan)
 
 	# declare date
-	Write-Information -MessageData "Checking for records older than $OlderThanUnits $OlderThanType ($($PreviousDate.ToString()))"
+	Write-Information -MessageData "Retrieve records last updated before $($PreviousDate.ToString()) ($(Get-TimeSpanAsFormattedString -TimeSpan $TimeSpan))"
 
 	# get AD-integrated primary DNS zones with dynamic update enabled
 	Try {
