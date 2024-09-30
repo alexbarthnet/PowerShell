@@ -2546,29 +2546,32 @@ Process {
 		}
 		# add entry to configuration file
 		$Add {
-			# validate task path before standardizing input
-			Try {
-				$TaskPathIsValid = Test-ScheduledTaskPath -TaskPath $TaskPath
-			}
-			Catch {
-				Write-Warning -Message "could not validate TaskPath value: $TaskPath"
-				Return
-			}
+			# if task is not Update-ScheduledTasks at the root...
+			If ($TaskName -ne 'Update-ScheduledTasks' -and $TaskPath -ne '\') {
+				# validate task path
+				Try {
+					$TaskPathIsValid = Test-ScheduledTaskPath -TaskPath $TaskPath
+				}
+				Catch {
+					Write-Warning -Message "could not validate provided TaskPath value: '$TaskPath'"
+					Return $_
+				}
 
-			# if task name not 'Update-ScheduledTasks' and task path is not valid...
-			If ($TaskName -ne 'Update-ScheduledTasks' -and -not $TaskPathIsValid) {
-				Write-Warning -Message "the provided TaskPath is not permitted: '$TaskPath'"
-				Return
-			}
+				# if task path is not valid...
+				If (!$TaskPathIsValid) {
+					Write-Warning -Message "the provided TaskPath value is not permitted: '$TaskPath'"
+					Return
+				}
 
-			# verify task path starts with \
-			If (!$TaskPath.StartsWith('\')) {
-				$TaskPath = "\$TaskPath"
-			}
+				# verify task path starts with \
+				If (!$TaskPath.StartsWith('\')) {
+					$TaskPath = "\$TaskPath"
+				}
 
-			# verify task path ends with \
-			If (!$TaskPath.EndsWith('\')) {
-				$TaskPath = "$TaskPath\"
+				# verify task path ends with \
+				If (!$TaskPath.EndsWith('\')) {
+					$TaskPath = "$TaskPath\"
+				}
 			}
 
 			# if existing entry has same primary key(s)...
