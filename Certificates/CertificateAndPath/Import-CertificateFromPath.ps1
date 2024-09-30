@@ -73,15 +73,6 @@ Param(
 	# path to JSON configuration file
 	[Parameter(Mandatory = $True)]
 	[string]$Json,
-	# switch to skip transcript logging
-	[Parameter(DontShow)]
-	[switch]$SkipTranscript,
-	# name in transcript files
-	[Parameter(DontShow)]
-	[string]$TranscriptName,
-	# path to transcript files
-	[Parameter(DontShow)]
-	[string]$TranscriptPath,
 	# local hostname
 	[Parameter(DontShow)]
 	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
