@@ -17,10 +17,13 @@ None.
 None. The script reports the actions taken and does not provide any actionable output.
 
 .EXAMPLE
-.\Update-DnsServerPolicyFromAD.ps1
+.\Update-DnsServerPolicyFromADSubnets.ps1
 
 .EXAMPLE
-.\Update-DnsServerPolicyFromAD.ps1 -Location 'AD'
+.\Update-DnsServerPolicyFromADSubnets.ps1 -Filter "Location -match '-AD$'"
+
+.EXAMPLE
+.\Update-DnsServerPolicyFromADSubnets.ps1 -Filter "Location -match '^DNS-'"
 
 .NOTES
 This script creates and updates two DNS Policy objects on a DNS server:
@@ -50,9 +53,9 @@ Param(
 	# suffix for DNS client subnet
 	[Parameter(DontShow)]
 	[string]$PolicySuffix = 'default',
-	# string for AD subnet location
-	[Parameter(Position = 0, ValueFromPipeline = $true)]
-	[string]$Location = 'Default'
+	# filter for AD subnet objects
+	[Parameter(Position = 0)]
+	[string]$Filter = "Location -eq 'Default'"
 )
 
 # define DNS client subnets name
@@ -142,16 +145,16 @@ Else {
 
 # get subnets from AD sorted by name
 Try {
-	$ADReplicationSubnets = Get-ADReplicationSubnet -Server $DomainController -Filter "Location -eq '$Location'" | Sort-Object -Property 'Name'
+	$ADReplicationSubnets = Get-ADReplicationSubnet -Server $DomainController -Filter $Filter | Sort-Object -Property 'Name'
 }
 Catch {
-	Write-Warning -Message "could not retrieve AD Replication Subnets from domain controller: '$DomainController'"
+	Write-Warning -Message "could not retrieve AD Replication Subnets from domain controller: $DomainController"
 	Return $_
 }
 
 # if subnets not found matching location...
 If (!$ADReplicationSubnets) {
-	Write-Warning -Message "could not locate any AD Replication Subnets with location matching: '$Location'"
+	Write-Warning -Message "could not locate any AD Replication Subnets with matching filter: $Filter"
 	Return
 }
 
@@ -160,7 +163,7 @@ Try {
 	$DnsServerZones = Get-DnsServerZone -ComputerName $DomainController | Where-Object { $_.ZoneType -eq 'Primary' -and $_.IsDsIntegrated -and -not $_.IsAutoCreated } | Sort-Object -Property 'IsReverseLookupZone', 'ZoneName'
 }
 Catch {
-	Write-Warning -Message "could not retrieve DNS server zones from domain controller: '$DomainController'"
+	Write-Warning -Message "could not retrieve DNS server zones from domain controller: $DomainController"
 	Return $_
 }
 
