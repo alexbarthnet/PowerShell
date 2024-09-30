@@ -2579,4 +2579,4 @@ $FunctionsToExport = @(
 Export-ModuleMember -Function $FunctionsToExport
 
 # initialize module
-Write-CmsCredentialSettings
+Initialize-CmsCredentialSettings
