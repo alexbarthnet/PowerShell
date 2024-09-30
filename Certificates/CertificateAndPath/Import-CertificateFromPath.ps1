@@ -461,7 +461,7 @@ Process {
 			$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
 		}
 		Catch {
-			Write-Output "`nERROR: could not read configuration file: '$Json'"
+			Write-Warning "could not read configuration file: '$Json'"
 			Return $_
 		}
 	}
@@ -474,7 +474,7 @@ Process {
 				$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
 			}
 			Catch {
-				Write-Output "`nERROR: could not create configuration file: '$Json'"
+				Write-Warning "could not create configuration file: '$Json'"
 				Return $_
 			}
 			# ...create JSON data object as empty array
@@ -483,7 +483,7 @@ Process {
 		# ...and Add not set...
 		Else {
 			# ...report and return
-			Write-Output "`nERROR: could not find configuration file: '$Json'"
+			Write-Warning "could not find configuration file: '$Json'"
 			Return
 		}
 	}
@@ -547,7 +547,7 @@ Process {
 
 				# remove existing entry with same name
 				If ($JsonData.Subject -contains $Subject) {
-					Write-Warning -Message "Will overwrite existing entry for '$Subject' configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
+					Write-Warning "Will overwrite existing entry for '$Subject' configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
 					$JsonData = $JsonData | Where-Object { $_.Subject -ne $Subject }
 				}
 
@@ -558,18 +558,18 @@ Process {
 				$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			Catch {
-				Write-Output "`nERROR: could not update configuration file: '$Json'"
+				Write-Warning "could not update configuration file: '$Json'"
 				Return $_
 			}
 		}
 		# process configuration file
 		Default {
 			# declare start
-			Write-Host "`nImporting certificates per '$Json'"
+			Write-Host "Importing certificates per '$Json'"
 
 			# check entry count in configuration file
 			If ($JsonData.Count -eq 0) {
-				Write-Host "ERROR: no entries found in configuration file: $Json"
+				Write-Warning "no entries found in configuration file: $Json"
 				Return
 			}
 
@@ -577,10 +577,10 @@ Process {
 			:JsonDatum ForEach ($JsonDatum in $JsonData) {
 				switch ($true) {
 					([string]::IsNullOrEmpty($JsonDatum.Subject)) {
-						Write-Host "ERROR: required entry (Subject) not found in configuration file: $Json"; Continue :JsonDatum
+						Write-Warning "required entry (Subject) not found in configuration file: $Json"; Continue :JsonDatum
 					}
 					([string]::IsNullOrEmpty($JsonDatum.Path)) {
-						Write-Host "ERROR: required entry (Path) not found in configuration file: $Json"; Continue :JsonDatum
+						Write-Warning "required entry (Path) not found in configuration file: $Json"; Continue :JsonDatum
 					}
 					Default {
 						# declare JSON entry contents
@@ -604,7 +604,7 @@ Process {
 							Import-PfxCertificateFromFolder @ImportPfxCertificateFromFolder
 						}
 						Catch {
-							Write-Host 'ERROR: could not import certificate:' $_.ToString()
+							Write-Warning "could not import certificate:' $_.ToString()"
 							Continue :JsonDatum
 						}
 					}
