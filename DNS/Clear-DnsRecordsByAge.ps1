@@ -1,4 +1,4 @@
-#Requires -Modules DnsServer,TranscriptWithHostAndDate
+#Requires -Modules DnsServer
 
 <#
 .SYNOPSIS
@@ -105,23 +105,12 @@ Begin {
 			'Years' { Return (Get-Date).AddYears(-1 * $OlderThanUnits) }
 		}
 	}
-
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# start transcript with default parameters
-		Try {
-			Start-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
-	}
 }
 
 Process {
 	# check for PDC role
-	If (Assert-NonInteractiveSession -and $DnsHostName -ne $InfrastructureRoleOwner) {
-		Write-TranscriptWithHostAndDate 'Skipping DNS record cleanup: running non-interactively and the current system does not hold the Infrastructure Master role'
+	If (Assert-NonInteractiveSession -and $DnsHostName -ne $PdcRoleOwner) {
+		Write-Information -MessageData 'Skipping DNS record cleanup: running non-interactively and the current system does not hold the Infrastructure Master role'
 		Return
 	}
 
@@ -136,14 +125,14 @@ Process {
 	$PreviousDate = Get-PreviousDate -OlderThanUnits $OlderThanUnits -OlderThanType $OlderThanType
 
 	# declare date
-	Write-TranscriptWithHostAndDate "Checking for records older than $OlderThanUnits $OlderThanType ($($PreviousDate.ToString()))"
+	Write-Information -MessageData "Checking for records older than $OlderThanUnits $OlderThanType ($($PreviousDate.ToString()))"
 
 	# get AD-integrated primary DNS zones with dynamic update enabled
 	Try {
 		$DnsServerZones = Get-DnsServerZone -ComputerName $InfrastructureRoleOwner | Where-Object { $_.IsDsIntegrated -and $_.ZoneName -notlike '_msdcs.*' -and $_.ZoneType -eq 'Primary' -and $_.DynamicUpdate -in 'Secure', 'Unsecure' }
 	}
 	Catch {
-		Write-WarningToTranscriptWithHostAndDate "could not retrieve DNS zones: $($_.Exeception.Message)"
+		Write-Warning -Message "could not retrieve DNS zones: $($_.Exeception.Message)"
 		Return $_
 	}
 
@@ -171,14 +160,14 @@ Process {
 		$DnsZonesOnPdcRole++
 
 		# declare zone
-		Write-TranscriptWithHostAndDate "Checking for records in '$($DnsServerZone.ZoneName)'"
+		Write-Information -MessageData "Checking for records in '$($DnsServerZone.ZoneName)'"
 
 		# get DNS records
 		Try {
 			$DnsServerResourceRecords = Get-DnsServerResourceRecord -ComputerName $InfrastructureRoleOwner -ZoneName $DnsServerZone.ZoneName | Where-Object { $_.TimeStamp -gt 0 -and $_.Timestamp -lt $PreviousDate } | Sort-Object -Property RecordType, HostName
 		}
 		Catch {
-			Write-WarningToTranscriptWithHostAndDate "could not retrieve DNS records: $($_.Exeception.Message)"
+			Write-Warning -Message "could not retrieve DNS records: $($_.Exeception.Message)"
 			Return $_
 		}
 
@@ -202,7 +191,7 @@ Process {
 					$RecordData = "[$($DnsServerResourceRecord.RecordData.Priority)][$($DnsServerResourceRecord.RecordData.Weight)][$($DnsServerResourceRecord.RecordData.Port)][$($DnsServerResourceRecord.RecordData.DomainName)]"
 				}
 				Default {
-					Write-TranscriptWithHostAndDate "Located unexpected $($DnsServerResourceRecord.RecordType) record from $($DnsServerZone.ZoneName) created on $($DnsServerResourceRecord.TimeStamp): $($DnsServerResourceRecord.HostName)"
+					Write-Information -MessageData "Located unexpected $($DnsServerResourceRecord.RecordType) record from $($DnsServerZone.ZoneName) created on $($DnsServerResourceRecord.TimeStamp): $($DnsServerResourceRecord.HostName)"
 					Continue NextDnsServerResourceRecord
 				}
 			}
@@ -214,44 +203,31 @@ Process {
 					Remove-DnsServerResourceRecord -ComputerName $InfrastructureRoleOwner -ZoneName $DnsServerZone.ZoneName -InputObject $DnsServerResourceRecord -Force
 				}
 				Catch {
-					Write-WarningToTranscriptWithHostAndDate "could not remove record: $($_.ToString())"
+					Write-Warning -Message "could not remove record: $($_.ToString())"
 					$DnsRecordsErrored++
 					Continue NextDnsServerResourceRecord
 				}
 
 				# declare removed
-				Write-TranscriptWithHostAndDate "Removed $($DnsServerResourceRecord.RecordType) record from $($DnsServerZone.ZoneName) created on $($DnsServerResourceRecord.TimeStamp): $($DnsServerResourceRecord.HostName); $RecordData"
+				Write-Information -MessageData "Removed $($DnsServerResourceRecord.RecordType) record from $($DnsServerZone.ZoneName) created on $($DnsServerResourceRecord.TimeStamp): $($DnsServerResourceRecord.HostName); $RecordData"
 				$DnsRecordsRemoved++
 			}
 			Else {
 				# declare found
-				Write-TranscriptWithHostAndDate "Located $($DnsServerResourceRecord.RecordType) record from $($DnsServerZone.ZoneName) created on $($DnsServerResourceRecord.TimeStamp): $($DnsServerResourceRecord.HostName); $RecordData"
+				Write-Information -MessageData "Located $($DnsServerResourceRecord.RecordType) record from $($DnsServerZone.ZoneName) created on $($DnsServerResourceRecord.TimeStamp): $($DnsServerResourceRecord.HostName); $RecordData"
 				$DnsRecordsLocated++
 			}
 		}
 	}
 
 	# report DNS records removed
-	Write-TranscriptWithHostAndDate "Found '$DnsRecordsInTotal' records(s) in '$DnsZonesOnPdcRole' zones"
+	Write-Information -MessageData "Found '$DnsRecordsInTotal' records(s) in '$DnsZonesOnPdcRole' zones"
 
-	Write-TranscriptWithHostAndDate "Removed '$DnsRecordsRemoved' records(s)"
+	Write-Information -MessageData "Removed '$DnsRecordsRemoved' records(s)"
 	If ($DnsRecordsLocated -gt 0) {
-		Write-TranscriptWithHostAndDate "Located '$DnsRecordsLocated' records(s) to delete"
+		Write-Information -MessageData "Located '$DnsRecordsLocated' records(s) to delete"
 	}
 	If ($DnsRecordsErrored -gt 0) {
-		Write-TranscriptWithHostAndDate "Could not remove '$DnsRecordsErrored' records(s)"
-	}
-}
-
-End {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# stop transcript with default parameters
-		Try {
-			Stop-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
+		Write-Information -MessageData "Could not remove '$DnsRecordsErrored' records(s)"
 	}
 }
