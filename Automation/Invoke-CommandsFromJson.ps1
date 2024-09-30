@@ -1479,14 +1479,6 @@ Begin {
 		# return collection
 		Return $Collection
 	}
-
-	# start transcript with default parameters
-	Try {
-		Start-TranscriptForCommand
-	}
-	Catch {
-		Throw $_
-	}
 }
 
 Process {
@@ -1654,8 +1646,16 @@ Process {
 		}
 		# process entries in configuration file
 		Default {
+			# start transcript with default parameters
+			Try {
+				Start-TranscriptForCommand
+			}
+			Catch {
+				Throw $_
+			}
+
 			# declare start
-			Write-Host "`nCalling commands from '$Json'"
+			Write-Host "Calling commands from '$Json'"
 
 			# check entry count in configuration file
 			If ($JsonData.Count -eq 0) {
@@ -1849,16 +1849,14 @@ Process {
 					Continue NextJsonEntry
 				}
 			}
-		}
-	}
-}
 
-End {
-	# stop transcript with default parameters
-	Try {
-		Stop-TranscriptForCommand
-	}
-	Catch {
-		Throw $_
+			# stop transcript with default parameters
+			Try {
+				Stop-TranscriptForCommand
+			}
+			Catch {
+				Throw $_
+			}
+		}
 	}
 }
