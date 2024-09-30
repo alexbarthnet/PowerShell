@@ -2352,7 +2352,7 @@ Process {
 			TaskName  = 'Update-ScheduledTasks'
 			TaskPath  = '\'
 			Execute   = Join-Path -Path $PSHOME -ChildPath 'powershell.exe'
-			Argument  = "-NonInteractive -NoProfile -ExecutionPolicy ByPass -File `"$PSCommandPath`" -Json `"$Json`""
+			Argument  = '-NonInteractive -NoProfile -ExecutionPolicy ByPass -File "{0}" -Json "{1}"' -f $PSCommandPath, $Json
 			UserId    = $UserId
 			LogonType = $LogonType
 			RunLevel  = $RunLevel
@@ -2430,7 +2430,7 @@ Process {
 		$TaskName = 'Update-ScheduledTasks'
 		$TaskPath = '\'
 		$Execute = Join-Path -Path $PSHOME -ChildPath 'powershell.exe'
-		$Argument = "-NonInteractive -NoProfile -ExecutionPolicy ByPass -File `"$PSCommandPath`" -Json `"$Json`""
+		$Argument = '-NonInteractive -NoProfile -ExecutionPolicy ByPass -File "{0}" -Json "{1}"' -f $PSCommandPath, $Json
 
 		# if RandomDelay parameter not provided...
 		If (!$PSBoundParameters.ContainsKey('RandomDelay')) {
@@ -2658,7 +2658,7 @@ Process {
 		# process entries in configuration file
 		Default {
 			# declare start
-			Write-Host "`nUpdating scheduled tasks from '$Json'"
+			Write-Host "Updating scheduled tasks from '$Json'"
 
 			# check entry count in configuration file
 			If ($JsonData.Count -eq 0) {
