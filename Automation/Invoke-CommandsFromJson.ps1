@@ -51,13 +51,10 @@ None. The script reports the actions taken and does not provide any actionable o
 .\Invoke-CommandFromJson.ps1 -Json C:\Content\script-1.json -Remove -Command 'Restart-Service'
 
 .EXAMPLE
-.\Invoke-CommandFromJson.ps1 -Json C:\Content\script-1.json -Remove -Command 'Restart-Service' -Order 2
-
-.EXAMPLE
 .\Invoke-CommandFromJson.ps1 -Json C:\Content\script-1.json -Remove -Command 'C:\path\to\script.ps1'
 
 .EXAMPLE
-.\Invoke-CommandFromJson.ps1 -Json C:\Content\script-1.json -Remove -Command 'C:\path\to\script.ps1' -Order 3
+.\Invoke-CommandFromJson.ps1 -Json C:\Content\script-1.json -Remove -Order 2
 
 .EXAMPLE
 .\Invoke-CommandFromJson.ps1 -Json C:\Content\script-1.json -Add -Command 'Restart-Service' -Parameters @{ Name = 'DnsClient' }
