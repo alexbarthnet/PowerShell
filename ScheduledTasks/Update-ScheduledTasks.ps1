@@ -92,8 +92,11 @@ String or string array representing the path to one or more PFX certificate file
 .PARAMETER Expression
 String containing an expression to evaluate. The expression must return a boolean. The result of evaluating the expression determines the state of the scheduled task trigger.
 
-.PARAMETER RemoveOldTasks
-Switch parameter to remove any scheduled task that is not defined in the JSON file and located in any of the task paths defined on the entries in the JSON configuration file.
+.PARAMETER ReportUndefinedTasks
+Switch parameter to report scheduled tasks that are not defined in the JSON file and located in any of the task paths defined on the entries in the JSON configuration file.
+
+.PARAMETER RemoveUndefinedTasks
+Switch parameter to remove scheduled tasks that are not defined in the JSON file and located in any of the task paths defined on the entries in the JSON configuration file.
 
 .PARAMETER SkipTranscript
 Switch parameter to skip creating a PowerShell transcript for this script.
@@ -213,9 +216,12 @@ Param(
 	# expression to evaluate for task trigger
 	[Parameter(ParameterSetName = 'Add')]
 	[string]$Expression,
-	# switch to remove old tasks during run
+	# switch to report undefined tasks during run
 	[Parameter(ParameterSetName = 'Default')]
-	[switch]$RemoveOldTasks,
+	[switch]$ReportUndefinedTasks,
+	# switch to remove undefined tasks during run
+	[Parameter(ParameterSetName = 'Default')]
+	[switch]$RemoveUndefinedTasks,
 	# switch to process JSON entries for previous versions of the script
 	[Parameter(ParameterSetName = 'Default')]
 	[switch]$Run,
@@ -2908,51 +2914,57 @@ Process {
 				}
 			}
 
-			# process cleanup hashtable
-			:NextTaskPath ForEach ($TaskPath in $ExpectedTasks.Keys) {
-				# if task path is root...
-				If ($TaskPath -eq '\') {
-					# quietly continue to next task path
-					Continue NextTaskPath
-				}
+			# if report or remove undefined tasks requested...
+			If ($script:ReportUndefinedTasks -or $script:RemoveUndefinedTasks) {
+				# process cleanup hashtable
+				:NextTaskPath ForEach ($TaskPath in $ExpectedTasks.Keys) {
+					# if task path is root...
+					If ($TaskPath -eq '\') {
+						# quietly continue to next task path
+						Continue NextTaskPath
+					}
 
-				# validate task path
-				Try {
-					$TaskPathIsValid = Test-ScheduledTaskPath -TaskPath $TaskPath
-				}
-				Catch {
-					Write-Warning -Message "could not validate TaskPath value found in expected tasks list: $TaskPath"
-					Continue NextTaskPath
-				}
+					# validate task path
+					Try {
+						$TaskPathIsValid = Test-ScheduledTaskPath -TaskPath $TaskPath
+					}
+					Catch {
+						Write-Warning -Message "could not validate TaskPath value found in expected tasks list: $TaskPath"
+						Continue NextTaskPath
+					}
 
-				# if task path is not valid...
-				If (!$TaskPathIsValid) {
-					Write-Warning -Message "the TaskPath value found in expected tasks list is not permitted: '$($JsonEntry.TaskPath)'"
-					Continue NextTaskPath
-				}
+					# if task path is not valid...
+					If (!$TaskPathIsValid) {
+						Write-Warning -Message "the TaskPath value found in expected tasks list is not permitted: '$($JsonEntry.TaskPath)'"
+						Continue NextTaskPath
+					}
 
-				# get all tasks in TaskPath
-				Try {
-					$TasksInPath = Get-ScheduledTask | Where-Object { $_.TaskPath -eq $TaskPath } | Select-Object -ExpandProperty 'TaskName'
-				}
-				Catch {
-					Write-Warning -Message "could not retrieve tasks from path: '$TaskPath'"
-					Return $_
-				}
+					# get all tasks in TaskPath
+					Try {
+						$TasksInPath = Get-ScheduledTask | Where-Object { $_.TaskPath -eq $TaskPath } | Select-Object -ExpandProperty 'TaskName'
+					}
+					Catch {
+						Write-Warning -Message "could not retrieve tasks from path: '$TaskPath'"
+						Return $_
+					}
 
-				# process each task in key
-				ForEach ($TaskName in $TasksInPath) {
-					If ($TaskName -notin $ExpectedTasks[$TaskPath]) {
-						# report errant scheduled task
-						Write-Warning -Message "the path '$TaskPath' contains a scheduled task not defined in the JSON file: '$TaskName'"
+					# process each task in key
+					ForEach ($TaskName in $TasksInPath) {
+						If ($TaskName -notin $ExpectedTasks[$TaskPath]) {
+							# report undefined scheduled task
+							Write-Warning -Message "the path '$TaskPath' contains a scheduled task not defined in the JSON file: '$TaskName'"
 
-						# remove errant scheduled task
-						Try {
-							# Unregister-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath
-						}
-						Catch {
-							Write-Warning -Message "could not unregister task '$TaskName' from path '$TaskPath'"
-							Return $_
+							# if remove undefined tasks requested...
+							If ($script:RemoveUndefinedTasks) {
+								# remove undefined scheduled task
+								Try {
+									# Unregister-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath
+								}
+								Catch {
+									Write-Warning -Message "could not unregister task '$TaskName' from path '$TaskPath'"
+									Return $_
+								}
+							}
 						}
 					}
 				}
