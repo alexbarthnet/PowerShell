@@ -1550,7 +1550,7 @@ Process {
 		$Remove {
 			# if order provided...
 			If ($PSBoundParameters.ContainsKey('Command')) {
-				# define report parameter 
+				# define report parameter
 				$ParametersForReporting = "Command of '$Command'"
 				# remove existing entry by primary key(s)...
 				$JsonDataToRemove = [array]($JsonData.Where({ $_.Command -eq $Command }))
@@ -1565,7 +1565,7 @@ Process {
 
 			# if order provided...
 			If ($PSBoundParameters.ContainsKey('Order')) {
-				# define report parameter 
+				# define report parameter
 				$ParametersForReporting = "Order of '$Order'"
 				# remove existing entry by primary key(s)...
 				$JsonDataToRemove = [array]($JsonData.Where({ $_.Order -eq $Order }))
