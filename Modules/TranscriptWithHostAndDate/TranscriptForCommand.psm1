@@ -430,7 +430,7 @@ Function Remove-TranscriptFiles {
 	$TranscriptFilter = "$TranscriptLeaf.$TranscriptHost.$TranscriptName*"
 
 	# declare cleanup thresholds
-	Write-Verbose -Verbose -Message "Removing transcript files from '$TranscriptPath' matching '$TranscriptFilter' with a LastWriteTime before '$($TranscriptDate.ToString('s'))' provided that '$MinimumFileCount' files remain"
+	Write-Verbose -Message "Removing transcript files from '$TranscriptPath' matching '$TranscriptFilter' with a LastWriteTime before '$($TranscriptDate.ToString('s'))' provided that '$MinimumFileCount' files remain"
 
 	# get transcript files matching filter
 	Try {
@@ -453,19 +453,22 @@ Function Remove-TranscriptFiles {
 	# if count of files-to-remain is than minimum file count...
 	If ($FilesToRemain.Count -lt $MinimumFileCount) {
 		# declare skip and return
-		Write-Verbose -Verbose -Message "Skipping transcript cleanup: only '$($FilesToRemain.Count)' files would remain"
+		Write-Verbose -Message "Skipping transcript cleanup: only '$($FilesToRemain.Count)' files would remain"
 		Return
 	}
 
-	# sort files-to-remove by name then remove
+	# sort files-to-remove by name then process files
 	ForEach ($FileToRemove in ($FilesToRemove | Sort-Object -Property FullName)) {
+		# remove file
 		Try {
-			Remove-Item -Path $FileToRemove.FullName -Force -Verbose -ErrorAction Stop
+			Remove-Item -Path $FileToRemove.FullName -Force -ErrorAction 'Stop'
 		}
 		Catch {
 			Write-Warning -Message "could not remove transcript file: $($FileToRemove.FullName)"
 			Return $_
 		}
+		# report complete
+		Write-Verbose -Message "Removed transcript file: $($FileToRemove.FullName)"
 	}
 }
 
@@ -554,7 +557,7 @@ Function Remove-TextOutputFiles {
 	$TextOutputFilter = "$TextOutputLeaf.$TextOutputHost.$TextOutputName*"
 
 	# declare cleanup thresholds
-	Write-Verbose -Verbose -Message "Removing text output files from '$TextOutputPath' matching '$TextOutputFilter' with a LastWriteTime before '$($TextOutputDate.ToString('s'))' provided that '$MinimumFileCount' files remain"
+	Write-Verbose -Message "Removing text output files from '$TextOutputPath' matching '$TextOutputFilter' with a LastWriteTime before '$($TextOutputDate.ToString('s'))' provided that '$MinimumFileCount' files remain"
 
 	# get text output files matching filter
 	Try {
@@ -577,19 +580,22 @@ Function Remove-TextOutputFiles {
 	# if count of files-to-remain is than minimum file count...
 	If ($FilesToRemain.Count -lt $MinimumFileCount) {
 		# declare skip and return
-		Write-Verbose -Verbose -Message "Skipping text output cleanup: only '$($FilesToRemain.Count)' files would remain"
+		Write-Verbose -Message "Skipping text output cleanup: only '$($FilesToRemain.Count)' files would remain"
 		Return
 	}
 
-	# sort files-to-remove by name then remove
+	# sort files-to-remove by name then process files
 	ForEach ($FileToRemove in ($FilesToRemove | Sort-Object -Property FullName)) {
+		# remove file
 		Try {
-			Remove-Item -Path $FileToRemove.FullName -Force -Verbose -ErrorAction Stop
+			Remove-Item -Path $FileToRemove.FullName -Force -ErrorAction 'Stop'
 		}
 		Catch {
 			Write-Warning -Message "could not remove text output file: $($FileToRemove.FullName)"
 			Return $_
 		}
+		# report complete
+		Write-Verbose -Message "Removed text output file: $($FileToRemove.FullName)"
 	}
 }
 
