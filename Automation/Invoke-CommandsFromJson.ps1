@@ -1520,19 +1520,25 @@ Process {
 	switch ($true) {
 		# show configuration file
 		$Show {
-			Write-Verbose -Verbose -Message "Displaying '$Json'"
+			# report and display JSON contents
+			Write-Host "Displaying '$Json'"
 			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 		# clear configuration file
 		$Clear {
+			# update JSON file
 			Try {
+				# clear JSON data
 				[string]::Empty | Set-Content -Path $Json
-				Write-Verbose -Verbose -Message "Cleared configuration file: '$Json'"
 			}
 			Catch {
 				Write-Warning -Message "could not clear configuration file: '$Json'"
 				Return $_
 			}
+
+			# report and display JSON contents
+			Write-Host "Cleared configuration file: '$Json'"
+			$JsonData | Sort-Object -Property 'Order', 'Command' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 		# remove entry from configuration file
 		$Remove {
@@ -1591,17 +1597,25 @@ Process {
 		$Add {
 			# if order parameter not provided...
 			If (!$PSBoundParameters.ContainsKey('Order')) {
-				# find first unassigned order value
-				For ($Order = 1; $null -eq $JsonEntryWithOrderValue; $Order++) {
-					# if order assigned to existing entry...
-					$JsonEntryWithOrderValue = $JsonData.Where({ $_.Order -eq $Order })
+				# while order is not assigned...
+				While ($Order -lt [uint16]::MaxValue -and -not $OrderAssigned) {
+					# if JSON contains entry with current Order...
+					If ($JsonData.Where({ $_.Order -eq $Order })) {
+						# increment order
+						$Order++
+					}
+					# if JSON does not contains entry with current Order...
+					Else {
+						# declare order assigned
+						$OrderAssigned = $true
+					}
 				}
 			}
 
 			# if existing entry has same primary key(s)...
 			If ($JsonData.Where({ $_.Order -eq $Order })) {
 				# inquire before removing existing entry
-				Write-Warning -Message "Will overwrite existing entry for '$Command' with order '$Order' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction 'Inquire'
+				Write-Warning "Will overwrite existing entry for '$Command' with order '$Order' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction 'Inquire'
 				# remove existing entry with same primary key(s)
 				$JsonData = [array]($JsonData.Where({ $_.Order -ne $Order }))
 			}
@@ -1636,13 +1650,15 @@ Process {
 			Try {
 				# export JSON data
 				$JsonData | Sort-Object -Property 'Order', 'Command' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-				Write-Verbose -Verbose -Message "Added '$Command' to configuration file: '$Json'"
-				$JsonData | Sort-Object -Property 'Order', 'Command' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 			}
 			Catch {
-				Write-Warning -Message "could not update configuration file: '$Json'"
+				Write-Warning "could not update configuration file: '$Json'"
 				Return $_
 			}
+
+			# report and display JSON contents
+			Write-Host "Added '$Command' to configuration file: '$Json'"
+			$JsonData | Sort-Object -Property 'Order', 'Command' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 		# process entries in configuration file
 		Default {
