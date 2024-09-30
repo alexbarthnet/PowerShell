@@ -1608,7 +1608,7 @@ Process {
 			}
 
 			# report and display JSON contents
-			Write-Host "Removed $ParametersForReporting from configuration file: '$Json'"
+			Write-Host "Removed entry with $ParametersForReporting from configuration file: '$Json'"
 			$JsonData | Sort-Object -Property 'Order', 'Command' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 		# add entry to configuration file
@@ -1674,7 +1674,7 @@ Process {
 			}
 
 			# report and display JSON contents
-			Write-Host "Added '$Command' to configuration file: '$Json'"
+			Write-Host "Added entry with Order of '$Order' for '$Command' Command to configuration file: '$Json'"
 			$JsonData | Sort-Object -Property 'Order', 'Command' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 		# process entries in configuration file
