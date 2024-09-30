@@ -578,15 +578,18 @@ Begin {
 			Return
 		}
 
-		# sort files-to-remove by name then remove
+		# sort files-to-remove by name then process files
 		ForEach ($FileToRemove in ($FilesToRemove | Sort-Object -Property FullName)) {
+			# remove file
 			Try {
-				Remove-Item -Path $FileToRemove.FullName -Force -ErrorAction Stop
+				Remove-Item -Path $FileToRemove.FullName -Force -ErrorAction 'Stop'
 			}
 			Catch {
 				Write-Warning -Message "could not remove transcript file: $($FileToRemove.FullName)"
 				Return $_
 			}
+			# report complete
+			Write-Verbose -Message "Removed transcript file: $($FileToRemove.FullName)"
 		}
 	}
 
@@ -702,15 +705,18 @@ Begin {
 			Return
 		}
 
-		# sort files-to-remove by name then remove
+		# sort files-to-remove by name then process files
 		ForEach ($FileToRemove in ($FilesToRemove | Sort-Object -Property FullName)) {
+			# remove file
 			Try {
-				Remove-Item -Path $FileToRemove.FullName -Force -ErrorAction Stop
+				Remove-Item -Path $FileToRemove.FullName -Force -ErrorAction 'Stop'
 			}
 			Catch {
 				Write-Warning -Message "could not remove text output file: $($FileToRemove.FullName)"
 				Return $_
 			}
+			# report complete
+			Write-Verbose -Message "Removed text output file: $($FileToRemove.FullName)"
 		}
 	}
 
@@ -882,7 +888,7 @@ Begin {
 
 		# remove new lines from message
 		Try {
-			$MessageWithoutNewLines = $Message.Replace("`r`n", '   ').Replace("`n", '   ')
+			$MessageWithoutNewLines = $Message.Replace("`r`n", ' ').Replace("`n", ' ').Replace("`r", ' ')
 		}
 		Catch {
 			$PSCmdlet.ThrowTerminatingError($_)
