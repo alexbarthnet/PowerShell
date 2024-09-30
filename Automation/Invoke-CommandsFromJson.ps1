@@ -1666,7 +1666,6 @@ Process {
 
 			# update JSON file
 			Try {
-				# export JSON data
 				$JsonData | Sort-Object -Property 'Order', 'Command' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
 			}
 			Catch {
