@@ -7,8 +7,8 @@ Configures DNS Policy to enable a DNS server to act as a recursive DNS resolver 
 .DESCRIPTION
 Creates and updates DNS Policy client subnet and query resolution policy objects using information from Active Directory subnets and Active Directory integrated DNS zones, respectively. See the Note section for more details.
 
-.PARAMETER Location
-String parameter to match against the location attribute of Active Directory subnet objects. The default value is 'Default'.
+.PARAMETER Filter
+String parameter to filter Active Directory subnet objects. The default value is "Location -eq 'Default'".
 
 .INPUTS
 None.
@@ -17,13 +17,13 @@ None.
 None. The script reports the actions taken and does not provide any actionable output.
 
 .EXAMPLE
-.\Update-DnsServerPolicyFromADSubnets.ps1
+.\Update-DnsServerPolicyFromAD.ps1
 
 .EXAMPLE
-.\Update-DnsServerPolicyFromADSubnets.ps1 -Filter "Location -match '-AD$'"
+.\Update-DnsServerPolicyFromAD.ps1 -Filter "Location -match '-AD$'"
 
 .EXAMPLE
-.\Update-DnsServerPolicyFromADSubnets.ps1 -Filter "Location -match '^DNS-'"
+.\Update-DnsServerPolicyFromAD.ps1 -Filter "Location -match '^DNS-'"
 
 .NOTES
 This script creates and updates two DNS Policy objects on a DNS server:
@@ -53,12 +53,12 @@ Param(
 	# suffix for DNS client subnet
 	[Parameter(DontShow)]
 	[string]$QueryResolutionPolicyName = "$HostName-default",
+	# type for DNS zones
+	[Parameter(DontShow)]
+	[string[]]$ZoneType = @('Primary', 'Forwarder'),
 	# filter for AD subnet objects
 	[Parameter(Position = 0)]
-	[string]$Filter = "Location -eq 'Default'",
-	# filter for AD subnet objects
-	[Parameter(Position = 2)]
-	[string[]]$ZoneType = @('Primary', 'Forwarder')
+	[string]$Filter = "Location -eq 'Default'"
 )
 
 ### retrieve Active Directory objects
