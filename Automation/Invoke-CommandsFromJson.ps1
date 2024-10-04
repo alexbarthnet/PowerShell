@@ -24,16 +24,31 @@ Switch parameter to add an entry from the JSON configuration file. Cannot be com
 The command to run. This parameter can be an existing cmdlet, function, or script. A script must be a fully qualified path.
 
 .PARAMETER Parameters
-Hashtable with parameters for the command.
+Hashtable with parameters for the command. Cannot be combined with the Arguments parameter.
+
+.PARAMETER Arguments
+Hashtable with arguments for the command. Cannot be combined with the Parameters parameter. The keys in the hashtable define the order in which arguments are provided to the command and must be castable to unsigned 16-bit integers.
+
+.PARAMETER Expression
+An optional string containing a PowerShell expression to evaluate. When the Expression parameter is provided, the evaluated expression must return a boolean of true for the command to run.
+
+.PARAMETER Modules
+The name or path of one or more PowerShell modules to import before running the command.
+
+.PARAMETER InputName
+The name of one or more script-wide variables to add to the parameters of the command.
+
+.PARAMETER OutputName
+The name of the script-wide variable where the output of the command should be stored.
 
 .PARAMETER Order
 An unsigned 16-bit integer representing the order that the command will be run when multiple commands are defined in a JSON file. The first command is assigned a value of 1 and each additional command is assigned an incrementing value. Providing a value that is already assigned will prompt the user to overwrite the command assigned the provided value.
 
-.PARAMETER InputName
-A string containing the name of the script-wide variable to add to the parameters of a command.
+.PARAMETER SkipTranscript
+Switch parameter to skip creating a transcript file for this script and any commands run by this script.
 
-.PARAMETER OutputName
-A string containing the name of the script-wide variable to store the output of a command.
+.PARAMETER SkipTextOutput
+Switch parameter to skip creating a text output file for this script and any commands run by this script.
 
 .INPUTS
 String. The path to a JSON file.
@@ -86,41 +101,52 @@ Param(
 	[Parameter(Mandatory = $True, ParameterSetName = 'RemoveByCommand')]
 	[Parameter(Mandatory = $True, ParameterSetName = 'RemoveByOrder')]
 	[switch]$Remove,
+	[Parameter(Mandatory = $True, ParameterSetName = 'AddWithArguments')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'AddWithParameters')]
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[switch]$Add,
 	# script parameter - command to run
 	[Parameter(Mandatory = $True, ParameterSetName = 'RemoveByCommand')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'AddWithArguments')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'AddWithParameters')]
 	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[string]$Command,
+	# script parameter - arguments for command
+	[Parameter(Mandatory = $True, ParameterSetName = 'AddWithArguments')]
+	[hashtable]$Arguments,
 	# script parameter - parameters for command
-	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'AddWithParameters')]
 	[hashtable]$Parameters,
 	# script parameter - expression for evaluating command
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
 	[string]$Expression,
-	# script parameter - name of variable to add to command parameters
+	# script parameter - modules to import before running command
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
-	[string]$InputName,
-	# script parameter - name of variable to store command output
+	[string[]]$Modules,
+	# script parameter - variable names to add to parameters for command
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')]
+	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
+	[string[]]$InputName,
+	# script parameter - variable name to hold output from command
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
 	[string]$OutputName,
 	# script parameter - order of command
 	[Parameter(Mandatory = $True, ParameterSetName = 'RemoveByOrder')]
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
 	[uint16]$Order = 1,
 	# switch parameter to skip transcript logging
 	[switch]$SkipTranscript,
 	# switch parameter to skip text output logging
-	[switch]$SkipTextOutput,
-	# local host name
-	[Parameter(DontShow)]
-	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
-	# local domain name
-	[Parameter(DontShow)]
-	[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
-	# local DNS hostname
-	[Parameter(DontShow)]
-	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
+	[switch]$SkipTextOutput
 )
 
 Begin {
@@ -1434,19 +1460,23 @@ Begin {
 
 	Function ConvertTo-Collection {
 		Param (
-			[Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+			[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 			[object]$InputObject,
-			[switch]$Ordered
+			[Parameter(Position = 1)][ValidateSet('Hashtable', 'SortedList', 'OrderedDictionary')]
+			[switch]$Type = 'Hashtable'
 		)
 
-		# if ordered...
-		If ($Ordered) {
-			# create an ordered dictionary
-			$Collection = [System.Collections.Specialized.OrderedDictionary]::new()
-		}
-		Else {
-			# create a hashtable
-			$Collection = [System.Collections.Hashtable]::new()
+		# switch on type
+		switch ($Type) {
+			'OrderedDictionary' {
+				$Collection = [System.Collections.Specialized.OrderedDictionary]::new()
+			}
+			'SortedList' {
+				$Collection = [System.Collections.SortedList]::new()
+			}
+			'Hashtable' {
+				$Collection = [System.Collections.Hashtable]::new()
+			}
 		}
 
 		# process each property of input object
@@ -1460,7 +1490,7 @@ Begin {
 					# if property value is a pscustomobject...
 					If ($PropertyValue -is [System.Management.Automation.PSCustomObject]) {
 						# convert property value into collection
-						$PropertyValueCollection = ConvertTo-Collection -InputObject $PropertyValue -Ordered:$Ordered
+						$PropertyValueCollection = ConvertTo-Collection -InputObject $PropertyValue -Type:$Type
 						# add property value collection to list
 						$PropertyValues.Add($PropertyValueCollection)
 					}
@@ -1477,7 +1507,7 @@ Begin {
 				# if property value is a pscustomobject...
 				If ($Property.Value -is [System.Management.Automation.PSCustomObject]) {
 					# convert property value into collection
-					$PropertyValueCollection = ConvertTo-Collection -InputObject $Property.Value -Ordered:$Ordered
+					$PropertyValueCollection = ConvertTo-Collection -InputObject $Property.Value -Type:$Type
 					# add property name and value to collection
 					$Collection[$Property.Name] = $PropertyValueCollection
 				}
@@ -1652,28 +1682,56 @@ Process {
 
 			# create ordered dictionary for custom object
 			$JsonParameters = [ordered]@{
-				Order      = [uint16]$Order
-				Command    = [string]$Command
-				Parameters = [hashtable]$Parameters
+				Order   = [uint16]$Order
+				Command = [string]$Command
 			}
 
-			# add Expression if provided
+			# if Arguments provided...
+			If ($script:Arguments) {
+				# process each key in Arguments
+				ForEach ($Key in $Arguments.Keys) {
+					# if key cannot be cast as un-signed 16-bit integer...
+					If (![uint16]::TryParse($Key, [ref][uint16]::MinValue)) {
+						Write-Warning "could not validate Arguments parameter: the value in the '$Key' key cannot be parsed into a UInt16 object"
+						Return
+					}
+				}
+				# add Arguments to dictionary
+				$JsonParameters['Arguments'] = [hashtable]$Arguments
+			}
+
+			# if Parameters provided...
+			If ($script:Parameters) {
+				# add Parameters to dictionary
+				$JsonParameters['Parameters'] = [hashtable]$Parameters
+			}
+
+			# if Expression provided...
 			If ($script:Expression) {
+				# add Expression to dictionary
 				$JsonParameters['Expression'] = [string]$Expression
 			}
 
-			# add InputName if provided
-			If ($script:InputName) {
-				$JsonParameters['InputName'] = [string]$InputName
+			# if Modules provided...
+			If ($script:Modules) {
+				# add Modules to dictionary
+				$JsonParameters['Modules'] = [string[]]$Modules
 			}
 
-			# add OutputName if provided
+			# if InputName provided...
+			If ($script:InputName) {
+				# add InputName to dictionary
+				$JsonParameters['InputName'] = [string[]]$InputName
+			}
+
+			# if OutputName provided...
 			If ($script:OutputName) {
+				# add OutputName to dictionary
 				$JsonParameters['OutputName'] = [string]$OutputName
 			}
 
 			# add current time as FileDateTimeUniversal
-			$JsonParameters['Updated'] = (Get-Date -Format FileDateTimeUniversal)
+			$JsonParameters['Updated'] = [datetime]::Now.ToString('s')
 
 			# create custom object from hashtable
 			$JsonEntry = [pscustomobject]$JsonParameters
@@ -1733,6 +1791,10 @@ Process {
 						Write-Warning -Message 'required value (Order) found in configuration file but cannot be parsed into a UInt16 object'
 						Continue NextJsonEntry
 					}
+					($null -ne $JsonEntry.Arguments -and $JsonEntry.Arguments -isnot [System.Management.Automation.PSCustomObject]) {
+						Write-Warning -Message 'optional value (Arguments) found in configuration file but was not parsed into a PSCustomObject object'
+						Continue NextJsonEntry
+					}
 					($null -ne $JsonEntry.Parameters -and $JsonEntry.Parameters -isnot [System.Management.Automation.PSCustomObject]) {
 						Write-Warning -Message 'optional value (Parameters) found in configuration file but was not parsed into a PSCustomObject object'
 						Continue NextJsonEntry
@@ -1743,6 +1805,18 @@ Process {
 					}
 					($null -ne $JsonEntry.OutputName -and $JsonEntry.OutputName -match '[^\w]') {
 						Write-Warning -Message 'optional value (OutputName) found in configuration file but contained a character not in 0-9A-Za-z_'
+						Continue NextJsonEntry
+					}
+					($null -ne $JsonEntry.Parameters -and $null -ne $JsonEntry.Arguments) {
+						Write-Warning -Message 'optional values (Parameters and Arguments) found in configuration file but cannot be combined'
+						Continue NextJsonEntry
+					}
+					($null -ne $JsonEntry.InputName -and $null -ne $JsonEntry.Arguments) {
+						Write-Warning -Message 'optional values (InputName and Arguments) found in configuration file but cannot be combined'
+						Continue NextJsonEntry
+					}
+					($null -ne $JsonEntry.OutputName -and $null -ne $JsonEntry.Arguments) {
+						Write-Warning -Message 'optional value (OutputName and Arguments) found in configuration file but cannot be combined'
 						Continue NextJsonEntry
 					}
 				}
@@ -1787,6 +1861,21 @@ Process {
 					$CommandName = $JsonEntry.Command
 				}
 
+				# if modules defined...
+				If ($null -ne $JsonEntry.Modules) {
+					# process each module name
+					ForEach ($ModuleName in $JsonEntry.Modules) {
+						# import module
+						Try {
+							Import-Module -Name $ModuleName -ErrorAction Stop
+						}
+						Catch {
+							Write-Warning -Message "could not import PowerShell module: '$ModuleName'"
+							Continue NextJsonEntry
+						}
+					}
+				}
+
 				# if trigger expression defined...
 				If ($null -ne $JsonEntry.Expression) {
 					# invoke trigger expression
@@ -1811,11 +1900,31 @@ Process {
 					}
 				}
 
+				# if arguments provided...
+				If ($null -ne $JsonEntry.Arguments) {
+					# process each key in Arguments
+					ForEach ($Key in $Arguments.Keys) {
+						# if key cannot be cast as un-signed 16-bit integer...
+						If (![uint16]::TryParse($Key, [ref][uint16]::MinValue)) {
+							Write-Warning "could not validate Arguments parameter: the value in the '$Key' key cannot be parsed into a UInt16 object"
+							Continue NextJsonEntry
+						}
+					}
+					# convert arguments to a sorted list
+					Try {
+						$Arguments = ConvertTo-Collection -InputObject $JsonEntry.Arguments -Type 'SortedList'
+					}
+					Catch {
+						Write-Warning -Message "exception caught converting the Arguments object to a sorted list: $($_.Exception.ToString())"
+						Continue NextJsonEntry
+					}
+				}
+
 				# if parameters provided...
 				If ($null -ne $JsonEntry.Parameters) {
 					# convert parameters to a hashtable
 					Try {
-						$Parameters = ConvertTo-Collection -InputObject $JsonEntry.Parameters -Ordered:$false
+						$Parameters = ConvertTo-Collection -InputObject $JsonEntry.Parameters -Type 'Hashtable'
 					}
 					Catch {
 						Write-Warning -Message "exception caught converting the Parameters object to a hashtable: $($_.Exception.ToString())"
@@ -1830,21 +1939,41 @@ Process {
 
 				# if input name defined...
 				If ($null -ne $JsonEntry.InputName) {
-					# retrieve value of variable matching input name
-					Try {
-						$InputValue = Get-Variable -Name $InputName -Scope 'script' -ValueOnly 
+					# process each named input variable
+					ForEach ($VariableName in $InputName) {
+						# retrieve value of the named variable
+						Try {
+							$VariableValue = Get-Variable -Name $VariableName -Scope 'script' -ValueOnly 
+						}
+						Catch {
+							Write-Warning -Message "exception caught retrieving value of the '$VariableName' variable: $($_.Exception.ToString())"
+							Continue NextJsonEntry
+						}
+
+						# add variable name and value to parameters
+						Try {
+							$Parameters.Add($VariableName, $VariableValue)
+						}
+						Catch {
+							Write-Warning -Message "exception caught adding '$VariableName' parameter to Parameters hashtable: $($_.Exception.ToString())"
+							Continue NextJsonEntry
+						}
 					}
-					Catch {
-						Write-Warning -Message "exception caught retrieving value of the '$InputName' variable: $($_.Exception.ToString())"
+				}
+
+				# if output name defined...
+				If ($null -ne $JsonEntry.OutputName) {
+					# if outvariable already defined...
+					If ($Parameters.ContainsKey('OutVariable')) {
+						Write-Warning -Message "could not add OutputName as OutVariable; OutVariable already defined in parameters as: $($Parameters['OutVariable'])"
 						Continue NextJsonEntry
 					}
-
-					# add variable to parameters...
+					# add OutputName as OutVariable to parameters
 					Try {
-						$Parameters.Add($InputName, $InputValue)
+						$Parameters.Add('OutVariable', $OutputName)
 					}
 					Catch {
-						Write-Warning -Message "exception caught updating Parameters with value of the '$InputName' variable: $($_.Exception.ToString())"
+						Write-Warning -Message "exception caught adding 'OutVariable' parameter to Parameters hashtable: $($_.Exception.ToString())"
 						Continue NextJsonEntry
 					}
 				}
@@ -1867,33 +1996,25 @@ Process {
 					Continue NextJsonEntry
 				}
 
-				# if output name defined...
-				If ($null -ne $JsonEntry.OutputName) {
-					# call script or function with parameters
+				# if arguments defined...
+				If ($null -ne $Arguments) {
+					# call command with values from arguments
 					Try {
-						$OutputValue = . $JsonEntry.Command @Parameters
+						. $JsonEntry.Command $Arguments.Values
 					}
 					Catch {
-						Write-Warning -Message "exception caught calling '$($JsonEntry.Command)' $CommandType command and saving output to object: $($_.Exception.ToString())"
-						$ExceptionCaught = $true
-					}
-					# save output object to named variable
-					Try {
-						New-Variable -Name $JsonEntry.OutputName -Value $OutputValue -Scope 'script' -Force
-					}
-					Catch {
-						Write-Warning -Message "exception caught saving output from '$($JsonEntry.Command)' $CommandType command to '$($JsonEntry.OutputName)' variable: $($_.Exception.ToString())"
+						Write-Warning -Message "exception caught calling '$($JsonEntry.Command)' $CommandType command with arguments: $($_.Exception.ToString())"
 						$ExceptionCaught = $true
 					}
 				}
-				# if variable not defined...
+				# if arguments not defined...
 				Else {
-					# call script or function with parameters
+					# call command with parameters
 					Try {
 						. $JsonEntry.Command @Parameters
 					}
 					Catch {
-						Write-Warning -Message "exception caught calling '$($JsonEntry.Command)' $CommandType command: $($_.Exception.ToString())"
+						Write-Warning -Message "exception caught calling '$($JsonEntry.Command)' $CommandType command with parameters: $($_.Exception.ToString())"
 						$ExceptionCaught = $true
 					}
 				}
