@@ -1,5 +1,3 @@
-#requires -Modules TranscriptWithHostAndDate
-
 <#
 .SYNOPSIS
 Removes files and empty directories based upon values in a JSON configuration file.
@@ -29,10 +27,10 @@ Switch parameter to remove files and empty directories based upoon the parameter
 The path containing files and empty directories that will be removed if older than the computed datetime. Required when the Remove, Add or Run parameters are specified.
 
 .PARAMETER OlderThanUnits
-The number of datetime units to create the computed datetime. Required when the Add or Run parameters are specified.
+The number of datetime units to create the computed datetime. Required when the Add and Json parameters are specified or the Path parameter is specified without the Json parameter.
 
 .PARAMETER OlderThanType
-The type of datetime units to create the computed datetime. Required when the Add or Run parameters are specified. Valid values are 'Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', and 'Years'
+The type of datetime units to create the computed datetime. Required when the Add and Json parameters are specified or the Path parameter is specified without the Json parameter. Valid values are 'Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', and 'Years'
 
 .INPUTS
 None.
@@ -41,51 +39,66 @@ None.
 None. The script reports the actions taken and does not provide any actionable output.
 
 .EXAMPLE
+# process all entries in the 'C:\Content\config.json' file and remove files and empty directories in the defined paths that are older than the datetime computed from the defined units and types
 .\Remove-OldFiles.ps1 -Json C:\Content\config.json
 
 .EXAMPLE
+# show all entries in the 'C:\Content\config.json' file
 .\Remove-OldFiles.ps1 -Json C:\Content\config.json -Show
 
 .EXAMPLE
+# remove all entries from the 'C:\Content\config.json' file
 .\Remove-OldFiles.ps1 -Json C:\Content\config.json -Clear
 
 .EXAMPLE
+# remove any entries from the 'C:\Content\config.json' file that contain the 'C:\Content\test' path
 .\Remove-OldFiles.ps1 -Json C:\Content\config.json -Remove -Path 'C:\Content\test'
 
 .EXAMPLE
+# add an entry to the 'C:\Content\config.json' file for removing files and empty directories in the 'C:\Content\test' path that are older than 30 days
 .\Remove-OldFiles.ps1 -Json C:\Content\config.json -Add -Path 'C:\Content\test' -OlderThanUnits 30 -OlderThanType 'Days'
 
 .EXAMPLE
-.\Remove-OldFiles.ps1 -Run -Path 'C:\Content\test' -OlderThanUnits 30 -OlderThanType 'Days'
+# immediately remove files and empty directories in the 'C:\Content\test' path that are older than 30 days
+.\Remove-OldFiles.ps1 -Path 'C:\Content\test' -OlderThanUnits 30 -OlderThanType 'Days'
 #>
 
-[CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Default')]
+[CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Run')]
 Param(
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Show')]
+	# switch parameter to show entries in json file
+	[Parameter(Mandatory = $True, ParameterSetName = 'Show')]
 	[switch]$Show,
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Clear')]
+	# switch parameter to clear entries in json file
+	[Parameter(Mandatory = $True, ParameterSetName = 'Clear')]
 	[switch]$Clear,
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Remove')]
+	# switch parameter to remove entries from json file
+	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
 	[switch]$Remove,
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Add')]
+	# switch parameter to add entries to json file
+	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[switch]$Add,
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Run')]
-	[switch]$Run,
-	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Remove')][ValidatePattern('^[^\*]+$')]
-	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')]
-	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Run')][ValidatePattern('^[^\*]+$')]
-	[string]$Path,
-	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Add')][ValidateRange(1, 65535)]
-	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Run')][ValidateRange(1, 65535)]
-	[uint16]$OlderThanUnits,
-	[Parameter(Position = 3, Mandatory = $True, ParameterSetName = 'Add')][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
-	[Parameter(Position = 3, Mandatory = $True, ParameterSetName = 'Run')][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
-	[string]$OlderThanType,
-	[Parameter()]
+	# path to json file
+	[Parameter(Mandatory = $True, ParameterSetName = 'Show')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'Clear')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'Add')]
 	[string]$Json,
-	# switch to skip transcript logging
-	[Parameter(DontShow)]
-	[switch]$SkipTranscript,
+	# path for items to remove
+	[Parameter(Mandatory = $True, ParameterSetName = 'Remove')][ValidatePattern('^[^\*]+$')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'Add')][ValidatePattern('^[^\*]+$')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'Run')][ValidatePattern('^[^\*]+$')]
+	[string]$Path,
+	# units for computing previous date
+	[Parameter(Mandatory = $True, ParameterSetName = 'Add')][ValidateRange(1, 65535)]
+	[Parameter(Mandatory = $True, ParameterSetName = 'Run')][ValidateRange(1, 65535)]
+	[uint16]$OlderThanUnits,
+	# type for computing previous date
+	[Parameter(Mandatory = $True, ParameterSetName = 'Add')][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'Run')][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
+	[string]$OlderThanType,
+	# legacy switch parameter to force run mode
+	[Parameter(Mandatory = $False, ParameterSetName = 'Run')]
+	[switch]$Run,
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -103,16 +116,18 @@ Begin {
 			[Parameter(Mandatory = $true, Position = 0)][ValidateRange(1, 65535)]
 			[uint16]$OlderThanUnits,
 			[Parameter(Mandatory = $true, Position = 1)][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
-			[string]$OlderThanType
+			[string]$OlderThanType,
+			[Parameter(Mandatory = $false)]
+			[datetime]$Date = [datetime]::Now
 		)
 		Switch ($OlderThanType) {
-			'Seconds' { Return (Get-Date).AddSeconds(-1 * $OlderThanUnits) }
-			'Minutes' { Return (Get-Date).AddMinutes(-1 * $OlderThanUnits) }
-			'Hours' { Return (Get-Date).AddHours(-1 * $OlderThanUnits) }
-			'Days' { Return (Get-Date).AddDays(-1 * $OlderThanUnits) }
-			'Weeks' { Return (Get-Date).AddWeeks(-1 * $OlderThanUnits) }
-			'Months' { Return (Get-Date).AddMonths(-1 * $OlderThanUnits) }
-			'Years' { Return (Get-Date).AddYears(-1 * $OlderThanUnits) }
+			'Seconds' { Return $Date.AddSeconds(-1 * $OlderThanUnits) }
+			'Minutes' { Return $Date.AddMinutes(-1 * $OlderThanUnits) }
+			'Hours' { Return $Date.AddHours(-1 * $OlderThanUnits) }
+			'Days' { Return $Date.AddDays(-1 * $OlderThanUnits) }
+			'Weeks' { Return $Date.AddWeeks(-1 * $OlderThanUnits) }
+			'Months' { Return $Date.AddMonths(-1 * $OlderThanUnits) }
+			'Years' { Return $Date.AddYears(-1 * $OlderThanUnits) }
 		}
 	}
 
@@ -195,20 +210,44 @@ Begin {
 			}
 		}
 	}
-
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# start transcript with default parameters
-		Try {
-			Start-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
-	}
 }
 
 Process {
+	# if script in direct run mode...
+	If ($PSCmdLet.ParameterSetName -eq 'Run') {
+		# get previous date from input
+		Try {
+			$Date = Get-PreviousDate -OlderThanUnits $OlderThanUnits -OlderThanType $OlderThanType
+		}
+		Catch {
+			Write-Warning -Message "could not create date from '$OlderThanUnits $OlderThanType'"
+			Throw $_
+		}
+
+		# define required parameters for Remove-ItemsFromPathBeforeDate
+		$RemoveItemsFromPathBeforeDate = @{
+			Path = [string]$Path
+			Date = [datetime]$Date
+		}
+
+		# define optional parameters for Remove-ItemsFromPathBeforeDate
+		If ($WhatIfPreference.IsPresent) {
+			$RemoveItemsFromPathBeforeDate['WhatIf'] = $true
+		}
+
+		# remove items from path before date
+		Try {
+			Remove-ItemsFromPathBeforeDate @RemoveItemsFromPathBeforeDate
+		}
+		Catch {
+			Write-Warning -Message "could not remove items from path: $Path"
+			Throw $_
+		}
+
+		# return after direct run
+		Return
+	}
+
 	# if JSON file found...
 	If (Test-Path -Path $Json) {
 		# ...create JSON data object as array of PSCustomObjects from JSON file content
@@ -322,37 +361,6 @@ Process {
 				Return $_
 			}
 		}
-		# run script with provided parameters
-		$Run {
-			# get previous date from input
-			Try {
-				$Date = Get-PreviousDate -OlderThanUnits $OlderThanUnits -OlderThanType $OlderThanType
-			}
-			Catch {
-				Write-Warning -Message "could not create date from '$OlderThanUnits $OlderThanType'"
-				Throw $_
-			}
-
-			# define required parameters for Remove-ItemsFromPathBeforeDate
-			$RemoveItemsFromPathBeforeDate = @{
-				Path = [string]$Path
-				Date = [datetime]$Date
-			}
-
-			# define optional parameters for Remove-ItemsFromPathBeforeDate
-			If ($WhatIfPreference.IsPresent) {
-				$RemoveItemsFromPathBeforeDate['WhatIf'] = $true
-			}
-
-			# remove items from path before date
-			Try {
-				Remove-ItemsFromPathBeforeDate @RemoveItemsFromPathBeforeDate
-			}
-			Catch {
-				Write-Warning -Message "could not remove items: $($JsonEntry.Path)"
-				Throw $_
-			}
-		}
 		# process entries in configuration file
 		Default {
 			# check entry count in configuration file
@@ -362,62 +370,52 @@ Process {
 			}
 
 			# process entries in configuration file
-			:JsonEntry ForEach ($JsonEntry in $JsonData) {
-				switch ($true) {
+			:NextJsonEntry ForEach ($JsonEntry in $JsonData) {
+				# validate entries in JSON file
+				Switch ($true) {
 					([string]::IsNullOrEmpty($JsonEntry.Path)) {
-						Write-Warning -Message "required entry (Path) not found in configuration file: $Json"; Continue :JsonEntry
+						Write-Warning -Message "required entry (Path) not found in configuration file: $Json"
+						Continue NextJsonEntry
 					}
 					([string]::IsNullOrEmpty($JsonEntry.OlderThanUnits)) {
-						Write-Warning -Message "required entry (OlderThanUnits) not found in configuration file: $Json"; Continue :JsonEntry
+						Write-Warning -Message "required entry (OlderThanUnits) not found in configuration file: $Json"
+						Continue NextJsonEntry
 					}
 					([string]::IsNullOrEmpty($JsonEntry.OlderThanType)) {
-						Write-Warning -Message "required entry (OlderThanType) not found in configuration file: $Json"; Continue :JsonEntry
-					}
-					Default {
-						# get previous date from input
-						Try {
-							$Date = Get-PreviousDate -OlderThanUnits ($JsonEntry.OlderThanUnits) -OlderThanType ($JsonEntry.OlderThanType)
-						}
-						Catch {
-							Write-Warning -Message "could not create date from '$($JsonEntry.OlderThanUnits) $($JsonEntry.OlderThanType)'"
-							Continue :JsonEntry
-						}
-
-						# define required parameters for Remove-ItemsFromPathBeforeDate
-						$RemoveItemsFromPathBeforeDate = @{
-							Path = [string]$JsonEntry.Path
-							Date = [datetime]$Date
-						}
-
-						# define optional parameters for Remove-ItemsFromPathBeforeDate
-						If ($WhatIfPreference.IsPresent) {
-							$RemoveItemsFromPathBeforeDate['WhatIf'] = $true
-						}
-
-						# remove items from path before date
-						Try {
-							Remove-ItemsFromPathBeforeDate @RemoveItemsFromPathBeforeDate
-						}
-						Catch {
-							Write-Warning -Message "could not remove items from path: $($JsonEntry.Path)"
-							Continue :JsonEntry
-						}
+						Write-Warning -Message "required entry (OlderThanType) not found in configuration file: $Json"
+						Continue NextJsonEntry
 					}
 				}
-			}
-		}
-	}
-}
 
-End {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# stop transcript with default parameters
-		Try {
-			Stop-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
+				# get previous date from input
+				Try {
+					$Date = Get-PreviousDate -OlderThanUnits ($JsonEntry.OlderThanUnits) -OlderThanType ($JsonEntry.OlderThanType)
+				}
+				Catch {
+					Write-Warning -Message "could not create date from '$($JsonEntry.OlderThanUnits) $($JsonEntry.OlderThanType)'"
+					Continue NextJsonEntry
+				}
+
+				# define required parameters for Remove-ItemsFromPathBeforeDate
+				$RemoveItemsFromPathBeforeDate = @{
+					Path = [string]$JsonEntry.Path
+					Date = [datetime]$Date
+				}
+
+				# define optional parameters for Remove-ItemsFromPathBeforeDate
+				If ($WhatIfPreference.IsPresent) {
+					$RemoveItemsFromPathBeforeDate['WhatIf'] = $true
+				}
+
+				# remove items from path before date
+				Try {
+					Remove-ItemsFromPathBeforeDate @RemoveItemsFromPathBeforeDate
+				}
+				Catch {
+					Write-Warning -Message "could not remove items from path: $($JsonEntry.Path)"
+					Continue NextJsonEntry
+				}
+			}
 		}
 	}
 }
