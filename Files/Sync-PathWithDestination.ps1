@@ -161,9 +161,6 @@ Param(
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'Run')]
 	[string[]]$PostSyncCommands,
-	# switch to skip transcript logging
-	[Parameter(DontShow)]
-	[switch]$SkipTranscript,
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
