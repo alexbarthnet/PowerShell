@@ -2516,16 +2516,20 @@ Process {
 		}
 		# clear configuration file
 		$Clear {
+			# set empty string for JSON string
+			$JsonValue = [string]::Empty
+
+			# update JSON file
 			Try {
-				[string]::Empty | Set-Content -Path $Json
+				$JsonValue | Set-Content -Path $Json
 			}
 			Catch {
-				Write-Warning -Message "could not clear configuration file: '$Json'"
+				Write-Warning "could not clear entries from configuration file: '$Json'"
 				Return $_
 			}
 
-			# report
-			Write-Host "Cleared configuration file: '$Json'"
+			# report entries cleared
+			Write-Host "Cleared entries from configuration file: '$Json'"
 		}
 		# remove entry from configuration file
 		$Remove {

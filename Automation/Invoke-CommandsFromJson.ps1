@@ -1595,19 +1595,20 @@ Process {
 		}
 		# clear configuration file
 		$Clear {
+			# set empty string for JSON string
+			$JsonValue = [string]::Empty
+
 			# update JSON file
 			Try {
-				# clear JSON data
-				[string]::Empty | Set-Content -Path $Json
+				$JsonValue | Set-Content -Path $Json
 			}
 			Catch {
-				Write-Warning -Message "could not clear configuration file: '$Json'"
+				Write-Warning "could not clear entries from configuration file: '$Json'"
 				Return $_
 			}
 
-			# report and display JSON contents
-			Write-Host "Cleared configuration file: '$Json'"
-			$JsonData | Sort-Object -Property 'Order', 'Command' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+			# report entries cleared
+			Write-Host "Cleared entries from configuration file: '$Json'"
 		}
 		# remove entry from configuration file
 		$Remove {
