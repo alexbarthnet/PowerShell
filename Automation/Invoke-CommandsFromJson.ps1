@@ -1760,18 +1760,29 @@ Process {
 			# add entry to data
 			$JsonData += $JsonEntry
 
+			# convert data to JSON
+			Try {
+				$JsonValue = $JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100
+			}
+			Catch {
+				Write-Warning 'could not convert object to JSON'
+				Return $_
+			}
+
 			# update JSON file
 			Try {
-				$JsonData | Sort-Object -Property 'Order', 'Command' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
+				$JsonValue | Set-Content -Path $Json
 			}
 			Catch {
 				Write-Warning "could not add entry to configuration file: '$Json'"
 				Return $_
 			}
 
-			# report and display JSON contents
-			Write-Host "Added entry with Order of '$Order' for '$Command' Command to configuration file: '$Json'"
-			$JsonData | Sort-Object -Property 'Order', 'Command' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+			# report entry added
+			Write-Host "Added entry with order of '$Order' for '$Command' command to configuration file: '$Json'"
+
+			# display current entries if verbose
+			If ($VerbosePreference) { $JsonValue | Format-List }
 		}
 		# process entries in configuration file
 		Default {

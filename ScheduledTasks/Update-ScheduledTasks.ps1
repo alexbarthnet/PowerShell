@@ -2666,18 +2666,29 @@ Process {
 			# add entry to data
 			$JsonData += $JsonEntry
 
+			# convert data to JSON
+			Try {
+				$JsonValue = $JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100
+			}
+			Catch {
+				Write-Warning 'could not convert object to JSON'
+				Return $_
+			}
+
 			# update JSON file
 			Try {
-				$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
+				$JsonValue | Set-Content -Path $Json
 			}
 			Catch {
 				Write-Warning "could not add entry to configuration file: '$Json'"
 				Return $_
 			}
 
-			# report and display JSON contents
-			Write-Verbose -Verbose -Message "Added '$TaskName' at '$Taskpath' to configuration file: '$Json'"
-			$JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+			# report entry added
+			Write-Host "Added entry for '$TaskName' task at '$Taskpath' path to configuration file: '$Json'"
+
+			# display current entries if verbose
+			If ($VerbosePreference) { $JsonValue | Format-List }
 		}
 		# process entries in configuration file
 		Default {
