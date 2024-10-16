@@ -1975,7 +1975,7 @@ Process {
 					ForEach ($VariableName in $InputName) {
 						# retrieve value of the named variable
 						Try {
-							$VariableValue = Get-Variable -Name $VariableName -Scope 'script' -ValueOnly 
+							$VariableValue = Get-Variable -Name $VariableName -Scope 'script' -ValueOnly
 						}
 						Catch {
 							Write-Warning -Message "exception caught retrieving value of the '$VariableName' variable: $($_.Exception.ToString())"
