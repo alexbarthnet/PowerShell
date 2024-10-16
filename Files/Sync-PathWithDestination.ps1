@@ -596,8 +596,8 @@ Begin {
 			}
 		}
 
-		# update JSON file if LastSyncTime is not 0
-		If ($Json -and $LastSyncTime -ne 0) {
+		# if JSON file was source of run...
+		If ($script:Json) {
 			# create ordered dictionary for custom object
 			$JsonParameters = [ordered]@{
 				Path              = $Path
