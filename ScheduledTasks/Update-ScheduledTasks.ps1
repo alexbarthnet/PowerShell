@@ -2511,7 +2511,7 @@ Process {
 	switch ($true) {
 		# show configuration file
 		$Show {
-			Write-Verbose -Verbose -Message "Displaying '$Json'"
+			Write-Host "Displaying '$Json'"
 			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 		# clear configuration file
