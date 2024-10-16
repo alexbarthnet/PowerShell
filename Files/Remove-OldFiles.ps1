@@ -202,7 +202,7 @@ Begin {
 		ForEach ($Directory in $Directories) {
 			If ($PSCmdlet.ShouldProcess($Directory, 'Remove Directory')) {
 				Try {
-					Remove-Item -Path $Directory -Force -Verbose -ErrorAction Stop
+					Remove-Item -Path $Directory -Force -Verbose:$VerbosePreference -ErrorAction 'Stop'
 				}
 				Catch {
 					Write-Warning -Message "could not perform `"Remove Directory`" on target `"$Directory`": $($_.ToString())"
@@ -230,8 +230,13 @@ Process {
 			Date = [datetime]$Date
 		}
 
+		# defined optional parameters for Remove-ItemsFromPathBeforeDate
+		If ($VerbosePreference -eq 'Continue') {
+			$RemoveItemsFromPathBeforeDate['Verbose'] = $true
+		}
+
 		# define optional parameters for Remove-ItemsFromPathBeforeDate
-		If ($WhatIfPreference.IsPresent) {
+		If ($WhatIfPreference -eq $true) {
 			$RemoveItemsFromPathBeforeDate['WhatIf'] = $true
 		}
 
@@ -402,8 +407,13 @@ Process {
 					Date = [datetime]$Date
 				}
 
+				# defined optional parameters for Remove-ItemsFromPathBeforeDate
+				If ($VerbosePreference -eq 'Continue') {
+					$RemoveItemsFromPathBeforeDate['Verbose'] = $true
+				}
+
 				# define optional parameters for Remove-ItemsFromPathBeforeDate
-				If ($WhatIfPreference.IsPresent) {
+				If ($WhatIfPreference -eq $true) {
 					$RemoveItemsFromPathBeforeDate['WhatIf'] = $true
 				}
 

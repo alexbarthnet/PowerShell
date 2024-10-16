@@ -689,9 +689,14 @@ Process {
 				LastSyncTime      = $LastSyncTime
 			}
 
+			# defined optional parameters for Sync-ItemsInPathWithDestination
+			If ($VerbosePreference -eq 'Continue') {
+				$SyncItemsInPathWithDestination['Verbose'] = $true
+			}
+
 			# define optional parameters for Sync-ItemsInPathWithDestination
-			If ($script:WhatIfPreference.IsPresent) {
-				$SyncItemsInPathWithDestination['WhatIf'] = $script:WhatIfPreference
+			If ($WhatIfPreference -eq $true) {
+				$SyncItemsInPathWithDestination['WhatIf'] = $true
 			}
 
 			# sync items in path with destination
@@ -908,8 +913,13 @@ Process {
 					Updated           = $JsonEntry.Updated
 				}
 
+				# defined optional parameters for Sync-ItemsInPathWithDestination
+				If ($VerbosePreference -eq 'Continue') {
+					$SyncItemsInPathWithDestination['Verbose'] = $true
+				}
+
 				# define optional parameters for Sync-ItemsInPathWithDestination
-				If ($WhatIfPreference.IsPresent) {
+				If ($WhatIfPreference -eq $true) {
 					$SyncItemsInPathWithDestination['WhatIf'] = $true
 				}
 
