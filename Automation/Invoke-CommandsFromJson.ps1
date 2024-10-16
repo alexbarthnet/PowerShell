@@ -1463,7 +1463,7 @@ Begin {
 			[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 			[object]$InputObject,
 			[Parameter(Position = 1)][ValidateSet('Hashtable', 'SortedList', 'OrderedDictionary')]
-			[switch]$Type = 'Hashtable'
+			[string]$Type = 'Hashtable'
 		)
 
 		# switch on type
@@ -1490,7 +1490,7 @@ Begin {
 					# if property value is a pscustomobject...
 					If ($PropertyValue -is [System.Management.Automation.PSCustomObject]) {
 						# convert property value into collection
-						$PropertyValueCollection = ConvertTo-Collection -InputObject $PropertyValue -Type:$Type
+						$PropertyValueCollection = ConvertTo-Collection -InputObject $PropertyValue -Type $Type
 						# add property value collection to list
 						$PropertyValues.Add($PropertyValueCollection)
 					}
@@ -1507,7 +1507,7 @@ Begin {
 				# if property value is a pscustomobject...
 				If ($Property.Value -is [System.Management.Automation.PSCustomObject]) {
 					# convert property value into collection
-					$PropertyValueCollection = ConvertTo-Collection -InputObject $Property.Value -Type:$Type
+					$PropertyValueCollection = ConvertTo-Collection -InputObject $Property.Value -Type $Type
 					# add property name and value to collection
 					$Collection[$Property.Name] = $PropertyValueCollection
 				}

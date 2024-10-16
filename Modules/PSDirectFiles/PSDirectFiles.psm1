@@ -2,19 +2,23 @@
 
 Function ConvertTo-Collection {
 	Param (
-		[Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		[object]$InputObject,
-		[switch]$Ordered
+		[Parameter(Position = 1)][ValidateSet('Hashtable', 'SortedList', 'OrderedDictionary')]
+		[string]$Type = 'Hashtable'
 	)
 
-	# if ordered...
-	If ($Ordered) {
-		# create an ordered dictionary
-		$Collection = [System.Collections.Specialized.OrderedDictionary]::new()
-	}
-	Else {
-		# create a hashtable
-		$Collection = [System.Collections.Hashtable]::new()
+	# switch on type
+	switch ($Type) {
+		'OrderedDictionary' {
+			$Collection = [System.Collections.Specialized.OrderedDictionary]::new()
+		}
+		'SortedList' {
+			$Collection = [System.Collections.SortedList]::new()
+		}
+		'Hashtable' {
+			$Collection = [System.Collections.Hashtable]::new()
+		}
 	}
 
 	# process each property of input object
@@ -28,7 +32,7 @@ Function ConvertTo-Collection {
 				# if property value is a pscustomobject...
 				If ($PropertyValue -is [System.Management.Automation.PSCustomObject]) {
 					# convert property value into collection
-					$PropertyValueCollection = ConvertTo-Collection -InputObject $PropertyValue -Ordered:$Ordered
+					$PropertyValueCollection = ConvertTo-Collection -InputObject $PropertyValue -Type $Type
 					# add property value collection to list
 					$PropertyValues.Add($PropertyValueCollection)
 				}
@@ -45,7 +49,7 @@ Function ConvertTo-Collection {
 			# if property value is a pscustomobject...
 			If ($Property.Value -is [System.Management.Automation.PSCustomObject]) {
 				# convert property value into collection
-				$PropertyValueCollection = ConvertTo-Collection -InputObject $Property.Value -Ordered:$Ordered
+				$PropertyValueCollection = ConvertTo-Collection -InputObject $Property.Value -Type $Type
 				# add property name and value to collection
 				$Collection[$Property.Name] = $PropertyValueCollection
 			}
