@@ -2345,6 +2345,21 @@ Begin {
 }
 
 Process {
+	# if JSON is not an absolute path...
+	If (![System.IO.Path]::IsPathRooted($Json)) {
+		# get unresolved absolute path
+		Try {
+			$Json = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Json)
+		}
+		Catch {
+			Write-Warning "could not create absolute path from the provided Json parameter: $Json"
+			Return
+		}
+
+		# report absolute path
+		Write-Warning "converted relative path in provided Json parameter to absolute path: $Json"
+	}
+
 	# if Register set...
 	If ($Register) {
 		# define parameters for Update-ScheduledTaskFromJson
