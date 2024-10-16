@@ -177,17 +177,17 @@ Param(
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'AddSelf')]
 	[Parameter(ParameterSetName = 'Register')]
-	[timespan]$RandomDelay = (New-TimeSpan -Minutes 5),
+	[timespan]$RandomDelay = [timespan]::FromMinutes(5),
 	# scheduled task parameter - trigger
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'AddSelf')]
 	[Parameter(ParameterSetName = 'Register')]
-	[timespan]$RepetitionInterval = (New-TimeSpan -Hours 1),
+	[timespan]$RepetitionInterval = [timespan]::FromHours(1),
 	# scheduled task parameter - settings
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'AddSelf')]
 	[Parameter(ParameterSetName = 'Register')]
-	[timespan]$ExecutionTimeLimit = (New-TimeSpan -Minutes 30),
+	[timespan]$ExecutionTimeLimit = [timespan]::FromMinutes(30),
 	# scheduled task parameter - principal
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'AddSelf')]
@@ -2376,17 +2376,17 @@ Process {
 
 		# if RandomDelay parameter not provided...
 		If (!$PSBoundParameters.ContainsKey('RandomDelay')) {
-			$UpdateScheduledTaskFromJson['RandomDelay'] = (New-TimeSpan -Minutes 0)
+			$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]::FromMinutes(0)
 		}
 
 		# if ExecutionTimeLimit parameter not provided...
 		If (!$PSBoundParameters.ContainsKey('ExecutionTimeLimit')) {
-			$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = (New-TimeSpan -Minutes 1)
+			$UpdateScheduledTaskFromJson['ExecutionTimeLimit'] = [timespan]::FromMinutes(1)
 		}
 
 		# if RepetitionInterval parameter not provided...
 		If (!$PSBoundParameters.ContainsKey('RepetitionInterval')) {
-			$UpdateScheduledTaskFromJson['RepetitionInterval'] = (New-TimeSpan -Minutes 15)
+			$UpdateScheduledTaskFromJson['RepetitionInterval'] = [timespan]::FromMinutes(15)
 		}
 
 		# register scheduled task
@@ -2449,17 +2449,17 @@ Process {
 
 		# if RandomDelay parameter not provided...
 		If (!$PSBoundParameters.ContainsKey('RandomDelay')) {
-			$RandomDelay = (New-TimeSpan -Minutes 0)
+			$RandomDelay = [timespan]::FromMinutes(0)
 		}
 
 		# if ExecutionTimeLimit parameter not provided...
 		If (!$PSBoundParameters.ContainsKey('ExecutionTimeLimit')) {
-			$ExecutionTimeLimit = (New-TimeSpan -Minutes 1)
+			$ExecutionTimeLimit = [timespan]::FromMinutes(1)
 		}
 
 		# if RepetitionInterval parameter not provided...
 		If (!$PSBoundParameters.ContainsKey('RepetitionInterval')) {
-			$RepetitionInterval = (New-TimeSpan -Minutes 15)
+			$RepetitionInterval = [timespan]::FromMinutes(15)
 		}
 	}
 
