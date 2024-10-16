@@ -1644,30 +1644,35 @@ Process {
 
 			# if JSON data empty...
 			If ($JsonData.Count -eq 0) {
-				# clear JSON file
-				Try {
-					[string]::Empty | Set-Content -Path $Json
-				}
-				Catch {
-					Write-Warning "could not clear last entry from configuration file: '$Json'"
-					Return $_
-				}
+				# set empty string for JSON string
+				$JsonValue = [string]::Empty
 			}
 			# if JSON data is not empty...
 			Else {
-				# update JSON file
+				# convert JSON data to JSON string
 				Try {
-					$JsonData | Sort-Object -Property 'Order', 'Command' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
+					$JsonValue = $JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100
 				}
 				Catch {
-					Write-Warning "could not remove entry from configuration file: '$Json'"
+					Write-Warning 'could not convert object to JSON'
 					Return $_
 				}
 			}
 
-			# report and display JSON contents
+			# update JSON file
+			Try {
+				$JsonValue | Set-Content -Path $Json
+			}
+			Catch {
+				Write-Warning "could not remove entry from configuration file: '$Json'"
+				Return $_
+			}
+
+			# report entry removed
 			Write-Host "Removed entry with $ParametersForReporting from configuration file: '$Json'"
-			$JsonData | Sort-Object -Property 'Order', 'Command' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+
+			# display current entries if verbose
+			If ($VerbosePreference) { $JsonValue | Format-List }
 		}
 		# add entry to configuration file
 		$Add {
