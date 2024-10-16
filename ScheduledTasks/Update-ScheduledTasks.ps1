@@ -2430,7 +2430,7 @@ Process {
 		}
 
 		# report state
-		Write-Verbose -Verbose -Message "Unregistered existing scheduled task '$TaskName' at path '$TaskPath'"
+		Write-Host "Unregistered existing scheduled task '$TaskName' at path '$TaskPath'"
 
 		# return after unregistering task
 		Return
@@ -2486,8 +2486,8 @@ Process {
 	}
 	# if JSON file was not found...
 	Else {
-		# ...and Add or AddSelf set...
-		If ($Add -or $AddSelf) {
+		# ...and Add set...
+		If ($Add) {
 			# ...try to create the JSON file
 			Try {
 				$null = New-Item -ItemType 'File' -Path $Json -ErrorAction 'Stop'
@@ -2499,7 +2499,7 @@ Process {
 			# ...create JSON data object as empty array
 			$JsonData = @()
 		}
-		# ...and Add or AddSelf not set...
+		# ...and Add not set...
 		Else {
 			# ...report and return
 			Write-Warning -Message "could not find configuration file: '$Json'"
