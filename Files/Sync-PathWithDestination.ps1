@@ -583,46 +583,47 @@ Begin {
 
 		# update JSON file if LastSyncTime is not 0
 		If ($Json -and $LastSyncTime -ne 0) {
-			# create custom object from parameters then add to object
+			# create ordered dictionary for custom object
+			$JsonParameters = [ordered]@{
+				Path              = $Path
+				Destination       = $Destination
+				Direction         = $Direction
+				Purge             = $Purge.ToBool()
+				Recurse           = $Recurse.ToBool()
+				CheckHash         = $CheckHash.ToBool()
+				SkipDelete        = $SkipDelete.ToBool()
+				SkipExisting      = $SkipExisting.ToBool()
+				SkipFiles         = $SkipFiles.ToBool()
+				CreatePath        = $CreatePath.ToBool()
+				CreateDestination = $CreateDestination.ToBool()
+				LastSyncTime      = $CurrentSyncTime
+				Updated           = $Updated
+			}
+
+			# create custom object from ordered dictionary
+			$JsonEntry = [pscustomobject]$JsonParameters
+
+			# remove existing entry with same primary key(s)
+			$JsonData = [array]($JsonData.Where({ $_.Path -ne $Path -and $_.Destination -ne $Destination }))
+
+			# add entry to data
+			$JsonData += $JsonEntry
+
+			# convert JSON data to JSON string
 			Try {
-				# create ordered dictionary for custom object
-				$JsonParameters = [ordered]@{
-					Path              = $Path
-					Destination       = $Destination
-					Direction         = $Direction
-					Purge             = $Purge.ToBool()
-					Recurse           = $Recurse.ToBool()
-					CheckHash         = $CheckHash.ToBool()
-					SkipDelete        = $SkipDelete.ToBool()
-					SkipExisting      = $SkipExisting.ToBool()
-					SkipFiles         = $SkipFiles.ToBool()
-					CreatePath        = $CreatePath.ToBool()
-					CreateDestination = $CreateDestination.ToBool()
-					LastSyncTime      = $CurrentSyncTime
-					Updated           = $Updated
-				}
-
-				# create custom object from hashtable
-				$JsonEntry = [pscustomobject]$JsonParameters
-
-				# if existing entry has same primary key(s)...
-				If ($JsonData.Where({ $_.Path -eq $Path -and $_.Destination -eq $Destination })) {
-					# inquire before removing existing entry
-					Write-Warning -Message "Will overwrite existing entry for '$Path' path and '$Destination' destination in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
-					# remove existing entry with same primary key(s)
-					$JsonData = [array]($JsonData.Where({ $_.Path -ne $Path -and $_.Destination -ne $Destination }))
-				}
-
-				# add entry to data
-				$JsonData += $JsonEntry
-
-				# export JSON data
-				$JsonData | Sort-Object -Property 'Path', 'Destination' | ConvertTo-Json -Depth 100 | Set-Content -Path $Json
-				Write-Output "`nAdded entry for '$Path' path and '$Destination' destination to configuration file: '$Json'"
-				$JsonData | Sort-Object -Property 'Path', 'Destination' | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+				$JsonValue = $JsonData | Sort-Object -Property 'Path', 'Destination' | ConvertTo-Json -Depth 100
 			}
 			Catch {
-				Write-Warning -Message "could not update configuration file after Sync: '$Json'"
+				Write-Warning 'could not convert object to JSON'
+				Return $_
+			}
+
+			# update JSON file
+			Try {
+				$JsonValue | Set-Content -Path $Json
+			}
+			Catch {
+				Write-Warning "could not update configuration file after Sync: '$Json'"
 				Return $_
 			}
 		}
