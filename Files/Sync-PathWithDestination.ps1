@@ -233,40 +233,55 @@ Begin {
 		$Path = $Path.TrimEnd('\')
 		$Destination = $Destination.TrimEnd('\')
 
-		# verify source
+		# if source found...
 		If (Test-Path -Path $Path -PathType 'Container') {
 			$Source = Get-Item -Path $Path | Select-Object -ExpandProperty 'FullName'
-			Write-Verbose -Message "Found '$Path' on host with full path: $Source"
+			Write-Host "Found '$Path' on host with full path: $Source"
 		}
-		ElseIf ($CreatePath) {
-			Try {
-				$Source = New-Item -ItemType 'Directory' -Path $Path | Select-Object -ExpandProperty 'FullName'
-				Write-Verbose -Message "Created '$Path' on host with full path: $Source"
-			}
-			Catch {
-				Write-Warning -Message "Could not create Path folder '$Path' on host"; Return
-			}
-		}
+		# if source not found...
 		Else {
-			Write-Warning -Message "Could not find Path folder '$Path' on host"; Return
+			# if create path requested...
+			If ($CreatePath) {
+				Try {
+					$Source = New-Item -ItemType 'Directory' -Path $Path -Verbose:$VerbosePreference | Select-Object -ExpandProperty 'FullName'
+					Write-Host "Created '$Path' on host with full path: $Source"
+				}
+				Catch {
+					Write-Warning -Message "Could not create Path folder '$Path' on host"
+					Return $_
+				}
+			}
+			# if create path not requested...
+			Else {
+				Write-Warning "Could not find Path folder '$Path' on host"
+				Return
+			}
 		}
 
-		# verify target
+		# if target found...
 		If (Test-Path -Path $Destination -PathType 'Container') {
 			$Target = Get-Item -Path $Destination | Select-Object -ExpandProperty 'FullName'
-			Write-Verbose -Message "Found '$Destination' on host with full path: $Target"
+			Write-Host "Found '$Destination' on host with full path: $Target"
 		}
-		ElseIf ($CreateDestination) {
-			Try {
-				$Target = New-Item -ItemType 'Directory' -Path $Destination | Select-Object -ExpandProperty 'FullName'
-				Write-Verbose -Message "Created '$Destination' on host with full path: $Target"
-			}
-			Catch {
-				Write-Output "Could not create Destination folder '$Destination' on host"; Return
-			}
-		}
+		# if target not found...
 		Else {
-			Write-Output "Could not find Destination folder '$Destination' on host"; Return
+			# if create destination requested...
+			If ($CreateDestination) {
+				Try {
+					$Target = New-Item -ItemType 'Directory' -Path $Destination -Verbose:$VerbosePreference | Select-Object -ExpandProperty 'FullName'
+					Write-Host "Created '$Destination' on host with full path: $Target"
+				}
+				Catch {
+					Write-Warning "Could not create Destination folder '$Destination' on host"
+					Return $_
+				}
+			}
+			# if create destination not requested...
+			Else {
+				# report not found and return
+				Write-Warning "Could not find Destination folder '$Destination' on host"
+				Return
+			}
 		}
 
 		# set direction
@@ -281,9 +296,9 @@ Begin {
 
 		# remove all files and folders from target if Purge is set
 		If ($Purge) {
-			Write-Verbose -Message "Clearing '$TargetPath' before copy"
+			Write-Warning "Clearing '$TargetPath' before copy"
 			Try {
-				Get-ChildItem -Path $TargetPath -Recurse -Force | Remove-Item -Force
+				Get-ChildItem -Path $TargetPath -Recurse -Force | Remove-Item -Force -Verbose:$VerbosePreference
 			}
 			Catch {
 				Write-Warning -Message "Could not purge folder '$TargetPath'"
@@ -315,11 +330,11 @@ Begin {
 					$MissingTargetFolder = Join-Path -Path $TargetPath -ChildPath $MissingTargetFolder
 					If ($PSCmdlet.ShouldProcess($MissingTargetFolder, 'create folder')) {
 						Try {
-							$null = New-Item -Path $MissingTargetFolder -ItemType 'Directory' -Force -Verbose
+							$null = New-Item -Path $MissingTargetFolder -ItemType 'Directory' -Force -Verbose:$VerbosePreference
 						}
 						Catch {
-							Write-Output "ERROR: could not create folder '$MissingTargetFolder'"
-							Return
+							Write-Warning "could not create folder '$MissingTargetFolder'"
+							Return $_
 						}
 					}
 				}
@@ -335,11 +350,11 @@ Begin {
 					$MissingSourceFolder = Join-Path -Path $SourcePath -ChildPath $MissingSourceFolder
 					If ($PSCmdlet.ShouldProcess($MissingSourceFolder, 'create folder')) {
 						Try {
-							$null = New-Item -Path $MissingSourceFolder -ItemType 'Directory' -Force -Verbose
+							$null = New-Item -Path $MissingSourceFolder -ItemType 'Directory' -Force -Verbose:$VerbosePreference
 						}
 						Catch {
-							Write-Output "ERROR: could not create folder '$MissingSourceFolder'"
-							Return
+							Write-Warning "could not create folder '$MissingSourceFolder'"
+							Return $_
 						}
 					}
 				}
@@ -371,10 +386,10 @@ Begin {
 					$MissingTargetFileExpected = Join-Path -Path $TargetPath -ChildPath $MissingTargetFile
 					If ($PSCmdlet.ShouldProcess("source: $MissingTargetFileOnSource, target: $MissingTargetFileExpected", 'copy file')) {
 						Try {
-							Copy-Item -Path $MissingTargetFileOnSource -Destination $MissingTargetFileExpected -Force -Verbose
+							Copy-Item -Path $MissingTargetFileOnSource -Destination $MissingTargetFileExpected -Force -Verbose:$VerbosePreference
 						}
 						Catch {
-							Write-Output "ERROR: could not copy file '$MissingTargetFileOnSource' to file '$MissingTargetFileExpected'"
+							Write-Warning "could not copy file '$MissingTargetFileOnSource' to file '$MissingTargetFileExpected'"
 						}
 					}
 				}
@@ -391,10 +406,10 @@ Begin {
 					$MissingSourceFileExpected = Join-Path -Path $SourcePath -ChildPath $MissingSourceFile
 					If ($PSCmdlet.ShouldProcess("source: $MissingSourceFileOnTarget, target: $MissingSourceFileExpected", 'copy file')) {
 						Try {
-							Copy-Item -Path $MissingSourceFileOnTarget -Destination $MissingSourceFileExpected -Force -Verbose
+							Copy-Item -Path $MissingSourceFileOnTarget -Destination $MissingSourceFileExpected -Force -Verbose:$VerbosePreference
 						}
 						Catch {
-							Write-Output "ERROR: could not copy file '$MissingSourceFileOnTarget' to file '$MissingSourceFileExpected'"
+							Write-Warning "could not copy file '$MissingSourceFileOnTarget' to file '$MissingSourceFileExpected'"
 						}
 					}
 				}
@@ -422,7 +437,7 @@ Begin {
 				# compare files by hash if requested
 				If ($CheckHash) {
 					If ((Get-FileHash -Path $MatchedSourcePath).Hash -eq (Get-FileHash -Path $MatchedTargetPath).Hash) {
-						Write-Verbose "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same file hash"
+						Write-Host "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same file hash"
 						Continue
 					}
 				}
@@ -432,7 +447,7 @@ Begin {
 				# compare files by last
 				If (-not $CheckHash) {
 					If ($MatchedSourceItem.LastWriteTime -eq $MatchedTargetItem.LastWriteTime) {
-						Write-Verbose "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same LastWriteTime"
+						Write-Host "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same LastWriteTime"
 						Continue
 					}
 				}
@@ -443,7 +458,7 @@ Begin {
 							Copy-Item -Path $MatchedSourcePath -Destination $MatchedTargetPath -Force -Verbose:$VerbosePreference
 						}
 						Catch {
-							Write-Output "ERROR: could not copy file '$MatchedSourcePath' to file '$MatchedTargetPath'"
+							Write-Warning "could not copy file '$MatchedSourcePath' to file '$MatchedTargetPath'"
 						}
 					}
 				}
@@ -454,7 +469,7 @@ Begin {
 							Copy-Item -Path $MatchedTargetPath -Destination $MatchedSourcePath -Force -Verbose:$VerbosePreference
 						}
 						Catch {
-							Write-Output "ERROR: could not copy file '$MatchedTargetPath' to file '$MatchedSourcePath'"
+							Write-Warning "could not copy file '$MatchedTargetPath' to file '$MatchedSourcePath'"
 						}
 					}
 				}
@@ -492,10 +507,10 @@ Begin {
 					$ExpiredTargetFilePath = Join-Path -Path $TargetPath -ChildPath $ExpiredTargetFile
 					If ($PSCmdlet.ShouldProcess($ExpiredTargetFilePath, 'remove file')) {
 						Try {
-							$null = Remove-Item -Path $ExpiredTargetFilePath -Force -Verbose
+							$null = Remove-Item -Path $ExpiredTargetFilePath -Force -Verbose:$VerbosePreference
 						}
 						Catch {
-							Write-Output "ERROR: could not remove file '$ExpiredTargetFilePath'"
+							Write-Warning "could not remove file '$ExpiredTargetFilePath'"
 						}
 					}
 				}
@@ -511,10 +526,10 @@ Begin {
 					$ExpiredSourceFilePath = Join-Path -Path $SourcePath -ChildPath $ExpiredSourceFile
 					If ($PSCmdlet.ShouldProcess($ExpiredSourceFilePath, 'remove file')) {
 						Try {
-							$null = Remove-Item -Path $ExpiredSourceFilePath -Force -Verbose
+							$null = Remove-Item -Path $ExpiredSourceFilePath -Force -Verbose:$VerbosePreference
 						}
 						Catch {
-							Write-Output "ERROR: could not remove file '$ExpiredSourceFilePath'"
+							Write-Warning "could not remove file '$ExpiredSourceFilePath'"
 						}
 					}
 				}
@@ -555,7 +570,7 @@ Begin {
 							$null = Remove-Item -Path $ExpiredTargetFolderPath -Force -Verbose:$VerbosePreference
 						}
 						Catch {
-							Write-Output "ERROR: could not remove path '$ExpiredTargetFolderPath'"
+							Write-Warning "could not remove path '$ExpiredTargetFolderPath'"
 						}
 					}
 				}
@@ -574,7 +589,7 @@ Begin {
 							$null = Remove-Item -Path $ExpiredSourceFolderPath -Force -Verbose:$VerbosePreference
 						}
 						Catch {
-							Write-Output "ERROR: could not remove path '$ExpiredSourceFolderPath'"
+							Write-Warning "could not remove path '$ExpiredSourceFolderPath'"
 						}
 					}
 				}
