@@ -507,7 +507,7 @@ Begin {
 		$JsonKey = $JsonData.$JsonKeyName
 
 		# if verbose...
-		If ($VerbosePreference -or $null -eq $JsonKey) {
+		If ($VerbosePreference -eq 'Continue' -or $null -eq $JsonKey) {
 			# ...display full file
 			Write-Host "`nDisplaying full configuration file: '$Json'"
 			$JsonData | ConvertTo-Json -Depth 100

@@ -1672,7 +1672,7 @@ Process {
 			Write-Host "Removed entry with $ParametersForReporting from configuration file: '$Json'"
 
 			# display current entries if verbose
-			If ($VerbosePreference) { $JsonValue | Format-List }
+			If ($VerbosePreference -eq 'Continue') { $JsonValue | Format-List }
 		}
 		# add entry to configuration file
 		$Add {
@@ -1782,7 +1782,7 @@ Process {
 			Write-Host "Added entry with order of '$Order' for '$Command' command to configuration file: '$Json'"
 
 			# display current entries if verbose
-			If ($VerbosePreference) { $JsonValue | Format-List }
+			If ($VerbosePreference -eq 'Continue') { $JsonValue | Format-List }
 		}
 		# process entries in configuration file
 		Default {

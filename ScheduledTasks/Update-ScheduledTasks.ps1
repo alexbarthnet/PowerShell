@@ -2566,7 +2566,7 @@ Process {
 			Write-Host "Removed entry for '$TaskName' task at '$Taskpath' path from configuration file: '$Json'"
 
 			# display current entries if verbose
-			If ($VerbosePreference) { $JsonValue | Format-List }
+			If ($VerbosePreference -eq 'Continue') { $JsonValue | Format-List }
 		}
 		# add entry to configuration file
 		$Add {
@@ -2688,7 +2688,7 @@ Process {
 			Write-Host "Added entry for '$TaskName' task at '$Taskpath' path to configuration file: '$Json'"
 
 			# display current entries if verbose
-			If ($VerbosePreference) { $JsonValue | Format-List }
+			If ($VerbosePreference -eq 'Continue') { $JsonValue | Format-List }
 		}
 		# process entries in configuration file
 		Default {
