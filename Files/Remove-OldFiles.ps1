@@ -163,7 +163,7 @@ Begin {
 		ForEach ($File in $Files) {
 			If ($PSCmdlet.ShouldProcess($File, 'Remove File')) {
 				Try {
-					Remove-Item -Path $File -Force -Verbose -ErrorAction Stop
+					Remove-Item -Path $File -Force -Verbose:$VerbosePreference -ErrorAction 'Stop' -WarningAction 'Continue'
 				}
 				Catch {
 					Write-Warning -Message "could not perform `"Remove File`" on target `"$File`": $($_.ToString())"
@@ -186,8 +186,8 @@ Begin {
 		# checking directories
 		Write-Verbose -Verbose -Message  "Checking directories for child objects in '$Path'"
 		ForEach ($Directory in $Directories) {
-			If ($null -ne (Get-ChildItem -Path $Directory -Recurse -Force -Attributes '!Directory')) {
-				Write-Warning -Message "will not perform `"Remove Directory`" on target `"$Directory`": has children that are not directories"
+			If ($null -ne (Get-ChildItem -Path $Directory -Recurse -Force)) {
+				Write-Warning -Message "will not perform `"Remove Directory`" on target `"$Directory`": has child items last written after '$Date'"
 				$DirectoriesToExclude.Add($Directory)
 			}
 		}
@@ -202,7 +202,7 @@ Begin {
 		ForEach ($Directory in $Directories) {
 			If ($PSCmdlet.ShouldProcess($Directory, 'Remove Directory')) {
 				Try {
-					Remove-Item -Path $Directory -Force -Verbose:$VerbosePreference -ErrorAction 'Stop'
+					Remove-Item -Path $Directory -Force -Verbose:$VerbosePreference -ErrorAction 'Stop' -WarningAction 'Continue'
 				}
 				Catch {
 					Write-Warning -Message "could not perform `"Remove Directory`" on target `"$Directory`": $($_.ToString())"
