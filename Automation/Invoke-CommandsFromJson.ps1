@@ -2002,7 +2002,7 @@ Process {
 					}
 					# add OutputName as OutVariable to parameters
 					Try {
-						$Parameters.Add('OutVariable', $OutputName)
+						$Parameters.Add('OutVariable', $JsonEntry.OutputName)
 					}
 					Catch {
 						Write-Warning -Message "exception caught adding 'OutVariable' parameter to Parameters hashtable: $($_.Exception.ToString())"
@@ -2030,6 +2030,9 @@ Process {
 
 				# if arguments defined...
 				If ($null -ne $Arguments) {
+					# report command and arguments
+					Write-Verbose -Message "running '$($JsonEntry.Command)' command with arguments: $($Arguments.Values)"
+
 					# call command with values from arguments
 					Try {
 						. $JsonEntry.Command $Arguments.Values
@@ -2041,6 +2044,9 @@ Process {
 				}
 				# if arguments not defined...
 				Else {
+					# report command and parameters
+					Write-Verbose -Message "running '$($JsonEntry.Command)' command with parameters: $($Parameters.GetEnumerator())"
+					
 					# call command with parameters
 					Try {
 						. $JsonEntry.Command @Parameters
