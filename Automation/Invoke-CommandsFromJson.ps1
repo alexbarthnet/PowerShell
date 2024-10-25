@@ -1915,19 +1915,19 @@ Process {
 						$Evaluation = Invoke-Expression -Command $JsonEntry.Expression
 					}
 					Catch {
-						Write-Warning -Message "exception caught calling '$($JsonEntry.Expression)' Expression: $($_.Exception.ToString())"
+						Write-Warning -Message "exception caught calling '$($JsonEntry.Expression)' Expression for the '$($JsonEntry.Command)' Command: $($_.Exception.ToString())"
 						Continue NextJsonEntry
 					}
 
 					# if trigger evaluation is not a boolean...
 					If ($Evaluation -isnot [boolean]) {
-						Write-Warning -Message "the evaluation of the '$($JsonEntry.Expression)' Expression returned an invalid type: '$($Evaluation.GetType().FullName)'"
+						Write-Warning -Message "the evaluation of the '$($JsonEntry.Expression)' Expression for the '$($JsonEntry.Command)' Command returned an invalid type: '$($Evaluation.GetType().FullName)'"
 						Continue NextJsonEntry
 					}
 
 					# if trigger evaluation is false...
 					If ($Evaluation -eq $false) {
-						Write-Warning -Message "the evaluation of the '$($JsonEntry.Expression)' Expression returned 'false'"
+						Write-Host "The evaluation of the '$($JsonEntry.Expression)' Expression for the '$($JsonEntry.Command)' Command returned 'false'"
 						Continue NextJsonEntry
 					}
 				}
