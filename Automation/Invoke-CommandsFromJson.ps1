@@ -1802,7 +1802,7 @@ Process {
 			$ExceptionCaught = $false
 
 			# process configuration file
-			:JsonEntry ForEach ($JsonEntry in $JsonData) {
+			:NextJsonEntry ForEach ($JsonEntry in $JsonData) {
 				# if exception caught on previous pass...
 				If ($ExceptionCaught) {
 					# return immediately
