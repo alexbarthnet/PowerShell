@@ -490,7 +490,7 @@ Function Set-ADGroupMemberOf {
 	$MemberOfMissing = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except($MemberOfTrimmed, $MemberOfCurrent))
 
 	# retrieve invalid memberships, linq will ensure that the output is of unique values
-	$MemberOfInvalid = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except($MemberOfCurrent, $MemberOfTrimmed))
+	$MemberOfRevoked = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except($MemberOfCurrent, $MemberOfTrimmed))
 
 	# report current, desired, missing, and extra memberships
 	If ($VerbosePreference -eq 'Continue') {
@@ -498,7 +498,7 @@ Function Set-ADGroupMemberOf {
 		ForEach ($MemberOf in $MemberOfDesired) { Write-Verbose "Desired MemberOf: $MemberOf" }
 		ForEach ($MemberOf in $MemberOfOmitted) { Write-Verbose "Omitted MemberOf: $MemberOf" }
 		ForEach ($MemberOf in $MemberOfMissing) { Write-Verbose "Will Join: $MemberOf" }
-		ForEach ($MemberOf in $MemberOfInvalid) { Write-Verbose "Will Exit: $MemberOf" }
+		ForEach ($MemberOf in $MemberOfRevoked) { Write-Verbose "Will Exit: $MemberOf" }
 	}
 
 	# add missing memberships
@@ -514,10 +514,10 @@ Function Set-ADGroupMemberOf {
 	}
 
 	# remove extra memberships
-	If ($MemberOfInvalid.Count -ge 1) {
-		If ($PSCmdlet.ShouldProcess(($MemberOfInvalid -join ','), "Exit '$($MemberOfMissing.Count)' group(s) for '$($ADGroup.SamAccountName)'")) {
+	If ($MemberOfRevoked.Count -ge 1) {
+		If ($PSCmdlet.ShouldProcess(($MemberOfRevoked -join ','), "Exit '$($MemberOfRevoked.Count)' group(s) for '$($ADGroup.SamAccountName)'")) {
 			Try {
-				Remove-ADPrincipalGroupMembership -Server $Server -Identity $ADGroup -MemberOf $MemberOfInvalid -Confirm:$false
+				Remove-ADPrincipalGroupMembership -Server $Server -Identity $ADGroup -MemberOf $MemberOfRevoked -Confirm:$false
 			}
 			Catch {
 				Return $_
@@ -532,7 +532,7 @@ Function Set-ADGroupMemberOf {
 			# retreive updated object
 			$ADGroup = Get-ADGroup -Server $Server -Identity $Identity -Properties $Properties
 			# define note properties for object
-			$NotePropertyMembers = @{ MemberOfAdded = $MemberOfMissing; MemberOfRemoved = $MemberOfInvalid }
+			$NotePropertyMembers = @{ MemberOfAdded = $MemberOfMissing; MemberOfRemoved = $MemberOfRevoked }
 			# attach note properties to updated object
 			Add-Member -InputObject $ADGroup -NotePropertyMembers $NotePropertyMembers -Force
 			# return notated object
