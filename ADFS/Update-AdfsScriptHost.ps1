@@ -271,7 +271,7 @@ Process {
 	}
 
 	# check current host and active host
-	If ([string]::IsNullOrEmpty($CurrentHost) -or $CurrentHost -ne $ActiveHost) {
+	If (![string]::IsNullOrEmpty($CurrentHost) -or $CurrentHost -eq $ActiveHost) {
 		Write-Host "Verified script host file: active script host is '$ActiveHost'"
 		Return
 	}
