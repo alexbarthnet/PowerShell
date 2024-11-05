@@ -40,7 +40,7 @@ Param(
 	[string]$Path,
 	# path for constructed uri
 	[Parameter(Position = 1)]
-	[string]$UriPath = '/host',
+	[string]$UriPath = '/host/',
 	# path for specific script host file
 	[Parameter(Position = 2)]
 	[string]$FilePath = (Join-Path -Path $Path -ChildPath "$HostName.txt")
