@@ -603,14 +603,14 @@ Begin {
 				Path              = $Path
 				Destination       = $Destination
 				Direction         = $Direction
-				Purge             = $Purge.ToBool()
-				Recurse           = $Recurse.ToBool()
-				CheckHash         = $CheckHash.ToBool()
-				SkipDelete        = $SkipDelete.ToBool()
-				SkipExisting      = $SkipExisting.ToBool()
-				SkipFiles         = $SkipFiles.ToBool()
-				CreatePath        = $CreatePath.ToBool()
-				CreateDestination = $CreateDestination.ToBool()
+				Purge             = $Purge -as [System.Boolean]
+				Recurse           = $Recurse -as [System.Boolean]
+				CheckHash         = $CheckHash -as [System.Boolean]
+				SkipDelete        = $SkipDelete -as [System.Boolean]
+				SkipExisting      = $SkipExisting -as [System.Boolean]
+				SkipFiles         = $SkipFiles -as [System.Boolean]
+				CreatePath        = $CreatePath -as [System.Boolean]
+				CreateDestination = $CreateDestination -as [System.Boolean]
 				LastSyncTime      = $CurrentSyncTime
 				Updated           = $Updated
 			}
@@ -682,14 +682,14 @@ Process {
 				Path              = $Path
 				Destination       = $Destination
 				Direction         = $Direction
-				Purge             = $Purge.ToBool()
-				Recurse           = $Recurse.ToBool()
-				CheckHash         = $CheckHash.ToBool()
-				SkipDelete        = $SkipDelete.ToBool()
-				SkipExisting      = $SkipExisting.ToBool()
-				SkipFiles         = $SkipFiles.ToBool()
-				CreatePath        = $CreatePath.ToBool()
-				CreateDestination = $CreateDestination.ToBool()
+				Purge             = $Purge -as [System.Boolean]
+				Recurse           = $Recurse -as [System.Boolean]
+				CheckHash         = $CheckHash -as [System.Boolean]
+				SkipDelete        = $SkipDelete -as [System.Boolean]
+				SkipExisting      = $SkipExisting -as [System.Boolean]
+				SkipFiles         = $SkipFiles -as [System.Boolean]
+				CreatePath        = $CreatePath -as [System.Boolean]
+				CreateDestination = $CreateDestination -as [System.Boolean]
 				LastSyncTime      = 0
 			}
 
@@ -852,14 +852,14 @@ Process {
 				Path              = $Path
 				Destination       = $Destination
 				Direction         = $Direction
-				Purge             = $Purge.ToBool()
-				Recurse           = $Recurse.ToBool()
-				CheckHash         = $CheckHash.ToBool()
-				SkipDelete        = $SkipDelete.ToBool()
-				SkipExisting      = $SkipExisting.ToBool()
-				SkipFiles         = $SkipFiles.ToBool()
-				CreatePath        = $CreatePath.ToBool()
-				CreateDestination = $CreateDestination.ToBool()
+				Purge             = $Purge -as [System.Boolean]
+				Recurse           = $Recurse -as [System.Boolean]
+				CheckHash         = $CheckHash -as [System.Boolean]
+				SkipDelete        = $SkipDelete -as [System.Boolean]
+				SkipExisting      = $SkipExisting -as [System.Boolean]
+				SkipFiles         = $SkipFiles -as [System.Boolean]
+				CreatePath        = $CreatePath -as [System.Boolean]
+				CreateDestination = $CreateDestination -as [System.Boolean]
 				LastSyncTime      = 0
 			}
 
