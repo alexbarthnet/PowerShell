@@ -794,7 +794,7 @@ Process {
 					Return $_
 				}
 			}
-			
+
 			# update JSON file
 			Try {
 				$JsonValue | Set-Content -Path $Json
@@ -803,10 +803,10 @@ Process {
 				Write-Warning "could not remove entry from configuration file: '$Json'"
 				Return $_
 			}
-			
+
 			# report entry removed
 			Write-Host "Removed '$Path' path with '$Destination' destination from configuration file: '$Json'"
-			
+
 			# display current entries if verbose
 			If ($VerbosePreference -eq 'Continue') { $JsonValue | Format-List }
 		}
