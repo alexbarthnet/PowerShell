@@ -1,12 +1,15 @@
 <#
 .SYNOPSIS
-Updates the local 'ActiveScriptHost' file with the name of the server actively servicing requests to ADFS.
+Updates the local 'ActiveScriptHost' file with the name of the server actively servicing requests for ADFS.
 
 .DESCRIPTION
-Updates the local 'ActiveScriptHost' file with the name of the server actively servicing requests to ADFS. See the Notes for more details.
+Updates the local 'ActiveScriptHost' file with the name of the server actively servicing requests for ADFS. See the Notes for more details.
 
 .PARAMETER Path
 The path to the folder containing the 'script host' files.
+
+.PARAMETER UriPath
+The path to add to the ADFS URL that returns the name of the server actively servicing requests for ADFS. The path must have a trailing forward slash if the constructed URI points to a folder instead of a file. The default value is '/host/'.
 
 .INPUTS
 None.
@@ -18,8 +21,10 @@ None. The script reports the actions taken and does not provide any actionable o
 .\Update-AdfsScriptHost.ps1 -Path C:\Content\adfs\host
 
 .NOTES
-This script is a key element in 'ActiveScriptHost' process that provides an effective "FSMO" to scripts run on ADFS server. This process assumes the following:
- 1. The ADFS servers and Web Application Proxy servers are able to access a common file location. 
+This script is a key element in 'ActiveScriptHost' process that provides an effective "FSMO" to scripts run on the ADFS servers. 
+
+This process assumes the following:
+ 1. The ADFS servers and Web Application Proxy servers are able to access a common file location.
  2. The ADFS servers are load balanced in an active/passive fashion with a consistent active node.
 
 #>
