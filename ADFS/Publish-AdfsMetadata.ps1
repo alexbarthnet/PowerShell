@@ -17,14 +17,17 @@ None.
 None. The script reports the actions taken and does not provide any actionable output.
 
 .EXAMPLE
-.\Publish-AdfsMetadata.ps1 -Json C:\Content\adfs\config.json -ChildPath 'metadata'
+.\Publish-AdfsMetadata.ps1 -Path C:\Content\adfs\metadata
 #>
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	# path for metadata files
+	# folder path for metadata files
 	[Parameter(Position = 0, Mandatory = $True)]
-	[string]$Path
+	[string]$Path,
+	# file paths for metadata files
+	[Parameter(Position = 1, Mandatory = $False)]
+	[string[]]$ChildPaths = @('saml-single-logout.xml', 'custom-logout.xml')
 )
 
 Begin {
@@ -224,9 +227,6 @@ Process {
 		$XmlElement.Location = $BindingLocations[$Binding]
 	}
 
-	# define templates for binding-specific child paths for XML files
-	$ChildPaths = @('saml-single-logout.xml', 'custom-logout.xml')
-
 	# process child paths for XML files
 	:NextChildPath ForEach ($ChildPath in $ChildPaths) {
 		# create file path
@@ -265,7 +265,7 @@ Process {
 
 			# if XML update required
 			If ($XmlFilesMatch) {
-				Write-Host "Found current metadata file for '$Binding' binding at path: $FilePath"
+				Write-Host "Found current metadata file at path: $FilePath"
 				Continue NextChildPath
 			}
 		}
@@ -275,11 +275,11 @@ Process {
 			$XmlFromRestMethod.Save($FilePath)
 		}
 		Catch {
-			Write-Warning "could not write updated metadata file for '$Binding' binding to path: $FilePath"
+			Write-Warning "could not write updated metadata file to path: $FilePath"
 			Return $_
 		}
 	
 		# report write
-		Write-Host "Wrote updated metadata file for '$Binding' binding to path: $FilePath"
+		Write-Host "Wrote updated metadata file to path: $FilePath"
 	}
 }
