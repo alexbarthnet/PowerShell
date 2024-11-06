@@ -316,7 +316,7 @@ Process {
 	}
 
 	# report state
-	Write-Host "Verifying ADFS probe..."
+	Write-Host 'Verifying ADFS probe...'
 
 	# build ADFS probe URI from hostname
 	$Uri = 'http://{0}/adfs/probe' -f $DnsName.IPAddress
@@ -328,7 +328,7 @@ Process {
 	While ($Counter -lt 5) {
 		# query ADFS server
 		Try {
-			$WebRequest = Invoke-WebRequest -Uri $Uri -UseBasicParsing -DisableKeepAlive -TimeOutSec 1 -ErrorAction 'SilentlyContinue'
+			$WebRequest = Invoke-WebRequest -Uri $Uri -UseBasicParsing -DisableKeepAlive -TimeoutSec 1 -ErrorAction 'SilentlyContinue'
 		}
 		Catch {
 			#
@@ -353,7 +353,7 @@ Process {
 	If ($WebRequest) {
 		# if status code is 200...
 		If ($WebRequest.StatusCode -eq 200) {
-			Write-Host "...verified ADFS probe"
+			Write-Host '...verified ADFS probe'
 		}
 		# if status code is not 200...
 		Else {
