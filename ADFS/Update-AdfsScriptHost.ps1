@@ -21,7 +21,7 @@ None. The script reports the actions taken and does not provide any actionable o
 .\Update-AdfsScriptHost.ps1 -Path C:\Content\adfs\host
 
 .NOTES
-This script is a key element in 'ActiveScriptHost' process that provides an effective "FSMO" to scripts run on the ADFS servers. 
+This script is a key element in 'ActiveScriptHost' process that provides an effective "FSMO" to scripts run on the ADFS servers.
 
 This process assumes the following:
  1. The ADFS servers and Web Application Proxy servers are able to access a common file location.
