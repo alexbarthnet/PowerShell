@@ -1,16 +1,20 @@
-#Requires -Modules WebApplicationProxy,CmsCredential
+#Requires -Modules WebApplicationProxy
 
 <#
 .SYNOPSIS
 Updates the Web Application Proxy configuration from ADFS.
 
 .DESCRIPTION
-Updates the Web Application Proxy configuration from ADFS. The CmsCredential module is used to store credentials for connecting to the ADFS farm. A separate process must install any required certificates on each server in the farm.
+Updates the Web Application Proxy configuration from ADFS. The thumbprint and path to the ADFS SSL certificate are retrieved from the provided JSON file. The credential must be manually provided.
 
 .PARAMETER Json
 The path to a JSON file containing the configuration for the ADFS service. The following values are required:
  - FQDN - the FQDN of the ADFS service
- - Hash - the thumbprint hash of the ADFS SSL certificate
+ - PfxFile - the path to the ADFS SSL certificate PFX file
+ - Thumbprint - the thumbprint of the ADFS SSL certificate
+
+.PARAMETER Credential
+A credential with administrative rights to the ADFS farm.
 
 .INPUTS
 None.
@@ -19,65 +23,102 @@ None.
 None. The script reports the actions taken and does not provide any actionable output.
 
 .EXAMPLE
-.\Update-AdfsProxy.ps1 -Json C:\Content\adfs\config.json
+.\Update-AdfsProxy.ps1 -Json C:\Content\adfs\config.json -Credential $Credential
 #>
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	# local host name
-	[Parameter(DontShow)]
-	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
-	# local domain name
-	[Parameter(DontShow)]
-	[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
-	# local DNS hostname
-	[Parameter(DontShow)]
-	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.'),
 	# path to JSON configuration file
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
-	[string]$Json
+	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
+	[string]$Json,
+	# credential for connecing WAP to ADFS
+	[Parameter(Mandatory = $True)]
+	[pscredential]$Credential
 )
 
 Begin {
-	Function Install-WebApplicationProxyWithCMS {
+	Function Import-PfxCertificateWithDpapi {
 		[CmdletBinding()]
-		Param (
-			[Parameter(Mandatory = $true)]
-			[string]$CertificateThumbprint,
-			[Parameter(Mandatory = $true)]
-			[string]$FederationServiceName
+		Param(
+			[Parameter(Mandatory = $true)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
+			[string]$FilePath,
+			[Parameter(Mandatory = $false)]
+			[switch]$Force,
+			[Parameter(DontShow)]
+			[string]$CertStoreLocation = 'Cert:\LocalMachine\My'
 		)
 
-		# retrieve ADFS credentials from CMS
+		# define required parameters for Import-PfxCertificate
+		$ImportPfxCertificate = @{
+			FilePath          = $FilePath
+			CertStoreLocation = $CertStoreLocation
+			ErrorAction       = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# import certificate
 		Try {
-			$FederationServiceTrustCredential = Get-CmsCredential -Identity $FederationServiceName
+			$null = Import-PfxCertificate @ImportPfxCertificate
 		}
 		Catch {
-			Write-Warning "error retrieving CMS credentials: $($_.Exception.Message)"
+			Write-Warning -Message "could not import certificate to '$CertStoreLocation' store from '$FilePath' PFX file: $($_.Exception.Message)"
 			Return $_
 		}
 
-		# install WAP configuration
-		If ($FederationServiceTrustCredential -isnot [System.Management.Automation.PSCredential]) {
-			Write-Warning 'required CMS credential not found'
-			Return
-		}
+		# report imported and return
+		Write-Verbose -Message "Imported certificates to '$CertStoreLocation' store from '$FilePath' PFX file"
+	}
 
-		# define parameters for Install-WebApplicationProxy
-		$InstallWebApplicationProxy = @{
-			CertificateThumbprint            = $CertificateThumbprint
-			FederationServiceName            = $FederationServiceName
-			FederationServiceTrustCredential = $FederationServiceTrustCredential
-			Verbose                          = $true
-			ErrorAction                      = [System.Management.Automation.ActionPreference]::Stop
-		}
+	Function Test-PfxCertificateImportedToStore {
+		Param(
+			[Parameter(Mandatory = $true)]
+			[string]$FilePath,
+			[Parameter(Mandatory = $false)]
+			[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
+			[Parameter(DontShow)]
+			[boolean]$CertificateFound = $false
+		)
 
-		# install web application proxy with CMS credentials
+		# get PFX data from certificate
 		Try {
-			Install-WebApplicationProxy @InstallWebApplicationProxy
+			$PfxData = Get-PfxData -FilePath $FilePath -ErrorAction 'Stop'
 		}
 		Catch {
+			Write-Warning -Message "could not retrieve PFX data from '$FilePath' file: $($_.Exception.Message)"
 			Return $_
+		}
+
+		# get end entity certificates from PFX data
+		Try {
+			$EndEntityCertificates = $PfxData.EndEntityCertificates
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve end entity certificates from PFX data of '$FilePath' file: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# get certificates with private keys in store
+		Try {
+			$Certificates = Get-ChildItem -Path $CertStoreLocation -ErrorAction 'Stop' | Where-Object { $_.HasPrivateKey }
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve certificates from '$CertStoreLocation' path: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# process thumbprints
+		ForEach ($EndEntityCertificate in $EndEntityCertificates) {
+			# if thumbprint found in thumbprints of certificates with private keys in store...
+			If ($EndEntityCertificate.Thumbprint -in $Certificates.Thumbprint) {
+				# declare verified and record found
+				Write-Verbose -Message "Found '$CertStoreLocation' store contains certificate with '$($EndEntityCertificate.Thumbprint)' thumbprint and subject: $($EndEntityCertificate.Subject)"
+				Return $true
+			}
+			# if thumbprint not found in thumbprints of certificates with private keys in store...
+			Else {
+				# immediately return false
+				Write-Verbose -Message "Found '$CertStoreLocation' store missing certificate with '$($EndEntityCertificate.Thumbprint)' thumbprint and subject: $($EndEntityCertificate.Subject)"
+				Return $false
+			}
 		}
 	}
 
@@ -93,24 +134,28 @@ Begin {
 				Verbose     = $True
 				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 			}
+
 			# get service
 			Try {
 				$Service = Get-Service @ServiceParameters
 			}
 			Catch {
-				Write-Warning "could not get service: '$Name'"
+				Write-Warning "could not retrieve service: '$Name'"
 				Return $_
 			}
+
 			# if service already running...
 			If ($Service.Status -eq 'Running') {
-				Write-Host "found service already running: '$Name'"
+				Write-Host "...found service already running: '$Name'"
 				Continue
 			}
+
 			# if service start type not automatic...
 			If ($Service.StartType -ne 'Automatic') {
-				Write-Host "found service without automatic start type: '$Name'"
+				Write-Host "...found service without automatic start type: '$Name'"
 				Continue
 			}
+
 			# start service
 			Try {
 				Start-Service @ServiceParameters
@@ -119,8 +164,9 @@ Begin {
 				Write-Warning "could not start service: '$Name'"
 				Return $_
 			}
+
 			# declare started
-			Write-Host "started service: '$Name'"
+			Write-Host "...started service: '$Name'"
 		}
 	}
 
@@ -136,19 +182,22 @@ Begin {
 				Verbose     = $True
 				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 			}
+
 			# get service
 			Try {
 				$Service = Get-Service @ServiceParameters
 			}
 			Catch {
-				Write-Warning "could not get service: '$Name'"
+				Write-Warning "could not retrieve service: '$Name'"
 				Return $_
 			}
+
 			# if service already stopped...
 			If ($Service.Status -eq 'Stopped') {
-				Write-Host "found service already stopped: '$Name'"
+				Write-Host "...found service already stopped: '$Name'"
 				Continue
 			}
+
 			# stop service
 			Try {
 				Stop-Service @ServiceParameters
@@ -157,8 +206,9 @@ Begin {
 				Write-Warning "could not stop service: '$Name'"
 				Return $_
 			}
+
 			# declare stopped
-			Write-Host "stopped service: '$Name'"
+			Write-Host "...stopped service: '$Name'"
 		}
 	}
 
@@ -213,16 +263,22 @@ Begin {
 }
 
 Process {
-	# define JSON properties
-	$JsonProperties = 'Primary', 'Fqdn', 'Hash'
-
 	# get JSON data
-	$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
+	Try {
+		$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
+	}
+	Catch {
+		Write-Warning -Message "could not retrieve content from JSON file: $Json"
+		Return $_
+	}
+
+	# define JSON properties
+	$JsonProperties = 'FQDN', 'PfxFile', 'Thumbprint'
 
 	# create variables from JSON properties
 	ForEach ($Property in $JsonProperties) {
 		If ($null -eq $JsonData.$Property) {
-			Write-Warning "could not find '$Property' in JSON file"
+			Write-Warning "could not find named property in JSON file: $Property"
 			Return
 		}
 		Else {
@@ -230,43 +286,108 @@ Process {
 		}
 	}
 
-	# verify connectivity
-	ForEach ($AdfsServer in $Primary, $Fqdn) {
-		# build ADFS probe URI from hostname
-		$Uri = "http://$AdfsServer/adfs/probe"
-
-		# query ADFS server
-		Try {
-			$WebRequest = Invoke-WebRequest -Uri $Uri -UseBasicParsing
-		}
-		Catch {
-			Write-Warning "could not connect to '$AdfsServer' probe URI: $($_.Exception.Message)"
-			Return
-		}
-
-		# if web request status code is 200...
-		If ($WebRequest.StatusCode -eq 200) {
-			Write-Host "Validated ADFS probe on hostname: '$AdfsServer'"
-		}
-		Else {
-			Write-Warning "could not connect to ADFS probe on hostname: '$AdfsServer'"
-			Return
-		}
-	}
-
-	# verify services are running
-	Write-Host 'Verifying WAP services'
+	# test if certificate imported
 	Try {
-		Start-WebApplicationProxyServices
+		$PfxFileImported = Test-PfxCertificateImportedToStore -FilePath $PfxFile -ErrorAction 'Stop'
 	}
 	Catch {
-		Write-Warning "could not start WAP services: $($_.Exception.Message)"
+		Write-Warning "could not test if '$PfxFile' file was already imported: $($_.Exception.Message)"
+		Return $_
+	}
+
+	# if PFX file not imported...
+	If (!$PfxFileImported) {
+		Try {
+			Import-PfxCertificateWithDpapi -FilePath $PfxFile -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning "could not import certificate from '$PfxFile' file: $($_.Exception.Message)"
+			Return $_
+		}
+	}
+
+	# resolve FQDN to IP address
+	Try {
+		$DnsName = Resolve-DnsName -Name $FQDN -Type A -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning "could not resolve '$FQDN' to IP Address: $($_.Exception.Message)"
 		Return
+	}
+
+	# report state
+	Write-Host "Verifying ADFS probe..."
+
+	# build ADFS probe URI from hostname
+	$Uri = 'http://{0}/adfs/probe' -f $DnsName.IPAddress
+
+	# define counter
+	$Counter = 0
+
+	# check probe URI
+	While ($Counter -lt 5) {
+		# query ADFS server
+		Try {
+			$WebRequest = Invoke-WebRequest -Uri $Uri -UseBasicParsing -DisableKeepAlive -TimeOutSec 1 -ErrorAction 'SilentlyContinue'
+		}
+		Catch {
+			#
+		}
+
+		# if web request found...
+		If ($WebRequest) {
+			# break out of loop
+			Break
+		}
+		# if web request not found...
+		Else {
+			# increment counter
+			$Counter++
+			# wait before next loop
+			Start-Sleep -Seconds 2
+		}
+	}
+
+
+	# if web request has a status code...
+	If ($WebRequest) {
+		# if status code is 200...
+		If ($WebRequest.StatusCode -eq 200) {
+			Write-Host "...verified ADFS probe"
+		}
+		# if status code is not 200...
+		Else {
+			Write-Warning "found unexpected status code from ADFS probe URI: $($WebRequest.StatusCode)"
+			Return
+		}
+	}
+	# if web request has a status code...
+	Else {
+		Write-Warning "could not query ADFS probe URI: $($Error[0].Exception.Message)"
+		Return
+	}
+
+	# verify services are running before checking WAP health
+	If ($null -eq $WebApplicationProxyConfiguration) {
+		# report state
+		Write-Host 'Verifying WAP services'
+
+		# start services
+		Try {
+			Start-WebApplicationProxyServices
+		}
+		Catch {
+			Write-Warning "could not start WAP services: $($_.Exception.Message)"
+			Return
+		}
 	}
 
 	# check WAP health (try 1)
 	If ($null -eq $WebApplicationProxyConfiguration) {
+		# report state
 		Write-Host 'Retrieving WAP configuration from ADFS'
+
+		# retrieve WAP configuration
 		Try {
 			$WebApplicationProxyConfiguration = Get-WebApplicationProxyConfiguration
 		}
@@ -277,7 +398,9 @@ Process {
 
 	# address WAP health (try 1)
 	If ($null -eq $WebApplicationProxyConfiguration) {
+		# report state
 		Write-Host 'Restarting WAP services'
+
 		# stop services
 		Try {
 			Stop-WebApplicationProxyServices
@@ -286,6 +409,7 @@ Process {
 			Write-Warning "could not stop WAP services: '$($_.Exception.Message)"
 			Return
 		}
+
 		# start services
 		Try {
 			Start-WebApplicationProxyServices
@@ -298,7 +422,10 @@ Process {
 
 	# check WAP health (try 2)
 	If ($null -eq $WebApplicationProxyConfiguration) {
+		# report state
 		Write-Host 'Retrieving WAP configuration from ADFS after restart'
+
+		# retrieve WAP configuration
 		Try {
 			$WebApplicationProxyConfiguration = Get-WebApplicationProxyConfiguration
 		}
@@ -309,20 +436,34 @@ Process {
 
 	# address WAP health (try 2)
 	If ($null -eq $WebApplicationProxyConfiguration) {
-		Write-Host 'Installing WAP with CmsCredentials'
-		# get WAP configuration
+		# report state
+		Write-Host 'Installing WAP with Credential'
+
+		# define parameters for Install-WebApplicationProxy
+		$InstallWebApplicationProxy = @{
+			CertificateThumbprint            = $Thumbprint
+			FederationServiceName            = $Fqdn
+			FederationServiceTrustCredential = $Credential
+			Verbose                          = $true
+			ErrorAction                      = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# install web application proxy with CMS credentials
 		Try {
-			Install-WebApplicationProxyWithCMS -CertificateThumbprint $Hash -FederationServiceName $Fqdn
+			Install-WebApplicationProxy @InstallWebApplicationProxy
 		}
 		Catch {
-			Write-Warning "could not reinstall WAP configuration: $($_.Exception.Message)"
-			Return
+			Write-Warning "could not install WAP configuration: $($_.Exception.Message)"
+			Return $_
 		}
 	}
 
 	# check WAP health (try 3)
 	If ($null -eq $WebApplicationProxyConfiguration) {
+		# report state
 		Write-Host 'Retrieving WAP configuration from ADFS after reinstall'
+
+		# retrieve WAP configuration
 		Try {
 			$WebApplicationProxyConfiguration = Get-WebApplicationProxyConfiguration
 		}
