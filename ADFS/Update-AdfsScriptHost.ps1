@@ -8,6 +8,9 @@ Updates the local 'ActiveScriptHost' file with the name of the server actively s
 .PARAMETER Path
 The path to the folder containing the 'script host' files.
 
+.PARAMETER FilePath
+The path to script host file for the local system. The default value is a text file in the provided path and named with the local hostname.
+
 .PARAMETER UriPath
 The path to add to the ADFS URL that returns the name of the server actively servicing requests for ADFS. The path must have a trailing forward slash if the constructed URI points to a folder instead of a file. The default value is '/host/'.
 
@@ -34,21 +37,15 @@ Param(
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
-	# local domain name
-	[Parameter(DontShow)]
-	[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
-	# local DNS hostname
-	[Parameter(DontShow)]
-	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.'),
-	# path for script host files
+	# path for all script host files
 	[Parameter(Position = 0, Mandatory = $True)]
 	[string]$Path,
-	# path for constructed uri
+	# path for local script host file
 	[Parameter(Position = 1)]
-	[string]$UriPath = '/host/',
-	# path for specific script host file
+	[string]$FilePath = (Join-Path -Path $Path -ChildPath "$HostName.txt"),
+	# path for constructed uri
 	[Parameter(Position = 2)]
-	[string]$FilePath = (Join-Path -Path $Path -ChildPath "$HostName.txt")
+	[string]$UriPath = '/host/'
 )
 
 Begin {
