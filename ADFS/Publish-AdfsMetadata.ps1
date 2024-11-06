@@ -243,12 +243,12 @@ Process {
 			# define comparison boolean
 			$XmlFilesMatch = $true
 
-			# compare XML objects for Application Service Role Descriptor 
+			# compare XML objects for Application Service Role Descriptor
 			$XmlElement1 = $XmlFromFileSystem.EntityDescriptor.RoleDescriptor | Where-Object { $_.type -eq 'fed:ApplicationServiceType' }
 			$XmlElement2 = $XmlFromRestMethod.EntityDescriptor.RoleDescriptor | Where-Object { $_.type -eq 'fed:ApplicationServiceType' }
 			If ($XmlElement1.OuterXML -ne $XmlElement2.OuterXML) { $XmlFilesMatch = $false }
 
-			# compare XML objects for Security Token Service Role Descriptor 
+			# compare XML objects for Security Token Service Role Descriptor
 			$XmlElement1 = $XmlFromFileSystem.EntityDescriptor.RoleDescriptor | Where-Object { $_.type -eq 'fed:SecurityTokenServiceType' }
 			$XmlElement2 = $XmlFromRestMethod.EntityDescriptor.RoleDescriptor | Where-Object { $_.type -eq 'fed:SecurityTokenServiceType' }
 			If ($XmlElement1.OuterXML -ne $XmlElement2.OuterXML) { $XmlFilesMatch = $false }
@@ -278,7 +278,7 @@ Process {
 			Write-Warning "could not write updated metadata file to path: $FilePath"
 			Return $_
 		}
-	
+
 		# report write
 		Write-Host "Wrote updated metadata file to path: $FilePath"
 	}
