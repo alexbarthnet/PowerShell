@@ -38,7 +38,7 @@ String paramter to specify multiple parameters from a single value:
 - 'Missing' sets Direction = 'Forward', SkipDelete = $true, SkipExisting = $true
 
 .PARAMETER Direction
-Specifics the direction of the synchronization:
+Specifies the direction of the synchronization:
 - 'Forward' synchronizes items in the source to the destination.
 - 'Reverse' synchronizes items in the destination to the path.
 - 'Both' synchronizes items in both directions and is the default.
