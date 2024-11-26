@@ -27,7 +27,7 @@ The command to run. This parameter can be an existing cmdlet, function, or scrip
 Hashtable with parameters for the command. Cannot be combined with the Arguments parameter.
 
 .PARAMETER Arguments
-Hashtable with arguments for the command. Cannot be combined with the Parameters parameter. The keys in the hashtable define the order in which arguments are provided to the command and must be castable to unsigned 16-bit integers.
+Hashtable with arguments for the command. Cannot be combined with the Parameters parameter. The keys in the hashtable define the order in which arguments are provided to the command and each key must be castable as a Character object.
 
 .PARAMETER Expression
 An optional string containing a PowerShell expression to evaluate. When the Expression parameter is provided, the evaluated expression must return a boolean of true for the command to run.
@@ -1711,9 +1711,9 @@ Process {
 			If ($script:Arguments) {
 				# process each key in Arguments
 				ForEach ($Key in $Arguments.Keys) {
-					# if key cannot be cast as un-signed 16-bit integer...
-					If (![uint16]::TryParse($Key, [ref][uint16]::MinValue)) {
-						Write-Warning "could not validate Arguments parameter: the value in the '$Key' key cannot be parsed into a UInt16 object"
+					# if key cannot be cast as a Character...
+					If (![char]::TryParse($Key, [ref][char]::MinValue)) {
+						Write-Warning "could not validate Arguments parameter: the value in the '$Key' key cannot be parsed into a Character object"
 						Return
 					}
 				}
@@ -1936,9 +1936,9 @@ Process {
 				If ($null -ne $JsonEntry.Arguments) {
 					# process each key in Arguments
 					ForEach ($Key in $Arguments.Keys) {
-						# if key cannot be cast as un-signed 16-bit integer...
-						If (![uint16]::TryParse($Key, [ref][uint16]::MinValue)) {
-							Write-Warning "could not validate Arguments parameter: the value in the '$Key' key cannot be parsed into a UInt16 object"
+						# if key cannot be cast as a Character...
+						If (![char]::TryParse($Key, [ref][char]::MinValue)) {
+							Write-Warning "could not validate Arguments parameter: the value in the '$Key' key cannot be parsed into a Character object"
 							Continue NextJsonEntry
 						}
 					}
