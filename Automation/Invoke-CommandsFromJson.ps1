@@ -2014,6 +2014,24 @@ Process {
 					}
 				}
 
+				# report command
+				Write-Host "Calling $CommandType Command: $($JsonEntry.Command)"
+
+				# if arguments defined...
+				If ($null -ne $Arguments) {
+					# report arguments
+					ForEach ($Argument in $Arguments) {
+						Write-Host "...with argument: $Argument"
+					}
+				}
+				# if arguments not defined...
+				Else {
+					# report parameters
+					ForEach ($Parameter in $Parameters.GetEnumerator()) {
+						Write-Host "...with parameter: $($Parameter.Key), $($Parameter.Value)"
+					}
+				}
+
 				# suspend current transcript
 				Try {
 					Suspend-TranscriptForCommand
@@ -2034,9 +2052,6 @@ Process {
 
 				# if arguments defined...
 				If ($null -ne $Arguments) {
-					# report command and arguments
-					Write-Verbose -Message "running '$($JsonEntry.Command)' command with arguments: $($Arguments.Values)"
-
 					# call command with values from arguments
 					Try {
 						. $JsonEntry.Command $Arguments.Values
@@ -2048,9 +2063,6 @@ Process {
 				}
 				# if arguments not defined...
 				Else {
-					# report command and parameters
-					Write-Verbose -Message "running '$($JsonEntry.Command)' command with parameters: $($Parameters.GetEnumerator())"
-					
 					# call command with parameters
 					Try {
 						. $JsonEntry.Command @Parameters
