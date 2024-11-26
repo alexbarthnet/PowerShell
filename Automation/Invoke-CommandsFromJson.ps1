@@ -1909,7 +1909,7 @@ Process {
 				}
 
 				# if trigger expression defined...
-				If ($null -ne $JsonEntry.Expression) {
+				If (![string]::IsNullOrEmpty($JsonEntry.Expression)) {
 					# invoke trigger expression
 					Try {
 						$Evaluation = Invoke-Expression -Command $JsonEntry.Expression
