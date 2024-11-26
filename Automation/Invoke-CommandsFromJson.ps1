@@ -1548,7 +1548,7 @@ Process {
 		}
 
 		# report absolute path
-		Write-Warning "converted relative path in provided Json parameter to absolute path: $Json"
+		Write-Warning -Message "converted relative path in provided Json parameter to absolute path: $Json"
 	}
 
 	# if JSON file found...
@@ -1558,7 +1558,7 @@ Process {
 			$JsonData = [array](Get-Content -Path $Json -ErrorAction 'Stop' | ConvertFrom-Json)
 		}
 		Catch {
-			Write-Warning -Message "could not read configuration file: '$Json'"
+			Write-Warning -Message "could not read configuration file: $Json"
 			Return $_
 		}
 	}
@@ -1571,7 +1571,7 @@ Process {
 				$null = New-Item -ItemType 'File' -Path $Json -Force -ErrorAction 'Stop'
 			}
 			Catch {
-				Write-Warning -Message "could not create configuration file: '$Json'"
+				Write-Warning -Message "could not create configuration file: $Json"
 				Return $_
 			}
 			# ...create JSON data object as empty array
@@ -1580,7 +1580,7 @@ Process {
 		# ...and Add not set...
 		Else {
 			# ...report and return
-			Write-Warning -Message "could not find configuration file: '$Json'"
+			Write-Warning -Message "could not find configuration file: $Json"
 			Return
 		}
 	}
@@ -1590,7 +1590,7 @@ Process {
 		# show configuration file
 		$Show {
 			# report and display JSON contents
-			Write-Host "Displaying '$Json'"
+			Write-Host "Displaying entries in configuration file: $Json"
 			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 		# clear configuration file
@@ -1603,12 +1603,12 @@ Process {
 				$JsonValue | Set-Content -Path $Json
 			}
 			Catch {
-				Write-Warning "could not clear entries from configuration file: '$Json'"
+				Write-Warning "could not clear entries from configuration file: $Json"
 				Return $_
 			}
 
 			# report entries cleared
-			Write-Host "Cleared entries from configuration file: '$Json'"
+			Write-Host "Cleared entries from configuration file: $Json"
 		}
 		# remove entry from configuration file
 		$Remove {
@@ -1621,7 +1621,7 @@ Process {
 				# if JSON data empty...
 				If ($JsonDataToRemove.Count -gt 1) {
 					# warn and inquire
-					Write-Warning "Found multiple entries with $ParametersForReporting in configuration file: '$Json' `nAll matching entries will be removed" -WarningAction 'Inquire'
+					Write-Warning -Message "Found multiple entries with $ParametersForReporting in configuration file: $Json`nAll matching entries will be removed" -WarningAction 'Inquire'
 				}
 				# remove existing entry by primary key(s)...
 				$JsonData = [array]($JsonData.Where({ $_.Command -ne $Command }))
@@ -1636,7 +1636,7 @@ Process {
 				# if JSON data empty...
 				If ($JsonDataToRemove.Count -gt 1) {
 					# warn and inquire
-					Write-Warning -Message "Found multiple entries with $ParametersForReporting in configuration file: '$Json' `nAll matching entries will be removed" -WarningAction 'Inquire'
+					Write-Warning -Message "Found multiple entries with $ParametersForReporting in configuration file: $Json`nAll matching entries will be removed" -WarningAction 'Inquire'
 				}
 				# remove existing entry by primary key(s)...
 				$JsonData = [array]($JsonData.Where({ $_.Order -ne $Order }))
@@ -1664,12 +1664,12 @@ Process {
 				$JsonValue | Set-Content -Path $Json
 			}
 			Catch {
-				Write-Warning "could not remove entry from configuration file: '$Json'"
+				Write-Warning "could not remove entry from configuration file: $Json"
 				Return $_
 			}
 
 			# report entry removed
-			Write-Host "Removed entry with $ParametersForReporting from configuration file: '$Json'"
+			Write-Host "Removed entry with $ParametersForReporting from configuration file: $Json"
 
 			# display current entries if verbose
 			If ($VerbosePreference -eq 'Continue') { $JsonValue | Format-List }
@@ -1774,12 +1774,12 @@ Process {
 				$JsonValue | Set-Content -Path $Json
 			}
 			Catch {
-				Write-Warning "could not add entry to configuration file: '$Json'"
+				Write-Warning "could not add entry to configuration file: $Json"
 				Return $_
 			}
 
 			# report entry added
-			Write-Host "Added entry with order of '$Order' for '$Command' command to configuration file: '$Json'"
+			Write-Host "Added entry with order of '$Order' for '$Command' command to configuration file: $Json"
 
 			# display current entries if verbose
 			If ($VerbosePreference -eq 'Continue') { $JsonValue | Format-List }
@@ -1997,7 +1997,7 @@ Process {
 				If ($null -ne $JsonEntry.OutputName) {
 					# if outvariable already defined...
 					If ($Parameters.ContainsKey('OutVariable')) {
-						Write-Warning -Message "could not add OutputName as OutVariable; OutVariable already defined in parameters as: $($Parameters['OutVariable'])"
+						Write-Warning -Message "could not add OutputName as OutVariable; OutVariable already defined in parameters with value: $($Parameters['OutVariable'])"
 						Continue NextJsonEntry
 					}
 					# add OutputName as OutVariable to parameters
