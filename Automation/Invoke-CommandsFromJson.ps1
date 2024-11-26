@@ -1525,7 +1525,7 @@ Begin {
 
 	# if default parameter set and skip transcript not requested...
 	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $SkipTranscript) {
-		# stop transcript with default parameters
+		# start transcript with default parameters and skip text output if requested
 		Try {
 			Start-TranscriptForCommand -SkipTextOutput:$SkipTextOutput
 		}
