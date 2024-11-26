@@ -125,6 +125,8 @@ Function Invoke-LdapQuery {
 		[System.Management.Automation.PSCredential]$Credential,
 		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Kerberos')]
 		[switch]$Kerberos,
+		[Parameter(Position = 9, Mandatory = $True, ParameterSetName = 'Anonymous')]
+		[switch]$Anonymous,
 		[Parameter(DontShow)]
 		[guid]$QueryGuid = [System.Guid]::NewGuid()
 	)
@@ -146,6 +148,10 @@ Function Invoke-LdapQuery {
 
 		# update security settings for LDAP connection 
 		switch ($PSCmdlet.ParameterSetName) {
+			'Anonymous' {
+				$LdapConnection.AuthType = [System.DirectoryServices.Protocols.AuthType]::Anonymous
+				$LdapConnection.SessionOptions.SecureSocketLayer = $SSL
+			}
 			'Certificate' {
 				$LdapConnection.AuthType = [System.DirectoryServices.Protocols.AuthType]::Anonymous
 				$LdapConnection.SessionOptions.QueryClientCertificate = { $Certificate }
