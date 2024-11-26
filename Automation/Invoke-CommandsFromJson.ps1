@@ -1951,6 +1951,10 @@ Process {
 						Continue NextJsonEntry
 					}
 				}
+				# if arguments not provided...
+				Else {
+					$Arguments = $null
+				}
 
 				# if parameters provided...
 				If ($null -ne $JsonEntry.Parameters) {
