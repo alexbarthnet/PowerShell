@@ -2094,6 +2094,32 @@ Process {
 					$ExceptionCaught = $true
 					Continue NextJsonEntry
 				}
+
+				# if output name defined...
+				If (![string]::IsNullOrEmpty($JsonEntry.OutputName)) {
+					# define command to unwrap OutVariable value from ArrayList
+					$OutVariableCommand = '$(${0})' -f $JsonEntry.OutputName
+
+					# unwrap OutVariable value via Invoke-Expression
+					Try {
+						$OutputValue = Invoke-Expression -Command $OutVariableCommand -ErrorAction 'Stop'
+					}
+					Catch {
+						Write-Warning -Message "exception caught unwrapping '$($JsonEntry.OutputName)' variable: $($_.Exception.ToString())"
+						$ExceptionCaught = $true
+						Continue NextJsonEntry
+					}
+
+					# store OutVariable in named variable
+					Try {
+						New-Variable -Name $JsonEntry.OutputName -Value $OutputValue -Force -Scope 'Script' -ErrorAction 'Stop'
+					}
+					Catch {
+						Write-Warning -Message "exception caught retrieving value of the '$VariableName' variable: $($_.Exception.ToString())"
+						$ExceptionCaught = $true
+						Continue NextJsonEntry
+					}
+				}
 			}
 		}
 	}
