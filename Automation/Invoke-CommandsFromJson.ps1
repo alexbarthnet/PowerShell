@@ -1651,7 +1651,7 @@ Process {
 			Else {
 				# convert JSON data to JSON string
 				Try {
-					$JsonValue = $JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100
+					$JsonValue = $JsonData | Sort-Object -Property 'Order', 'Command' | ConvertTo-Json -Depth 100
 				}
 				Catch {
 					Write-Warning 'could not convert object to JSON'
@@ -1762,7 +1762,7 @@ Process {
 
 			# convert data to JSON
 			Try {
-				$JsonValue = $JsonData | Sort-Object -Property 'TaskPath', 'TaskName' | ConvertTo-Json -Depth 100
+				$JsonValue = $JsonData | Sort-Object -Property 'Order', 'Command' | ConvertTo-Json -Depth 100
 			}
 			Catch {
 				Write-Warning 'could not convert object to JSON'
