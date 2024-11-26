@@ -1973,13 +1973,13 @@ Process {
 					$Parameters = @{}
 				}
 
-				# if input name defined...
+				# if one or more input names defined...
 				If ($null -ne $JsonEntry.InputName) {
 					# process each named input variable
-					ForEach ($VariableName in $InputName) {
+					ForEach ($VariableName in $JsonEntry.InputName) {
 						# retrieve value of the named variable
 						Try {
-							$VariableValue = Get-Variable -Name $VariableName -Scope 'script' -ValueOnly
+							$VariableValue = Get-Variable -Name $VariableName -ValueOnly -Scope 'Script' -ErrorAction 'Stop'
 						}
 						Catch {
 							Write-Warning -Message "exception caught retrieving value of the '$VariableName' variable: $($_.Exception.ToString())"
@@ -1998,7 +1998,7 @@ Process {
 				}
 
 				# if output name defined...
-				If ($null -ne $JsonEntry.OutputName) {
+				If (![string]::IsNullOrEmpty($JsonEntry.OutputName)) {
 					# if outvariable already defined...
 					If ($Parameters.ContainsKey('OutVariable')) {
 						Write-Warning -Message "could not add OutputName as OutVariable; OutVariable already defined in parameters with value: $($Parameters['OutVariable'])"
