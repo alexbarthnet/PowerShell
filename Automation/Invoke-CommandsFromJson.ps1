@@ -2038,6 +2038,7 @@ Process {
 				}
 				Catch {
 					Write-Warning -Message "could not suspend transcript for script: $((Get-PSCallStack)[0].Command)"
+					$ExceptionCaught = $true
 					Continue NextJsonEntry
 				}
 
@@ -2047,6 +2048,7 @@ Process {
 				}
 				Catch {
 					Write-Warning -Message "could not start transcript for command: $($JsonEntry.Command)"
+					$ExceptionCaught = $true
 					Continue NextJsonEntry
 				}
 
@@ -2079,6 +2081,7 @@ Process {
 				}
 				Catch {
 					Write-Warning -Message "could not stop transcript for command: $($JsonEntry.Command)"
+					$ExceptionCaught = $true
 					Continue NextJsonEntry
 				}
 
@@ -2088,6 +2091,7 @@ Process {
 				}
 				Catch {
 					Write-Warning -Message "could not resume transcript for script: $((Get-PSCallStack)[0].Command)"
+					$ExceptionCaught = $true
 					Continue NextJsonEntry
 				}
 			}
