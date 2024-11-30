@@ -67,6 +67,9 @@ Switch to create the Path directory if it does not already exist.
 .PARAMETER CreateDestination
 Switch to create the Destination directory if it does not already exist.
 
+.PARAMETER UseSavedSyncTime
+Switch parameter to use a saved sync time file.
+
 .INPUTS
 None. Sync-PathWithDestination does not accept pipeline input.
 
@@ -149,6 +152,8 @@ Param(
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'Run')]
 	[switch]$CreateDestination,
+	# script parameter - use saved sync time files
+	[switch]$UseSavedSyncTime,
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -161,6 +166,148 @@ Param(
 )
 
 Begin {
+	Function Get-SavedSyncTime {
+		Param(
+			# source path for sync
+			[Parameter(Mandatory)]
+			[string]$Path,
+			
+			# target path for sync
+			[Parameter(Mandatory)]
+			[string]$Destination,
+
+			# define instance name from Path and Destination parameters
+			[string]$SavedSyncTimeSet = [string]::Join('=>', $Path, $Destination),
+
+			# get hash of byte array of instance string as hex string
+			[string]$SavedSyncTimeName = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($SavedSyncTimeSet))).Replace('-', $null),
+
+			# root folder for text output folders; default is common application data folder
+			[string]$SavedSyncTimeRoot = [System.Environment]::GetFolderPath('CommonApplicationData'),
+
+			# leaf folder for text output folders; default is 'PowerShell_SavedSyncTime'
+			[string]$SavedSyncTimeLeaf = ((Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$'),
+
+			# base folder for text output folders; default is text output leaf folder in common application data folder
+			[string]$SavedSyncTimeBase = (Join-Path -Path $SavedSyncTimeRoot -ChildPath $SavedSyncTimeLeaf),
+
+			# path for text output files; default is named folder under 'PowerShell_SavedSyncTime' folder in common application data folder
+			[string]$SavedSyncTimePath = (Join-Path -Path $SavedSyncTimeBase -ChildPath $SavedSyncTimeName)
+		)
+
+		# if saved sync time base not found...
+		If (![System.IO.Directory]::Exists($SavedSyncTimeBase)) {
+			Try {
+				$null = New-Item -ItemType Directory -Path $SavedSyncTimeBase -ErrorAction Stop
+			}
+			Catch {
+				Write-Warning -Message "could not create saved sync time folder: $SavedSyncTimeBase"
+				Throw $_
+			}
+		}
+
+		# if saved sync time path not found...
+		If (![System.IO.File]::Exists($SavedSyncTimePath)) {
+			Try {
+				$null = New-Item -ItemType File -Path $SavedSyncTimePath -ErrorAction Stop
+			}
+			Catch {
+				Write-Warning -Message "could not create saved sync time file: $SavedSyncTimePath"
+				Throw $_
+			}
+		}
+
+		# retrieve content from saved sync time path
+		Try {
+			$SavedSyncTimeText = Get-Content -Path $SavedSyncTimePath
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve saved sync time from file: $SavedSyncTimePath"
+			Throw $_
+		}
+
+		# if content is null...
+		If ([string]::IsNullOrEmpty($SavedSyncTimeText)) {
+			# return 0
+			Return [uint64]::MinValue
+		}
+		
+		# if content cannot be parsed as uint64...
+		If (![uint64]::TryParse($SavedSyncTimeText, [ref][uint64]::MinValue)) {
+			# warn and throw
+			Write-Warning -Message "could not create unsigned 64-bit integer from saved sync time value: $SavedSyncTimeText"
+			Throw $_
+		}
+
+		# parse content and return
+		Return [uint64]::Parse($SavedSyncTimeText)
+	}
+
+	Function Set-SavedSyncTime {
+		Param(
+			# file ticks of last sync time
+			[Parameter(Mandatory)]
+			[uint64]$SyncTime,
+
+			# source path for sync
+			[Parameter(Mandatory)]
+			[string]$Path,
+			
+			# target path for sync
+			[Parameter(Mandatory)]
+			[string]$Destination,
+
+			# define instance name from Path and Destination parameters
+			[string]$SavedSyncTimeSet = [string]::Join('=>', $Path, $Destination),
+
+			# get hash of byte array of instance string as hex string
+			[string]$SavedSyncTimeName = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($SavedSyncTimeSet))).Replace('-', $null),
+
+			# root folder for text output folders; default is common application data folder
+			[string]$SavedSyncTimeRoot = [System.Environment]::GetFolderPath('CommonApplicationData'),
+
+			# leaf folder for text output folders; default is 'PowerShell_SavedSyncTime'
+			[string]$SavedSyncTimeLeaf = ((Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$'),
+
+			# base folder for text output folders; default is text output leaf folder in common application data folder
+			[string]$SavedSyncTimeBase = (Join-Path -Path $SavedSyncTimeRoot -ChildPath $SavedSyncTimeLeaf),
+
+			# path for text output files; default is named folder under 'PowerShell_SavedSyncTime' folder in common application data folder
+			[string]$SavedSyncTimePath = (Join-Path -Path $SavedSyncTimeBase -ChildPath $SavedSyncTimeName)
+		)
+
+		# if saved sync time base not found...
+		If (![System.IO.Directory]::Exists($SavedSyncTimeBase)) {
+			Try {
+				$null = New-Item -ItemType Directory -Path $SavedSyncTimeBase -ErrorAction Stop
+			}
+			Catch {
+				Write-Warning -Message "could not create saved sync time folder: $SavedSyncTimeBase"
+				Throw $_
+			}
+		}
+
+		# if saved sync time path not found...
+		If (![System.IO.File]::Exists($SavedSyncTimePath)) {
+			Try {
+				$null = New-Item -ItemType File -Path $SavedSyncTimePath -ErrorAction Stop
+			}
+			Catch {
+				Write-Warning -Message "could not create saved sync time file: $SavedSyncTimePath"
+				Throw $_
+			}
+		}
+
+		# retrieve content from saved sync time path
+		Try {
+			Set-Content -Path $SavedSyncTimePath -Value $SyncTime
+		}
+		Catch {
+			Write-Warning -Message "could not store sync time in file: $SavedSyncTimePath"
+			Throw $_
+		}
+	}
+
 	Function Resolve-PresetToParameters {
 		# resolve Direction
 		If (!$script:PSBoundParameters.ContainsKey('Direction')) {
@@ -596,67 +743,41 @@ Begin {
 			}
 		}
 
-		# if JSON file was source of run...
-		If ($script:Json) {
-			# create ordered dictionary for custom object
-			$JsonParameters = [ordered]@{
-				Path              = $Path
-				Destination       = $Destination
-				Direction         = $Direction
-				Purge             = $Purge -as [System.Boolean]
-				Recurse           = $Recurse -as [System.Boolean]
-				CheckHash         = $CheckHash -as [System.Boolean]
-				SkipDelete        = $SkipDelete -as [System.Boolean]
-				SkipExisting      = $SkipExisting -as [System.Boolean]
-				SkipFiles         = $SkipFiles -as [System.Boolean]
-				CreatePath        = $CreatePath -as [System.Boolean]
-				CreateDestination = $CreateDestination -as [System.Boolean]
-				LastSyncTime      = $CurrentSyncTime
-				Updated           = $Updated
-			}
-
-			# create custom object from ordered dictionary
-			$JsonEntry = [pscustomobject]$JsonParameters
-
-			# remove existing entry with same primary key(s)
-			$JsonData = [array]($JsonData.Where({ $_.Path -ne $Path -and $_.Destination -ne $Destination }))
-
-			# add entry to data
-			$JsonData += $JsonEntry
-
-			# convert JSON data to JSON string
-			Try {
-				$JsonValue = $JsonData | Sort-Object -Property 'Path', 'Destination' | ConvertTo-Json -Depth 100
-			}
-			Catch {
-				Write-Warning 'could not convert object to JSON'
-				Return $_
-			}
-
-			# update JSON file
-			Try {
-				$JsonValue | Set-Content -Path $Json
-			}
-			Catch {
-				Write-Warning "could not update configuration file after Sync: '$Json'"
-				Return $_
-			}
+		# if last sync time had value...
+		If ($LastSyncTime -gt 0) {
+			# return current sync time
+			Return $CurrentSyncTime
 		}
 	}
 }
 
 Process {
-	# if script in direct run mode...
-	If ($PSCmdLet.ParameterSetName -eq 'Run') {
-		# resolve preset to parameters
+	# resolve preset to parameters
+	Try {
+		Resolve-PresetToParameters
+	}
+	Catch {
+		Write-Warning -Message "could not resolve preset to parameters: '$Preset'"
+		Throw $_
+	}
+
+	# if Path is not an absolute path...
+	If (![System.IO.Path]::IsPathRooted($Path)) {
+		# get unresolved absolute path
 		Try {
-			Resolve-PresetToParameters
+			$Path = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
 		}
 		Catch {
-			Write-Warning -Message "could not resolve preset to parameters: '$Preset'"
+			Write-Warning -Message "could not create absolute path from the provided Path parameter: $Path"
 			Throw $_
 		}
 
+		# report absolute path
+		Write-Warning -Message "converted relative path in provided Path parameter to absolute path: $Path"
+	}
+
+	# if Path ends with a backslash...
+	If ($Path.EndsWith('\')) {
 		# trim any trailing backslash from Path
 		Try {
 			$Path = $Path.TrimEnd('\')
@@ -665,7 +786,25 @@ Process {
 			Write-Warning -Message 'could not trim Path'
 			Throw $_
 		}
+	}
 
+	# if Destination is not an absolute path...
+	If (![System.IO.Path]::IsPathRooted($Destination)) {
+		# get unresolved absolute path
+		Try {
+			$Path = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Destination)
+		}
+		Catch {
+			Write-Warning -Message "could not create absolute path from the provided Destination parameter: $Destination"
+			Throw $_
+		}
+
+		# report absolute path
+		Write-Warning -Message "converted relative path in provided Destination parameter to absolute path: $Destination"
+	}
+
+	# if Destination ends with a backslash...
+	If ($Destination.EndsWith('\')) {
 		# trim any trailing backslash from Destination
 		Try {
 			$Destination = $Destination.TrimEnd('\')
@@ -674,289 +813,62 @@ Process {
 			Write-Warning -Message 'could not trim Destination'
 			Throw $_
 		}
-
-		# create hashtable from parameters then splat to function
-		Try {
-			# define required parameters for Sync-ItemsInPathWithDestination
-			$SyncItemsInPathWithDestination = [ordered]@{
-				Path              = $Path
-				Destination       = $Destination
-				Direction         = $Direction
-				Purge             = $Purge -as [System.Boolean]
-				Recurse           = $Recurse -as [System.Boolean]
-				CheckHash         = $CheckHash -as [System.Boolean]
-				SkipDelete        = $SkipDelete -as [System.Boolean]
-				SkipExisting      = $SkipExisting -as [System.Boolean]
-				SkipFiles         = $SkipFiles -as [System.Boolean]
-				CreatePath        = $CreatePath -as [System.Boolean]
-				CreateDestination = $CreateDestination -as [System.Boolean]
-				LastSyncTime      = 0
-			}
-
-			# defined optional parameters for Sync-ItemsInPathWithDestination
-			If ($VerbosePreference -eq 'Continue') {
-				$SyncItemsInPathWithDestination['Verbose'] = $true
-			}
-
-			# define optional parameters for Sync-ItemsInPathWithDestination
-			If ($WhatIfPreference -eq $true) {
-				$SyncItemsInPathWithDestination['WhatIf'] = $true
-			}
-
-			# sync items in path with destination
-			Sync-ItemsInPathWithDestination @SyncItemsInPathWithDestination
-		}
-		Catch {
-			Write-Warning -Message 'could not sync path with destination'
-			Return $_
-		}
-
-		# return after direct run
-		Return
 	}
 
-	# if JSON file found...
-	If (Test-Path -Path $Json) {
-		# ...create JSON data object as array of PSCustomObjects from JSON file content
+	# if UseSavedSyncTime is requested...
+	If ($UseSavedSyncTime) {
 		Try {
-			$JsonData = [array](Get-Content -Path $Json -ErrorAction Stop | ConvertFrom-Json)
+			$LastSyncTime = Get-SavedSyncTime -Path $Path -Destination $Destination
 		}
 		Catch {
-			Write-Warning -Message "could not read configuration file: '$Json'"
+			Write-Warning -Message "could not retrieve saved sync time for '$Path' path and '$Destination' destination"
 			Return $_
 		}
 	}
-	# if JSON file was not found...
-	Else {
-		# ...and Add set...
-		If ($Add) {
-			# ...try to create the JSON file
-			Try {
-				$null = New-Item -ItemType 'File' -Path $Json -ErrorAction Stop
-			}
-			Catch {
-				Write-Warning -Message "could not create configuration file: '$Json'"
-				Return $_
-			}
-			# ...create JSON data object as empty array
-			$JsonData = @()
-		}
-		# ...and Add not set...
-		Else {
-			# ...report and return
-			Write-Warning -Message "could not find configuration file: '$Json'"
-			Return
-		}
+
+	# define required parameters for Sync-ItemsInPathWithDestination
+	$SyncItemsInPathWithDestination = [ordered]@{
+		Path              = $Path
+		Destination       = $Destination
+		Direction         = $Direction
+		Purge             = $Purge -as [System.Boolean]
+		Recurse           = $Recurse -as [System.Boolean]
+		CheckHash         = $CheckHash -as [System.Boolean]
+		SkipDelete        = $SkipDelete -as [System.Boolean]
+		SkipExisting      = $SkipExisting -as [System.Boolean]
+		SkipFiles         = $SkipFiles -as [System.Boolean]
+		CreatePath        = $CreatePath -as [System.Boolean]
+		CreateDestination = $CreateDestination -as [System.Boolean]
+		LastSyncTime      = $LastSyncTime
 	}
 
-	# evaluate parameters
-	switch ($true) {
-		# show configuration file
-		$Show {
-			Write-Host "Displaying '$Json'"
-			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+	# define optional parameters for Sync-ItemsInPathWithDestination
+	If ($VerbosePreference -eq 'Continue') {
+		$SyncItemsInPathWithDestination['Verbose'] = $true
+	}
+
+	# define optional parameters for Sync-ItemsInPathWithDestination
+	If ($WhatIfPreference -eq $true) {
+		$SyncItemsInPathWithDestination['WhatIf'] = $true
+	}
+
+	# sync items in path with destination
+	Try {
+		$SyncTime = Sync-ItemsInPathWithDestination @SyncItemsInPathWithDestination
+	}
+	Catch {
+		Write-Warning -Message 'could not sync path with destination'
+		Return $_
+	}
+
+	# if UseSavedSyncTime is requested...
+	If ($UseSavedSyncTime) {
+		Try {
+			Set-SavedSyncTime -Path $Path -Destination $Destination -SyncTime $SyncTime
 		}
-		# clear configuration file
-		$Clear {
-			# set empty string for JSON string
-			$JsonValue = [string]::Empty
-
-			# update JSON file
-			Try {
-				$JsonValue | Set-Content -Path $Json
-			}
-			Catch {
-				Write-Warning "could not clear entries from configuration file: '$Json'"
-				Return $_
-			}
-
-			# report entries cleared
-			Write-Host "Cleared entries from configuration file: '$Json'"
-		}
-		# remove entry from configuration file
-		$Remove {
-			# remove existing entry by primary key(s)...
-			$JsonData = [array]($JsonData.Where({ $_.Path -ne $Path -and $_.Destination -ne $Destination }))
-
-			# if JSON data empty...
-			If ($JsonData.Count -eq 0) {
-				# set empty string for JSON string
-				$JsonValue = [string]::Empty
-			}
-			# if JSON data is not empty...
-			Else {
-				# convert JSON data to JSON string
-				Try {
-					$JsonValue = $JsonData | Sort-Object -Property 'Path', 'Destination' | ConvertTo-Json -Depth 100
-				}
-				Catch {
-					Write-Warning 'could not convert object to JSON'
-					Return $_
-				}
-			}
-
-			# update JSON file
-			Try {
-				$JsonValue | Set-Content -Path $Json
-			}
-			Catch {
-				Write-Warning "could not remove entry from configuration file: '$Json'"
-				Return $_
-			}
-
-			# report entry removed
-			Write-Host "Removed '$Path' path with '$Destination' destination from configuration file: '$Json'"
-
-			# display current entries if verbose
-			If ($VerbosePreference -eq 'Continue') { $JsonValue | Format-List }
-		}
-		# add entry to configuration file
-		$Add {
-			# resolve preset to parameters
-			Try {
-				Resolve-PresetToParameters
-			}
-			Catch {
-				Write-Warning -Message "could not resolve preset to parameters: '$Preset'"
-				Throw $_
-			}
-
-			# trim any trailing backslash from Path
-			Try {
-				$Path = $Path.TrimEnd('\')
-			}
-			Catch {
-				Write-Warning -Message "could not trim Path: '$Path'"
-				Throw $_
-			}
-
-			# trim any trailing backslash from Destination
-			Try {
-				$Destination = $Destination.TrimEnd('\')
-			}
-			Catch {
-				Write-Warning -Message "could not trim Destination: '$Destination'"
-				Throw $_
-			}
-
-			# if existing entry has same primary key(s)...
-			If ($JsonData.Where({ $_.Path -eq $Path -and $_.Destination -eq $Destination })) {
-				# inquire before removing existing entry
-				Write-Warning -Message "Will overwrite existing entry for '$Path' path and '$Destination' destination in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
-				# remove existing entry with same primary key(s)
-				$JsonData = [array]($JsonData.Where({ $_.Path -ne $Path -and $_.Destination -ne $Destination }))
-			}
-
-			# create ordered dictionary for custom object
-			$JsonParameters = [ordered]@{
-				Path              = $Path
-				Destination       = $Destination
-				Direction         = $Direction
-				Purge             = $Purge -as [System.Boolean]
-				Recurse           = $Recurse -as [System.Boolean]
-				CheckHash         = $CheckHash -as [System.Boolean]
-				SkipDelete        = $SkipDelete -as [System.Boolean]
-				SkipExisting      = $SkipExisting -as [System.Boolean]
-				SkipFiles         = $SkipFiles -as [System.Boolean]
-				CreatePath        = $CreatePath -as [System.Boolean]
-				CreateDestination = $CreateDestination -as [System.Boolean]
-				LastSyncTime      = 0
-			}
-
-			# add current time as FileDateTimeUniversal
-			$JsonParameters['Updated'] = (Get-Date -Format FileDateTimeUniversal)
-
-			# create custom object from ordered dictionary
-			$JsonEntry = [pscustomobject]$JsonParameters
-
-			# add entry to data
-			$JsonData += $JsonEntry
-
-			# convert data to JSON
-			Try {
-				$JsonValue = $JsonData | Sort-Object -Property 'Path', 'Destination' | ConvertTo-Json -Depth 100
-			}
-			Catch {
-				Write-Warning 'could not convert object to JSON'
-				Return $_
-			}
-
-			# update JSON file
-			Try {
-				$JsonValue | Set-Content -Path $Json
-			}
-			Catch {
-				Write-Warning "could not add entry to configuration file: '$Json'"
-				Return $_
-			}
-
-			# report entry added
-			Write-Host "Added entry for '$Path' path and '$Destination' destination to configuration file: '$Json'"
-
-			# display current entries if verbose
-			If ($VerbosePreference -eq 'Continue') { $JsonValue | Format-List }
-		}
-		# process entries in configuration file
-		Default {
-			# check entry count in configuration file
-			If ($JsonData.Count -eq 0) {
-				Write-Warning -Message "no entries found in configuration file: '$Json'"
-				Return
-			}
-
-			# process configuration file
-			:NextJsonEntry ForEach ($JsonEntry in $JsonData) {
-				# validate values present in JSON file
-				Switch ($true) {
-					([string]::IsNullOrEmpty($JsonEntry.Path)) {
-						Write-Warning -Message "required entry (Path) not found in configuration file: $Json"
-						Continue NextJsonEntry
-					}
-					([string]::IsNullOrEmpty($JsonEntry.Destination)) {
-						Write-Warning -Message "required entry (Destination) not found in configuration file: $Json"
-						Continue NextJsonEntry
-					}
-					([string]::IsNullOrEmpty($JsonEntry.Direction)) {
-						Write-Warning -Message "required entry (Direction) not found in configuration file: $Json"
-						Continue NextJsonEntry
-					}
-				}
-
-				# define required parameters for Sync-ItemsInPathWithDestination
-				$SyncItemsInPathWithDestination = @{
-					Path              = $JsonEntry.Path
-					Destination       = $JsonEntry.Destination
-					Direction         = $JsonEntry.Direction
-					Purge             = $JsonEntry.Purge
-					Recurse           = $JsonEntry.Recurse
-					CheckHash         = $JsonEntry.CheckHash
-					SkipDelete        = $JsonEntry.SkipDelete
-					SkipExisting      = $JsonEntry.SkipExisting
-					SkipFiles         = $JsonEntry.SkipFiles
-					CreatePath        = $JsonEntry.CreatePath
-					CreateDestination = $JsonEntry.CreateDestination
-					LastSyncTime      = $JsonEntry.LastSyncTime
-					Updated           = $JsonEntry.Updated
-				}
-
-				# defined optional parameters for Sync-ItemsInPathWithDestination
-				If ($VerbosePreference -eq 'Continue') {
-					$SyncItemsInPathWithDestination['Verbose'] = $true
-				}
-
-				# define optional parameters for Sync-ItemsInPathWithDestination
-				If ($WhatIfPreference -eq $true) {
-					$SyncItemsInPathWithDestination['WhatIf'] = $true
-				}
-
-				# sync items in path with destination
-				Try {
-					Sync-ItemsInPathWithDestination @SyncItemsInPathWithDestination
-				}
-				Catch {
-					Return $_
-				}
-			}
+		Catch {
+			Write-Warning -Message "could not retrieve saved sync time for '$Path' path and '$Destination' destination"
+			Return $_
 		}
 	}
 }
