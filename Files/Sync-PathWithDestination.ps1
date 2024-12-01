@@ -5,24 +5,6 @@ Synchronize files and directories in a source path with a destination path.
 .DESCRIPTION
 Synchronize files and directories in a source path with a destination path based upon runtime parameters or settings from a JSON file.
 
-.PARAMETER Json
-The path to a JSON file containing the configuration for this script.
-
-.PARAMETER Show
-Switch parameter to show all entries from the JSON configuration file. Cannot be combined with the Clear, Remove, Add, or Run parameters.
-
-.PARAMETER Clear
-Switch parameter to clear all entries from the JSON configuration file. Cannot be combined with the Show, Remove, Add, or Run parameters.
-
-.PARAMETER Remove
-Switch parameter to remove an entry from the JSON configuration file. Cannot be combined with the Show, Clear, Add, or Run parameters.
-
-.PARAMETER Add
-Switch parameter to add an entry from the JSON configuration file. Cannot be combined with the Show, Clear, Remove, or Run parameters.
-
-.PARAMETER Run
-Switch parameter to immediately synchronize files and directories per the parameters provided to the script. Cannot be combined with the Show, Clear, Remove, or Add parameters.
-
 .PARAMETER Path
 The path of the source directory. Required when the Remove, Add, or Run parameters are specified.
 
@@ -80,77 +62,37 @@ None. The script merely reports on actions taken and does not provide any action
 To be added...
 #>
 
-[CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Run')]
+[CmdletBinding(SupportsShouldProcess)]
 Param(
-	# script parameters - json file
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Json')]
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Show')]
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Clear')]
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Remove')]
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Add')]
-	[string]$Json,
-	# script parameters - mode
-	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Show')]
-	[switch]$Show,
-	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Clear')]
-	[switch]$Clear,
-	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Remove')]
-	[switch]$Remove,
-	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Add')]
-	[switch]$Add,
-	# function parameters - source path
-	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Remove')]
-	[Parameter(Position = 2, Mandatory = $True, ParameterSetName = 'Add')]
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Run')]
+	# source path
+	[Parameter(Position = 0, Mandatory = $True)]
 	[ValidatePattern('^[^\*]+$')]
 	[string]$Path,
-	# function parameters - target path
-	[Parameter(Position = 3, Mandatory = $True, ParameterSetName = 'Remove')]
-	[Parameter(Position = 3, Mandatory = $True, ParameterSetName = 'Add')]
-	[Parameter(Position = 1, Mandatory = $True, ParameterSetName = 'Run')]
+	# target path
+	[Parameter(Position = 1, Mandatory = $True)]
 	[ValidatePattern('^[^\*]+$')]
 	[string]$Destination,
-	# function parameters - preset for Direction, SkipExisting, SkipDelete
-	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Run')]
+	# preset for Direction, SkipExisting, SkipDelete
 	[ValidateSet('Sync', 'Contribute', 'Mirror', 'Merge')]
 	[string]$Preset = 'Sync',
-	# function parameters - sync direction
-	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Run')]
+	# sync direction
 	[ValidateSet('Both', 'Forward', 'Reverse')]
 	[string]$Direction = 'Both',
-	# function parameters - purge destination
-	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Run')]
+	# purge destination
 	[switch]$Purge,
-	# function parameters - include child items
-	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Run')]
+	# include child items
 	[switch]$Recurse,
-	# function parameters - compare files with Get-FileHash
-	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Run')]
+	# compare files with Get-FileHash
 	[switch]$CheckHash,
-	# function parameters - do not delete mismatched files and folders
-	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Run')]
+	# do not delete mismatched files and folders
 	[switch]$SkipDelete,
-	# function parameters - do not compare existing files and folders
-	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Run')]
+	# do not compare existing files and folders
 	[switch]$SkipExisting,
-	# function parameters - do not compare files
-	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Run')]
+	# do not compare files
 	[switch]$SkipFiles,
-	# function parameters - create source path if missing
-	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Run')]
+	# create source path if missing
 	[switch]$CreatePath,
-	# function parameters - create target path if missing
-	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'Run')]
+	# create target path if missing
 	[switch]$CreateDestination,
 	# script parameter - use saved sync time files
 	[switch]$UseSavedSyncTime,
