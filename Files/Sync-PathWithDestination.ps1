@@ -757,8 +757,9 @@ Process {
 		}
 	}
 
-	# if UseSavedSyncTime is requested...
+	# if UseSavedSyncTime was requested...
 	If ($UseSavedSyncTime) {
+		# retrieve last sync time
 		Try {
 			$LastSyncTime = Get-SavedSyncTime -Path $Path -Destination $Destination
 		}
@@ -766,6 +767,11 @@ Process {
 			Write-Warning -Message "could not retrieve saved sync time for '$Path' path and '$Destination' destination"
 			Return $_
 		}
+	}
+	# if UseSavedSyncTime was not requested...
+	Else {
+		# set last sync time to zero
+		$LastSyncTime = 0
 	}
 
 	# define required parameters for Sync-ItemsInPathWithDestination
@@ -803,8 +809,9 @@ Process {
 		Return $_
 	}
 
-	# if UseSavedSyncTime is requested...
+	# if UseSavedSyncTime was requested...
 	If ($UseSavedSyncTime) {
+		# update last sync time
 		Try {
 			Set-SavedSyncTime -Path $Path -Destination $Destination -SyncTime $SyncTime
 		}
