@@ -49,8 +49,8 @@ Switch to create the Path directory if it does not already exist.
 .PARAMETER CreateDestination
 Switch to create the Destination directory if it does not already exist.
 
-.PARAMETER UseSavedSyncTime
-Switch parameter to use a saved sync time file.
+.PARAMETER UseStreamsForLastSyncTime
+Switch parameter to retrieve and store the last sync time in use file system streams on the provided Path and Destination.
 
 .INPUTS
 None. Sync-PathWithDestination does not accept pipeline input.
@@ -94,8 +94,8 @@ Param(
 	[switch]$CreatePath,
 	# create target path if missing
 	[switch]$CreateDestination,
-	# script parameter - use saved sync time files
-	[switch]$UseSavedSyncTime,
+	# retrieve and store last sync time in file system streams
+	[switch]$UseStreamsForLastSyncTime,
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -108,144 +108,160 @@ Param(
 )
 
 Begin {
-	Function Get-SavedSyncTime {
+	Function Get-DateTimeFromStream {
 		Param(
-			# source path for sync
+			# path to file system object with stream
 			[Parameter(Mandatory)]
 			[string]$Path,
-			
-			# target path for sync
+
+			# name of stream on file system object
 			[Parameter(Mandatory)]
-			[string]$Destination,
+			[string]$Stream,
 
-			# define instance name from Path and Destination parameters
-			[string]$SavedSyncTimeSet = [string]::Join('=>', $Path, $Destination),
-
-			# get hash of byte array of instance string as hex string
-			[string]$SavedSyncTimeName = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($SavedSyncTimeSet))).Replace('-', $null),
-
-			# root folder for text output folders; default is common application data folder
-			[string]$SavedSyncTimeRoot = [System.Environment]::GetFolderPath('CommonApplicationData'),
-
-			# leaf folder for text output folders; default is 'PowerShell_SavedSyncTime'
-			[string]$SavedSyncTimeLeaf = ((Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$'),
-
-			# base folder for text output folders; default is text output leaf folder in common application data folder
-			[string]$SavedSyncTimeBase = (Join-Path -Path $SavedSyncTimeRoot -ChildPath $SavedSyncTimeLeaf),
-
-			# path for text output files; default is named folder under 'PowerShell_SavedSyncTime' folder in common application data folder
-			[string]$SavedSyncTimePath = (Join-Path -Path $SavedSyncTimeBase -ChildPath $SavedSyncTimeName)
+			# name of property in JSON string stored in stream
+			[Parameter(Mandatory)]
+			[string]$Property
 		)
 
-		# if saved sync time base not found...
-		If (![System.IO.Directory]::Exists($SavedSyncTimeBase)) {
-			Try {
-				$null = New-Item -ItemType Directory -Path $SavedSyncTimeBase -ErrorAction Stop
-			}
-			Catch {
-				Write-Warning -Message "could not create saved sync time folder: $SavedSyncTimeBase"
-				Throw $_
-			}
+		# if path not found...
+		If (![System.IO.Directory]::Exists($Path)) {
+			Return $null
 		}
 
-		# if saved sync time path not found...
-		If (![System.IO.File]::Exists($SavedSyncTimePath)) {
-			Try {
-				$null = New-Item -ItemType File -Path $SavedSyncTimePath -ErrorAction Stop
-			}
-			Catch {
-				Write-Warning -Message "could not create saved sync time file: $SavedSyncTimePath"
-				Throw $_
-			}
-		}
-
-		# retrieve content from saved sync time path
+		# get content from named stream on object
 		Try {
-			$SavedSyncTimeText = Get-Content -Path $SavedSyncTimePath
+			$Content = Get-Content -Path $Path -Stream $Stream -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not retrieve saved sync time from file: $SavedSyncTimePath"
-			Throw $_
+			Write-Warning -Message "could not retrieve '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
+			Return $null
 		}
 
 		# if content is null...
-		If ([string]::IsNullOrEmpty($SavedSyncTimeText)) {
-			# return 0
-			Return [uint64]::MinValue
-		}
-		
-		# if content cannot be parsed as uint64...
-		If (![uint64]::TryParse($SavedSyncTimeText, [ref][uint64]::MinValue)) {
-			# warn and throw
-			Write-Warning -Message "could not create unsigned 64-bit integer from saved sync time value: $SavedSyncTimeText"
-			Throw $_
+		If ($null -eq $Content) {
+			# return $null
+			Return $null
 		}
 
-		# parse content and return
-		Return [uint64]::Parse($SavedSyncTimeText)
+		# convert content from JSON
+		Try {
+			$JsonObject = ConvertFrom-Json -InputObject $Content -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not convert content of '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
+			Return $null
+		}
+
+		# if object missing requested property...
+		If (!$JsonObject.PSObject.Properties.Name.Contains($Property)) {
+			# warn and return null
+			Write-Warning -Message "could not locate '$Property' property on JSON object in '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
+			Return $null
+		}
+
+		# if requested property cannot be parsed as 64-bit unsigned integer...
+		If (![uint64]::TryParse($JsonObject.$Property, [ref][uint64]::MinValue)) {
+			Write-Warning -Message "could not parse '$($JsonObject.$Property)' value to uint64 in '$Property' property on JSON object in '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
+			Return $null
+		}
+
+		# create timespan from requested property
+		Try {
+			$TimeSpan = [timespan]::FromTicks($JsonObject.$Property)
+		}
+		Catch {
+			Write-Warning -Message "could not create timespan from '$($JsonObject.$Property)' value in '$Property' property on JSON object in '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
+			Return $null
+		}
+
+		# create datetime from timespan
+		Try {
+			$DateTime = [datetime]::MinValue.Add($TimeSpan)
+		}
+		Catch {
+			Write-Warning -Message "could not create datetime from '$($JsonObject.$Property)' value in '$Property' property on JSON object in '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
+			Return $null
+		}
+
+		# return datetime
+		Return $DateTime
 	}
 
-	Function Set-SavedSyncTime {
+	Function Write-DateTimeToStream {
 		Param(
-			# file ticks of last sync time
-			[Parameter(Mandatory)]
-			[uint64]$SyncTime,
-
-			# source path for sync
+			# path to file system object with stream
 			[Parameter(Mandatory)]
 			[string]$Path,
-			
-			# target path for sync
+
+			# name of stream on file system object
 			[Parameter(Mandatory)]
-			[string]$Destination,
+			[string]$Stream,
 
-			# define instance name from Path and Destination parameters
-			[string]$SavedSyncTimeSet = [string]::Join('=>', $Path, $Destination),
+			# name of property in JSON string in stream
+			[Parameter(Mandatory)]
+			[string]$Property,
 
-			# get hash of byte array of instance string as hex string
-			[string]$SavedSyncTimeName = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($SavedSyncTimeSet))).Replace('-', $null),
+			# datetime to store in JSON string in stream
+			[Parameter(Mandatory)]
+			[datetime]$DateTime,
 
-			# root folder for text output folders; default is common application data folder
-			[string]$SavedSyncTimeRoot = [System.Environment]::GetFolderPath('CommonApplicationData'),
-
-			# leaf folder for text output folders; default is 'PowerShell_SavedSyncTime'
-			[string]$SavedSyncTimeLeaf = ((Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$'),
-
-			# base folder for text output folders; default is text output leaf folder in common application data folder
-			[string]$SavedSyncTimeBase = (Join-Path -Path $SavedSyncTimeRoot -ChildPath $SavedSyncTimeLeaf),
-
-			# path for text output files; default is named folder under 'PowerShell_SavedSyncTime' folder in common application data folder
-			[string]$SavedSyncTimePath = (Join-Path -Path $SavedSyncTimeBase -ChildPath $SavedSyncTimeName)
+			# required datetime as ticks
+			[Parameter(DontShow)]
+			[uint64]$Ticks = $DateTime.Ticks
 		)
 
-		# if saved sync time base not found...
-		If (![System.IO.Directory]::Exists($SavedSyncTimeBase)) {
+		# get content from named stream on object
+		Try {
+			$Content = Get-Content -Path $Path -Stream $Stream -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
+			Return $null
+		}
+
+		# if content is null...
+		If ($null -eq $Content) {
+			# create custom object
+			$JsonObject = [pscustomobject]@{
+				$Property = $Ticks
+			}
+		}
+		# if content is not null...
+		Else {
+			# convert content from JSON
 			Try {
-				$null = New-Item -ItemType Directory -Path $SavedSyncTimeBase -ErrorAction Stop
+				$JsonObject = ConvertFrom-Json -InputObject $Content -ErrorAction 'Stop'
 			}
 			Catch {
-				Write-Warning -Message "could not create saved sync time folder: $SavedSyncTimeBase"
-				Throw $_
+				Write-Warning -Message "could not convert content of '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
+				Return
+			}
+
+			# update object with datetime value
+			Try {
+				Add-Member -InputObject $JsonObject -MemberType NoteProperty -Name $Property -Value $Ticks -Force -ErrorAction 'Stop'
+			}
+			Catch {
+				Write-Warning -Message "could not update content of '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
+				Return
 			}
 		}
 
-		# if saved sync time path not found...
-		If (![System.IO.File]::Exists($SavedSyncTimePath)) {
-			Try {
-				$null = New-Item -ItemType File -Path $SavedSyncTimePath -ErrorAction Stop
-			}
-			Catch {
-				Write-Warning -Message "could not create saved sync time file: $SavedSyncTimePath"
-				Throw $_
-			}
+		# convert object to JSON
+		Try {
+			$Value = ConvertTo-Json -InputObject $JsonObject -Depth 100 -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not convert object to JSON for '$Path' path: $($_.Exception.ToString())"
+			Throw $_
 		}
 
 		# retrieve content from saved sync time path
 		Try {
-			Set-Content -Path $SavedSyncTimePath -Value $SyncTime
+			Set-Content -Path $Path -Stream $Stream -Value $Value -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not store sync time in file: $SavedSyncTimePath"
+			Write-Warning -Message "could not store datetime in '$Stream' stream for '$Path' path: $($_.Exception.ToString())"
 			Throw $_
 		}
 	}
@@ -314,9 +330,6 @@ Begin {
 			[Parameter()]
 			[uint64]$CurrentSyncTime = [datetime]::Now.Ticks
 		)
-
-		# get current time
-		$CurrentSyncTime = (Get-Date).Ticks
 
 		# trim inputs
 		$Path = $Path.TrimEnd('\')
@@ -757,18 +770,71 @@ Process {
 		}
 	}
 
-	# if UseSavedSyncTime was requested...
-	If ($UseSavedSyncTime) {
-		# retrieve last sync time
+	# if UseStreamsForLastSyncTime was requested...
+	If ($UseStreamsForLastSyncTime) {
+		# define stream name from script name
+		$Stream = (Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$'
+
+		# define instance name using Hostname, Path, and Destination parameters
+		$InstanceName = '{0}:{1}=>{2}' -f $Hostname, $Path, $Destination
+
+		# obscure instance name; get byte array of instance string as hex string then hash
 		Try {
-			$LastSyncTime = Get-SavedSyncTime -Path $Path -Destination $Destination
+			$InstanceHash = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($InstanceName))).Replace('-', $null)
 		}
 		Catch {
-			Write-Warning -Message "could not retrieve saved sync time for '$Path' path and '$Destination' destination"
+			Write-Warning -Message "could not create hash of '$InstanceName' instance name: $($_.Exception.ToString())"
 			Return $_
 		}
+
+		# retrieve datetime from named stream on Path
+		Try {
+			$DateTimeFromPath = Get-DateTimeFromStream -Path $Path -Stream $Stream -Property $InstanceHash
+		}
+		Catch {
+			Return $_
+		}
+
+		# retrieve datetime from named stream on Destination
+		Try {
+			$DateTimeFromDestination = Get-DateTimeFromStream -Path $Destination -Stream $Stream -Property $InstanceHash
+		}
+		Catch {
+			Return $_
+		}
+
+		# if datetime objects not retrieved from Path or Destination...
+		If (!$DateTimeFromPath -and !$DateTimeFromDestination) {
+			# warn and set last sync time to zero
+			Write-Warning -Message "could not locate datetime values in '$InstanceHash' property in '$Stream' stream on provided Path and Destination; will initialize with current datetime after sync"
+			$LastSyncTime = 0
+		}
+		# if datetime objects not retrieved from Path...
+		ElseIf (!$DateTimeFromPath) {
+			# warn and set last sync time to zero
+			Write-Warning -Message "could not locate datetime value in '$InstanceHash' property in '$Stream' stream on provided Path; will sync without last sync time"
+			$LastSyncTime = 0
+		}
+		# if datetime objects not retrieved from Destination...
+		ElseIf (!$DateTimeFromDestination) {
+			# warn and set last sync time to zero
+			Write-Warning -Message "could not locate datetime value in '$InstanceHash' property in '$Stream' stream on provided Destination; will sync without last sync time"
+			$LastSyncTime = 0
+		}
+		# if datetime objects do not match...
+		ElseIf ($DateTimeFromPath -ne $DateTimeFromDestination) {
+			# warn and set last sync time to zero
+			Write-Warning -Message "found different datetime values in '$InstanceHash' property in '$Stream' stream on provided Path and Destination; will sync without last sync time"
+			$LastSyncTime = 0
+		}
+		# if datetime objects match...
+		Else {
+			# set last sync time to ticks of datetime from path
+			Write-Verbose -Message "found matching datetime values in '$InstanceHash' property in '$Stream' stream on provided Path and Destination; will sync with last sync time: $($DateTimeFromPath.ToUniversalTime().ToString('o'))"
+			$LastSyncTime = $DateTimeFromPath.Ticks
+		}
 	}
-	# if UseSavedSyncTime was not requested...
+	# if UseStreamsForLastSyncTime was not requested...
 	Else {
 		# set last sync time to zero
 		$LastSyncTime = 0
@@ -802,21 +868,28 @@ Process {
 
 	# sync items in path with destination
 	Try {
-		$SyncTime = Sync-ItemsInPathWithDestination @SyncItemsInPathWithDestination
+		$DateTimeFromSync = Sync-ItemsInPathWithDestination @SyncItemsInPathWithDestination
 	}
 	Catch {
 		Write-Warning -Message 'could not sync path with destination'
 		Return $_
 	}
 
-	# if UseSavedSyncTime was requested...
-	If ($UseSavedSyncTime) {
-		# update last sync time
+	# if UseStreamsForLastSyncTime was requested...
+	If ($UseStreamsForLastSyncTime) {
+		# save datetime to named stream on Path
 		Try {
-			Set-SavedSyncTime -Path $Path -Destination $Destination -SyncTime $SyncTime
+			Write-DateTimeToStream -Path $Path -Stream $Stream -Property $InstanceHash -DateTime $DateTimeFromSync
 		}
 		Catch {
-			Write-Warning -Message "could not retrieve saved sync time for '$Path' path and '$Destination' destination"
+			Return $_
+		}
+
+		# save datetime to named stream on Destination
+		Try {
+			Write-DateTimeToStream -Path $Destination -Stream $Stream -Property $InstanceHash -DateTime $DateTimeFromSync
+		}
+		Catch {
 			Return $_
 		}
 	}
