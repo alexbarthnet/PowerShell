@@ -78,7 +78,7 @@ Param(
 	# sync direction
 	[ValidateSet('Both', 'Forward', 'Reverse')]
 	[string]$Direction = 'Both',
-	# purge destination
+	# purge target path before copying
 	[switch]$Purge,
 	# include child items
 	[switch]$Recurse,
@@ -94,7 +94,7 @@ Param(
 	[switch]$CreatePath,
 	# create target path if missing
 	[switch]$CreateDestination,
-	# method to retrieve and store last sync time
+	# define method to retrieve and store last sync time
 	[ValidateSet('Json', 'Stream')]
 	[string]$LastSyncTimeMethod = 'Stream',
 	# path to JSON file containing last sync time
