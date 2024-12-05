@@ -30,7 +30,7 @@ None. The script reports the actions taken and does not provide any actionable o
 .\Remove-ItemsOlderThan.ps1 -Path 'C:\Content\test' -OlderThanUnits 30 -OlderThanType 'Days'
 #>
 
-[CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'OtherThan')]
+[CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Computed')]
 Param(
 	# path for items to remove
 	[Parameter(Mandatory = $True, Position = 0)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
@@ -42,10 +42,10 @@ Param(
 	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'TimeSpan')]
 	[timespan]$TimeSpan,
 	# units for computing previous datetime
-	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'OtherThan')][ValidateRange(1, 65535)]
+	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'Computed')][ValidateRange(1, 65535)]
 	[uint16]$OlderThanUnits,
 	# type for computing previous datetime
-	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'OtherThan')][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
+	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'Computed')][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
 	[string]$OlderThanType
 )
 
@@ -83,8 +83,8 @@ Process {
 		$DateTime = [datetime]::Now.Subtract($TimeSpan)
 	}
 
-	# if other than components provided...
-	If ($PSCmdLet.ParameterSetName -eq 'OtherThan') {
+	# if components provided for computing previous datetime...
+	If ($PSCmdLet.ParameterSetName -eq 'Computed') {
 		# get previous date from input
 		Try {
 			$DateTime = Get-PreviousDate -OlderThanUnits $OlderThanUnits -OlderThanType $OlderThanType
