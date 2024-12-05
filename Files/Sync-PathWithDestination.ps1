@@ -3,13 +3,13 @@
 Synchronize files and directories in a source path with a destination path.
 
 .DESCRIPTION
-Synchronize files and directories in a source path with a destination path based upon runtime parameters or settings from a JSON file.
+Synchronize files and directories in a source path with a destination path based upon runtime parameters.
 
 .PARAMETER Path
-The path of the source directory. Required when the Remove, Add, or Run parameters are specified.
+The path of the source directory.
 
 .PARAMETER Destination
-The path of the destination directory. Required when the Remove, Add, or Run parameters are specified.
+The path of the target directory.
 
 .PARAMETER Preset
 String paramter to specify multiple parameters from a single value:
@@ -32,7 +32,7 @@ Switch to removes all files and directories in the Destination path before synch
 Switch to synchronize files and directories in child directories of the path and destination.
 
 .PARAMETER CheckHash
-Switch to compare files using Get-FileHash instead of the LastWriteTime attribute.
+Switch to compare files using Get-FileHash instead of the LastWriteTimeUtc attribute.
 
 .PARAMETER SkipDelete
 Switch to keep files and directories that would be removed by synchronization.
@@ -49,8 +49,8 @@ Switch to create the Path directory if it does not already exist.
 .PARAMETER CreateDestination
 Switch to create the Destination directory if it does not already exist.
 
-.PARAMETER UseStreamsForLastSyncTime
-Switch parameter to retrieve and store the last sync time in use file system streams on the provided Path and Destination.
+.PARAMETER LastSyncTimeMethod
+String parameter to define the method to retrieve and store the last sync time. The permitted values are 'Json' and 'Stream' with the latter as the default value.
 
 .INPUTS
 None. Sync-PathWithDestination does not accept pipeline input.
@@ -94,8 +94,12 @@ Param(
 	[switch]$CreatePath,
 	# create target path if missing
 	[switch]$CreateDestination,
-	# retrieve and store last sync time in file system streams
-	[switch]$UseStreamsForLastSyncTime,
+	# method to retrieve and store last sync time
+	[ValidateSet('Json', 'Stream')]
+	[string]$LastSyncTimeMethod = 'Stream',
+	# path to JSON file containing last sync time
+	[ValidateScript({ [System.IO.File]::Exists($_) })]
+	[string]$JsonFilePath,
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -108,6 +112,82 @@ Param(
 )
 
 Begin {
+	Function Get-DateTimeFromJson {
+		Param(
+			# path to JSON file
+			[Parameter(Mandatory)]
+			[string]$Json,
+
+			# name of property in JSON string containing ticks for datetime
+			[Parameter(Mandatory)]
+			[string]$Property
+		)
+
+		# if JSON file not found...
+		If (![System.IO.File]::Exists($Json)) {
+			Write-Warning -Message "could not locate '$Json' JSON file: $($_.Exception.ToString())"
+			Return $null
+		}
+
+		# retrieve content from JSON file
+		Try {
+			$JsonContent = Get-Content -Path $Json
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve content from '$Json' JSON file: $($_.Exception.ToString())"
+			Return $null
+		}
+
+		# if content is null...
+		If ($null -eq $JsonContent) {
+			# return $null
+			Return $null
+		}
+
+		# convert content from JSON
+		Try {
+			$JsonObject = ConvertFrom-Json -InputObject $JsonContent -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not convert content of '$Json' JSON file: $($_.Exception.ToString())"
+			Return $null
+		}
+
+		# if object missing requested property...
+		If (!$JsonObject.PSObject.Properties.Name.Contains($Property)) {
+			# warn and return null
+			Write-Warning -Message "could not locate '$Property' property on JSON object in '$Json' JSON file: $($_.Exception.ToString())"
+			Return $null
+		}
+
+		# if requested property cannot be parsed as 64-bit unsigned integer...
+		If (![uint64]::TryParse($JsonObject.$Property, [ref][uint64]::MinValue)) {
+			Write-Warning -Message "could not parse '$($JsonObject.$Property)' value to uint64 in '$Property' property on JSON object in '$Json' JSON file: $($_.Exception.ToString())"
+			Return $null
+		}
+
+		# create timespan from requested property
+		Try {
+			$TimeSpan = [timespan]::FromTicks($JsonObject.$Property)
+		}
+		Catch {
+			Write-Warning -Message "could not create timespan from '$($JsonObject.$Property)' value in '$Property' property on JSON object in '$Json' JSON file: $($_.Exception.ToString())"
+			Return $null
+		}
+
+		# create datetime from timespan
+		Try {
+			$DateTime = [datetime]::MinValue.Add($TimeSpan)
+		}
+		Catch {
+			Write-Warning -Message "could not create datetime from '$($JsonObject.$Property)' value in '$Property' property on JSON object in '$Json' JSON file: $($_.Exception.ToString())"
+			Return $null
+		}
+
+		# return datetime
+		Return $DateTime
+	}
+
 	Function Get-DateTimeFromStream {
 		Param(
 			# path to file system object with stream
@@ -125,12 +205,13 @@ Begin {
 
 		# if path not found...
 		If (![System.IO.Directory]::Exists($Path)) {
+			# return $null
 			Return $null
 		}
 
 		# get content from named stream on object
 		Try {
-			$Content = Get-Content -Path $Path -Stream $Stream -ErrorAction 'Stop'
+			$JsonContent = Get-Content -Path $Path -Stream $Stream -ErrorAction 'Stop'
 		}
 		Catch {
 			Write-Warning -Message "could not retrieve '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
@@ -138,14 +219,14 @@ Begin {
 		}
 
 		# if content is null...
-		If ($null -eq $Content) {
+		If ($null -eq $JsonContent) {
 			# return $null
 			Return $null
 		}
 
 		# convert content from JSON
 		Try {
-			$JsonObject = ConvertFrom-Json -InputObject $Content -ErrorAction 'Stop'
+			$JsonObject = ConvertFrom-Json -InputObject $JsonContent -ErrorAction 'Stop'
 		}
 		Catch {
 			Write-Warning -Message "could not convert content of '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
@@ -187,6 +268,88 @@ Begin {
 		Return $DateTime
 	}
 
+	Function Write-DateTimeToJson {
+		Param(
+			# path to JSON file
+			[Parameter(Mandatory)]
+			[string]$Json,
+
+			# name of property in JSON to store datetime as ticks
+			[Parameter(Mandatory)]
+			[string]$Property,
+
+			# datetime to store in JSON
+			[Parameter(Mandatory)]
+			[datetime]$DateTime
+		)
+
+		# if JSON file not found...
+		If (![System.IO.File]::Exists($Json)) {
+			Try {
+				$null = New-Item -ItemType File -Path $Json -Force -ErrorAction Stop
+			}
+			Catch {
+				Write-Warning -Message "could not create '$Json' JSON file: $($_.Exception.ToString())"
+				Throw $_
+			}
+		}
+
+		# retrieve content from named stream on object
+		Try {
+			$JsonContent = Get-Content -Path $Json -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve content from '$Json' JSON file: $($_.Exception.ToString())"
+			Return $null
+		}
+
+		# if content is null...
+		If ([string]::IsNullOrEmpty($JsonContent)) {
+			# create custom object
+			$JsonObject = [pscustomobject]@{
+				$Property = $DateTime.Ticks
+			}
+		}
+		# if content is not null...
+		Else {
+			# convert content from JSON
+			Try {
+				$JsonObject = ConvertFrom-Json -InputObject $JsonContent -ErrorAction 'Stop'
+			}
+			Catch {
+				Write-Warning -Message "could not convert existing content of '$Json' JSON file: $($_.Exception.ToString())"
+				Return
+			}
+
+			# update object with datetime value
+			Try {
+				Add-Member -InputObject $JsonObject -MemberType NoteProperty -Name $Property -Value $DateTime.Ticks -Force -ErrorAction 'Stop'
+			}
+			Catch {
+				Write-Warning -Message "could not update existing content of '$Json' JSON file: $($_.Exception.ToString())"
+				Return
+			}
+		}
+
+		# convert object to JSON
+		Try {
+			$Value = ConvertTo-Json -InputObject $JsonObject -Depth 100 -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not convert object to JSON for '$Json' JSON file: $($_.Exception.ToString())"
+			Throw $_
+		}
+
+		# retrieve content from saved sync time path
+		Try {
+			Set-Content -Path $Json -Value $Value -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not store datetime in '$Property' property in '$Json' JSON file: $($_.Exception.ToString())"
+			Throw $_
+		}
+	}
+
 	Function Write-DateTimeToStream {
 		Param(
 			# path to file system object with stream
@@ -203,16 +366,12 @@ Begin {
 
 			# datetime to store in JSON string in stream
 			[Parameter(Mandatory)]
-			[datetime]$DateTime,
-
-			# required datetime as ticks
-			[Parameter(DontShow)]
-			[uint64]$Ticks = $DateTime.Ticks
+			[datetime]$DateTime
 		)
 
 		# get content from named stream on object
 		Try {
-			$Content = Get-Content -Path $Path -Stream $Stream -ErrorAction 'Stop'
+			$JsonContent = Get-Content -Path $Path -Stream $Stream -ErrorAction 'Stop'
 		}
 		Catch {
 			Write-Warning -Message "could not retrieve '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
@@ -220,17 +379,17 @@ Begin {
 		}
 
 		# if content is null...
-		If ($null -eq $Content) {
+		If ([string]::IsNullOrEmpty($JsonContent)) {
 			# create custom object
 			$JsonObject = [pscustomobject]@{
-				$Property = $Ticks
+				$Property = $DateTime.Ticks
 			}
 		}
 		# if content is not null...
 		Else {
 			# convert content from JSON
 			Try {
-				$JsonObject = ConvertFrom-Json -InputObject $Content -ErrorAction 'Stop'
+				$JsonObject = ConvertFrom-Json -InputObject $JsonContent -ErrorAction 'Stop'
 			}
 			Catch {
 				Write-Warning -Message "could not convert content of '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
@@ -239,7 +398,7 @@ Begin {
 
 			# update object with datetime value
 			Try {
-				Add-Member -InputObject $JsonObject -MemberType NoteProperty -Name $Property -Value $Ticks -Force -ErrorAction 'Stop'
+				Add-Member -InputObject $JsonObject -MemberType NoteProperty -Name $Property -Value $DateTime.Ticks -Force -ErrorAction 'Stop'
 			}
 			Catch {
 				Write-Warning -Message "could not update content of '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
@@ -326,9 +485,9 @@ Begin {
 			[Parameter()]
 			[string]$Updated,
 			[Parameter()]
-			[uint64]$LastSyncTime = 0,
+			[uint64]$LastSyncDateTime = [datetime]::MinValue.Ticks,
 			[Parameter()]
-			[uint64]$CurrentSyncTime = [datetime]::Now.Ticks
+			[uint64]$CurrentSyncDateTime = [datetime]::UtcNow.Ticks
 		)
 
 		# trim inputs
@@ -415,8 +574,8 @@ Begin {
 			$TargetFolders = Get-ChildItem -Path $TargetPath -Recurse -Directory
 
 			# retrieve fullname of new paths
-			$NewSourceFolders = $SourceFolders | Where-Object { $_.LastWriteTime.Ticks -ge $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
-			$NewTargetFolders = $TargetFolders | Where-Object { $_.LastWriteTime.Ticks -ge $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
+			$NewSourceFolders = $SourceFolders | Where-Object { $_.LastWriteTimeUtc.Ticks -ge $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
+			$NewTargetFolders = $TargetFolders | Where-Object { $_.LastWriteTimeUtc.Ticks -ge $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
 
 			# trim new paths to relative paths
 			If ($NewSourceFolders.Count) { $RelativeSourceFolders = $NewSourceFolders.Replace($SourcePath, $null) } Else { $RelativeSourceFolders = @() }
@@ -470,8 +629,8 @@ Begin {
 			$TargetItems = Get-ChildItem -Path $TargetPath -Recurse:$Recurse -File
 
 			# retrieve fullname of new files
-			$NewSourceFiles = $SourceItems | Where-Object { $_.LastWriteTime.Ticks -ge $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
-			$NewTargetFiles = $TargetItems | Where-Object { $_.LastWriteTime.Ticks -ge $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
+			$NewSourceFiles = $SourceItems | Where-Object { $_.LastWriteTimeUtc.Ticks -ge $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
+			$NewTargetFiles = $TargetItems | Where-Object { $_.LastWriteTimeUtc.Ticks -ge $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
 
 			# trim new files to relative paths
 			If ($NewSourceFiles.Count) { $RelativeSourceFiles = $NewSourceFiles.Replace($SourcePath, $null) } Else { $RelativeSourceFiles = @() }
@@ -548,13 +707,13 @@ Begin {
 				$MatchedTargetItem = $TargetItems.Where({ $_.FullName -eq $MatchedTargetPath })
 				# compare files by last
 				If (-not $CheckHash) {
-					If ($MatchedSourceItem.LastWriteTime -eq $MatchedTargetItem.LastWriteTime) {
-						Write-Host "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same LastWriteTime"
+					If ($MatchedSourceItem.LastWriteTimeUtc -eq $MatchedTargetItem.LastWriteTimeUtc) {
+						Write-Host "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same LastWriteTimeUtc"
 						Continue
 					}
 				}
 				# copy file from Path to Destination if newer or Direction is not 'Both'
-				If ($MatchedSourceItem.LastWriteTime -gt $MatchedTargetItem.LastWriteTime -or $Direction -ne 'Both') {
+				If ($MatchedSourceItem.LastWriteTimeUtc -gt $MatchedTargetItem.LastWriteTimeUtc -or $Direction -ne 'Both') {
 					If ($PSCmdlet.ShouldProcess("source: $MatchedSourcePath, target: $MatchedTargetPath", 'copy file')) {
 						Try {
 							Copy-Item -Path $MatchedSourcePath -Destination $MatchedTargetPath -Force -Verbose:$VerbosePreference
@@ -565,7 +724,7 @@ Begin {
 					}
 				}
 				# copy file from Destination to Path if newer and Direction is 'Both'
-				ElseIf ($MatchedSourceItem.LastWriteTime -lt $MatchedTargetItem.LastWriteTime -and $Direction -eq 'Both') {
+				ElseIf ($MatchedSourceItem.LastWriteTimeUtc -lt $MatchedTargetItem.LastWriteTimeUtc -and $Direction -eq 'Both') {
 					If ($PSCmdlet.ShouldProcess("source: $MatchedTargetPath, target: $MatchedSourcePath", 'copy file')) {
 						Try {
 							Copy-Item -Path $MatchedTargetPath -Destination $MatchedSourcePath -Force -Verbose:$VerbosePreference
@@ -587,8 +746,8 @@ Begin {
 			# retrieve fullname of files
 			$AllSourceFiles = $SourceItems | Select-Object -ExpandProperty 'FullName'
 			$AllTargetFiles = $TargetItems | Select-Object -ExpandProperty 'FullName'
-			$OldSourceFiles = $SourceItems | Where-Object { $_.LastWriteTime.Ticks -lt $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
-			$OldTargetFiles = $TargetItems | Where-Object { $_.LastWriteTime.Ticks -lt $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
+			$OldSourceFiles = $SourceItems | Where-Object { $_.LastWriteTimeUtc.Ticks -lt $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
+			$OldTargetFiles = $TargetItems | Where-Object { $_.LastWriteTimeUtc.Ticks -lt $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
 
 			# trim files to relative paths
 			If ($AllSourceFiles.Count) { $AllRelativeSourceFiles = $AllSourceFiles.Replace($SourcePath, $null) } Else { $AllRelativeSourceFiles = @() }
@@ -647,8 +806,8 @@ Begin {
 			# retrieve fullname of paths
 			$AllSourceFolders = $SourceFolders | Select-Object -ExpandProperty 'FullName'
 			$AllTargetFolders = $TargetFolders | Select-Object -ExpandProperty 'FullName'
-			$OldSourceFolders = $SourceFolders | Where-Object { $_.LastWriteTime.Ticks -lt $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
-			$OldTargetFolders = $TargetFolders | Where-Object { $_.LastWriteTime.Ticks -lt $LastSyncTime } | Select-Object -ExpandProperty 'FullName'
+			$OldSourceFolders = $SourceFolders | Where-Object { $_.LastWriteTimeUtc.Ticks -lt $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
+			$OldTargetFolders = $TargetFolders | Where-Object { $_.LastWriteTimeUtc.Ticks -lt $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
 
 			# trim paths to relative paths
 			If ($AllSourceFolders.Count) { $AllRelativeSourceFolders = $AllSourceFolders.Replace($SourcePath, $null) } Else { $AllRelativeSourceFolders = @() }
@@ -698,11 +857,8 @@ Begin {
 			}
 		}
 
-		# if last sync time had value...
-		If ($LastSyncTime -gt 0) {
-			# return current sync time
-			Return $CurrentSyncTime
-		}
+		# return current sync time
+		Return $CurrentSyncDateTime
 	}
 }
 
@@ -712,7 +868,7 @@ Process {
 		Resolve-PresetToParameters
 	}
 	Catch {
-		Write-Warning -Message "could not resolve preset to parameters: '$Preset'"
+		Write-Warning -Message "could not resolve '$Preset' preset to parameters: $($_.Exception.ToString())"
 		Throw $_
 	}
 
@@ -723,7 +879,7 @@ Process {
 			$Path = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
 		}
 		Catch {
-			Write-Warning -Message "could not create absolute path from the provided Path parameter: $Path"
+			Write-Warning -Message "could not create absolute path from the provided '$Path' Path: $($_.Exception.ToString())"
 			Throw $_
 		}
 
@@ -738,7 +894,7 @@ Process {
 			$Path = $Path.TrimEnd('\')
 		}
 		Catch {
-			Write-Warning -Message 'could not trim Path'
+			Write-Warning -Message "could not trim Path: $($_.Exception.ToString())"
 			Throw $_
 		}
 	}
@@ -747,10 +903,10 @@ Process {
 	If (![System.IO.Path]::IsPathRooted($Destination)) {
 		# get unresolved absolute path
 		Try {
-			$Path = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Destination)
+			$Destination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Destination)
 		}
 		Catch {
-			Write-Warning -Message "could not create absolute path from the provided Destination parameter: $Destination"
+			Write-Warning -Message "could not create absolute path from the provided '$Destination' Destination: $($_.Exception.ToString())"
 			Throw $_
 		}
 
@@ -765,15 +921,20 @@ Process {
 			$Destination = $Destination.TrimEnd('\')
 		}
 		Catch {
-			Write-Warning -Message 'could not trim Destination'
+			Write-Warning -Message "could not trim Destination: $($_.Exception.ToString())"
 			Throw $_
 		}
 	}
 
-	# if UseStreamsForLastSyncTime was requested...
-	If ($UseStreamsForLastSyncTime) {
-		# define stream name from script name
-		$Stream = (Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$'
+	# if SkipDelete not requested...
+	If (!$SkipDelete) {
+		# retrieve command name from call stack
+		If ([string]::IsNullOrEmpty((Get-PSCallStack)[0].ScriptName)) {
+			$CommandName = (Get-PSCallStack)[0].Command -replace '^<|>$'
+		}
+		Else {
+			$CommandName = [System.IO.FileInfo]::new((Get-PSCallStack)[0].ScriptName).BaseName
+		}
 
 		# define instance name using Hostname, Path, and Destination parameters
 		$InstanceName = '{0}:{1}=>{2}' -f $Hostname, $Path, $Destination
@@ -787,57 +948,93 @@ Process {
 			Return $_
 		}
 
-		# retrieve datetime from named stream on Path
-		Try {
-			$DateTimeFromPath = Get-DateTimeFromStream -Path $Path -Stream $Stream -Property $InstanceHash
-		}
-		Catch {
-			Return $_
+		# if JSON method for last sync time was requested...
+		If ($LastSyncTimeMethod = 'Json') {
+			# if JSON file path was not provided...
+			If (!$PSBoundParameters.ContainsKey('JsonFilePath')) {
+				# define folder for JSON file; default is common application data folder
+				$JsonFolderPath = [System.Environment]::GetFolderPath('CommonApplicationData')
+
+				# define path for JSON file; default is file named for script in the common application data folder
+				$JsonFilePath = Join-Path -Path $JsonFolderPath -ChildPath "$CommandName.json"
+			}
+
+			# retrieve datetime from JSON file
+			Try {
+				$DateTimeFromJson = Get-DateTimeFromJson -Json $JsonFilePath -Property $InstanceHash
+			}
+			Catch {
+				Return $_
+			}
+
+			# if datetime object not retrieved from JSON file...
+			If (!$DateTimeFromJson) {
+				# warn and set last sync time to zero
+				Write-Warning -Message "could not locate datetime value in '$InstanceHash' property in '$JsonFilePath' JSON file; will sync without last sync time"
+				$LastSyncDateTime = [datetime]::MinValue
+			}
+			# if datetime object retrieved from JSON file...
+			Else {
+				# set last sync time to ticks of datetime from JSON file...
+				Write-Verbose -Message "found datetime value in '$InstanceHash' property in '$JsonFilePath' JSON file; will sync with last sync time: $($DateTimeFromJson.ToUniversalTime().ToString('o'))"
+				$LastSyncDateTime = $DateTimeFromJson
+			}
 		}
 
-		# retrieve datetime from named stream on Destination
-		Try {
-			$DateTimeFromDestination = Get-DateTimeFromStream -Path $Destination -Stream $Stream -Property $InstanceHash
-		}
-		Catch {
-			Return $_
-		}
+		# if Stream method for last sync time was requested...
+		If ($LastSyncTimeMethod = 'Stream') {
+			# retrieve datetime from named stream on Path
+			Try {
+				$DateTimeFromPath = Get-DateTimeFromStream -Path $Path -Stream $CommandName -Property $InstanceHash
+			}
+			Catch {
+				Return $_
+			}
 
-		# if datetime objects not retrieved from Path or Destination...
-		If (!$DateTimeFromPath -and !$DateTimeFromDestination) {
-			# warn and set last sync time to zero
-			Write-Warning -Message "could not locate datetime values in '$InstanceHash' property in '$Stream' stream on provided Path and Destination; will initialize with current datetime after sync"
-			$LastSyncTime = 0
-		}
-		# if datetime objects not retrieved from Path...
-		ElseIf (!$DateTimeFromPath) {
-			# warn and set last sync time to zero
-			Write-Warning -Message "could not locate datetime value in '$InstanceHash' property in '$Stream' stream on provided Path; will sync without last sync time"
-			$LastSyncTime = 0
-		}
-		# if datetime objects not retrieved from Destination...
-		ElseIf (!$DateTimeFromDestination) {
-			# warn and set last sync time to zero
-			Write-Warning -Message "could not locate datetime value in '$InstanceHash' property in '$Stream' stream on provided Destination; will sync without last sync time"
-			$LastSyncTime = 0
-		}
-		# if datetime objects do not match...
-		ElseIf ($DateTimeFromPath -ne $DateTimeFromDestination) {
-			# warn and set last sync time to zero
-			Write-Warning -Message "found different datetime values in '$InstanceHash' property in '$Stream' stream on provided Path and Destination; will sync without last sync time"
-			$LastSyncTime = 0
-		}
-		# if datetime objects match...
-		Else {
-			# set last sync time to ticks of datetime from path
-			Write-Verbose -Message "found matching datetime values in '$InstanceHash' property in '$Stream' stream on provided Path and Destination; will sync with last sync time: $($DateTimeFromPath.ToUniversalTime().ToString('o'))"
-			$LastSyncTime = $DateTimeFromPath.Ticks
+			# retrieve datetime from named stream on Destination
+			Try {
+				$DateTimeFromDestination = Get-DateTimeFromStream -Path $Destination -Stream $CommandName -Property $InstanceHash
+			}
+			Catch {
+				Return $_
+			}
+
+			# if datetime objects not retrieved from Path or Destination...
+			If (!$DateTimeFromPath -and !$DateTimeFromDestination) {
+				# warn and set last sync time to zero
+				Write-Warning -Message "could not locate datetime values in '$InstanceHash' property in '$CommandName' stream on provided Path and Destination; will initialize with current datetime after sync"
+				$LastSyncDateTime = [datetime]::MinValue
+			}
+			# if datetime objects not retrieved from Path...
+			ElseIf (!$DateTimeFromPath) {
+				# warn and set last sync time to zero
+				Write-Warning -Message "could not locate datetime value in '$InstanceHash' property in '$CommandName' stream on provided Path; will sync without last sync time"
+				$LastSyncDateTime = [datetime]::MinValue
+			}
+			# if datetime objects not retrieved from Destination...
+			ElseIf (!$DateTimeFromDestination) {
+				# warn and set last sync time to zero
+				Write-Warning -Message "could not locate datetime value in '$InstanceHash' property in '$CommandName' stream on provided Destination; will sync without last sync time"
+				$LastSyncDateTime = [datetime]::MinValue
+			}
+			# if datetime objects do not match...
+			ElseIf ($DateTimeFromPath -ne $DateTimeFromDestination) {
+				# warn and set last sync time to zero
+				Write-Warning -Message "found different datetime values in '$InstanceHash' property in '$CommandName' stream on provided Path and Destination; will sync without last sync time"
+				$LastSyncDateTime = [datetime]::MinValue
+			}
+			# if datetime objects match...
+			Else {
+				# set last sync time to ticks of datetime from path
+				Write-Verbose -Message "found matching datetime values in '$InstanceHash' property in '$CommandName' stream on provided Path and Destination; will sync with last sync time: $($DateTimeFromPath.ToUniversalTime().ToString('o'))"
+				$LastSyncDateTime = $DateTimeFromPath
+			}
 		}
 	}
-	# if UseStreamsForLastSyncTime was not requested...
+	# if SkipDelete was requested...
 	Else {
 		# set last sync time to zero
-		$LastSyncTime = 0
+		$LastSyncDateTime = [datetime]::MinValue
 	}
 
 	# define required parameters for Sync-ItemsInPathWithDestination
@@ -853,7 +1050,7 @@ Process {
 		SkipFiles         = $SkipFiles -as [System.Boolean]
 		CreatePath        = $CreatePath -as [System.Boolean]
 		CreateDestination = $CreateDestination -as [System.Boolean]
-		LastSyncTime      = $LastSyncTime
+		LastSyncDateTime  = $LastSyncDateTime
 	}
 
 	# define optional parameters for Sync-ItemsInPathWithDestination
@@ -875,22 +1072,36 @@ Process {
 		Return $_
 	}
 
-	# if UseStreamsForLastSyncTime was requested...
-	If ($UseStreamsForLastSyncTime) {
-		# save datetime to named stream on Path
-		Try {
-			Write-DateTimeToStream -Path $Path -Stream $Stream -Property $InstanceHash -DateTime $DateTimeFromSync
-		}
-		Catch {
-			Return $_
+	# if SkipDelete not requested...
+	If (!$SkipDelete) {
+		# if JSON method for last sync time was requested...
+		If ($LastSyncTimeMethod = 'Json') {
+			# write datetime to JSON file
+			Try {
+				Write-DateTimeToJson -Path $JsonFilePath -Property $InstanceHash -DateTime $DateTimeFromSync
+			}
+			Catch {
+				Return $_
+			}
 		}
 
-		# save datetime to named stream on Destination
-		Try {
-			Write-DateTimeToStream -Path $Destination -Stream $Stream -Property $InstanceHash -DateTime $DateTimeFromSync
-		}
-		Catch {
-			Return $_
+		# if Stream method for last sync time was requested...
+		If ($LastSyncTimeMethod = 'Stream') {
+			# save datetime to named stream on Path
+			Try {
+				Write-DateTimeToStream -Path $Path -Stream $Stream -Property $InstanceHash -DateTime $DateTimeFromSync
+			}
+			Catch {
+				Return $_
+			}
+
+			# save datetime to named stream on Destination
+			Try {
+				Write-DateTimeToStream -Path $Destination -Stream $Stream -Property $InstanceHash -DateTime $DateTimeFromSync
+			}
+			Catch {
+				Return $_
+			}
 		}
 	}
 }
