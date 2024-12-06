@@ -948,6 +948,17 @@ Process {
 			Return $_
 		}
 
+		# if operating system is not Windows...
+		If ([System.Environment]::OSVersion.Platform -ne 'Win32NT') {
+			# if LastSyncTimeMethod defined and value set to Stream...
+			If ($PSBoundParameters.ContainsKey('LastSyncTimeMethod') -and $LastSyncTimeMethod -eq 'Stream') {
+				# warn user that LastSyncTimeMethod must be swapped to Json
+				Write-Warning -Message "The 'Stream' LastSyncTimeMethod method is limited to Windows. Switch to 'Json' method for a non-Windows platform?" -WarningAction Inquire
+			}
+			# switch LastSyncTimeMethod to Json
+			$LastSyncTimeMethod = 'Json'
+		}
+
 		# if JSON method for last sync time was requested...
 		If ($LastSyncTimeMethod = 'Json') {
 			# if JSON file path was not provided...
