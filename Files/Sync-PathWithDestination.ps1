@@ -464,9 +464,9 @@ Begin {
 			[Parameter()]
 			[string]$Updated,
 			[Parameter()]
-			[uint64]$LastSyncDateTime = [datetime]::MinValue.Ticks,
+			[datetime]$LastSyncDateTime = [datetime]::new([UInt64]0,[System.DateTimeKind]::Utc),
 			[Parameter()]
-			[uint64]$CurrentSyncDateTime = [datetime]::UtcNow.Ticks
+			[datetime]$CurrentSyncDateTime = [datetime]::UtcNow
 		)
 
 		# trim inputs
