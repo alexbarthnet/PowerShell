@@ -354,9 +354,7 @@ Begin {
 		# if content is null...
 		If ([string]::IsNullOrEmpty($JsonContent)) {
 			# create custom object
-			$JsonObject = [pscustomobject]@{
-				$Property = $DateTime.Ticks
-			}
+			$JsonObject = [pscustomobject]@{ $Property = $DateTime.Ticks }
 		}
 		# if content is not null...
 		Else {
