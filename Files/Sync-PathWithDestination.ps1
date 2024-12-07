@@ -349,13 +349,7 @@ Begin {
 		)
 
 		# get content from named stream on object
-		Try {
-			$JsonContent = Get-Content -Path $Path -Stream $Stream -ErrorAction 'Stop'
-		}
-		Catch {
-			Write-Warning -Message "could not retrieve '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
-			Return $null
-		}
+		[string]$JsonContent = Get-Content -Path $Path -Stream $Stream -ErrorAction 'Ignore'
 
 		# if content is null...
 		If ([string]::IsNullOrEmpty($JsonContent)) {
