@@ -127,7 +127,7 @@ Begin {
 
 		# if JSON file not found...
 		If (![System.IO.File]::Exists($Json)) {
-			Write-Warning -Message "could not locate '$Json' JSON file: $($_.Exception.ToString())"
+			Write-Warning -Message "could not locate '$Json' JSON file: $($_.Exception.Message)"
 			Return $null
 		}
 
@@ -136,7 +136,7 @@ Begin {
 			$JsonContent = Get-Content -Path $Json
 		}
 		Catch {
-			Write-Warning -Message "could not retrieve content from '$Json' JSON file: $($_.Exception.ToString())"
+			Write-Warning -Message "could not retrieve content from '$Json' JSON file: $($_.Exception.Message)"
 			Return $null
 		}
 
@@ -151,14 +151,14 @@ Begin {
 			$JsonObject = ConvertFrom-Json -InputObject $JsonContent -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not convert content of '$Json' JSON file: $($_.Exception.ToString())"
+			Write-Warning -Message "could not convert content of '$Json' JSON file: $($_.Exception.Message)"
 			Return $null
 		}
 
 		# if object missing requested property...
 		If (!$JsonObject.PSObject.Properties.Name.Contains($Property)) {
 			# warn and return null
-			Write-Warning -Message "could not locate '$Property' property on JSON object in '$Json' JSON file: $($_.Exception.ToString())"
+			Write-Warning -Message "could not locate '$Property' property on JSON object in '$Json' JSON file: $($_.Exception.Message)"
 			Return $null
 		}
 
@@ -173,7 +173,7 @@ Begin {
 			$DateTime = [datetime]::new([UInt64]$JsonObject.$Property,[System.DateTimeKind]::Utc)
 		}
 		Catch {
-			Write-Warning -Message "could not create datetime from '$($JsonObject.$Property)' value in '$Property' property on JSON object in '$Json' JSON file: $($_.Exception.ToString())"
+			Write-Warning -Message "could not create datetime from '$($JsonObject.$Property)' value in '$Property' property on JSON object in '$Json' JSON file: $($_.Exception.Message)"
 			Return $null
 		}
 
@@ -217,14 +217,14 @@ Begin {
 			$JsonObject = ConvertFrom-Json -InputObject $JsonContent -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not convert content of '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
+			Write-Warning -Message "could not convert content of '$Stream' stream on '$Path' path: $($_.Exception.Message)"
 			Return $null
 		}
 
 		# if object missing requested property...
 		If (!$JsonObject.PSObject.Properties.Name.Contains($Property)) {
 			# warn and return null
-			Write-Warning -Message "could not locate '$Property' property on JSON object in '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
+			Write-Warning -Message "could not locate '$Property' property on JSON object in '$Stream' stream on '$Path' path: $($_.Exception.Message)"
 			Return $null
 		}
 
@@ -239,7 +239,7 @@ Begin {
 			$DateTime = [datetime]::new([UInt64]$JsonObject.$Property,[System.DateTimeKind]::Utc)
 		}
 		Catch {
-			Write-Warning -Message "could not create datetime from '$($JsonObject.$Property)' value in '$Property' property on JSON object in '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
+			Write-Warning -Message "could not create datetime from '$($JsonObject.$Property)' value in '$Property' property on JSON object in '$Stream' stream on '$Path' path: $($_.Exception.Message)"
 			Return $null
 		}
 
@@ -268,7 +268,7 @@ Begin {
 				$null = New-Item -ItemType File -Path $Json -Force -ErrorAction Stop
 			}
 			Catch {
-				Write-Warning -Message "could not create '$Json' JSON file: $($_.Exception.ToString())"
+				Write-Warning -Message "could not create '$Json' JSON file: $($_.Exception.Message)"
 				Throw $_
 			}
 		}
@@ -278,7 +278,7 @@ Begin {
 			$JsonContent = Get-Content -Path $Json -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not retrieve content from '$Json' JSON file: $($_.Exception.ToString())"
+			Write-Warning -Message "could not retrieve content from '$Json' JSON file: $($_.Exception.Message)"
 			Return $null
 		}
 
@@ -296,7 +296,7 @@ Begin {
 				$JsonObject = ConvertFrom-Json -InputObject $JsonContent -ErrorAction 'Stop'
 			}
 			Catch {
-				Write-Warning -Message "could not convert existing content of '$Json' JSON file: $($_.Exception.ToString())"
+				Write-Warning -Message "could not convert existing content of '$Json' JSON file: $($_.Exception.Message)"
 				Return
 			}
 
@@ -305,7 +305,7 @@ Begin {
 				Add-Member -InputObject $JsonObject -MemberType NoteProperty -Name $Property -Value $DateTime.Ticks -Force -ErrorAction 'Stop'
 			}
 			Catch {
-				Write-Warning -Message "could not update existing content of '$Json' JSON file: $($_.Exception.ToString())"
+				Write-Warning -Message "could not update existing content of '$Json' JSON file: $($_.Exception.Message)"
 				Return
 			}
 		}
@@ -315,7 +315,7 @@ Begin {
 			$Value = ConvertTo-Json -InputObject $JsonObject -Depth 100 -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not convert object to JSON for '$Json' JSON file: $($_.Exception.ToString())"
+			Write-Warning -Message "could not convert object to JSON for '$Json' JSON file: $($_.Exception.Message)"
 			Throw $_
 		}
 
@@ -324,7 +324,7 @@ Begin {
 			Set-Content -Path $Json -Value $Value -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not store datetime in '$Property' property in '$Json' JSON file: $($_.Exception.ToString())"
+			Write-Warning -Message "could not store datetime in '$Property' property in '$Json' JSON file: $($_.Exception.Message)"
 			Throw $_
 		}
 	}
@@ -363,7 +363,7 @@ Begin {
 				$JsonObject = ConvertFrom-Json -InputObject $JsonContent -ErrorAction 'Stop'
 			}
 			Catch {
-				Write-Warning -Message "could not convert content of '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
+				Write-Warning -Message "could not convert content of '$Stream' stream on '$Path' path: $($_.Exception.Message)"
 				Return
 			}
 
@@ -372,7 +372,7 @@ Begin {
 				Add-Member -InputObject $JsonObject -MemberType NoteProperty -Name $Property -Value $DateTime.Ticks -Force -ErrorAction 'Stop'
 			}
 			Catch {
-				Write-Warning -Message "could not update content of '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
+				Write-Warning -Message "could not update content of '$Stream' stream on '$Path' path: $($_.Exception.Message)"
 				Return
 			}
 		}
@@ -382,7 +382,7 @@ Begin {
 			$Value = ConvertTo-Json -InputObject $JsonObject -Depth 100 -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not convert object to JSON for '$Path' path: $($_.Exception.ToString())"
+			Write-Warning -Message "could not convert object to JSON for '$Path' path: $($_.Exception.Message)"
 			Throw $_
 		}
 
@@ -391,7 +391,7 @@ Begin {
 			Set-Content -Path $Path -Stream $Stream -Value $Value -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "could not store datetime in '$Stream' stream for '$Path' path: $($_.Exception.ToString())"
+			Write-Warning -Message "could not store datetime in '$Stream' stream for '$Path' path: $($_.Exception.Message)"
 			Throw $_
 		}
 	}
@@ -843,7 +843,7 @@ Process {
 		Resolve-PresetToParameters
 	}
 	Catch {
-		Write-Warning -Message "could not resolve '$Preset' preset to parameters: $($_.Exception.ToString())"
+		Write-Warning -Message "could not resolve '$Preset' preset to parameters: $($_.Exception.Message)"
 		Throw $_
 	}
 
@@ -854,7 +854,7 @@ Process {
 			$Path = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
 		}
 		Catch {
-			Write-Warning -Message "could not create absolute path from the provided '$Path' Path: $($_.Exception.ToString())"
+			Write-Warning -Message "could not create absolute path from the provided '$Path' Path: $($_.Exception.Message)"
 			Throw $_
 		}
 
@@ -869,7 +869,7 @@ Process {
 			$Path = $Path.TrimEnd('\')
 		}
 		Catch {
-			Write-Warning -Message "could not trim Path: $($_.Exception.ToString())"
+			Write-Warning -Message "could not trim Path: $($_.Exception.Message)"
 			Throw $_
 		}
 	}
@@ -881,7 +881,7 @@ Process {
 			$Destination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Destination)
 		}
 		Catch {
-			Write-Warning -Message "could not create absolute path from the provided '$Destination' Destination: $($_.Exception.ToString())"
+			Write-Warning -Message "could not create absolute path from the provided '$Destination' Destination: $($_.Exception.Message)"
 			Throw $_
 		}
 
@@ -896,7 +896,7 @@ Process {
 			$Destination = $Destination.TrimEnd('\')
 		}
 		Catch {
-			Write-Warning -Message "could not trim Destination: $($_.Exception.ToString())"
+			Write-Warning -Message "could not trim Destination: $($_.Exception.Message)"
 			Throw $_
 		}
 	}
@@ -919,7 +919,7 @@ Process {
 			$InstanceHash = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($InstanceName))).Replace('-', $null)
 		}
 		Catch {
-			Write-Warning -Message "could not create hash of '$InstanceName' instance name: $($_.Exception.ToString())"
+			Write-Warning -Message "could not create hash of '$InstanceName' instance name: $($_.Exception.Message)"
 			Return $_
 		}
 
