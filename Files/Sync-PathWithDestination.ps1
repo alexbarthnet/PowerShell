@@ -960,7 +960,7 @@ Process {
 		}
 
 		# if JSON method for last sync time was requested...
-		If ($LastSyncTimeMethod = 'Json') {
+		If ($LastSyncTimeMethod -eq 'Json') {
 			# if JSON file path was not provided...
 			If (!$PSBoundParameters.ContainsKey('JsonFilePath')) {
 				# define folder for JSON file; default is common application data folder
@@ -982,7 +982,7 @@ Process {
 			If (!$DateTimeFromJson) {
 				# warn and set last sync time to zero
 				Write-Warning -Message "could not locate datetime value in '$InstanceHash' property in '$JsonFilePath' JSON file; will sync without last sync time"
-				$LastSyncDateTime = [datetime]::MinValue
+				$LastSyncDateTime = $DatetTimeMinValueUtc
 			}
 			# if datetime object retrieved from JSON file...
 			Else {
@@ -1086,7 +1086,7 @@ Process {
 	# if SkipDelete not requested...
 	If (!$SkipDelete) {
 		# if JSON method for last sync time was requested...
-		If ($LastSyncTimeMethod = 'Json') {
+		If ($LastSyncTimeMethod -eq 'Json') {
 			# write datetime to JSON file
 			Try {
 				Write-DateTimeToJson -Path $JsonFilePath -Property $InstanceHash -DateTime $DateTimeFromSync
@@ -1097,7 +1097,7 @@ Process {
 		}
 
 		# if Stream method for last sync time was requested...
-		If ($LastSyncTimeMethod = 'Stream') {
+		If ($LastSyncTimeMethod -eq 'Stream') {
 			# save datetime to named stream on Path
 			Try {
 				Write-DateTimeToStream -Path $Path -Stream $Stream -Property $InstanceHash -DateTime $DateTimeFromSync
