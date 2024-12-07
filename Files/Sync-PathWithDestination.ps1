@@ -1100,7 +1100,7 @@ Process {
 		If ($LastSyncTimeMethod -eq 'Stream') {
 			# save datetime to named stream on Path
 			Try {
-				Write-DateTimeToStream -Path $Path -Stream $Stream -Property $InstanceHash -DateTime $DateTimeFromSync
+				Write-DateTimeToStream -Path $Path -Stream $CommandName -Property $InstanceHash -DateTime $DateTimeFromSync
 			}
 			Catch {
 				Return $_
@@ -1108,7 +1108,7 @@ Process {
 
 			# save datetime to named stream on Destination
 			Try {
-				Write-DateTimeToStream -Path $Destination -Stream $Stream -Property $InstanceHash -DateTime $DateTimeFromSync
+				Write-DateTimeToStream -Path $Destination -Stream $CommandName -Property $InstanceHash -DateTime $DateTimeFromSync
 			}
 			Catch {
 				Return $_
