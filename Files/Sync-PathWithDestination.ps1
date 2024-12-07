@@ -993,7 +993,7 @@ Process {
 		}
 
 		# if Stream method for last sync time was requested...
-		If ($LastSyncTimeMethod = 'Stream') {
+		If ($LastSyncTimeMethod -eq 'Stream') {
 			# retrieve datetime from named stream on Path
 			Try {
 				$DateTimeFromPath = Get-DateTimeFromStream -Path $Path -Stream $CommandName -Property $InstanceHash
