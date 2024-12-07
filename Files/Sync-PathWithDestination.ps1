@@ -469,6 +469,10 @@ Begin {
 			[datetime]$CurrentSyncDateTime = [datetime]::UtcNow
 		)
 
+		# report datetime values
+		Write-Host "Datetime of this sync: $($CurrentSyncDateTime.ToString('o'))"
+		Write-Host "Datetime of last sync: $($LastSyncDateTime.ToString('o'))"
+
 		# trim inputs
 		$Path = $Path.TrimEnd('\')
 		$Destination = $Destination.TrimEnd('\')
