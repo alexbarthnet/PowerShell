@@ -100,6 +100,8 @@ Param(
 	# path to JSON file containing last sync time
 	[ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$JsonFilePath,
+	# datetime minimum value in UTC
+	[datetime]$DatetTimeMinValueUtc = [datetime]::new([UInt64]0,[System.DateTimeKind]::Utc),
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -1014,25 +1016,25 @@ Process {
 			If (!$DateTimeFromPath -and !$DateTimeFromDestination) {
 				# warn and set last sync time to zero
 				Write-Warning -Message "could not locate datetime values in '$InstanceHash' property in '$CommandName' stream on provided Path and Destination; will initialize with current datetime after sync"
-				$LastSyncDateTime = [datetime]::MinValue
+				$LastSyncDateTime = $DatetTimeMinValueUtc
 			}
 			# if datetime objects not retrieved from Path...
 			ElseIf (!$DateTimeFromPath) {
 				# warn and set last sync time to zero
 				Write-Warning -Message "could not locate datetime value in '$InstanceHash' property in '$CommandName' stream on provided Path; will sync without last sync time"
-				$LastSyncDateTime = [datetime]::MinValue
+				$LastSyncDateTime = $DatetTimeMinValueUtc
 			}
 			# if datetime objects not retrieved from Destination...
 			ElseIf (!$DateTimeFromDestination) {
 				# warn and set last sync time to zero
 				Write-Warning -Message "could not locate datetime value in '$InstanceHash' property in '$CommandName' stream on provided Destination; will sync without last sync time"
-				$LastSyncDateTime = [datetime]::MinValue
+				$LastSyncDateTime = $DatetTimeMinValueUtc
 			}
 			# if datetime objects do not match...
 			ElseIf ($DateTimeFromPath -ne $DateTimeFromDestination) {
 				# warn and set last sync time to zero
 				Write-Warning -Message "found different datetime values in '$InstanceHash' property in '$CommandName' stream on provided Path and Destination; will sync without last sync time"
-				$LastSyncDateTime = [datetime]::MinValue
+				$LastSyncDateTime = $DatetTimeMinValueUtc
 			}
 			# if datetime objects match...
 			Else {
@@ -1045,7 +1047,7 @@ Process {
 	# if SkipDelete was requested...
 	Else {
 		# set last sync time to zero
-		$LastSyncDateTime = [datetime]::MinValue
+		$LastSyncDateTime = $DatetTimeMinValueUtc
 	}
 
 	# define required parameters for Sync-ItemsInPathWithDestination
