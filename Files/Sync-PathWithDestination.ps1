@@ -164,22 +164,13 @@ Begin {
 
 		# if requested property cannot be parsed as 64-bit unsigned integer...
 		If (![uint64]::TryParse($JsonObject.$Property, [ref][uint64]::MinValue)) {
-			Write-Warning -Message "could not parse '$($JsonObject.$Property)' value to uint64 in '$Property' property on JSON object in '$Json' JSON file: $($_.Exception.ToString())"
-			Return $null
-		}
-
-		# create timespan from requested property
-		Try {
-			$TimeSpan = [timespan]::FromTicks($JsonObject.$Property)
-		}
-		Catch {
-			Write-Warning -Message "could not create timespan from '$($JsonObject.$Property)' value in '$Property' property on JSON object in '$Json' JSON file: $($_.Exception.ToString())"
+			Write-Warning -Message "could not parse '$($JsonObject.$Property)' value to uint64 in '$Property' property on JSON object in '$Json' JSON file: $($_.Exception.Message)"
 			Return $null
 		}
 
 		# create datetime from timespan
 		Try {
-			$DateTime = [datetime]::MinValue.Add($TimeSpan)
+			$DateTime = [datetime]::new([UInt64]$JsonObject.$Property,[System.DateTimeKind]::Utc)
 		}
 		Catch {
 			Write-Warning -Message "could not create datetime from '$($JsonObject.$Property)' value in '$Property' property on JSON object in '$Json' JSON file: $($_.Exception.ToString())"
@@ -239,22 +230,13 @@ Begin {
 
 		# if requested property cannot be parsed as 64-bit unsigned integer...
 		If (![uint64]::TryParse($JsonObject.$Property, [ref][uint64]::MinValue)) {
-			Write-Warning -Message "could not parse '$($JsonObject.$Property)' value to uint64 in '$Property' property on JSON object in '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
-			Return $null
-		}
-
-		# create timespan from requested property
-		Try {
-			$TimeSpan = [timespan]::FromTicks($JsonObject.$Property)
-		}
-		Catch {
-			Write-Warning -Message "could not create timespan from '$($JsonObject.$Property)' value in '$Property' property on JSON object in '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
+			Write-Warning -Message "could not parse '$($JsonObject.$Property)' value to uint64 in '$Property' property on JSON object in '$Stream' stream on '$Path' path: $($_.Exception.Message)"
 			Return $null
 		}
 
 		# create datetime from timespan
 		Try {
-			$DateTime = [datetime]::MinValue.Add($TimeSpan)
+			$DateTime = [datetime]::new([UInt64]$JsonObject.$Property,[System.DateTimeKind]::Utc)
 		}
 		Catch {
 			Write-Warning -Message "could not create datetime from '$($JsonObject.$Property)' value in '$Property' property on JSON object in '$Stream' stream on '$Path' path: $($_.Exception.ToString())"
