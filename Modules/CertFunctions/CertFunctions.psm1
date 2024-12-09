@@ -271,7 +271,7 @@ Function Get-CertificateAltSecurityIdentity {
 	[CmdletBinding()]
 	Param (
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
-		[object]$Certificate,
+		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
 		[Parameter(Position = 1)][ValidateSet('IssuerSerialNumber', 'SKI', 'SHA1PublicKey', 'IssuerSubject', 'SubjectOnly', 'RFC822')]
 		[string]$Type = 'IssuerSerialNumber'
 	)
