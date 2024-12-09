@@ -1138,7 +1138,7 @@ Function Get-CertificatePrivateKeyPath {
 			$Certificate = Get-Item -Path (Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint)
 		}
 		Catch {
-			Write-Warning -Message "Certificate with thumbprint '$Thumbprint' was not found in the machine key store"
+			Write-Warning -Message "could not locate certificate with '$Thumbprint' thumbprint in the '$CertStoreLocation' key store"
 			Return $null
 		}
 	}
@@ -1148,7 +1148,7 @@ Function Get-CertificatePrivateKeyPath {
 		$PrivateKeyObject = Get-CertificatePrivateKeyObject -Certificate $Certificate
 	}
 	Catch {
-		Write-Warning -Message "Error retrieving $Algorithm private key for certificate '$($Certificate.Thumbprint)'"
+		Write-Warning -Message "could not retrieve private key for certificate with '$($Certificate.Thumbprint)' thumbprint: $($_.Exception.Message)"
 		Return $null
 	}
 
@@ -1158,7 +1158,7 @@ Function Get-CertificatePrivateKeyPath {
 		$UniqueName = $PrivateKeyObject.Key.UniqueName
 	}
 	Else {
-		Write-Verbose -Message "Could not retrieve $Algorithm private key for certificate '$($Certificate.Thumbprint)'"
+		Write-Warning -Message "could not locate private key for certificate with '$($Certificate.Thumbprint)' thumbprint: $($_.Exception.Message)"
 		Return $null
 	}
 
@@ -1374,7 +1374,7 @@ Function Grant-CertificatePermissions {
 			$Certificate = Get-Item -Path (Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint)
 		}
 		Catch {
-			Write-Host "ERROR: could not retrieve certificate with thumbprint '$Thumbprint' from the local machine key store"
+			Write-Warning -Message "could not retrieve certificate with thumbprint '$Thumbprint' from the local machine key store"
 			Return $null
 		}
 	}
@@ -1384,14 +1384,14 @@ Function Grant-CertificatePermissions {
 		$Path = Get-CertificatePrivateKeyPath -Certificate $Certificate
 	}
 	Catch {
-		Write-Host 'ERROR: could not retrieve private key path for certificate'
+		Write-Warning -Message "could not retrieve private key path for certificate with '$($Certificate.Thumbprint)' thumbprint"
 		Return
 	}
 
 	# if private key path is null...
 	If ($null -eq $Path) {
 		# ...report and return
-		Write-Host "ERROR: could not locate private key for certificate: '$($Certificate.Thumbprint)"
+		Write-Warning -Message "could not locate private key for certificate with '$($Certificate.Thumbprint)' thumbprint"
 		Return
 	}
 
@@ -1400,7 +1400,7 @@ Function Grant-CertificatePermissions {
 		$Acl = Get-Acl -Path $Path
 	}
 	Catch {
-		Write-Host "ERROR: could not retrieve ACL on private key for certificate: '$($Certificate.Thumbprint)'"
+		Write-Warning -Message "could not retrieve ACL on private key for certificate with '$($Certificate.Thumbprint)' thumbprint"
 		Return $_
 	}
 
@@ -1417,7 +1417,7 @@ Function Grant-CertificatePermissions {
 				Write-Host "Created ACE for principal: $Principal"
 			}
 			Catch {
-				Write-Host "ERROR: could not create ACE for princpal: $Principal"
+				Write-Warning -Message "could not create ACE for princpal: $Principal"
 				Return $_
 			}
 		}
@@ -1431,10 +1431,10 @@ Function Grant-CertificatePermissions {
 		ForEach ($AccessRule in $AccessRules) { $Acl.AddAccessRule($AccessRule) }
 		Try {
 			$Acl | Set-Acl -Path $Path
-			Write-Host "Updated ACL on private key for certificate: '$($Certificate.Thumbprint)'"
+			Write-Host "Updated ACL on private key for certificate with '$($Certificate.Thumbprint)' thumbprint"
 		}
 		Catch {
-			Write-Host "ERROR: could not update ACL on private key for certificate: '$($Certificate.Thumbprint)'"
+			Write-Warning -Message "could not update ACL on private key for certificate with '$($Certificate.Thumbprint)' thumbprint"
 			Return $_
 		}
 	}
@@ -1482,7 +1482,7 @@ Function Revoke-CertificatePermissions {
 			$Certificate = Get-Item -Path (Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint)
 		}
 		Catch {
-			Write-Host "ERROR: could not retrieve certificate with thumbprint '$Thumbprint' from the local machine key store"
+			Write-Warning -Message "could not retrieve certificate with thumbprint '$Thumbprint' from the '$CertStoreLocation' key store"
 			Return $null
 		}
 	}
@@ -1492,14 +1492,14 @@ Function Revoke-CertificatePermissions {
 		$Path = Get-CertificatePrivateKeyPath -Certificate $Certificate
 	}
 	Catch {
-		Write-Host 'ERROR: could not retrieve private key path for certificate'
+		Write-Warning -Message "could not retrieve private key path for certificate with '$($Certificate.Thumbprint)' thumbprint"
 		Return
 	}
 
 	# if private key path is null...
 	If ($null -eq $Path) {
 		# ...report and return
-		Write-Host "ERROR: could not locate private key for certificate: '$($Certificate.Thumbprint)"
+		Write-Warning -Message "could not locate private key for certificate with '$($Certificate.Thumbprint)' thumbprint"
 		Return
 	}
 
@@ -1508,7 +1508,7 @@ Function Revoke-CertificatePermissions {
 		$Acl = Get-Acl -Path $Path
 	}
 	Catch {
-		Write-Host "ERROR: could not retrieve ACL on private key for certificate: '$($Certificate.Thumbprint)'"
+		Write-Warning -Message "could not retrieve ACL on private key for certificate with '$($Certificate.Thumbprint)' thumbprint"
 		Return $_
 	}
 
@@ -1536,10 +1536,10 @@ Function Revoke-CertificatePermissions {
 		# set ACL object
 		Try {
 			$Acl | Set-Acl -Path $Path
-			Write-Host "Updated ACL on private key for certificate: '$($Certificate.Thumbprint)'"
+			Write-Host "Updated ACL on private key for certificate with '$($Certificate.Thumbprint)' thumbprint"
 		}
 		Catch {
-			Write-Host "ERROR: could not update ACL on private key for certificate: '$($Certificate.Thumbprint)'"
+			Write-Warning -Message "could not update ACL on private key for certificate with '$($Certificate.Thumbprint)' thumbprint"
 			Return $_
 		}
 	}
