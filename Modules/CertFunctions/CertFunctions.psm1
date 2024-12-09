@@ -986,6 +986,112 @@ Function Get-CertificateFromUri {
 	}
 }
 
+Function Get-CertificatePrivateKeyObject {
+	<#
+	.SYNOPSIS
+	Returns an object representing the private key for an X.509 certificate.
+
+	.DESCRIPTION
+	Returns an object representing the private key for an X.509 certificate.
+
+	.PARAMETER Certificate
+	Specifies an X.509 certificate object.
+
+	.PARAMETER AsByteArray
+	Switch parameter to return private key as a byte array
+
+	.INPUTS
+	X509Certificate2. An object representing an X.509 certificate.
+
+	.OUTPUTS
+	Object, Byte[]. An object or byte array representing the private key for the provided certificate.
+	
+	#>
+	[CmdletBinding()]
+	Param(
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
+		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
+		[Parameter(Position = 1)]
+		[switch]$AsByteArray
+	)
+
+	# if certificate private key not present...
+	If (!$Certificate.HasPrivateKey) {
+		Write-Warning -Message 'the provided certificate does not have an associated private key'
+		Return $null
+	}
+
+	# if certificate public OID not present...
+	If (!$Certificate.PublicKey.Oid.FriendlyName) {
+		Write-Warning -Message 'the provided certificate does not have an algorithm defined'
+		Return $null
+	}
+
+	# retrieve certificate algorithm from public key
+	$Algorithm = $Certificate.PublicKey.Oid.FriendlyName
+
+	# if algorithm is not supported...
+	If ($Algorithm -notin 'DSA', 'ECC', 'RSA') {
+		Write-Warning -Message "the provided certificate has an unsupported algorithm: $Algorithm"
+		Return $null
+	}
+
+	# retrieve private key using algorithm-specific method
+	Try {
+		switch ($Algorithm) {
+			'DSA' {
+				$PrivateKey = [System.Security.Cryptography.X509Certificates.DSACertificateExtensions]::GetDSAPrivateKey($Certificate)
+			}
+			'ECC' {
+				$PrivateKey = [System.Security.Cryptography.X509Certificates.ECDsaCertificateExtensions]::GetECDsaPrivateKey($Certificate)
+			}
+			'RSA' {
+				$PrivateKey = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($Certificate)
+			}
+		}
+	}
+	Catch {
+		Throw $_
+	}
+
+	# if byte array not requested...
+	If ($AsByteArray) {
+		# if private key export policy does not include plain text export...
+		If (!($PrivateKey.Key.ExportPolicy -band [System.Security.Cryptography.CngExportPolicies]::AllowPlaintextExport)) {
+			# define CNG property parameters
+			$CngPropertyName = 'ExportPolicy'
+			$CngPropertyValues = [System.Security.Cryptography.CngExportPolicies]::AllowExport -bor [System.Security.Cryptography.CngExportPolicies]::AllowPlaintextExport
+			$CngPropertyOptions = [System.Security.Cryptography.CngPropertyOptions]::Persist
+
+			# create CNG property
+			$CngProperty = [System.Security.Cryptography.CngProperty]::New($CngPropertyName, $CngPropertyValues, $CngPropertyOptions)
+
+			# update CNG property
+			Try {
+				$PrivateKey.Key.SetProperty($CngProperty)
+			}
+			Catch {
+				Write-Warning -Message 'the private key cannot be returned as a byte array: private key does not permit plain-text export'
+				Return $null
+			}
+		}
+
+		# retrieve byte array for private key
+		Try {
+			$ByteArray = $PrivateKey.Key.Export([Security.Cryptography.CngKeyBlobFormat]::Pkcs8PrivateBlob)
+		}
+		Catch {
+			Throw $_
+		}
+
+		# return byte array
+		Return $ByteArray
+	}
+	
+	# return private key object
+	Return $PrivateKey
+}
+
 Function Get-CertificatePrivateKeyPath {
 	<#
 	.SYNOPSIS
@@ -1037,32 +1143,9 @@ Function Get-CertificatePrivateKeyPath {
 		}
 	}
 
-	# if certificate has public and private keys...
-	If ($Certificate.PublicKey -and $Certificate.HasPrivateKey) {
-		# retrieve certificate algorithm from public key
-		$Algorithm = $Certificate.PublicKey.Oid.FriendlyName
-	}
-	Else {
-		Write-Warning -Message "Certificate '$($Certificate.Thumbprint)' does not have a private key"
-		Return $null
-	}
-
-	# retrieve private key using algorithm-specific method
+	# retrieve private key for certificate
 	Try {
-		switch ($Algorithm) {
-			'DSA' {
-				$PrivateKey = [System.Security.Cryptography.X509Certificates.DSACertificateExtensions]::GetDSAPrivateKey($Certificate)
-			}
-			'ECDsa' {
-				$PrivateKey = [System.Security.Cryptography.X509Certificates.ECDsaCertificateExtensions]::GetECDsaPrivateKey($Certificate)
-			}
-			'RSA' {
-				$PrivateKey = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($Certificate)
-			}
-			Default {
-				$PrivateKey = $null
-			}
-		}
+		$PrivateKeyObject = Get-CertificatePrivateKeyObject -Certificate $Certificate
 	}
 	Catch {
 		Write-Warning -Message "Error retrieving $Algorithm private key for certificate '$($Certificate.Thumbprint)'"
@@ -1156,26 +1239,11 @@ Function Get-PfxPrivateKey {
 
 	# retrieve private key object
 	Try {
-		$PrivateKeyObject = [Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($Certificate)
+		$ByteArray = Get-CertificatePrivateKeyObject -Certificate $Certificate -AsByteArray
 	}
 	Catch {
-		Write-Warning -Message 'could not retrieve private key object from certificate'
-		Return $_
-	}
-
-	# if private key export policy does not include plain text export...
-	If (!($PrivateKeyObject.Key.ExportPolicy -band [System.Security.Cryptography.CngExportPolicies]::AllowPlaintextExport)) {
-		Write-Warning -Message 'private key does not permit plain-text export'
+		Write-Warning -Message "could not retrieve private key for certificate with '$($Certificate.Thumbprint)' thumbprint: $($_.Exception.Message)"
 		Return $null
-	}
-
-	# retrieve byte array for private key
-	Try {
-		$ByteArray = $PrivateKeyObject.Key.Export([Security.Cryptography.CngKeyBlobFormat]::Pkcs8PrivateBlob)
-	}
-	Catch {
-		Write-Warning -Message 'could not create byte array from private key'
-		Return $_
 	}
 
 	# if byte array requested...
@@ -1523,6 +1591,7 @@ $FunctionsToExport = @(
 	'Get-CertificateChain'
 	'Get-CertificateFromAD'
 	'Get-CertificateFromUri'
+	'Get-CertificatePrivateKeyObject'
 	'Get-CertificatePrivateKeyPath'
 	'Get-PfxPrivateKey'
 	'Get-PfxPublicKey'
