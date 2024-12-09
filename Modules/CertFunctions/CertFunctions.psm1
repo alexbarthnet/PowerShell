@@ -147,6 +147,229 @@ Function ConvertTo-X509Certificate {
 	Return $Certificate
 }
 
+Function Export-CertificateAsPem {
+	<#
+	.SYNOPSIS
+	Export an X.509 certificate object in PEM format.
+
+	.DESCRIPTION
+	Export an X.509 certificate object in PEM format.
+
+	.PARAMETER Certificate
+	Specifies the X.509 certificate to export.
+
+	.PARAMETER Path
+	Specifies the path where the certificate will be saved. If the path is a directory, a "certificate.pem" file will be created in the directory.
+
+	.PARAMETER IncludeChain
+	Switch to include the certificate chain.
+
+	.PARAMETER IncludePrivateKey
+	Switch to include the certificate private key.
+
+	.INPUTS
+	X509Certificate2. An object representing an X.509 certificate.
+
+	.OUTPUTS
+	String. A string containing the PEM-formatted certificates in CA Bundle order.
+
+	#>
+	[CmdletBinding()]
+	Param (
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
+		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
+		[Parameter(Position = 1)]
+		[string]$FilePath,
+		[Parameter(Position = 2)]
+		[switch]$IncludeChain,
+		[Parameter(Position = 2)]
+		[switch]$IncludePrivateKey
+	)
+
+	# creat empty string for certificate
+	$CertificateString = [System.String]::Empty
+
+	# if private key should be exported...
+	If ($IncludePrivateKey) {
+		# retrieve private key for certificate
+		Try {
+			$PrivateKeyAsByteArray = Get-CertificatePrivateKeyObject -Certificate $Certificate -AsByteArray
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve private key for certificate with '$($Certificate.Thumbprint)' thumbprint: $($_.Exception.Message)"
+			Return $null
+		}
+
+		# if private key retrieved...
+		If ($PrivateKeyAsByteArray) {
+			# convert private key byte array to PEM-formatted string
+			Try {
+				$PrivateKeyInPEM = ConvertTo-PEMCertificate -InputObject $PrivateKeyAsByteArray -AsPrivateKey
+			}
+			Catch {
+				Throw $_
+			}
+		}
+		# if private key not retrieved...
+		Else {
+			# warn and inquire
+			Write-Warning -Message 'could not retrieve private key for certificate; continue to create PEM file without private key?' -WarningAction Inquire
+			$PrivateKeyInPEM = [string]::Empty
+		}
+		
+		# add encoded data to string
+		If ([string]::IsNullOrEmpty($CertificateString)) {
+			$CertificateString = $PrivateKeyInPEM
+		}
+		Else {
+			$CertificateString = $CertificateString, $PrivateKeyInPEM -join "`r`n"
+		}
+	}
+
+	# get certificate bundle with original certificate
+	Try {
+		$CertificateBundle = Get-CertificateBundle -Certificate $Certificate -IncludeCertificate
+	}
+	Catch {
+		Throw $_
+	}
+
+	# add certificate bundle to string
+	If ([string]::IsNullOrEmpty($CertificateString)) {
+		$CertificateString = $CertificateBundle
+	}
+	Else {
+		$CertificateString = $CertificateString, $CertificateBundle -join "`r`n"
+	}
+
+
+	# if path provided...
+	If ($PSBoundParameters.ContainsKey('Path')) {
+		# if path is a directory...
+		If (Test-Path -Path $Path -PathType Container) {
+			# ...append ca-bundle.crt to path
+			$Path = Join-Path -Path $Path -ChildPath 'certificate.pem'
+		}
+
+		# write the certificate bundle to path
+		Try {
+			Set-Content -Path $Path -Value $CertificateBundle
+		}
+		Catch {
+			Throw $_
+		}
+	}
+	# if path not provided...
+	Else {
+		# display bundle
+		Return $CertificateBundle
+	}
+}
+
+Function Get-CertificateBundle {
+	<#
+	.SYNOPSIS
+	Creates a CA Bundle from an X.509 certificate object.
+
+	.DESCRIPTION
+	Creates a CA Bundle from an X.509 certificate object.
+
+	.PARAMETER Certificate
+	Specifies the X.509 certificate for which the CA Bundle will be built.
+
+	.PARAMETER Path
+	Specifies the path where the CA Bundle will be saved. If the provided path is a directory, a "ca-bundle.crt" file will be created in the directory.
+
+	.PARAMETER IncludeCertificate
+	Switch to include the original X.509 certificate object in the CA Bundle.
+
+	.PARAMETER RootFirst
+	Switch to place the root certificate first. The chain order is determined by the NotBefore property on the certificate objects.
+
+	.INPUTS
+	X509Certificate2. An object representing an X.509 certificate.
+
+	.OUTPUTS
+	String. A string containing the PEM-formatted certificates in CA Bundle order.
+
+	#>
+	[CmdletBinding()]
+	Param (
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
+		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
+		[Parameter(Position = 1)]
+		[string]$Path,
+		[Parameter(Position = 2)]
+		[switch]$IncludeCertificate,
+		[Parameter(Position = 3)]
+		[switch]$RootFirst
+	)
+
+	# get certificate chain from certificate
+	Try {
+		$CertificateChain = Get-CertificateChain -Certificate $Certificate
+	}
+	Catch {
+		Throw $_
+	}
+
+	# if root first requested...
+	If ($RootFirst) {
+		$CertificateChain = $CertificateChain | Sort-Object -Property 'NotBefore'
+	}
+
+	# creat empty string for CA bundle
+	$CertificateBundle = [System.String]::Empty
+
+	# process each certificate in certificate chain
+	:CertificateInChain ForEach ($CertificateInChain in $CertificateChain) {
+		# if thumbprint of certificate in chain matches thumbprint of provided certificate and IncludeCertificate not set...
+		If ($CertificateInChain.Thumbprint -eq $Certificate.Thumbprint -and -not $IncludeCertificate) {
+			# ...continue to next certificate in chain
+			Continue CertificateInChain
+		}
+
+		# convert certificate to PEM-formatted string
+		Try {
+			$CertificateInChainPEM = ConvertTo-PEMCertificate -InputObject $CertificateInChain.RawData
+		}
+		Catch {
+			Write-Warning -Message 'could not create PEM-formatted string from byte array'
+			Return $_
+		}
+
+		# add formatted certificate data to bundle
+		If ([string]::IsNullOrEmpty($CertificateBundle)) {
+			$CertificateBundle = $CertificateInChainPEM
+		}
+		Else {
+			$CertificateBundle = $CertificateBundle, $CertificateInChainPEM -join "`r`n"
+		}
+	}
+
+	# if path provided...
+	If ($PSBoundParameters.ContainsKey('Path')) {
+		# if path is a directory...
+		If (Test-Path -Path $Path -PathType Container) {
+			# ...append ca-bundle.crt to path
+			$Path = Join-Path -Path $Path -ChildPath 'ca-bundle.crt'
+		}
+
+		# write the certificate bundle to path
+		Try {
+			Set-Content -Path $Path -Value $CertificateBundle
+		}
+		Catch {
+			Throw $_
+		}
+	}
+	# if path not provided...
+	Else {
+		# display bundle
+		Return $CertificateBundle
+	}
+}
+
 Function Format-ReversedDistinguishedName {
 	<#
 	.SYNOPSIS
@@ -1395,6 +1618,8 @@ Function Test-Thumbprint {
 $FunctionsToExport = @(
 	'ConvertTo-PEMCertificate'
 	'ConvertTo-X509Certificate'
+	'Export-CertificateAsPEM'
+	'Get-CertificateBundle'
 	'Format-ReversedDistinguishedName'
 	'Format-ReversedString'
 	'Get-CertificateAltSecurityIdentity'
