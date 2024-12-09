@@ -1153,9 +1153,9 @@ Function Get-CertificatePrivateKeyPath {
 	}
 
 	# if private key was retrieved...
-	If ($PrivateKey) {
+	If ($PrivateKeyObject) {
 		# retrieve private key unique name
-		$UniqueName = $PrivateKey.Key.UniqueName
+		$UniqueName = $PrivateKeyObject.Key.UniqueName
 	}
 	Else {
 		Write-Verbose -Message "Could not retrieve $Algorithm private key for certificate '$($Certificate.Thumbprint)'"
@@ -1163,7 +1163,7 @@ Function Get-CertificatePrivateKeyPath {
 	}
 
 	# if certificate is machine key...
-	If ($PrivateKey.Key.IsMachineKey) {
+	If ($PrivateKeyObject.Key.IsMachineKey) {
 		# ...get machine key container
 		$Path = Join-Path -Path ([System.Environment]::GetFolderPath('CommonApplicationData')) -ChildPath 'Microsoft\Crypto'
 	}
