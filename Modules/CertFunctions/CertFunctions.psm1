@@ -472,8 +472,8 @@ Function Get-CertificateAltSecurityIdentity {
 	 - SHA1PublicKey
 	 - IssuerSubject
 	 - SubjectOnly
-	 - PrincipalName
 	 - RFC822
+	 - PrincipalName
 
 	.INPUTS
 	X509Certificate2. An object representing an X.509 certificate.
@@ -577,6 +577,21 @@ Function Get-CertificateAltSecurityIdentity {
 				Return $null
 			}
 		}
+		'PrincipalName' {
+			# if UserPrincipalName empty or not found...
+			If ([String]::IsNullOrEmpty($Certificate.Extensions.UserPrincipalName)) {
+				# ...warn and return
+				Write-Warning 'UserPrincipalName not found on certificate'
+				Return $null
+			}
+			
+			# if UserPrincipalName is not unique...
+			If ($Certificate.Extensions.UserPrincipalName.Count -gt 1) {
+				# ...warn and return
+				Write-Warning 'Multiple UserPrincipalName extensions found on certificate'
+				Return $null
+			}
+		}
 	}
 
 	# create alternate security identity
@@ -619,6 +634,10 @@ Function Get-CertificateAltSecurityIdentity {
 		'RFC822' {
 			# create alternate security identity
 			$CertificateAltSecurityIdentity = "X509:<RFC822>$($Certificate.Extensions.UserPrincipalName)"
+		}
+		'PrincipalName' {
+			# create alternate security identity
+			$CertificateAltSecurityIdentity = "X509:<PN>$($Certificate.Extensions.UserPrincipalName)"
 		}
 	}
 
