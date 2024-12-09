@@ -466,11 +466,11 @@ Function Get-CertificateAltSecurityIdentity {
 	Specifies the X.509 certificate for which the identity will be built.
 
 	.PARAMETER MappingType
-	Specifies the type of mapping returned by the function. The valid values are detailed below. The default value is 'IssuerSerialNumber'.
-	 - IssuerSerialNumber
+	Specifies the type of mapping returned by the function. The valid values are detailed below. The default value is 'IssuerAndSerialNumber'.
+	 - IssuerAndSerialNumber
 	 - SKI
 	 - SHA1PublicKey
-	 - IssuerSubject
+	 - IssuerAndSubject
 	 - SubjectOnly
 	 - RFC822
 	 - PrincipalName
@@ -495,13 +495,13 @@ Function Get-CertificateAltSecurityIdentity {
 	Param (
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
-		[Parameter(Position = 1)][ValidateSet('IssuerSerialNumber', 'SKI', 'SHA1PublicKey', 'IssuerSubject', 'SubjectOnly', 'RFC822')]
-		[string]$Type = 'IssuerSerialNumber'
+		[Parameter(Position = 1)][ValidateSet('IssuerAndSerialNumber', 'SKI', 'SHA1PublicKey', 'IssuerAndSubject', 'SubjectOnly', 'RFC822')]
+		[string]$Type = 'IssuerAndSerialNumber'
 	)
 
 	# verify certificate properties
 	switch ($Type) {
-		'IssuerSerialNumber' {
+		'IssuerAndSerialNumber' {
 			# if Issuer empty or not found...
 			If ([String]::IsNullOrEmpty($Certificate.Issuer)) {
 				# ...warn and return
@@ -539,7 +539,7 @@ Function Get-CertificateAltSecurityIdentity {
 				Return $null
 			}
 		}
-		'IssuerSubject' {
+		'IssuerAndSubject' {
 			# if Issuer empty or not found...
 			If ([String]::IsNullOrEmpty($Certificate.Issuer)) {
 				# ...warn and return
@@ -596,7 +596,7 @@ Function Get-CertificateAltSecurityIdentity {
 
 	# create alternate security identity
 	switch ($Type) {
-		'IssuerSerialNumber' {
+		'IssuerAndSerialNumber' {
 			# get the reversed issuer
 			$ReversedIssuer = Format-ReversedDistinguishedName -DistinguishedName $Certificate.Issuer
 
@@ -614,7 +614,7 @@ Function Get-CertificateAltSecurityIdentity {
 			# create alternate security identity
 			$CertificateAltSecurityIdentity = "X509:<SHA1-PUKEY>$($Certificate.Thumbprint)"
 		}
-		'IssuerSubject' {
+		'IssuerAndSubject' {
 			# get the reversed issuer
 			$ReversedIssuer = Format-ReversedDistinguishedName -DistinguishedName $Certificate.Issuer
 
