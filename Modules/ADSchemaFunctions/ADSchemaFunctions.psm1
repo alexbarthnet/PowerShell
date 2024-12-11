@@ -3,6 +3,14 @@
 Function Add-ADSchemaAttributes {
 	[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 	Param(
+		[Parameter(DontShow)]
+		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
+		[Parameter(DontShow)]
+		[string]$SchemaNamingContext = $Schema.Name,
+		[Parameter(DontShow)]
+		[string]$Server = $Schema.SchemaRoleOwner.Name,
+		[Parameter(DontShow)]
+		[object]$RootDSE = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/RootDSE"),
 		[Parameter(Position = 0, Mandatory)]
 		[string]$OIDPrefix,
 		[Parameter(Position = 1, Mandatory)]
@@ -14,15 +22,13 @@ Function Add-ADSchemaAttributes {
 		[Parameter(Position = 4)][ValidateRange(1, 65535)]
 		[uint16]$Count = 1,
 		[Parameter(Position = 5)][ValidateRange(0, 8191)]
-		[uint16]$SearchFlags = 0,
-		[string]$Server = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().SchemaRoleOwner.Name,
-		[string]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema().Name
+		[uint16]$SearchFlags = 0
 	)
 
 	# set values for attribute
 	switch ($Type) {
 		'single' {
-			$ad_attribute_definition = [PSCustomObject]@{
+			$AttributeProperties = [PSCustomObject]@{
 				adminTextPrefix = 'custom-single-valued-attribute-'
 				attributeSyntax = '2.5.5.12'
 				isSingleValued  = $true
@@ -30,7 +36,7 @@ Function Add-ADSchemaAttributes {
 			}
 		}
 		'multi' {
-			$ad_attribute_definition = [PSCustomObject]@{
+			$AttributeProperties = [PSCustomObject]@{
 				adminTextPrefix = 'custom-multi-valued-attribute-'
 				attributeSyntax = '2.5.5.12'
 				isSingleValued  = $false
@@ -38,7 +44,7 @@ Function Add-ADSchemaAttributes {
 			}
 		}
 		'time' {
-			$ad_attribute_definition = [PSCustomObject]@{
+			$AttributeProperties = [PSCustomObject]@{
 				adminTextPrefix = 'custom-time-attribute-'
 				attributeSyntax = '2.5.5.11'
 				isSingleValued  = $true
@@ -46,7 +52,7 @@ Function Add-ADSchemaAttributes {
 			}
 		}
 		'bool' {
-			$ad_attribute_definition = [PSCustomObject]@{
+			$AttributeProperties = [PSCustomObject]@{
 				adminTextPrefix = 'custom-boolean-attribute-'
 				attributeSyntax = '2.5.5.8'
 				isSingleValued  = $true
@@ -59,70 +65,89 @@ Function Add-ADSchemaAttributes {
 		}
 	}
 
-	# force refresh of schema before update
-	$ad_root_dse = Get-ADRootDSE -Server $Server
-	$ad_root_dse.schemaUpdateNow = $true	
+	# refresh schema before update
+	Try {
+		$Schema.RefreshSchema()
+	}
+	Catch {
+		Return $_
+	}
+
+	# format type
+	$FormattedType = [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.ToTitleCase($Type.ToLower())
 
 	# create each attribute object
-	For ($index = 0; $index -lt $Count; $index++) {
+	For ($Index = 0; $Index -lt $Count; $Index++) {
 		# create strings
-		$ad_attribute_suffix = ($Suffix + $index).ToString()
-		$ad_attribute_name = ($NamePrefix + (Get-Culture).TextInfo.ToTitleCase($Type.ToLower()) + $ad_attribute_suffix)
-		$ad_attribute_path = "CN=$ad_attribute_name,$Schema"
+		$AttributeName = '{0}{1}{2}' -f $NamePrefix, $FormattedType, ($Suffix + $Index)
+		$Identity = 'CN={0},{1}' -f $AttributeName, $SchemaNamingContext
 
 		# check if attribute exists
 		Try {
-			$ad_attribute_found = Get-ADObject -Server $Server -Identity $ad_attribute_path
-			#report attribute WAS found
-			Write-Host "Attribute '$($ad_attribute_found.Name)' was ALREADY created"
+			$ADObject = Get-ADObject -Server $Server -Identity $Identity
 		}
 		Catch {
-			# create strings for schema object
-			$ad_attribute_text = ($ad_attribute_definition.adminTextPrefix + $ad_attribute_suffix)
-			$ad_attribute_id = "$OIDPrefix.$ad_attribute_suffix"
+			$ADObject = $null
+		}
 
-			# create attribute hashtable for schema object
-			$ad_attributes_object = @{
-				lDAPDisplayName  = $ad_attribute_name
-				adminDisplayName = $ad_attribute_text
-				adminDescription = $ad_attribute_text
-				attributeId      = $ad_attribute_id
-				attributeSyntax  = $ad_attribute_definition.attributeSyntax
-				isSingleValued   = $ad_attribute_definition.isSingleValued
-				oMSyntax         = $ad_attribute_definition.oMSyntax
-				searchFlags      = $SearchFlags
-			}
+		If ($null -ne $ADObject) {
+			#report attribute WAS found
+			Write-Host "Attribute '$($ADObject.Name)' was ALREADY created"
+			Continue
+		}
 
-			# declare values
-			Write-Host ''
-			Write-Host "Attribute '$($ad_attribute_name)' was NOT found and WILL be created as:"
-			$ad_attributes_object
-			Write-Host ''
-
-			# create attribute
-			If ($PSCmdlet.ShouldProcess($ad_attribute_name)) {
-				Try {
-					New-ADObject -Server $Server -Name $ad_attribute_name -Type 'attributeSchema' -Path $Schema -OtherAttributes $ad_attributes_object
-					Write-Host "Attribute '$($ad_attribute_name)' was SUCCESSFULLY created"
-				}
-				Catch {
-					Write-Error "Attribute '$($ad_attribute_name)' was NOT created"
-					Return $_
-				}
+		# create attribute hashtable for schema object
+		$OtherAttributes = @{
+			lDAPDisplayName  = $AttributeName
+			adminDisplayName = $AttributeName
+			adminDescription = $AttributeName
+			attributeId      = '{0}.{1}' -f $OIDPrefix, ($Suffix + $Index)
+			attributeSyntax  = $AttributeProperties.attributeSyntax
+			isSingleValued   = $AttributeProperties.isSingleValued
+			oMSyntax         = $AttributeProperties.oMSyntax
+			searchFlags      = $SearchFlags
+		}
+		
+		# declare values
+		Write-Host ''
+		Write-Host "Attribute '$($AttributeName)' was NOT found and WILL be created as:"
+		$OtherAttributes
+		Write-Host ''
+		
+		# create attribute
+		If ($PSCmdlet.ShouldProcess($AttributeName)) {
+			Try {
+				New-ADObject -Server $Server -Name $AttributeName -Type 'attributeSchema' -Path $SchemaNamingContext -OtherAttributes $OtherAttributes
+				Write-Host "Attribute '$($AttributeName)' was SUCCESSFULLY created"
 			}
-			Else {
-				Write-Host "Attribute '$($ad_attribute_name)' WOULD have been created"
+			Catch {
+				Write-Error "Attribute '$($AttributeName)' was NOT created"
+				Return $_
 			}
+		}
+		Else {
+			Write-Host "Attribute '$($AttributeName)' WOULD have been created"
 		}
 	}
 
-	# force refresh of schema after update
-	$ad_root_dse.schemaUpdateNow = $true
+	# reload schema after update
+	If ($PSCmdlet.ShouldProcess($Server, 'Update active schema')) {
+		$RootDSE.Put('schemaUpdateNow', 1)
+		$RootDSE.SetInfo()
+	}
 }
 
 Function Add-ADSchemaAttributesToClass {
 	[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 	Param (
+		[Parameter(DontShow)]
+		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
+		[Parameter(DontShow)]
+		[string]$SchemaNamingContext = $Schema.Name,
+		[Parameter(DontShow)]
+		[string]$Server = $Schema.SchemaRoleOwner.Name,
+		[Parameter(DontShow)]
+		[object]$RootDSE = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/RootDSE"),
 		[Parameter(Position = 0, Mandatory)]
 		[string]$Class,
 		[Parameter(Position = 1, Mandatory)]
@@ -132,70 +157,89 @@ Function Add-ADSchemaAttributesToClass {
 		[Parameter(Position = 3)][ValidateRange(1, 65535)]
 		[uint16]$Suffix = 1,
 		[Parameter(Position = 4)][ValidateRange(1, 65535)]
-		[uint16]$Count = 1,
-		[string]$Server = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().SchemaRoleOwner.Name,
-		[string]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema().Name
+		[uint16]$Count = 1
 	)
 
-	# force refresh of schema before update
-	$ad_root_dse = Get-ADRootDSE -Server $Server
-	$ad_root_dse.schemaUpdateNow = $true	
-
-	# verify class
+	# refresh schema before update
 	Try {
-		$ad_class_path = "CN=$Class,$Schema"
-		$ad_class_object = Get-ADObject -Server $Server -Identity $ad_class_path -Properties mayContain
+		$Schema.RefreshSchema()
 	}
 	Catch {
-		Write-Error 'Class '$Class' does NOT exist'
+		Return $_
+	}
+
+	# create strings
+	$ClassIdentity = 'CN={0},{1}' -f $Class, $SchemaNamingContext
+
+	# retrieve class
+	Try {
+		$ClassObject = Get-ADObject -Server $Server -Identity $ClassIdentity -Properties 'mayContain'
+	}
+	Catch {
+		Write-Wanring -Message "Class '$Class' does NOT exist"
 		Return $null
 	}
 
+	# format type
+	$FormattedType = [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.ToTitleCase($Type.ToLower())
+
 	# add each attribute object to class
-	For ($index = 0; $index -lt $Count; $index++) {
+	For ($Index = 0; $Index -lt $Count; $Index++) {
 		# create strings
-		$ad_attribute_suffix = ($Suffix + $index).ToString()
-		$ad_attribute_name = ($NamePrefix + (Get-Culture).TextInfo.ToTitleCase($Type.ToLower()) + $ad_attribute_suffix)
+		$AttributeName = '{0}{1}{2}' -f $NamePrefix, $FormattedType, ($Suffix + $Index)
+		$Identity = 'CN={0},{1}' -f $AttributeName, $SchemaNamingContext
 
 		# verify attribute
 		Try {
-			$ad_attribute_path = "CN=$ad_attribute_name,$Schema"
-			$null = Get-ADObject -Server $Server -Identity $ad_attribute_path -Properties 'mayContain'
+			$null = Get-ADObject -Server $Server -Identity $Identity
 		}
 		Catch {
-			Write-Error "Attribute '$ad_attribute_name' does NOT exist"
-			Return $null
+			Write-Warning -Message "Attribute '$AttributeName' was NOT found"
+			Return
 		}
 
 		# check for attribute in mayContain of class
-		If ($ad_class_object.mayContain -match $ad_attribute_name) {
-			Write-Host "Attribute '$ad_attribute_name' was ALREADY in the MayContain of '$Class'"
+		If ($ClassObject.mayContain.Contains($AttributeName)) {
+			Write-Host "Attribute '$AttributeName' was ALREADY in the MayContain of '$Class'"
+			Continue
 		}
-		Else {
-			# add attribute to mayContain attribute of class
-			If ($PSCmdlet.ShouldProcess("$ad_attribute_name to $Class")) {
-				Try {
-					Set-ADObject -Server $Server -Identity $ad_class_path -Add @{ mayContain = $ad_attribute_name }
-					Write-Host "Attribute '$ad_attribute_name' was SUCCESSFULLY added to the MayContain of '$Class'"
-				}
-				Catch {
-					Write-Error "Attribute '$ad_attribute_name' was NOT added to the MayContain of '$Class'"
-					Return $_
-				}
+
+		# define ShouldProcess values
+		$ShouldProcessMessage = "Attribute '$AttributeName' WOULD have been added to the MayContain of '$Class'"
+		$ShouldProcessAction = "Add attribute to '$Class' class"
+		$ShouldProcessTarget = $AttributeName
+
+		# add attribute to mayContain attribute of class
+		If ($PSCmdlet.ShouldProcess($ShouldProcessMessage, $ShouldProcessAction, $ShouldProcessTarget)) {
+			Try {
+				Set-ADObject -Server $Server -Identity $ClassObject -Add @{ mayContain = $AttributeName }
+				Write-Host "Attribute '$AttributeName' was SUCCESSFULLY added to the MayContain of '$Class'"
 			}
-			Else {
-				Write-Host "Attribute '$ad_attribute_name' WOULD have been added to the MayContain of '$Class'"
+			Catch {
+				Write-Warning -Message "Attribute '$AttributeName' was NOT added to the MayContain of '$Class'"
+				Return $_
 			}
 		}
 	}
 
-	# force refresh of schema after update
-	$ad_root_dse.schemaUpdateNow = $true
+	# reload schema after update
+	If ($PSCmdlet.ShouldProcess($Server, 'Update active schema')) {
+		$RootDSE.Put('schemaUpdateNow', 1)
+		$RootDSE.SetInfo()
+	}
 }
 
 Function Add-ADSchemaClass {
 	[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 	Param (
+		[Parameter(DontShow)]
+		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
+		[Parameter(DontShow)]
+		[string]$SchemaNamingContext = $Schema.Name,
+		[Parameter(DontShow)]
+		[string]$Server = $Schema.SchemaRoleOwner.Name,
+		[Parameter(DontShow)]
+		[object]$RootDSE = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/RootDSE"),
 		[Parameter(Position = 0, Mandatory)]
 		[string]$OIDPrefix,
 		[Parameter(Position = 1, Mandatory)]
@@ -204,17 +248,13 @@ Function Add-ADSchemaClass {
 		[string]$Type,
 		[Parameter(Position = 3)][ValidateRange(1, 65535)]
 		[uint16]$Suffix = 1,
-		[switch]$IncludeSuffixInName,
-		[string]$Server = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().SchemaRoleOwner.Name,
-		[string]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema().Name
+		[switch]$IncludeSuffixInName
 	)
 
-	#c heck attribute type variable
+	#check attribute type variable
 	switch ($Type) {
 		'aux' {
-			$ad_class_definition = [PSCustomObject]@{
-				adminTextPrefix     = 'custom-auxiliary-class-'
-				objectClass         = 'classSchema'
+			$ClassProperties = [PSCustomObject]@{
 				objectClassCategory = 3
 				rdnAttId            = '2.5.4.3'
 				subClassOf          = '2.5.6.0'
@@ -227,144 +267,177 @@ Function Add-ADSchemaClass {
 		}
 	}
 
-	# force refresh of schema before update
-	$ad_root_dse = Get-ADRootDSE -Server $Server
-	$ad_root_dse.schemaUpdateNow = $true
-
-	# create strings
-	$ad_class_suffix = ($Suffix).ToString()
-	If ($IncludeSuffixInName) {
-		$ad_class_name = "$NamePrefix$((Get-Culture).TextInfo.ToTitleCase($Type.ToLower()))$ad_class_suffix"
-	}
-	Else {
-		$ad_class_name = "$NamePrefix$((Get-Culture).TextInfo.ToTitleCase($Type.ToLower()))Class"
-	}
-
-	#check if class exists
+	# refresh schema before update
 	Try {
-		$ad_class_path = "CN=$ad_class_name,$Schema"
-		$ad_class_found = Get-ADObject -Server $Server -Identity $ad_class_path
-		Write-Host "Class '$($ad_class_found.Name)' was ALREADY created"
+		$Schema.RefreshSchema()
 	}
 	Catch {
-		# create strings for schema object
-		$ad_class_text = ($ad_class_definition.adminTextPrefix + $ad_class_suffix)
-		$ad_class_governsID = "$OIDPrefix.$ad_class_suffix"
+		Return $_
+	}
 
-		# create class
-		$ad_class_object = @{
-			lDAPDisplayName     = $ad_class_name
-			adminDisplayName    = $ad_class_text
-			adminDescription    = $ad_class_text
-			governsID           = $ad_class_governsID
-			# objectClass         = $ad_class_definition.objectClass
-			objectClassCategory = $ad_class_definition.objectClassCategory
-			subClassOf          = $ad_class_definition.subClassOf
-			rdnAttId            = $ad_class_definition.rdnAttId
-			systemOnly          = $ad_class_definition.systemOnly
+	# create suffix string
+	If ($IncludeSuffixInName) {
+		$SuffixString = $Suffix.ToString()
+	}
+	Else {
+		$SuffixString = 'Class'
+	}
+
+	# create strings
+	$ClassName = '{0}{1}{2}' -f $NamePrefix, [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.ToTitleCase($Type.ToLower()), $SuffixString
+	$ClassIdentity = '{0}{1}{2}' -f $ClassName, $SchemaNamingContext
+
+	# retrieve class object
+	Try {
+		$ClassObject = Get-ADObject -Server $Server -Identity $ClassIdentity
+	}
+	Catch {
+		$ClassObject = $null
+	}
+
+	# if class object exists...
+	If ($null -ne $ClassObject) {
+		# report and return
+		Write-Host "Class '$($ClassObject.Name)' was ALREADY created"
+		Return
+	}
+
+	# create class
+	$OtherAttributes = @{
+		lDAPDisplayName     = $ClassName
+		adminDisplayName    = $ClassName
+		adminDescription    = $ClassName
+		governsID           = '{0}.{1}' -f $OIDPrefix, $Suffix
+		objectClassCategory = $ClassProperties.objectClassCategory
+		subClassOf          = $ClassProperties.subClassOf
+		rdnAttId            = $ClassProperties.rdnAttId
+		systemOnly          = $ClassProperties.systemOnly
+	}
+
+	# declare values
+	Write-Host ''
+	Write-Host "Class '$ClassName' was NOT found and WILL be created as:"
+	$OtherAttributes
+	Write-Host ''
+
+	# define ShouldProcess values
+	$ShouldProcessMessage = "Class '$ClassName' WOULD have been created"
+	$ShouldProcessAction = 'Create auxiliary class'
+	$ShouldProcessTarget = $ClassName
+
+	# create the class
+	If ($PSCmdlet.ShouldProcess($ShouldProcessMessage, $ShouldProcessAction, $ShouldProcessTarget)) {
+		Try {
+			New-ADObject -Server $Server -Name $ClassName -Type 'classSchema' -Path $Schema -OtherAttributes $OtherAttributes
+			Write-Host "Class '$ClassName' was SUCCESSFULLY created"
 		}
-
-		# declare values
-		Write-Host ''
-		Write-Host "Class '$ad_class_name' was NOT found and WILL be created as:"
-		$ad_class_object
-		Write-Host ''
-
-		# create the class
-		If ($PSCmdlet.ShouldProcess($ad_class_name)) {
-			Try {
-				New-ADObject -Server $Server -Name $ad_class_name -Type 'classSchema' -Path $Schema -OtherAttributes $ad_class_object
-				Write-Host "Class '$ad_class_name' was SUCCESSFULLY created"
-			}
-			Catch {
-				Write-Error "Class '$ad_class_name' was NOT created"
-				Return $_
-			}
-		}
-		Else {
-			Write-Host "Class '$ad_class_name' WOULD have been created"
+		Catch {
+			Write-Warning -Message "Class '$ClassName' was NOT created"
+			Return $_
 		}
 	}
 
-	# force refresh of schema after update
-	$ad_root_dse.schemaUpdateNow = $true
+	# reload schema after update
+	If ($PSCmdlet.ShouldProcess($Server, 'Update active schema')) {
+		$RootDSE.Put('schemaUpdateNow', 1)
+		$RootDSE.SetInfo()
+	}
 }
 
 Function Add-ADSchemaClassToParent {
 	[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 	param (
+		[Parameter(DontShow)]
+		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
+		[Parameter(DontShow)]
+		[string]$SchemaNamingContext = $Schema.Name,
+		[Parameter(DontShow)]
+		[string]$Server = $Schema.SchemaRoleOwner.Name,
+		[Parameter(DontShow)]
+		[object]$RootDSE = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/RootDSE"),
 		[Parameter(Position = 0, Mandatory)]
 		[string]$Class,
 		[Parameter(Position = 1, Mandatory)]
-		[string]$ParentClass,
-		[string]$Server = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().SchemaRoleOwner.Name,
-		[string]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema().Name
+		[string]$ParentClass
 	)
 
-	# force refresh of schema before update
-	$ad_root_dse = Get-ADRootDSE -Server $Server
-	$ad_root_dse.schemaUpdateNow = $true	
-
-	# verify the child class object
+	# refresh schema before update
 	Try {
-		$ad_class_path = "CN=$Class,$Schema"
-		$ad_class_object = Get-ADObject -Server $Server -Identity $ad_class_path -Properties 'governsID'
+		$Schema.RefreshSchema()
 	}
 	Catch {
-		Write-Error "Class '$Class' does NOT exist"
-		Return $null
+		Return $_
+	}
+
+	# create strings
+	$ClassIdentity = 'CN={0},{1}' -f $Class, $SchemaNamingContext
+	$ParentClassIdentity = 'CN={0},{1}' -f $ParentClass, $SchemaNamingContext
+
+	# verify class
+	Try {
+		$ClassObject = Get-ADObject -Server $Server -Identity $ClassIdentity -Properties 'governsID'
+	}
+	Catch {
+		Write-Warning -Message "Class '$Class' was NOT found"
+		Return
 	}
 
 	# verify the parent class object
 	Try {
-		$ad_parent_path = "CN=$ParentClass,$Schema"
-		$ad_parent_object = Get-ADObject -Server $Server -Identity $ad_parent_path -Properties 'auxiliaryClass'
+		$ParentClassObject = Get-ADObject -Server $Server -Identity $ParentClassIdentity -Properties 'auxiliaryClass'
 	}
 	Catch {
-		Write-Error "Class '$ParentClass' does NOT exist, exiting!"
-		Return $null
+		Write-Warning -Message "Class '$ParentClass' was NOT found"
+		Return
 	}
 
-	# check auxiliaryClass attribute of parent class for name of child class
-	If ($ad_parent_object.auxiliaryClass -match $Class) {
+	# if parent class auxiliary class attribute already contains child class...
+	If ($ParentClassObject.auxiliaryClass.Contains($Class)) {
+		# report and return
 		Write-Host "Class '$Class' was ALREADY an auxiliary class of '$ParentClass'"
+		Return
 	}
-	Else {
-		# add governsID of child class to auxiliaryClass attribute of parent class
-		If ($PSCmdlet.ShouldProcess("$Class to $ParentClass")) {
-			Try {
-				Set-ADObject -Server $Server -Identity $ad_parent_path -Add @{ auxiliaryClass = $ad_class_object.governsID }
-				Write-Host "Class '$Class' was SUCCESSFULLY added as an auxiliary class of '$ParentClass'"
-			}
-			Catch {
-				Write-Error "Class '$Class' was NOT added as an auxiliary class of '$ParentClass'"
-				Return $_
-			}
+
+	# define ShouldProcess values
+	$ShouldProcessMessage = "Class '$Class' WOULD have been added as an auxiliary class of '$ParentClass'"
+	$ShouldProcessAction = "Add auxiliary class to '$ParentClass' class"
+	$ShouldProcessTarget = $Class
+
+	# add governsID of child class to auxiliaryClass attribute of parent class
+	If ($PSCmdlet.ShouldProcess($ShouldProcessMessage, $ShouldProcessAction, $ShouldProcessTarget)) {
+		Try {
+			Set-ADObject -Server $Server -Identity $ParentClassIdentity -Add @{ auxiliaryClass = $ClassObject.governsID }
+			Write-Host "Class '$Class' was SUCCESSFULLY added as an auxiliary class of '$ParentClass'"
 		}
-		Else {
-			Write-Host "Class '$Class' WOULD have been added as an auxiliary class of '$ParentClass'"
+		Catch {
+			Write-Warning -Message "Class '$Class' was NOT added as an auxiliary class of '$ParentClass'"
+			Return $_
 		}
 	}
 
-	# force refresh of schema after update
-	$ad_root_dse.schemaUpdateNow = $true
+	# reload schema after update
+	If ($PSCmdlet.ShouldProcess($Server, 'Update active schema')) {
+		$RootDSE.Put('schemaUpdateNow', 1)
+		$RootDSE.SetInfo()
+	}
 }
 
 Function Get-ADSchemaClass {
 	[CmdletBinding()]
 	Param (
+		[Parameter(DontShow)]
+		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
+		[Parameter(DontShow)]
+		[string]$SchemaNamingContext = $Schema.Name,
+		[Parameter(DontShow)]
+		[string]$Server = $Schema.SchemaRoleOwner.Name,
+		[Parameter(DontShow)]
+		[object]$RootDSE = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/RootDSE"),
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		[string]$ObjectClass,
-		[Parameter(Position = 1)]
-		[string]$Server = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().SchemaRoleOwner.Name,
 		[Parameter(Position = 2)]
 		[switch]$Reset
 	)
-
-	# check schema context
-	If ($null -eq $ad_nc_schema) {
-		New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_nc_schema' -Value ([System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema().Name)
-	}
 
 	# check class hastable
 	If ($null -eq $ad_schema_classes) {
@@ -381,7 +454,7 @@ Function Get-ADSchemaClass {
 		$ad_schema_classes_ldapquery = "(&(objectCategory=classSchema)(objectClass=classSchema)(lDAPDisplayName=$ObjectClass))"
 
 		# retrieve schema object for requested class
-		$ad_schema_object = Get-ADObject -Server $Server -SearchBase $ad_nc_schema -LDAPFilter $ad_schema_classes_ldapquery -Properties *
+		$ad_schema_object = Get-ADObject -Server $Server -SearchBase $SchemaNamingContext -LDAPFilter $ad_schema_classes_ldapquery -Properties *
 
 		# verify requested class exists
 		If ($null -ne $ad_schema_object) {
@@ -401,10 +474,16 @@ Function Get-ADSchemaClass {
 Function Get-ADSchemaClassAncestry {
 	[CmdletBinding()]
 	Param (
+		[Parameter(DontShow)]
+		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
+		[Parameter(DontShow)]
+		[string]$SchemaNamingContext = $Schema.Name,
+		[Parameter(DontShow)]
+		[string]$Server = $Schema.SchemaRoleOwner.Name,
+		[Parameter(DontShow)]
+		[object]$RootDSE = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/RootDSE"),
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		[string]$ObjectClass,
-		[Parameter(Position = 1)]
-		[string]$Server = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().SchemaRoleOwner.Name,
 		[Parameter(Position = 2)]
 		[switch]$Reset
 	)
@@ -460,10 +539,16 @@ Function Get-ADSchemaClassAncestry {
 Function Get-ADSchemaClassAttributes {
 	[CmdletBinding()]
 	Param (
+		[Parameter(DontShow)]
+		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
+		[Parameter(DontShow)]
+		[string]$SchemaNamingContext = $Schema.Name,
+		[Parameter(DontShow)]
+		[string]$Server = $Schema.SchemaRoleOwner.Name,
+		[Parameter(DontShow)]
+		[object]$RootDSE = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/RootDSE"),
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		[string]$ObjectClass,
-		[Parameter(Position = 1)]
-		[string]$Server = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().SchemaRoleOwner.Name,
 		[Parameter(Position = 2)]
 		[switch]$Reset
 	)
@@ -512,18 +597,19 @@ Function Get-ADSchemaClassAttributes {
 Function Get-ADSchemaAttribute {
 	[CmdletBinding()]
 	Param (
+		[Parameter(DontShow)]
+		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
+		[Parameter(DontShow)]
+		[string]$SchemaNamingContext = $Schema.Name,
+		[Parameter(DontShow)]
+		[string]$Server = $Schema.SchemaRoleOwner.Name,
+		[Parameter(DontShow)]
+		[object]$RootDSE = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/RootDSE"),
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		[string]$Attribute,
-		[Parameter(Position = 1)]
-		[string]$Server = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().SchemaRoleOwner.Name,
 		[Parameter(Position = 2)]
 		[switch]$Reset
 	)
-
-	# check for existing schema context
-	If ($null -eq $ad_nc_schema) {
-		New-Variable -Force -Scope 'Global' -Option 'ReadOnly' -Name 'ad_nc_schema' -Value ([System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema().Name)
-	}
 
 	# check for existing attribute hastable
 	If ($null -eq $ad_schema_attributes) {
