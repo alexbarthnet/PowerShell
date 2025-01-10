@@ -18,7 +18,7 @@ Function Find-ADGroup {
 	# check for group
 	Try {
 		# retrieve group with identity
-		$ADGroup = Get-ADGroup -Server $Server -Identity $Identity -Properties $Properties
+		$ADGroup = Get-ADGroup -Server $Server -Identity $Identity -Properties $Properties -ErrorAction 'Stop'
 	}
 	Catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
 		# set boolean and continue
