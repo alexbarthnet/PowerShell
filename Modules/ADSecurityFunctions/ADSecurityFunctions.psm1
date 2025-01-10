@@ -215,7 +215,7 @@ Function Get-ADSecurityIdentifier {
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		[object]$Principal,
 		[Parameter(Position = 1)]
-		[string]$Domain = [System.Environment]::UserDomainName
+		[string]$Server
 	)
 
 	# if principal is a SecurityIdentifier object...
@@ -272,6 +272,58 @@ Function Get-ADSecurityIdentifier {
 		}
 		'(^|^\w+\\)Terminal Server License Servers$' {
 			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-561')
+		}
+	}
+
+	# if server provided...
+	If ($PSBoundParameters.ContainsKey('Server')) {
+		# define parameters for Get-ADObject
+		$GetADObject = @{
+			Server      = $Server
+			Properties  = 'ObjectSid'
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# retrieve object by UserPrincipalName
+		Try {
+			$ADObject = Get-ADObject @GetADObject -Filter "UserPrincipalName -eq '$Principal'"
+		}
+		Catch {
+			Write-Warning -Message "could not query Active Directory for object by UserPrincipalName for principal: $Principal"
+			Return $_
+		}
+
+		# if ADObject found...
+		If ($ADObject) {
+			Return $ADObject.ObjectSid
+		}
+
+		# retrieve object by SamAccountName
+		Try {
+			$ADObject = Get-ADObject @GetADObject -Filter "SamAccountName -eq '$Principal'"
+		}
+		Catch {
+			Write-Warning -Message "could not query Active Directory for object by SamAccountName for principal: $Principal"
+			Return $_
+		}
+
+		# if ADObject found...
+		If ($ADObject) {
+			Return $ADObject.ObjectSid
+		}
+
+		# retrieve object by SamAccountName with $ suffix for computer objects
+		Try {
+			$ADObject = Get-ADObject @GetADObject -Filter "SamAccountName -eq '$Principal$'"
+		}
+		Catch {
+			Write-Warning -Message "could not query Active Directory for object by SamAccountName for principal: $Principal"
+			Return $_
+		}
+
+		# if ADObject found...
+		If ($ADObject) {
+			Return $ADObject.ObjectSid
 		}
 	}
 
