@@ -189,7 +189,7 @@ Function Get-ADSecurityIdentifier {
 	.PARAMETER Principal
 	A object representing a security principal in Active Directory. Must be one of the following object types:
 	 - a Security Identifier object
-	 - an NTAccount object 
+	 - an NTAccount object
 	 - an ADPrincipal-derived object such as an Active Directory user, computer, or group object
 	 - a string containing a Security Identifier in SDDL format
 	 - a string containing a value that can be translated into a Security Identifier object
@@ -267,7 +267,7 @@ Function Get-ADSecurityIdentifier {
 		'(^|^\w+\\)Incoming Forest Trust Builders$' {
 			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-557')
 		}
-		'(^|^\w+\\)Windows Authorization Access Group$' { 
+		'(^|^\w+\\)Windows Authorization Access Group$' {
 			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-560')
 		}
 		'(^|^\w+\\)Terminal Server License Servers$' {
@@ -568,7 +568,7 @@ Function New-ADAccessRule {
 	The Active Directory rights for the access rule. The default value is 'GenericRead'
 
 	.PARAMETER ObjectName
-	The display name of the object type for the access rule. 
+	The display name of the object type for the access rule.
 
 	.PARAMETER AccessControlType
 	The access control type for the access rule. The default value is 'Allow'
@@ -577,7 +577,7 @@ Function New-ADAccessRule {
 	The inheritance type for the access rule. The default value is 'All'
 
 	.PARAMETER InheritingObjectName
-	The display name of the inheriting object type for the access rule. 
+	The display name of the inheriting object type for the access rule.
 
 	.PARAMETER AccessRule
 	Optional parameter for an existing list of access rules. The access rules created will be added to this list and the updated list will be returned.
@@ -1114,6 +1114,7 @@ Function New-ADAccessRule {
 					inheritanceType     = 'Descendents'
 					inheritedObjectType = [guid]'bf967aa5-0de6-11d0-a285-00aa003049e2' # GUID for 'organizationalUnit' objects
 				}
+
 				# create ACE and add to array
 				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
