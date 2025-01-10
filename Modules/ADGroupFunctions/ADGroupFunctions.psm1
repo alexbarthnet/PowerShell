@@ -12,6 +12,8 @@ Function Find-ADGroup {
 		[Parameter(Position = 3)][ValidateSet('DomainLocal', 'Global', 'Universal')]
 		[string]$GroupScope = 'Universal',
 		[Parameter(Position = 4)]
+		[string]$Path,
+		[Parameter(DontShow)]
 		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
 	)
 
@@ -21,39 +23,50 @@ Function Find-ADGroup {
 		$ADGroup = Get-ADGroup -Server $Server -Identity $Identity -Properties $Properties -ErrorAction 'Stop'
 	}
 	Catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
-		# set boolean and continue
-		$NotFound = $true
+		# if Identity is an ADObject...
+		If ($PSBoundParameters['Identity'] -is [Microsoft.ActiveDirectory.Management.ADObject]) {
+			# warn and return exception
+			Write-Warning -Message "identity not found exception thrown when retrieving group for ADObject with identity: '$Identity'"
+			Return $_
+		}
+		Else {
+			# set boolean and continue
+			$NotFound = $true
+		}
 	}
 	Catch [System.UnauthorizedAccessException] {
-		# warn and contine on unauthorized
+		# warn and return exception
 		Write-Warning -Message "unauthorized exception thrown when retrieving group with identity: '$Identity'"
 		Return $_
 	}
 	Catch {
-		# warn and contine on unauthorized
+		# warn and return exception
 		Write-Warning -Message "unhandled exception thrown when retrieving group with identity: $Identity"
 		Return $_
 	}
 
 	# if group not found...
 	If ($NotFound) {
-		# if identity is an ADObject...
-		If ($PSBoundParameters['Identity'] -is [Microsoft.ActiveDirectory.Management.ADObject]) {
-			# get distinguished name from object
-			$DistinguishedName = $PSBoundParameters[$Identity].DistinguishedName
+		# if Path provided...
+		If ($PSBoundParameters.ContainsKey('Path')) {
+			# assume Identity is name of group
+			$Name = $Identity
 		}
-		# if identity is an ADObject...
+		# if Path not provided...
 		Else {
-			# set distinguished name to input
-			$DistinguishedName = $PSBoundParameters[$Identity]
+			# assume Identity is distinguished name then split into relative distinguished name and path
+			$RDN, $Path = $PSBoundParameters[$Identity].Split(',', 2)
+
+			# retrieve name from relative distinguished name
+			$Name = $RDN -replace '^CN='
 		}
 
 		# define parameters for New-ADGroup from distinguished name
 		$NewADGroup = @{
 			Server         = $Server
-			Path           = $DistinguishedName.Split(',', 2)[1]
-			Name           = $DistinguishedName.Split(',', 2)[0].Replace('CN=', $null)
-			SamAccountName = $DistinguishedName.Split(',', 2)[0].Replace('CN=', $null)
+			Path           = $Path
+			Name           = $Name
+			SamAccountName = $Name # force SAM account name to avoid random SAM creation
 			GroupCategory  = $GroupCategory
 			GroupScope     = $GroupScope
 			PassThru       = $true
