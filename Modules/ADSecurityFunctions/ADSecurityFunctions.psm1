@@ -194,7 +194,10 @@ Function Get-ADSecurityIdentifier {
 	 - a string containing a Security Identifier in SDDL format
 	 - a string containing a value that can be translated into a Security Identifier object
 
-	.INPUTS
+	.PARAMETER Server
+	An optional value to specify the domain controller to query for retrieving the security identifier
+
+	 .INPUTS
 	System.String, System.Security.Principal.NTAccount, System.Security.Principal.SecurityIdentifier, Microsoft.ActiveDirectory.Management.ADPrincipal.
 
 	.OUTPUTS
