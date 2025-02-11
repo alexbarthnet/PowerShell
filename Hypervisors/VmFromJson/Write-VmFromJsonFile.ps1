@@ -148,7 +148,7 @@ Param(
 	[string]$DeploymentServer,
 	# OS Deployment - based upon Deployment Method
 	#  ISO	: literal path to ISO file on hypervisor
-	#  WDS	: relative path to unattend XML file on WDS server
+	#  VHD	: literal path to VHD file on hypervisor
 	#  SCCM	: distinguished name of OU where VM will be created
 	[Parameter(Position = 5, ParameterSetName = 'AddOSD')]
 	[string]$DeploymentPath,
@@ -161,6 +161,15 @@ Param(
 	# OS Deployment - SCCM - maintenance window collection
 	[Parameter(Position = 8, ParameterSetName = 'AddOSD')]
 	[string]$MaintenanceCollection,
+	# OS Deployment - VHD - literal path to unattend XML file on hypervisor
+	[Parameter(Position = 9, ParameterSetName = 'AddOSD')]
+	[string]$UnattendFile,
+	# OS Deployment - VHD - FQDN of domain for VM to join
+	[Parameter(Position = 10, ParameterSetName = 'AddOSD')]
+	[string]$DomainName,
+	# OS Deployment - VHD - FQDN of OU where VM will be created
+	[Parameter(Position = 11, ParameterSetName = 'AddOSD')]
+	[string]$OrganizationalUnit,
 	# VM - optional affinity rules for clustered VMs
 	[Parameter(Position = 22, ParameterSetName = 'Add')]
 	[string[]]$ClusterAffinityRules,
