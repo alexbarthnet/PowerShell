@@ -1468,7 +1468,7 @@ Begin {
 		}
 	}
 
-	Function Add-IsoToVm {
+	Function Add-IsoToVM {
 		[CmdletBinding()]
 		Param (
 			# define VM parameters
@@ -3574,7 +3574,7 @@ Process {
 						# mount ISO file on VM
 						Try {
 							Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via ISO file")
-							Add-IsoToVm @AddIsoToVM
+							Add-IsoToVM @AddIsoToVM
 						}
 						Catch {
 							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add ISO to VM")
