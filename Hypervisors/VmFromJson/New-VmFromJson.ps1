@@ -2908,6 +2908,334 @@ Begin {
 		}
 	}
 
+	Function Copy-VHDFromParams {
+		[CmdletBinding()][Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', '')]
+		Param (
+			# define VM parameters
+			[Parameter(Mandatory = $true)]
+			[object]$VM,
+			[string]$ComputerName = $VM.ComputerName.ToLower(),
+			[string]$VMName = $VM.Name.ToLower(),
+			# define OSD parameters
+			[Parameter(Mandatory)]
+			[string]$DeploymentPath,
+			[string]$UnattendFile,
+			[string]$Username,
+			[string]$Password,
+			[string]$Domainname,
+			[string]$OrganizationalUnit
+		)
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# get VM from parameters
+		Try {
+			$VM = Get-VMFromParameters -ComputerName $ComputerName -VM $VM
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
+			Throw $_
+		}
+
+		# update argument list for Test-Path
+		$InvokeCommand['ArgumentList']['Path'] = $DeploymentPath
+
+		# test deployment path
+		Try {
+			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				$TestPath = @{
+					Path        = $ArgumentList['Path']
+					PathType    = [Microsoft.PowerShell.Commands.TestPathType]::Leaf
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				Test-Path @TestPath
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not check provided path")
+			Throw $_
+		}
+
+		# evaluate deployment path
+		If (-not $TestPath) {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD attach, host did not find file: '$DeploymentPath'")
+			Return
+		}
+
+		# retrieve VM firmware
+		Try {
+			$VMFirmware = Get-VMFirmware -VM $VM
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM firmware")
+			Throw $_
+		}
+
+		# retrieve path to first hard drive in boot order
+		$VhdPath = $VMFirmware.BootOrder.Where({ $_.Device -is [Microsoft.HyperV.PowerShell.HardDiskDrive] }).Device.Path | Select-Object -First 1
+
+		# evaluate path to first hard drive
+		If (-not $VhdPath) {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD copy, could not locate first VHD in boot order")
+			Return
+		}
+
+		# update argument list for Get-Item
+		$InvokeCommand['ArgumentList']['Path'] = $VhdPath
+
+		# retrieve first hard drive
+		Try {
+			$GetItem = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				$GetItem = @{
+					Path        = $ArgumentList['Path']
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				Get-Item @GetItem
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve first VHD in boot order: '$VhdPath'")
+			Throw $_
+		}
+
+		# evaluate first hard drive
+		If ($GetItem.Length -gt 4MB) {
+			Write-Warning ("$Hostname,$ComputerName,$Name - found first VHD larger than expected: '$(Format-Bytes -Size $GetItem.Length)'")
+			Write-Warning ("$Hostname,$ComputerName,$Name - replace first VHD?") -WarningAction Inquire
+		}
+
+		# update argument list for Copy-Item
+		$InvokeCommand['ArgumentList']['Path'] = $DeploymentPath
+		$InvokeCommand['ArgumentList']['Destination'] = $VhdPath
+
+		# copy deployment path to VHD
+		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...copying source VHD")
+			$CopyItem = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				$CopyItem = @{
+					Path        = $ArgumentList['Path']
+					Destination = $ArgumentList['Destination']
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				Copy-Item @CopyItem
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not copy VHD from provided path to destination: '$Destination'")
+			Throw $_
+		}
+
+		# update argument list for Get-ACL
+		$InvokeCommand['ArgumentList']['Path'] = $VhdPath
+		$InvokeCommand['ArgumentList']['VMId'] = $VM.Id
+		$InvokeCommand['ArgumentList'].Remove('Destination')
+
+		# update permissions
+		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...updating VHD ACL")
+			Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				# import parameters for VMId
+				$VMId = $ArgumentList['VMId']
+				# define parameters for Get-Acl
+				$GetAcl = @{
+					Path        = $ArgumentList['Path']
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				# retrieve ACL
+				$Acl = Get-Acl @GetAcl
+				# define VM prinicpal
+				$VMPrincipal = [System.Security.Principal.NTAccount]::new("NT VIRTUAL MACHINE\$($VMId)")
+				# create access rule
+				$AccessRule = [System.Security.AccessControl.FileSystemAccessRule]::new($VMPrincipal, @('Read', 'Write', 'Synchronize'), 'None', 'None', 'Allow')
+				# add access rule to ACL
+				$Acl.AddAccessRule($AccessRule)
+				# define parameters for Set-Acl
+				$SetAcl = @{
+					Acl         = $Acl
+					Path        = $ArgumentList['Path']
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				# update ACL
+				Set-Acl @SetAcl
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not update ACL for VHD: '$Destination'")
+			Throw $_
+		}
+
+		# if deployment file not provided...
+		If (!$PSBoundParameters.ContainsKey('UnattendFile')) {
+			Return
+		}
+
+		# update argument list for Test-Path
+		$InvokeCommand['ArgumentList']['Path'] = $UnattendFile
+
+		# test deployment file
+		Try {
+			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				$TestPath = @{
+					Path        = $ArgumentList['Path']
+					PathType    = [Microsoft.PowerShell.Commands.TestPathType]::Leaf
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				Test-Path @TestPath
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not check provided path")
+			Throw $_
+		}
+		
+		# evaluate deployment file
+		If (-not $TestPath) {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD update, host did not find unattend file: '$UnattendFile'")
+			Return
+		}
+
+		# update argument list for Mount-VHD
+		$InvokeCommand['ArgumentList']['Path'] = $VhdPath
+
+		# mount VHD
+		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...mounting copied VHD: '$VhdPath")
+			$DriveLetter = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				$MountVHD = @{
+					Path        = $ArgumentList['Path']
+					Passthru    = $true
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				Mount-VHD @MountVHD | Get-Disk | Get-Partition | Get-Volume | Select-Object -ExpandProperty 'DriveLetter'
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not mount VHD: '$VhdPath'")
+			Throw $_
+		}
+		
+		# evaluate deployment path
+		If (-not $DriveLetter) {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD attach, could not mount VHD: '$Destination'")
+			Return
+		}
+
+		# update argument list for Copy-Item with original unattend file
+		$InvokeCommand['ArgumentList']['Path'] = $UnattendFile
+
+		# update unattend file path
+		$UnattendFile = '{0}:\Windows\Panther\unattend.xml' -f $DriveLetter
+
+		# update argument list for Copy-Item with original unattend file
+		$InvokeCommand['ArgumentList']['Destination'] = $UnattendFile
+
+		# copy file to VHD
+		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...updating VHD with unattend file: '$UnattendFile'")
+			Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				$CopyItem = @{
+					Path        = $ArgumentList['Path']
+					Destination = $ArgumentList['Destination']
+					Force       = $true
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				Copy-Item @CopyItem
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not copy file: '$UnattendFile'")
+			Throw $_
+		}
+
+		# update argument list for Get-Content and Set-Content
+		$InvokeCommand['ArgumentList']['Path'] = $UnattendFile
+
+		# define hashtable for variables
+		$VariableHashtable = [ordered]@{
+			'%COMPUTERNAME%' = $VMName
+		}
+
+		# if Username provided...
+		If ($PSBoundParameters.ContainsKey('Username')) { 
+			$VariableHashtable['%USERNAME%'] = $Username
+		}
+
+		# if Password provided...
+		If ($PSBoundParameters.ContainsKey('Password')) { 
+			$VariableHashtable['%PASSWORD%'] = $Password
+		}
+
+		# if DomainName provided...
+		If ($PSBoundParameters.ContainsKey('DomainName')) { 
+			$VariableHashtable['%DOMAINNAME%'] = $DomainName
+		}
+
+		# if OrganizationalUnit provided...
+		If ($PSBoundParameters.ContainsKey('OrganizationalUnit')) { 
+			$VariableHashtable['%ORGANIZATIONALUNIT%'] = $OrganizationalUnit
+		}
+
+		# loop through variables
+		ForEach ($Variable in $VariableHashtable.Keys) {
+			# update argument list for 
+			$InvokeCommand['ArgumentList']['VariableName'] = $Variable
+			$InvokeCommand['ArgumentList']['VariableValue'] = $VariableHashtable[$Variable]
+			
+			# update file on VHD
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...replacing values in deployment file: $Variable")
+				Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
+					# get variables from arguments
+					$Path = $ArgumentList['Path']
+					$Variable = $ArgumentList['VariableName']
+					$VariableValue = $ArgumentList['VariableValue']
+					# get content of deployement file
+					$Content = Get-Content -Path $Path -Raw
+					$Content = $Content.Replace($Variable, $VariableValue)
+					$Content | Set-Content -Path $Path -Force
+				}
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not update file: '$UnattendFile'")
+				Throw $_
+			}
+		}
+
+		# update argument list for Dismount-VHD
+		$InvokeCommand['ArgumentList']['Path'] = $VhdPath
+
+		# dismount VHD
+		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...dismounting updated VHD: '$VhdPath")
+			Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				$DismountVHD = @{
+					Path        = $ArgumentList['Path']
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				Dismount-VHD @DismountVHD
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not dismount VHD: '$VhdPath'")
+			Throw $_
+		}
+	}
+
 	Function New-VHDFromParams {
 		[CmdletBinding()]
 		Param(
@@ -3578,6 +3906,28 @@ Process {
 						}
 						Catch {
 							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add ISO to VM")
+							Throw $_
+						}
+					}
+					'VHD' {
+						# define parameters for Copy-VHDFromParams
+						$CopyVHDFromParams = @{
+							VM                 = $VM
+							DeploymentPath     = $JsonData.$Name.OSDeployment.DeploymentPath
+							UnattendFile       = $JsonData.$Name.OSDeployment.UnattendFile
+							Username           = $JsonData.$Name.OSDeployment.Username
+							Password           = $JsonData.$Name.OSDeployment.Password
+							DomainName         = $JsonData.$Name.OSDeployment.DomainName
+							OrganizationalUnit = $JsonData.$Name.OSDeployment.OrganizationalUnit
+						}
+						
+						# mount ISO file on VM
+						Try {
+							Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via VHD file")
+							Copy-VHDFromParams @CopyVHDFromParams
+						}
+						Catch {
+							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VHD to VM")
 							Throw $_
 						}
 					}
