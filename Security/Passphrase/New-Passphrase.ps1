@@ -22,15 +22,15 @@ Param(
 	[uint16]$WordCount = 2,
 	# minimum length of generated passphrase
 	[Parameter()][ValidateRange(16, 256)]
-	[uint16]$Length = 15,
-	# mode for how delimiters are added to the passphrase
-	[Parameter()][ValidateSet('None', 'Simple', 'Numbers', 'NumbersWithDelimiter', 'Random', 'RandomWithNumbers')]
-	[string]$DelimiterMode = 'None',
-	# type of delimiters to use when random delimiters requested
-	[ValidateSet('Simple', 'Complete')]
-	[string]$DelimiterType = 'Simple',
+	[uint16]$Length = 16,
+	# length of number strings added to passphrase
+	[Parameter()][ValidateRange(1, 8)]
+	[uint16]$NumberLength = 2,
+	# length of delimiter strings added to passphrase
+	[Parameter()][ValidateRange(1, 8)]
+	[uint16]$DelimiterLength = 1,
+	# string to define delimiter
 	[string]$Delimiter,
-
 	# switch to include numbers in the passphrase
 	[switch]$IncludeNumbers,
 	# switch to include delimiters in the passphrase
@@ -40,61 +40,70 @@ Param(
 	# switch to use complex delimiters
 	[switch]$UseComplexDelimiters,
 	# preset for Direction, SkipExisting, SkipDelete
-	[ValidateSet('Default', 'Contribute', 'Mirror', 'Merge')]
-	[string]$Preset = 'Default'
+	[ValidateSet('Words', 'WithNumbers', 'WithNumbersAndDelimiter', 'WithNumbersWithRandomDelimiters', 'WithRandomDelimiters')]
+	[string]$Preset = 'Words'
 )
 
-Function Get-RandomNumber { 
+Function Get-RandomNumber {
 	Param(
-		$UpperBound = ([System.int32]::MaxValue)
+		$UpperBound = ([System.UInt64]::MaxValue)
 	)
 
-	# define an empty 32-bit byte array to store the 32-bit number
-	$Bytes = [byte[]]::new(4)
+	# define an empty 64-bit byte array
+	$Bytes = [byte[]]::new(8)
 
 	# create a RandomNumberGenerator object
 	$RandomNumberGenerator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
 
-	# generate a random integer between 0 and 100
+	# populate byte array with random bytes
 	$RandomNumberGenerator.GetBytes($Bytes)
 
-	# define upper bound for the random number
-	$RandomNumber = [BitConverter]::ToUInt32($Bytes, 0) % $UpperBound
+	# convert byte array to 64-bit integer
+	$RandomNumber = [BitConverter]::ToUInt64($Bytes, 0) % $UpperBound
 
 	# Print the random number
 	Return $RandomNumber
 }
 
 Function Resolve-PresetToParameters {
-	# resolve Direction
-	If (!$script:PSBoundParameters.ContainsKey('Direction')) {
-		If ($script:Preset -eq 'Sync' -or $script:Preset -eq 'Merge') {
-			$script:Direction = 'Both'
+	# resolve IncludeNumbers
+	If (!$script:PSBoundParameters.ContainsKey('IncludeNumbers')) {
+		If ($script:Preset -in 'WithNumbers', 'WithNumbersAndDelimiter', 'WithNumbersWithRandomDelimiters') {
+			$script:IncludeNumbers = $true
 		}
-		If ($script:Preset -eq 'Mirror' -or $script:Preset -eq 'Contribute' -or $script:Preset -eq 'Missing') {
-			$script:Direction = 'Forward'
-		}
-	}
-
-	# resolve SkipDelete
-	If (!$script:PSBoundParameters.ContainsKey('SkipDelete')) {
-		If ($script:Preset -eq 'Merge' -or $script:Preset -eq 'Contribute' -or $script:Preset -eq 'Missing') {
-			$script:SkipDelete = $true
-		}
-		If ($script:Preset -eq 'Sync' -or $script:Preset -eq 'Mirror') {
-			$script:SkipDelete = $false
+		Else {
+			$script:IncludeNumbers = $false
 		}
 	}
 
-	# resolve SkipExisting
-	If (!$script:PSBoundParameters.ContainsKey('SkipExisting')) {
-		If ($script:Preset -eq 'Missing') {
-			$script:SkipExisting = $true
+	# resolve IncludeDelimiters
+	If (!$script:PSBoundParameters.ContainsKey('IncludeDelimiters')) {
+		If ($script:Preset -in 'WithNumbersAndDelimiter', 'WithNumbersWithRandomDelimiters', 'WithRandomDelimiters') {
+			$script:IncludeDelimiters = $true
 		}
-		If ($script:Preset -eq 'Sync' -or $script:Preset -eq 'Merge' -or $script:Preset -eq 'Mirror' -or $script:Preset -eq 'Contribute') {
-			$script:SkipExisting = $false
+		Else {
+			$script:IncludeDelimiters = $false
 		}
 	}
+
+	# resolve RandomizeDelimiters
+	If (!$script:PSBoundParameters.ContainsKey('RandomizeDelimiters')) {
+		If ($script:Preset -in 'WithNumbersWithRandomDelimiters', 'WithRandomDelimiters') {
+			$script:RandomizeDelimiters = $true
+		}
+		Else {
+			$script:RandomizeDelimiters = $false
+		}
+	}
+}
+
+# resolve preset to parameters
+Try {
+	Resolve-PresetToParameters
+}
+Catch {
+	Write-Warning -Message "could not resolve '$Preset' preset to parameters: $($_.Exception.Message)"
+	Throw $_
 }
 
 # if path not found...
@@ -117,20 +126,19 @@ Catch {
 	Return $_
 }
 
-# if delimiter list not provides and complex delimiters requested...
+# if delimiter list not provided and complex delimiters requested...
 If (!$PSBoundParameters.ContainsKey('DelimiterList') -and $UseComplexDelimiters) {
 	# use complex delimiter list
 	$DelimiterList = $ComplexDelimiterList
 }
 
-# retrieve upper bounds for delimiter and word lists
-$DelimiterUpperBound = $DelimiterList.Count - 1
-$WordListUpperBound = $WordList.Count - 1
+# define upper bounds for random numbers
+$NumberUpperBound = [System.Math]::Pow(10, $NumberLength)
 
 # if static delimiter not provided...
 If (!$PSBoundParameters.ContainsKey('Delimiter')) {
-	# initialize delimiter randomly
-	$Delimiter = $DelimiterList[(Get-RandomNumber -UpperBound $DelimiterUpperBound)]
+	# initialize random delimiter
+	$Delimiter = $DelimiterList[(Get-RandomNumber -UpperBound $DelimiterList.Count)]
 }
 
 # initialize passphrase and word counter
@@ -139,44 +147,65 @@ $WordCounter = 0
 
 # while word counter is less than requested word count or passphrase is less than requested length...
 While ($WordCounter -lt $WordCount -or $Passphrase.Length -lt $Length) {
-	# if not the first word in the passphrase and delimiter mode is not none...
-	If ($WordCounter -ne 0 -and $DelimiterMode -ne 'None') {
-		# if delimiter mode is random or random with numbers...
-		If ($DelimiterMode -in 'RandomWithNumbers', 'Random') {
-			# retrieve random delimiter
-			$Delimiter = $DelimiterList[(Get-RandomNumber -UpperBound $DelimiterUpperBound)]
-		}
+	# if not the first word in the passphrase....
+	If ($WordCounter -ne 0) {
+		# if include delimiters requested...
+		If ($IncludeDelimiters) {
+			# if random delimiters requested...
+			If ($RandomizeDelimiters) {
+				# define empty delimiter string
+				$Delimiter = [System.String]::Empty
 
-		# if delimiter mode is random or random with numbers...
-		If ($DelimiterMode -in 'NumbersWithDelimiter', 'RandomWithNumbers', 'Random') {
+				# while delimiter string is less than requested delimiter length...
+				While ($Delimiter.Length -lt $DelimiterLength) {
+					# retrieve random delimiter
+					$RandomDelimiter = $DelimiterList[(Get-RandomNumber -UpperBound $DelimiterList.Count)]
+
+					# append random delimiter to delimiter string
+					$Delimiter = '{0}{1}' -f $Delimiter, $RandomDelimiter
+				}
+			}
+
 			# append delimiter to passphrase
 			$Passphrase = '{0}{1}' -f $Passphrase, $Delimiter
 		}
 
-		# if delimiter mode is random or random with numbers...
-		If ($DelimiterMode -in 'RandomWithNumbers', 'NumbersWithDelimiter', 'Numbers') {
-			# retrieve random number
-			$RandomNumber = Get-RandomNumber -UpperBound 99
+		# if include numbers requested...
+		If ($IncludeNumbers) {
+			# retrieve random number with upper bound
+			$RandomNumber = Get-RandomNumber -UpperBound $NumberUpperBound
 
-			# append random delimiter to passphrase
-			$Passphrase = '{0}{1}' -f $Passphrase, $RandomNumber
-		}
+			# convert random number to string and pad to requested length
+			$NumberString = $RandomNumber.ToString().PadLeft($NumberLength, '0')
 
-		# if delimiter mode is random or random with numbers...
-		If ($DelimiterMode -in 'RandomWithNumbers') {
-			# retrieve random delimiter
-			$Delimiter = $DelimiterList[(Get-RandomNumber -UpperBound $DelimiterUpperBound)]
-		}
+			# append trimmed number to passphrase
+			$Passphrase = '{0}{1}' -f $Passphrase, $NumberString
 
-		# if delimiter mode is random or random with numbers...
-		If ($DelimiterMode -in 'RandomWithNumbers', 'NumbersWithDelimiter') {
-			# append delimiter to passphrase
-			$Passphrase = '{0}{1}' -f $Passphrase, $Delimiter
+			# if include delimiters requested...
+			If ($IncludeDelimiters) {
+				# if delimiter mode is random or random with numbers...
+				If ($RandomizeDelimiters) {
+					# define empty delimiter string
+					$Delimiter = [System.String]::Empty
+
+					# while delimiter string is less than requested delimiter length...
+					While ($Delimiter.Length -lt $DelimiterLength) {
+						# retrieve random delimiter
+						$RandomDelimiter = $DelimiterList[(Get-RandomNumber -UpperBound $DelimiterList.Count)]
+
+						# append random delimiter to delimiter string
+						$Delimiter = '{0}{1}' -f $Delimiter, $RandomDelimiter
+					}
+				}
+
+				# append delimiter to passphrase
+				$Passphrase = '{0}{1}' -f $Passphrase, $Delimiter
+			}
 		}
 	}
 
 	# retrieve random line from word list
-	$RandomLine = $WordList[(Get-RandomNumber -UpperBound $WordListUpperBound)]
+	$RandomLine = $WordList[(Get-RandomNumber -UpperBound $WordList.Count)]
 
 	# retrieve word after dice value and tab character then update the case
 	$RandomWord = [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.ToTitleCase($RandomLine.Substring(6))
