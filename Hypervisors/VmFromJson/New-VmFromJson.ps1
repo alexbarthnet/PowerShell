@@ -10,6 +10,7 @@ Param(
 	[switch]$SkipStart,
 	[switch]$SkipClustering,
 	[switch]$ForceRestart,
+	[pscredential]$Credential,
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 )
@@ -3098,7 +3099,7 @@ Begin {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not check provided path")
 			Throw $_
 		}
-		
+
 		# evaluate deployment file
 		If (-not $TestPath) {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD update, host did not find unattend file: '$UnattendFile'")
@@ -3125,7 +3126,7 @@ Begin {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not mount VHD: '$VhdPath'")
 			Throw $_
 		}
-		
+
 		# evaluate deployment path
 		If (-not $DriveLetter) {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD attach, could not mount VHD: '$Destination'")
@@ -3169,31 +3170,27 @@ Begin {
 		}
 
 		# if Username provided...
-		If ($PSBoundParameters.ContainsKey('Username')) { 
-			$VariableHashtable['%USERNAME%'] = $Username
-		}
-
-		# if Password provided...
-		If ($PSBoundParameters.ContainsKey('Password')) { 
-			$VariableHashtable['%PASSWORD%'] = $Password
+		If ($script:PSBoundParameters.ContainsKey('Credential')) {
+			$VariableHashtable['%USERNAME%'] = $script:Credential.GetNetworkCredential().Username
+			$VariableHashtable['%PASSWORD%'] = $script:Credential.GetNetworkCredential().Password
 		}
 
 		# if DomainName provided...
-		If ($PSBoundParameters.ContainsKey('DomainName')) { 
+		If ($PSBoundParameters.ContainsKey('DomainName')) {
 			$VariableHashtable['%DOMAINNAME%'] = $DomainName
 		}
 
 		# if OrganizationalUnit provided...
-		If ($PSBoundParameters.ContainsKey('OrganizationalUnit')) { 
+		If ($PSBoundParameters.ContainsKey('OrganizationalUnit')) {
 			$VariableHashtable['%ORGANIZATIONALUNIT%'] = $OrganizationalUnit
 		}
 
 		# loop through variables
 		ForEach ($Variable in $VariableHashtable.Keys) {
-			# update argument list for 
+			# update argument list for
 			$InvokeCommand['ArgumentList']['VariableName'] = $Variable
 			$InvokeCommand['ArgumentList']['VariableValue'] = $VariableHashtable[$Variable]
-			
+
 			# update file on VHD
 			Try {
 				Write-Host ("$Hostname,$ComputerName,$Name - ...replacing values in deployment file: $Variable")
@@ -3915,12 +3912,10 @@ Process {
 							VM                 = $VM
 							DeploymentPath     = $JsonData.$Name.OSDeployment.DeploymentPath
 							UnattendFile       = $JsonData.$Name.OSDeployment.UnattendFile
-							Username           = $JsonData.$Name.OSDeployment.Username
-							Password           = $JsonData.$Name.OSDeployment.Password
 							DomainName         = $JsonData.$Name.OSDeployment.DomainName
 							OrganizationalUnit = $JsonData.$Name.OSDeployment.OrganizationalUnit
 						}
-						
+
 						# mount ISO file on VM
 						Try {
 							Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via VHD file")
