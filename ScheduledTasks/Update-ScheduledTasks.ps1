@@ -214,16 +214,7 @@ Param(
 	[switch]$SkipTranscript,
 	# switch to skip text output logging
 	[Parameter(DontShow)]
-	[switch]$SkipTextOutput,
-	# local host name
-	[Parameter(DontShow)]
-	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
-	# local domain name
-	[Parameter(DontShow)]
-	[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
-	# local DNS hostname
-	[Parameter(DontShow)]
-	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
+	[switch]$SkipTextOutput
 )
 
 Begin {
