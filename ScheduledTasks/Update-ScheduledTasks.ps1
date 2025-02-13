@@ -195,9 +195,13 @@ Param(
 	[string]$RunLevel = 'Highest',
 	# switch to report undefined tasks during run
 	[Parameter(ParameterSetName = 'Default')]
+	[Parameter(ParameterSetName = 'AddSelf')]
+	[Parameter(ParameterSetName = 'Register')]
 	[switch]$ReportUndefinedTasks,
 	# switch to remove undefined tasks during run
 	[Parameter(ParameterSetName = 'Default')]
+	[Parameter(ParameterSetName = 'AddSelf')]
+	[Parameter(ParameterSetName = 'Register')]
 	[switch]$RemoveUndefinedTasks,
 	# legacy switch to process JSON entries for previous versions of the script
 	[Parameter(ParameterSetName = 'Default')]
@@ -2344,6 +2348,16 @@ Process {
 			TriggerAt = $TriggerAt
 		}
 
+		# if ReportUndefinedTasks parameter provided...
+		If ($PSBoundParameters.ContainsKey('ReportUndefinedTasks')) {
+			$UpdateScheduledTaskFromJson['Argument'] = "$($UpdateScheduledTaskFromJson['Argument']) -ReportUndefinedTasks"
+		}
+
+		# if RemoveUndefinedTasks parameter provided...
+		If ($PSBoundParameters.ContainsKey('RemoveUndefinedTasks')) {
+			$UpdateScheduledTaskFromJson['Argument'] = "$($UpdateScheduledTaskFromJson['Argument']) -RemoveUndefinedTasks"
+		}
+
 		# if RandomDelay parameter not provided...
 		If (!$PSBoundParameters.ContainsKey('RandomDelay')) {
 			$UpdateScheduledTaskFromJson['RandomDelay'] = [timespan]::FromMinutes(0)
@@ -2416,6 +2430,16 @@ Process {
 		$TaskPath = '\'
 		$Execute = Join-Path -Path $PSHOME -ChildPath 'powershell.exe'
 		$Argument = '-NonInteractive -NoProfile -ExecutionPolicy ByPass -File "{0}" -Json "{1}"' -f $PSCommandPath, $Json
+
+		# if ReportUndefinedTasks parameter provided...
+		If ($PSBoundParameters.ContainsKey('ReportUndefinedTasks')) {
+			$Argument = "$Argument -ReportUndefinedTasks"
+		}
+
+		# if RemoveUndefinedTasks parameter provided...
+		If ($PSBoundParameters.ContainsKey('RemoveUndefinedTasks')) {
+			$Argument = "$Argument -RemoveUndefinedTasks"
+		}
 
 		# if RandomDelay parameter not provided...
 		If (!$PSBoundParameters.ContainsKey('RandomDelay')) {
@@ -2883,18 +2907,21 @@ Process {
 					ForEach ($TaskName in $TasksInPath) {
 						If ($TaskName -notin $ExpectedTasks[$TaskPath]) {
 							# report undefined scheduled task
-							Write-Warning -Message "the path '$TaskPath' contains a scheduled task not defined in the JSON file: '$TaskName'"
+							Write-Warning -Message "Found '$TaskName' scheduled task at '$Taskpath' path not defined in configuration file: '$Json'"
 
 							# if remove undefined tasks requested...
 							If ($script:RemoveUndefinedTasks) {
 								# remove undefined scheduled task
 								Try {
-									# Unregister-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath
+									Unregister-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Confirm:$false
 								}
 								Catch {
 									Write-Warning -Message "could not unregister task '$TaskName' from path '$TaskPath'"
 									Return $_
 								}
+
+								# report state
+								Write-Warning -Message "Removed '$TaskName' scheduled task at '$Taskpath' path not defined in configuration file: '$Json'"
 							}
 						}
 					}
