@@ -2127,7 +2127,7 @@ Begin {
 		If ($Existing -and $Existing.Triggers.Count -gt 0 -and -not $Trigger) {
 			# unregister scheduled task
 			Try {
-				$null = Unregister-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath
+				$null = Unregister-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -ErrorAction 'Stop'
 			}
 			Catch {
 				Write-Warning -Message "could not unregister existing scheduled task '$TaskName' at path '$TaskPath'"
