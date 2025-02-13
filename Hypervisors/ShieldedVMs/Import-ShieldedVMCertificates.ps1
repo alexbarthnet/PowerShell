@@ -1,5 +1,3 @@
-#requires -Module TranscriptWithHostAndDate
-
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
 	# path to JSON file with parameters
@@ -17,9 +15,6 @@ Param(
 	# path to certificate store containing Shielded VM certificates
 	[Parameter(DontShow)]
 	[string]$CertStoreLocation = 'Cert:\LocalMachine\Shielded VM Local Certificates',
-	# switch to skip transcript logging
-	[Parameter(DontShow)]
-	[switch]$SkipTranscript,
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -135,17 +130,6 @@ Begin {
 		# if certificate found...
 		Return $CertificateFound
 	}
-
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# start transcript with default parameters
-		Try {
-			Start-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
-	}
 }
 
 Process {
@@ -238,19 +222,6 @@ Process {
 		}
 		Catch {
 			Write-Warning -Message "could not import '$($PfxFile.FullName)' file to '$CertStoreLocation' store: $($_.Exception.Message)"
-		}
-	}
-}
-
-End {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# stop transcript with default parameters
-		Try {
-			Stop-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
 		}
 	}
 }
