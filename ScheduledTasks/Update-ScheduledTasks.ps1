@@ -2114,7 +2114,7 @@ Begin {
 			Return $_
 		}
 
-		# if scheduled task exists with triggers but trigger not created from provided parameters...
+		# if scheduled task exists and has triggers but should not have triggers...
 		If ($Existing -and $Existing.Triggers.Count -gt 0 -and -not $Trigger) {
 			# unregister scheduled task
 			Try {
@@ -2126,7 +2126,7 @@ Begin {
 			}
 
 			# report unregistered
-			Write-Verbose -Verbose -Message "Unregistered existing scheduled task '$TaskName' at path '$TaskPath'"
+			Write-Verbose -Verbose -Message "Unregistered existing scheduled task '$TaskName' at path '$TaskPath' for reason: trigger defined on task but no trigger defined in JSON"
 
 			# clear existing scheduled task object
 			$Existing = $null
@@ -2299,7 +2299,7 @@ Begin {
 
 	# if default parameter set and skip transcript not requested...
 	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $SkipTranscript) {
-		# start transcript with default parameters
+		# start transcript with default parameters and skip text output if requested
 		Try {
 			Start-TranscriptForCommand -SkipTextOutput:$SkipTextOutput
 		}
@@ -2496,7 +2496,8 @@ Process {
 	switch ($true) {
 		# show configuration file
 		$Show {
-			Write-Host "Displaying '$Json'"
+			# report and display JSON contents
+			Write-Host "Displaying entries in configuration file: $Json"
 			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
 		}
 		# clear configuration file
