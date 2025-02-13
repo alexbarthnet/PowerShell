@@ -990,7 +990,7 @@ Begin {
 			[string]$Hostname = [System.Environment]::MachineName,
 			# formatted datetime for message
 			[Parameter(DontShow)]
-			[string]$Datetime = [System.DateTime]::Now.ToString('yyyy-MM-ddThh:mm:ss.fff'),
+			[string]$Datetime = [System.DateTime]::Now.ToString('yyyy-MM-ddTHH:mm:ss.fff'),
 			# path to current text output file
 			[Parameter(DontShow)]
 			[string]$Path = $script:TextOutputActivePath
