@@ -1809,94 +1809,107 @@ Process {
 					Return
 				}
 
-				# validate values present in JSON file
-				Switch ($true) {
-					([string]::IsNullOrEmpty($JsonEntry.Command)) {
+				# convert custom object to hashtable
+				Try {
+					$HashtableFromJsonEntry = ConvertTo-Collection -InputObject $JsonEntry
+				}
+				Catch {
+					Write-Warning -Message "could not create hashtable from entry in configuration file: $Json"
+					Continue NextJsonEntry
+				}
+
+				# validate required values in hashtable with expressions that should be true
+				Switch ($false) {
+					($HashtableFromJsonEntry.ContainsKey('Command')) {
 						Write-Warning -Message "required entry (Command) not found in configuration file: $Json"
 						Continue NextJsonEntry
 					}
-					([string]::IsNullOrEmpty($JsonEntry.Order)) {
-						Write-Warning -Message "required value (Order) not found in configuration file: $Json"
+					($HashtableFromJsonEntry.ContainsKey('Order')) {
+						Write-Warning -Message "required entry (Order) not found in configuration file: $Json"
 						Continue NextJsonEntry
 					}
-					($null -ne $JsonEntry.Order -and -not [uint16]::TryParse($JsonEntry.Order, [ref][uint16]::MinValue)) {
+					($HashtableFromJsonEntry.ContainsKey('Order') -and [uint16]::TryParse($HashtableFromJsonEntry['Order'], [ref][uint16]::MinValue)) {
 						Write-Warning -Message 'required value (Order) found in configuration file but cannot be parsed into a UInt16 object'
 						Continue NextJsonEntry
 					}
-					($null -ne $JsonEntry.Arguments -and $JsonEntry.Arguments -isnot [System.Management.Automation.PSCustomObject]) {
-						Write-Warning -Message 'optional value (Arguments) found in configuration file but was not parsed into a PSCustomObject object'
+				}
+
+				# validate optional values in hashtable with expressions that should be false
+				Switch ($true) {
+					($HashtableFromJsonEntry.ContainsKey('Arguments') -and $HashtableFromJsonEntry['Arguments'] -isnot [System.Collections.Hashtable]) {
+						Write-Warning -Message 'optional value (Arguments) found in configuration file but was not parsed into a hashtable'
 						Continue NextJsonEntry
 					}
-					($null -ne $JsonEntry.Parameters -and $JsonEntry.Parameters -isnot [System.Management.Automation.PSCustomObject]) {
-						Write-Warning -Message 'optional value (Parameters) found in configuration file but was not parsed into a PSCustomObject object'
+					($HashtableFromJsonEntry.ContainsKey('Parameters') -and $HashtableFromJsonEntry['Parameters'] -isnot [System.Collections.Hashtable]) {
+						Write-Warning -Message 'optional value (Parameters) found in configuration file but was not parsed into a hashtable'
 						Continue NextJsonEntry
 					}
-					($null -ne $JsonEntry.InputName -and $JsonEntry.InputName -match '[^\w]') {
+					($HashtableFromJsonEntry.ContainsKey('InputName') -and $HashtableFromJsonEntry['InputName'] -match '[^\w]') {
 						Write-Warning -Message 'optional value (InputName) found in configuration file but contained a character not in 0-9A-Za-z_'
 						Continue NextJsonEntry
 					}
-					($null -ne $JsonEntry.OutputName -and $JsonEntry.OutputName -match '[^\w]') {
+					($HashtableFromJsonEntry.ContainsKey('OutputName') -and $HashtableFromJsonEntry['OutputName'] -match '[^\w]') {
 						Write-Warning -Message 'optional value (OutputName) found in configuration file but contained a character not in 0-9A-Za-z_'
 						Continue NextJsonEntry
 					}
-					($null -ne $JsonEntry.Parameters -and $null -ne $JsonEntry.Arguments) {
+					($HashtableFromJsonEntry.ContainsKey('Parameters') -and $HashtableFromJsonEntry.ContainsKey('Arguments')) {
 						Write-Warning -Message 'optional values (Parameters and Arguments) found in configuration file but cannot be combined'
 						Continue NextJsonEntry
 					}
-					($null -ne $JsonEntry.InputName -and $null -ne $JsonEntry.Arguments) {
+					($HashtableFromJsonEntry.ContainsKey('InputName') -and $HashtableFromJsonEntry.ContainsKey('Arguments')) {
 						Write-Warning -Message 'optional values (InputName and Arguments) found in configuration file but cannot be combined'
 						Continue NextJsonEntry
 					}
-					($null -ne $JsonEntry.OutputName -and $null -ne $JsonEntry.Arguments) {
+					($HashtableFromJsonEntry.ContainsKey('OutputName') -and $HashtableFromJsonEntry.ContainsKey('Arguments')) {
 						Write-Warning -Message 'optional value (OutputName and Arguments) found in configuration file but cannot be combined'
 						Continue NextJsonEntry
 					}
 				}
 
 				# if command is a file
-				If (Test-Path -Path $JsonEntry.Command -PathType 'Leaf') {
+				If (Test-Path -Path $HashtableFromJsonEntry['Command'] -PathType 'Leaf') {
 					# retrieve file
 					Try {
-						$Item = Get-Item -Path $JsonEntry.Command -ErrorAction 'Stop'
+						$Item = Get-Item -Path $HashtableFromJsonEntry['Command'] -ErrorAction 'Stop'
 					}
 					Catch {
-						Write-Warning -Message "could not access file for Command: '$($JsonEntry.Command)'"
+						Write-Warning -Message "could not access file for Command: '$($HashtableFromJsonEntry['Command'])'"
 						Continue NextJsonEntry
 					}
 
 					# check extension of file
 					switch ($Item.Extension) {
-						'.bat' { $CommandType = 'Batch' }
-						'.exe' { $CommandType = 'Executable' }
-						'.ps1' { $CommandType = 'Script' }
+						'.bat' { $HashtableFromJsonEntry['CommandType'] = 'Batch' }
+						'.exe' { $HashtableFromJsonEntry['CommandType'] = 'Executable' }
+						'.ps1' { $HashtableFromJsonEntry['CommandType'] = 'Script' }
 						Default {
-							Write-Warning -Message "unsupported '$($Item.Extension)' extension found on file for Command: '$($JsonEntry.Command)'"
+							Write-Warning -Message "unsupported '$($Item.Extension)' extension found on file for Command: '$($HashtableFromJsonEntry['Command'])'"
 							Continue NextJsonEntry
 						}
 					}
 
 					# define command name from basename of file
-					$CommandName = $Item.BaseName
+					$HashtableFromJsonEntry['CommandName'] = $Item.BaseName
 				}
 				# if command is not a file...
 				Else {
 					# retrieve command and return command type
 					Try {
-						$CommandType = Get-Command -Name $JsonEntry.Command -ErrorAction 'Stop' | Select-Object -ExpandProperty 'CommandType'
+						$HashtableFromJsonEntry['CommandType'] = Get-Command -Name $HashtableFromJsonEntry['Command'] -ErrorAction 'Stop' | Select-Object -ExpandProperty 'CommandType'
 					}
 					Catch {
-						Write-Warning -Message "could not locate PowerShell command for Command: '$($JsonEntry.Command)'"
+						Write-Warning -Message "could not locate PowerShell command for Command: '$($HashtableFromJsonEntry['Command'])'"
 						Continue NextJsonEntry
 					}
 
 					# define command name from PowerShell command
-					$CommandName = $JsonEntry.Command
+					$HashtableFromJsonEntry['CommandName'] = $HashtableFromJsonEntry['Command']
 				}
 
 				# if modules defined...
-				If ($null -ne $JsonEntry.Modules) {
+				If ($HashtableFromJsonEntry.ContainsKey('Modules')) {
 					# process each module name
-					ForEach ($ModuleName in $JsonEntry.Modules) {
+					ForEach ($ModuleName in $HashtableFromJsonEntry['Modules']) {
 						# import module
 						Try {
 							Import-Module -Name $ModuleName -ErrorAction Stop
@@ -1909,42 +1922,42 @@ Process {
 				}
 
 				# if trigger expression defined...
-				If (![string]::IsNullOrEmpty($JsonEntry.Expression)) {
+				If ($HashtableFromJsonEntry.ContainsKey('Expression')) {
 					# invoke trigger expression
 					Try {
-						$Evaluation = Invoke-Expression -Command $JsonEntry.Expression
+						$Evaluation = Invoke-Expression -Command $HashtableFromJsonEntry['Expression']
 					}
 					Catch {
-						Write-Warning -Message "exception caught calling '$($JsonEntry.Expression)' Expression for the '$($JsonEntry.Command)' Command: $($_.Exception.ToString())"
+						Write-Warning -Message "exception caught calling '$($HashtableFromJsonEntry['Expression'])' Expression for the '$($HashtableFromJsonEntry['Command'])' Command: $($_.Exception.ToString())"
 						Continue NextJsonEntry
 					}
 
 					# if trigger evaluation is not a boolean...
 					If ($Evaluation -isnot [boolean]) {
-						Write-Warning -Message "the evaluation of the '$($JsonEntry.Expression)' Expression for the '$($JsonEntry.Command)' Command returned an invalid type: '$($Evaluation.GetType().FullName)'"
+						Write-Warning -Message "the evaluation of the '$($HashtableFromJsonEntry['Expression'])' Expression for the '$($HashtableFromJsonEntry['Command'])' Command returned an invalid type: '$($Evaluation.GetType().FullName)'"
 						Continue NextJsonEntry
 					}
 
 					# if trigger evaluation is false...
 					If ($Evaluation -eq $false) {
-						Write-Host "The evaluation of the '$($JsonEntry.Expression)' Expression for the '$($JsonEntry.Command)' Command returned 'false'"
+						Write-Host "The evaluation of the '$($HashtableFromJsonEntry['Expression'])' Expression for the '$($HashtableFromJsonEntry['Command'])' Command returned 'false'"
 						Continue NextJsonEntry
 					}
 				}
 
 				# if arguments provided...
-				If ($null -ne $JsonEntry.Arguments) {
+				If ($HashtableFromJsonEntry.ContainsKey('Arguments')) {
 					# process each key in Arguments
-					ForEach ($Key in $Arguments.Keys) {
+					ForEach ($Key in $HashtableFromJsonEntry['Arguments'].Keys) {
 						# if key cannot be cast as a Character...
 						If (![char]::TryParse($Key, [ref][char]::MinValue)) {
 							Write-Warning "could not validate Arguments parameter: the value in the '$Key' key cannot be parsed into a Character object"
 							Continue NextJsonEntry
 						}
 					}
-					# convert arguments to a sorted list
+					# convert arguments hashtable to a sorted list
 					Try {
-						$Arguments = ConvertTo-Collection -InputObject $JsonEntry.Arguments -Type 'SortedList'
+						$ArgumentList = $HashtableFromJsonEntry['Arguments'] -as [System.Collections.SortedList]
 					}
 					Catch {
 						Write-Warning -Message "exception caught converting the Arguments object to a sorted list: $($_.Exception.ToString())"
@@ -1953,19 +1966,14 @@ Process {
 				}
 				# if arguments not provided...
 				Else {
-					$Arguments = $null
+					$ArgumentList = $null
 				}
 
 				# if parameters provided...
-				If ($null -ne $JsonEntry.Parameters) {
-					# convert parameters to a hashtable
-					Try {
-						$Parameters = ConvertTo-Collection -InputObject $JsonEntry.Parameters -Type 'Hashtable'
-					}
-					Catch {
-						Write-Warning -Message "exception caught converting the Parameters object to a hashtable: $($_.Exception.ToString())"
-						Continue NextJsonEntry
-					}
+				If ($HashtableFromJsonEntry.ContainsKey('Parameters')) {
+					# create parameters from hashtable
+					$Parameters = $HashtableFromJsonEntry['Parameters']
+
 				}
 				# if parameters not provided...
 				Else {
@@ -1974,9 +1982,9 @@ Process {
 				}
 
 				# if one or more input names defined...
-				If ($null -ne $JsonEntry.InputName) {
+				If ($HashtableFromJsonEntry.ContainsKey('InputName')) {
 					# process each named input variable
-					ForEach ($VariableName in $JsonEntry.InputName) {
+					ForEach ($VariableName in $HashtableFromJsonEntry['InputName']) {
 						# retrieve value of the named variable
 						Try {
 							$VariableValue = Get-Variable -Name $VariableName -ValueOnly -Scope 'Script' -ErrorAction 'Stop'
@@ -1998,7 +2006,7 @@ Process {
 				}
 
 				# if output name defined...
-				If (![string]::IsNullOrEmpty($JsonEntry.OutputName)) {
+				If ($HashtableFromJsonEntry.ContainsKey('OutputName')) {
 					# if outvariable already defined...
 					If ($Parameters.ContainsKey('OutVariable')) {
 						Write-Warning -Message "could not add OutputName as OutVariable; OutVariable already defined in parameters with value: $($Parameters['OutVariable'])"
@@ -2006,7 +2014,7 @@ Process {
 					}
 					# add OutputName as OutVariable to parameters
 					Try {
-						$Parameters.Add('OutVariable', $JsonEntry.OutputName)
+						$Parameters.Add('OutVariable', $HashtableFromJsonEntry['OutputName'])
 					}
 					Catch {
 						Write-Warning -Message "exception caught adding 'OutVariable' parameter to Parameters hashtable: $($_.Exception.ToString())"
@@ -2015,18 +2023,18 @@ Process {
 				}
 
 				# report command
-				Write-Host "Calling $CommandType Command: $($JsonEntry.Command)"
+				Write-Host "Calling $($HashtableFromJsonEntry['CommandType']) Command: $($HashtableFromJsonEntry['Command'])"
 
-				# if arguments defined...
-				If ($null -ne $Arguments) {
-					# report arguments
-					ForEach ($Argument in $Arguments) {
-						Write-Host "...with argument: $Argument"
+				# if argument list defined...
+				If ($ArgumentList -is [System.Collections.SortedList]) {
+					# report each argument
+					ForEach ($ArgumentValue in $ArgumentList.Values) {
+						Write-Host "...with argument: $ArgumentValue"
 					}
 				}
-				# if arguments not defined...
+				# if argument list not defined...
 				Else {
-					# report parameters
+					# report each parameter
 					ForEach ($Parameter in $Parameters.GetEnumerator()) {
 						Write-Host "...with parameter: $($Parameter.Key), $($Parameter.Value)"
 					}
@@ -2044,43 +2052,43 @@ Process {
 
 				# start transcript for command
 				Try {
-					Start-TranscriptForCommand -TranscriptName $CommandName
+					Start-TranscriptForCommand -TranscriptName $HashtableFromJsonEntry['CommandName']
 				}
 				Catch {
-					Write-Warning -Message "could not start transcript for command: $($JsonEntry.Command)"
+					Write-Warning -Message "could not start transcript for command: $($HashtableFromJsonEntry['Command'])"
 					$ExceptionCaught = $true
 					Continue NextJsonEntry
 				}
 
-				# if arguments defined...
-				If ($null -ne $Arguments) {
-					# call command with values from arguments
+				# if argument list defined...
+				If ($ArgumentList -is [System.Collections.SortedList]) {
+					# call command with values from argument list
 					Try {
-						. $JsonEntry.Command $Arguments.Values
+						. $HashtableFromJsonEntry['Command'] $ArgumentList.Values
 					}
 					Catch {
-						Write-Warning -Message "exception caught calling '$($JsonEntry.Command)' $CommandType command with arguments: $($_.Exception.ToString())"
+						Write-Warning -Message "exception caught calling '$($HashtableFromJsonEntry['Command'])' $($HashtableFromJsonEntry['CommandType']) command with arguments: $($_.Exception.ToString())"
 						$ExceptionCaught = $true
 					}
 				}
-				# if arguments not defined...
+				# if argument list not defined...
 				Else {
 					# call command with parameters
 					Try {
-						. $JsonEntry.Command @Parameters
+						. $HashtableFromJsonEntry['Command'] @Parameters
 					}
 					Catch {
-						Write-Warning -Message "exception caught calling '$($JsonEntry.Command)' $CommandType command with parameters: $($_.Exception.ToString())"
+						Write-Warning -Message "exception caught calling '$($HashtableFromJsonEntry['Command'])' $($HashtableFromJsonEntry['CommandType']) command with parameters: $($_.Exception.ToString())"
 						$ExceptionCaught = $true
 					}
 				}
 
 				# stop transcript for command
 				Try {
-					Stop-TranscriptForCommand -TranscriptName $CommandName
+					Stop-TranscriptForCommand -TranscriptName $HashtableFromJsonEntry['CommandName']
 				}
 				Catch {
-					Write-Warning -Message "could not stop transcript for command: $($JsonEntry.Command)"
+					Write-Warning -Message "could not stop transcript for command: $($HashtableFromJsonEntry['Command'])"
 					$ExceptionCaught = $true
 					Continue NextJsonEntry
 				}
@@ -2096,26 +2104,26 @@ Process {
 				}
 
 				# if output name defined...
-				If (![string]::IsNullOrEmpty($JsonEntry.OutputName)) {
+				If ($HashtableFromJsonEntry.ContainsKey('OutputName')) {
 					# define command to unwrap OutVariable value from ArrayList
-					$OutVariableCommand = '$(${0})' -f $JsonEntry.OutputName
+					$OutVariableCommand = '$(${0})' -f $HashtableFromJsonEntry['OutputName']
 
 					# unwrap OutVariable value via Invoke-Expression
 					Try {
 						$OutputValue = Invoke-Expression -Command $OutVariableCommand -ErrorAction 'Stop'
 					}
 					Catch {
-						Write-Warning -Message "exception caught unwrapping '$($JsonEntry.OutputName)' variable: $($_.Exception.ToString())"
+						Write-Warning -Message "exception caught unwrapping '$($HashtableFromJsonEntry['OutputName'])' variable: $($_.Exception.ToString())"
 						$ExceptionCaught = $true
 						Continue NextJsonEntry
 					}
 
 					# store OutVariable in named variable
 					Try {
-						New-Variable -Name $JsonEntry.OutputName -Value $OutputValue -Force -Scope 'Script' -ErrorAction 'Stop'
+						New-Variable -Name $HashtableFromJsonEntry['OutputName'] -Value $OutputValue -Force -Scope 'Script' -ErrorAction 'Stop'
 					}
 					Catch {
-						Write-Warning -Message "exception caught retrieving value of the '$VariableName' variable: $($_.Exception.ToString())"
+						Write-Warning -Message "exception caught creating the '$($HashtableFromJsonEntry['OutputName'])' variable: $($_.Exception.ToString())"
 						$ExceptionCaught = $true
 						Continue NextJsonEntry
 					}
