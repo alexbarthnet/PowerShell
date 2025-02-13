@@ -80,18 +80,6 @@ The logon type for the scheduled task. The accepted values are 'ServiceAccount' 
 .PARAMETER RunLevel
 The run level for the scheduled task. The accepted values are 'Highest' and 'Limited'. The default value is 'Highest'.
 
-.PARAMETER Modules
-String or string array representing the path to one or more PowerShell modules required by the scheduled task. Each module will be installed to the AllUsers location. The path may be one of the following:
- - A PowerShell module file (.psm1)
- - A folder containing a PowerShell module file
- - A folder containing folders containing PowerShell modules
-
-.PARAMETER Certificates
-String or string array representing the path to one or more PFX certificate files. Each certificate will be installed in the local machine personal store.
-
-.PARAMETER Expression
-String containing an expression to evaluate. The expression must return a boolean. The result of evaluating the expression determines the state of the scheduled task trigger.
-
 .PARAMETER ReportUndefinedTasks
 Switch parameter to report scheduled tasks that are not defined in the JSON file and located in any of the task paths defined on the entries in the JSON configuration file.
 
@@ -205,17 +193,6 @@ Param(
 	[Parameter(ParameterSetName = 'Register')]
 	[ValidateSet('Highest', 'Limited')]
 	[string]$RunLevel = 'Highest',
-	# scheduled task parameter - modules
-	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'AddSelf')]
-	[string[]]$Modules,
-	# scheduled task parameter - certificates
-	[Parameter(ParameterSetName = 'Add')]
-	[Parameter(ParameterSetName = 'AddSelf')]
-	[string[]]$Certificates,
-	# expression to evaluate for task trigger
-	[Parameter(ParameterSetName = 'Add')]
-	[string]$Expression,
 	# switch to report undefined tasks during run
 	[Parameter(ParameterSetName = 'Default')]
 	[switch]$ReportUndefinedTasks,
@@ -2026,7 +2003,6 @@ Begin {
 			[string]$Execute,
 			[string]$Argument,
 			# trigger
-			[boolean]$TriggerEnabled,
 			[datetime]$TriggerAt,
 			[timespan]$RandomDelay,
 			[timespan]$RepetitionInterval,
@@ -2069,7 +2045,6 @@ Begin {
 		If ($PSBoundParameters.ContainsKey('ExecutionTimeLimit') -and $ExecutionTimeLimit -gt [timespan]::Zero) {
 			$ScheduledTaskSettingsSetParameters['ExecutionTimeLimit'] = $ExecutionTimeLimit
 		}
-
 
 		# if TriggerAt provided...
 		If ($PSBoundParameters.ContainsKey('TriggerAt')) {
@@ -2123,11 +2098,6 @@ Begin {
 		}
 		Catch {
 			Return $_
-		}
-
-		# update trigger enabled if configured
-		If ($PSBoundParameters.ContainsKey('TriggerEnabled')) {
-			$Trigger.Enabled = $TriggerEnabled
 		}
 
 		# verify task path starts with \
@@ -2642,21 +2612,6 @@ Process {
 				$JsonParameters['RunLevel'] = [string]$RunLevel
 			}
 
-			# add Modules if provided
-			If ($script:Modules) {
-				$JsonParameters['Modules'] = [string[]]$Modules
-			}
-
-			# add Certificates if provided
-			If ($script:Certificates) {
-				$JsonParameters['Certificates'] = [string[]]$Certificates
-			}
-
-			# add Expression if provided
-			If ($script:Expression) {
-				$JsonParameters['Expression'] = [string]$Expression
-			}
-
 			# add Updated as current datetime in IS0 8601 extended format
 			$JsonParameters['Updated'] = [datetime]::Now.ToString('s')
 
@@ -2699,58 +2654,6 @@ Process {
 			If ($JsonData.Count -eq 0) {
 				Write-Warning -Message "no entries found in configuration file: $Json"
 				Return
-			}
-
-			# define list for all certificates
-			$CertificateList = [System.Collections.Generic.List[string]]::new()
-
-			# process entries in configuration file for certificates
-			ForEach ($JsonEntry in $JsonData) {
-				# retrieve certificates defined in the scheduled tasks
-				ForEach ($Certificate in $JsonEntry.Certificates) {
-					# if certificate not in certificates list...
-					If ($Certificate -notin $CertificateList) {
-						# add certificate to list
-						$CertificateList.Add($Certificate)
-					}
-				}
-			}
-
-			# process certificates in all certificates list
-			ForEach ($Certificate in $CertificateList) {
-				# import certificates defined in the scheduled tasks
-				Try {
-					Import-CertificateFromPath -Path $Certificate
-				}
-				Catch {
-					Return $_
-				}
-			}
-
-			# define list for all modules
-			$ModuleList = [System.Collections.Generic.List[string]]::new()
-
-			# process entries in configuration file for modules
-			ForEach ($JsonEntry in $JsonData) {
-				# retrieve modules defined in the scheduled tasks
-				ForEach ($Module in $JsonEntry.Modules) {
-					# if module not in modules list...
-					If ($Module -notin $ModuleList) {
-						# add module to list
-						$ModuleList.Add($Module)
-					}
-				}
-			}
-
-			# process modules in all modules list
-			ForEach ($Module in $ModuleList) {
-				# install modules defined in the scheduled tasks
-				Try {
-					Install-ModuleFromPath -Path $Module
-				}
-				Catch {
-					Return $_
-				}
 			}
 
 			# create dictionary for expected tasks
@@ -2931,27 +2834,6 @@ Process {
 						# add timespan to hashtable for independent value
 						$UpdateScheduledTaskFromJson[$IndependentValue] = $TimeSpan
 					}
-				}
-
-				# if trigger expression defined...
-				If ($null -ne $JsonEntry.Expression) {
-					# invoke trigger expression
-					Try {
-						$Evaluation = Invoke-Expression -Command $JsonEntry.Expression
-					}
-					Catch {
-						Write-Warning -Message "could not invoke the trigger expression: '$($JsonEntry.Expression)'"
-						Continue NextJsonEntry
-					}
-
-					# if trigger evaluation is not a boolean...
-					If ($Evaluation -isnot [boolean]) {
-						Write-Warning -Message "the evaluation of the TriggerExpression returned an invalid type: '$($Evaluation.GetType().FullName)'"
-						Continue NextJsonEntry
-					}
-
-					# add trigger evaluation to parameters
-					$UpdateScheduledTaskFromJson['TriggerEnabled'] = $Evaluation
 				}
 
 				# update scheduled task
