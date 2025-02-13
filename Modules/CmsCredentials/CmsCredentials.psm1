@@ -854,6 +854,18 @@ Function Get-CmsCredential {
 	.PARAMETER AsPlainText
 	Specifies the credential should be returned as a plain-text password. The credential will be returned as a PSCustomObject with Username and Password properties.
 
+	.PARAMETER AsVariable
+	Specifies the credential should be stored as a variable instead of returned as an object. The name and scope of the variable are set by the 'VariableName' and 'VariableScope' parameters.
+
+	.PARAMETER VariableName
+	Specifies the name of the variable that will store the credential when the AsVariable parameter is set. The default value is 'Credential'
+
+	.PARAMETER VariableScope
+	Specifies the scope of the variable that will store the credential when the AsVariable parameter is set. The default value is 'Global'
+
+	.PARAMETER Force
+	Specifies that an existing variable with the requested name and scope should be overwritten without prompting.
+
 	.INPUTS
 	None.
 
@@ -885,6 +897,14 @@ Function Get-CmsCredential {
 		[string]$PfxFile,
 		[Parameter(Mandatory = $false)]
 		[switch]$AsPlainText,
+		[Parameter(Mandatory = $false)]
+		[switch]$AsVariable,
+		[Parameter(DontShow)]
+		[string]$VariableName = 'Credential',
+		[Parameter(DontShow)]
+		[string]$VariableScope = 'Global',
+		[Parameter(DontShow)]
+		[switch]$Force,
 		[Parameter(ParameterSetName = 'Identity')]
 		[Parameter(ParameterSetName = 'Thumbprint')]
 		[string[]]$ComputerName,
@@ -1072,10 +1092,38 @@ Function Get-CmsCredential {
 		Throw [System.Management.Automation.ItemNotFoundException]
 	}
 
+	# if variable requested...
+	If ($local:AsVariable -and -not $local:Force) {
+		# retrieve existing variables in the requested scope
+		Try {
+			$local:Variables = Get-Variable -Scope $local:VariableScope
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve variables in the '$local:VariableScope' scope on host: $local:Hostname"
+		}
+
+		# if requested global variable already set...
+		If ($local:VariableName -in $local:Variables.Name) {
+			Write-Warning -Message "found existing '$local:VariableName' variable in the '$local:VariableScope' scope on host: $local:Hostname; continue and overwrite variable?" -WarningAction Inquire
+		}
+	}
+
 	# if plain text requested...
 	If ($local:AsPlainText) {
-		# return the PSCustomObject as-is
-		Return $local:PSCustomObject
+		# if variable requested...
+		If ($local:AsVariable) {
+			# return PSCustomObject as requested variable in requested scope
+			Try {
+				Set-Variable -Name $local:VariableName -Scope $local:VariableScope -Value $local:PSCustomObject -Force
+			}
+			Catch {
+				Write-Warning -Message "could not return credential as '$local:VariableName' variable in the '$local:VariableScope' scope on host: $local:Hostname"
+			}
+		}
+		Else {
+			# return the PSCustomObject as-is
+			Return $local:PSCustomObject
+		}
 	}
 
 	# if domain not included in credential...
@@ -1106,8 +1154,20 @@ Function Get-CmsCredential {
 		Throw $_
 	}
 
-	# return PSCredential object
-	Return $local:PSCredential
+	# if variable requested...
+	If ($local:AsVariable) {
+		# return PSCredential as requested variable in requested scope
+		Try {
+			Set-Variable -Name $local:VariableName -Scope $local:VariableScope -Value $local:PSCredential -Force
+		}
+		Catch {
+			Write-Warning -Message "could not return credential as '$local:VariableName' variable in the '$local:VariableScope' scope on host: $local:Hostname"
+		}
+	}
+	Else {
+		# return PSCredential object
+		Return $local:PSCredential
+	}
 }
 
 Function Protect-CmsCredential {
