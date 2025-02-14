@@ -1112,13 +1112,24 @@ Function Get-CmsCredential {
 	If ($local:AsPlainText) {
 		# if variable requested...
 		If ($local:AsVariable) {
-			# return PSCustomObject as requested variable in requested scope
+			# create variable in requested scope containing PSCustomObject
 			Try {
 				Set-Variable -Name $local:VariableName -Scope $local:VariableScope -Value $local:PSCustomObject -Force
 			}
 			Catch {
 				Write-Warning -Message "could not return credential as '$local:VariableName' variable in the '$local:VariableScope' scope on host: $local:Hostname"
 			}
+
+			# report variable created
+			If ($PSCmdlet.ParameterSetName -eq 'Identity') {
+				Write-Verbose -Message "created '$local:VariableName' variable with plaintext credential for '$Identity'"
+			}
+			Else {
+				Write-Verbose -Message "created '$local:VariableName' variable with plaintext credential from '$FilePath'"
+			}
+
+			# return after creating variable
+			Return
 		}
 		Else {
 			# return the PSCustomObject as-is
@@ -1156,13 +1167,24 @@ Function Get-CmsCredential {
 
 	# if variable requested...
 	If ($local:AsVariable) {
-		# return PSCredential as requested variable in requested scope
+		# create variable in requested scope containing PSCredential
 		Try {
 			Set-Variable -Name $local:VariableName -Scope $local:VariableScope -Value $local:PSCredential -Force
 		}
 		Catch {
 			Write-Warning -Message "could not return credential as '$local:VariableName' variable in the '$local:VariableScope' scope on host: $local:Hostname"
 		}
+
+		# report variable created
+		If ($PSCmdlet.ParameterSetName -eq 'Identity') {
+			Write-Verbose -Message "created '$local:VariableName' variable with PSCredential object for '$Identity'"
+		}
+		Else {
+			Write-Verbose -Message "created '$local:VariableName' variable with PSCredential object from '$FilePath'"
+		}
+
+		# return after creating variable
+		Return
 	}
 	Else {
 		# return PSCredential object
