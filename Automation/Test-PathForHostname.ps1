@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-Test if the content at a path is the local hostname.
+Test if the content retrieved from a patch matches the local hostname.
 
 .DESCRIPTION
-Test if the content at a path is the local hostname.
+Test if the content retrieved from a patch matches the local hostname.
 
 .PARAMETER Path
 The path with one or more files to evaluate.
@@ -18,19 +18,18 @@ String.
 Boolean.
 
 .EXAMPLE
-.\Test-HostnameFoundAtPath.ps1 -Path 'C:\Content\path\item'
+.\Test-PathForHostname.ps1 -Path 'C:\Content\path'
 
 .NOTES
 The path may be a folder or a file. The file with the last write time is selected when the path is a folder.
 #>
 
-[CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	# path for reference text
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Default')][ValidateScript({ Test-Path -Path $_})]
+	# path to evaluate
+	[Parameter(Position = 0, Mandatory = $True)]
 	[string]$Path,
 	# local host name
-	[Parameter(DontShow)]
+	[Parameter(Position = 1)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant()
 )
 

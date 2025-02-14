@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-Test if the content at a URI is the local hostname.
+Test if the content retrieved from a URI matches the local hostname.
 
 .DESCRIPTION
-Test if the content at a URI is the local hostname.
+Test if the content retrieved from a URI matches the local hostname.
 
 .PARAMETER Uri
 The URI with content to evaluate.
@@ -18,19 +18,18 @@ Uri.
 Boolean.
 
 .EXAMPLE
-.\Test-HostnameFoundAtUri.ps1 -Uri 'https://www.example.com/host/'
+.\Test-UriForHostname.ps1 -Uri 'https://www.example.com/host/'
 
 .NOTES
 The URI must have a trailing backslash if the URI points to a folder rather than a file.
 #>
 
-[CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	# URI for reference text
-	[Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'Default')]
+	# URI to evaluate
+	[Parameter(Position = 0, Mandatory = $True)]
 	[uri]$Uri,
 	# local host name
-	[Parameter(DontShow)]
+	[Parameter(Position = 1)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant()
 )
 
