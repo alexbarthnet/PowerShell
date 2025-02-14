@@ -1987,7 +1987,7 @@ Process {
 					ForEach ($VariableName in $HashtableFromJsonEntry['InputName']) {
 						# retrieve value of the named variable
 						Try {
-							$VariableValue = Get-Variable -Name $VariableName -ValueOnly -Scope 'Script' -ErrorAction 'Stop'
+							$VariableValue = Get-Variable -Name $VariableName -ValueOnly -Scope 'Global' -ErrorAction 'Stop'
 						}
 						Catch {
 							Write-Warning -Message "exception caught retrieving value of the '$VariableName' variable: $($_.Exception.ToString())"
