@@ -150,14 +150,37 @@ If ($Purge -and $Items) {
 }
 
 # copy files from path on host to destination on VM
-Try {
-	ForEach ($Item in $Items.FullName) {
-		Copy-Item -ToSession $Session -Path $Item -Destination $Destination -Force -Verbose -ErrorAction 'Stop'
+ForEach ($Item in $Items) {
+	# define destination item path
+	$DestinationPath = Join-Path -Path $Destination -ChildPath $Item.Name
+
+	# check if path in destination exists...
+	$DestinationExists = Invoke-Command -Session $Session -ScriptBlock { [System.IO.File]::Exists($using:DestinationPath) }
+
+	# if path in destination found...
+	If ($DestinationExists) {
+		# get hash of path in destination
+		$DestinationHash = Invoke-Command -Session $Session -ScriptBlock { Get-FileHash -Path $using:DestinationPath -Algorithm SHA384 | Select-Object -ExpandProperty Hash }
+		# get hash of path in source
+		$SourceHash = Get-FileHash -Path $Item -Algorithm SHA384 | Select-Object -ExpandProperty Hash
+		# if hashes match...
+		If ($SourceHash -eq $DestinationHash) {
+			Write-Verbose -Message "Found matching file hashes for '$($Item.FullName)' file and '$($DestinationPath)' file on '$VMName' VM"
+			Continue NextItem
+		}
 	}
-}
-Catch {
-	Write-Warning -Message "could not copy files to destination folder '$Destination' on VM: '$VMName'"
-	Return $_
+
+	# copy item to destination on VM
+	Try {
+		Copy-Item -ToSession $Session -Path $Item.FullName -Destination $Destination -Force -Verbose -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning -Message "could not copy '$($Item.FullName)' to '$($DestinationPath)'  on '$VMName' VM: $($_.Exception.Message)"
+		Return $_
+	}
+
+	# report file copied
+	Write-Verbose -Message "Copied '$($Item.FullName)' file to '$($DestinationPath)' file on '$VMName' VM"
 }
 
 # disconnect from VM
