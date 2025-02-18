@@ -29,6 +29,9 @@ Switch parameter to skip removing the temporary files created by this script. Pr
 .PARAMETER StagingPath
 Path to folder for staging the ISO file contents and mounting the WIM image. The default staging path is a randomly named folder in the system temp directory.
 
+.PARAMETER ProductKey
+String with product key for the Windows image. The default value is the KMS key for Windows Server 2025 Datacenter.
+
 .PARAMETER Index
 Integer for index of Windows image. The default value is 4 which maps to the Datacenter with Desktop Experience for Windows Server 2016 and later.
 
@@ -60,6 +63,12 @@ https://learn.microsoft.com/en-us/windows/win32/wua_sdk/searching--downloading--
 .LINK
 https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-deployment-runsynchronous-runsynchronouscommand-willreboot
 
+.LINK
+https://learn.microsoft.com/en-us/windows-server/get-started/kms-client-activation-keys
+
+.LINK
+https://learn.microsoft.com/en-us/windows-server/get-started/automatic-vm-activation
+
 #>
 
 Param(
@@ -75,6 +84,7 @@ Param(
 	[switch]$NoNewWindow,
 	[switch]$SkipRemove,
 	[string]$StagingPath,
+	[string]$ProductKey = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF',
 	[uint16]$Index = 4
 )
 
@@ -231,8 +241,9 @@ Process {
 		Return $_
 	}
 	
-	# update content with index
+	# update content with index and product key
 	$Content = $Content.Replace('%INDEX%', $Index)
+	$Content = $Content.Replace('%PRODUCTKEY%', $ProductKey)
 
 	# add unattend file to ISO
 	Try {
