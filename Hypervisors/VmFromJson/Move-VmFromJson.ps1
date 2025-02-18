@@ -773,10 +773,10 @@ Process {
 
 		# check if source is clustered
 		$vm_host_cl = $null
-		$vm_host_cl = Get-Service -ComputerName $vm_host | Where-Object { $_.Name -eq 'ClusSvc' -and $_.StartType -eq 'Automatic' -and $_.Status -eq 'Running' }
+		$vm_host_cl = Get-Service -ComputerName $vm_host_source | Where-Object { $_.Name -eq 'ClusSvc' -and $_.StartType -eq 'Automatic' -and $_.Status -eq 'Running' }
 		If ($vm_host_cl) {
 			# check for VM on cluster
-			$vm_host_cluster = Invoke-Command -ComputerName $vm_host { (Get-Cluster).Name }
+			$vm_host_cluster = Invoke-Command -ComputerName $vm_host_source { (Get-Cluster).Name }
 			$vm_on_cluster = Get-ClusterGroup -Cluster $vm_host_cluster | Where-Object { $_.Name -eq $vm_name -and $_.GroupType -eq 'VirtualMachine' }
 			If ($vm_on_cluster) {
 				Write-Host ("$Hostname - ...cluster resource for VM found on source cluster: $vm_host_cluster")
@@ -791,9 +791,9 @@ Process {
 
 		# check for VM on source host
 		$vm_on_host = $null
-		$vm_on_host = Get-VM -ComputerName $vm_host | Where-Object { $_.Name -eq $vm_name }
+		$vm_on_host = Get-VM -ComputerName $vm_host_source | Where-Object { $_.Name -eq $vm_name }
 		If ($null -eq $vm_on_host) {
-			Write-Host ("$Hostname - ....VM not found on host: $vm_host")
+			Write-Host ("$Hostname - ....VM not found on host: $vm_host_source")
 			Write-Host ("$Hostname - ...skipping!")
 			Return
 		}
