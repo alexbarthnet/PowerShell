@@ -1270,7 +1270,7 @@ Begin {
 				}
 
 				# dismount disk image from system
-				Dismount-DiskImage @DismountDiskImage
+				$null = Dismount-DiskImage @DismountDiskImage
 			}
 		}
 		Catch {
