@@ -123,7 +123,7 @@ Begin {
 
 	# create temporary path for ISO contents
 	Try {
-		$TemporaryPathForISO = New-Item -Force -ItemType Directory -Path $TemporaryPath -Name "ISO"
+		$TemporaryPathForISO = New-Item -Force -ItemType Directory -Path $TemporaryPath -Name 'ISO'
 	}
 	Catch {
 		$PSCmdlet.ThrowTerminatingError($_)
@@ -131,7 +131,7 @@ Begin {
 
 	# create temporary path for WIM file
 	Try {
-		$TemporaryPathForWIM = New-Item -Force -ItemType Directory -Path $TemporaryPath -Name "WIM"
+		$TemporaryPathForWIM = New-Item -Force -ItemType Directory -Path $TemporaryPath -Name 'WIM'
 	}
 	Catch {
 		$PSCmdlet.ThrowTerminatingError($_)
@@ -240,7 +240,7 @@ Process {
 	Catch {
 		Return $_
 	}
-	
+
 	# update content with index and product key
 	$Content = $Content.Replace('%INDEX%', $Index)
 	$Content = $Content.Replace('%PRODUCTKEY%', $ProductKey)
