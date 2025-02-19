@@ -513,7 +513,7 @@ Begin {
 			# ...and VM is a virtual machine...
 			If ($VM -is [Microsoft.HyperV.PowerShell.VirtualMachine]) {
 				# get computer name from VM
-				$ComputerName = $VM.ComputerName
+				$ComputerName = $VM.ComputerName.ToLower()
 			}
 			Else {
 				# get computer name from hostname
@@ -2242,7 +2242,7 @@ Begin {
 		Param(
 			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VMNetworkAdapter] })]
 			[object]$VMNetworkAdapter,
-			[string]$ComputerName = $VMNetworkAdapter.ComputerName,
+			[string]$ComputerName = $VMNetworkAdapter.ComputerName.ToLower(),
 			[string]$VlanMode,
 			[int32]$VlanId,
 			[string]$VlanIdList
