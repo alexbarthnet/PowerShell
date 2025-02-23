@@ -2920,6 +2920,8 @@ Begin {
 			# define OSD parameters
 			[Parameter(Mandatory)]
 			[string]$DeploymentPath,
+			[uint16]$ControllerNumber = 0,
+			[uint16]$ControllerLocation = 0,
 			[string]$UnattendFile,
 			[string]$Username,
 			[string]$Password,
@@ -2970,21 +2972,12 @@ Begin {
 			Return
 		}
 
-		# retrieve VM firmware
-		Try {
-			$VMFirmware = Get-VMFirmware -VM $VM
-		}
-		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM firmware")
-			Throw $_
-		}
+		# retrieve path to hard drive with provided controller number and location
+		$VhdPath = $VM.HardDrives.Where({ $_.ControllerNumber -eq $ControllerNumber -and $_.ControllerLocation -eq $ControllerLocation }).Path
 
-		# retrieve path to first hard drive in boot order
-		$VhdPath = $VMFirmware.BootOrder.Where({ $_.Device -is [Microsoft.HyperV.PowerShell.HardDiskDrive] }).Device.Path | Select-Object -First 1
-
-		# evaluate path to first hard drive
-		If (-not $VhdPath) {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD copy, could not locate first VHD in boot order")
+		# evaluate path to hard drive with provided controller number and location
+		If ([System.String]::IsNullOrEmpty($VhdPath)) {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD copy, could not locate VHD on controller $ControllerNumber at LUN $ControllerLocation")
 			Return
 		}
 
@@ -3911,6 +3904,8 @@ Process {
 						$CopyVHDFromParams = @{
 							VM                 = $VM
 							DeploymentPath     = $JsonData.$Name.OSDeployment.DeploymentPath
+							ControllerNumber   = $JsonData.$Name.OSDeployment.ControllerNumber
+							ControllerLocation = $JsonData.$Name.OSDeployment.ControllerLocation
 							UnattendFile       = $JsonData.$Name.OSDeployment.UnattendFile
 							DomainName         = $JsonData.$Name.OSDeployment.DomainName
 							OrganizationalUnit = $JsonData.$Name.OSDeployment.OrganizationalUnit
