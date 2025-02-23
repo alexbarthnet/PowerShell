@@ -2967,7 +2967,10 @@ Begin {
 		}
 
 		# evaluate deployment path
-		If (-not $TestPath) {
+		If ($TestPath) {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...found source VHD: $DeploymentPath")
+		}
+		Else {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD attach, host did not find file: '$DeploymentPath'")
 			Return
 		}
@@ -2979,6 +2982,9 @@ Begin {
 		If ([System.String]::IsNullOrEmpty($VhdPath)) {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD copy, could not locate VHD on controller $ControllerNumber at LUN $ControllerLocation")
 			Return
+		}
+		Else {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...found target VHD: $VhdPath")
 		}
 
 		# update argument list for Get-Item
@@ -3002,8 +3008,8 @@ Begin {
 
 		# evaluate first hard drive
 		If ($GetItem.Length -gt 4MB) {
-			Write-Warning ("$Hostname,$ComputerName,$Name - found first VHD larger than expected: '$(Format-Bytes -Size $GetItem.Length)'")
-			Write-Warning ("$Hostname,$ComputerName,$Name - replace first VHD?") -WarningAction Inquire
+			Write-Warning ("$Hostname,$ComputerName,$Name - found VHD larger than expected: '$(Format-Bytes -Size $GetItem.Length)'")
+			Write-Warning ("$Hostname,$ComputerName,$Name - replace VHD?") -WarningAction Inquire
 		}
 
 		# update argument list for Copy-Item
@@ -3035,7 +3041,7 @@ Begin {
 
 		# update permissions
 		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...updating VHD ACL")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...updating target VHD ACL")
 			Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
 				# import parameters for VMId
@@ -3095,7 +3101,7 @@ Begin {
 
 		# evaluate deployment file
 		If (-not $TestPath) {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD update, host did not find unattend file: '$UnattendFile'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping target VHD update, host did not find unattend file: '$UnattendFile'")
 			Return
 		}
 
@@ -3104,7 +3110,7 @@ Begin {
 
 		# mount VHD
 		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...mounting copied VHD: '$VhdPath")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...mounting target VHD")
 			$DriveLetter = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
 				$MountVHD = @{
@@ -3116,13 +3122,13 @@ Begin {
 			}
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not mount VHD: '$VhdPath'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not mount target VHD: '$($_.Exception.Message)'")
 			Throw $_
 		}
 
 		# evaluate deployment path
 		If (-not $DriveLetter) {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD attach, could not mount VHD: '$Destination'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD attach, could not mount target VHD: '$Destination'")
 			Return
 		}
 
@@ -3137,7 +3143,7 @@ Begin {
 
 		# copy file to VHD
 		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...updating VHD with unattend file: '$UnattendFile'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...updating target VHD with unattend file: '$UnattendFile'")
 			Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
 				$CopyItem = @{
@@ -3186,7 +3192,7 @@ Begin {
 
 			# update file on VHD
 			Try {
-				Write-Host ("$Hostname,$ComputerName,$Name - ...replacing values in deployment file: $Variable")
+				Write-Host ("$Hostname,$ComputerName,$Name - ...replacing values in deployment file: '$Variable'")
 				Invoke-Command @InvokeCommand -ScriptBlock {
 					Param($ArgumentList)
 					# get variables from arguments
@@ -3210,7 +3216,7 @@ Begin {
 
 		# dismount VHD
 		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...dismounting updated VHD: '$VhdPath")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...dismounting target VHD after updates")
 			Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
 				$DismountVHD = @{
@@ -3221,7 +3227,7 @@ Begin {
 			}
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not dismount VHD: '$VhdPath'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not dismount target VHD: '$($_.Exception.Message)'")
 			Throw $_
 		}
 	}
