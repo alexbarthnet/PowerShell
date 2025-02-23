@@ -65,7 +65,10 @@
                             <Value>%INDEX%</Value>
                         </MetaData>
                     </InstallFrom>
-                    <InstallToAvailablePartition>true</InstallToAvailablePartition>
+                    <InstallTo>
+                        <DiskID>0</DiskID>
+                        <PartitionID>3</PartitionID>
+                    </InstallTo>
                     <WillShowUI>OnError</WillShowUI>
                 </OSImage>
             </ImageInstall>
