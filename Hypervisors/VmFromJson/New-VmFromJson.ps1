@@ -513,7 +513,7 @@ Begin {
 			# ...and VM is a virtual machine...
 			If ($VM -is [Microsoft.HyperV.PowerShell.VirtualMachine]) {
 				# get computer name from VM
-				$ComputerName = $VM.ComputerName
+				$ComputerName = $VM.ComputerName.ToLower()
 			}
 			Else {
 				# get computer name from hostname
@@ -2242,7 +2242,7 @@ Begin {
 		Param(
 			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VMNetworkAdapter] })]
 			[object]$VMNetworkAdapter,
-			[string]$ComputerName = $VMNetworkAdapter.ComputerName,
+			[string]$ComputerName = $VMNetworkAdapter.ComputerName.ToLower(),
 			[string]$VlanMode,
 			[int32]$VlanId,
 			[string]$VlanIdList
@@ -2920,6 +2920,8 @@ Begin {
 			# define OSD parameters
 			[Parameter(Mandatory)]
 			[string]$DeploymentPath,
+			[uint16]$ControllerNumber = 0,
+			[uint16]$ControllerLocation = 0,
 			[string]$UnattendFile,
 			[string]$Username,
 			[string]$Password,
@@ -2965,27 +2967,24 @@ Begin {
 		}
 
 		# evaluate deployment path
-		If (-not $TestPath) {
+		If ($TestPath) {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...found source VHD: $DeploymentPath")
+		}
+		Else {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD attach, host did not find file: '$DeploymentPath'")
 			Return
 		}
 
-		# retrieve VM firmware
-		Try {
-			$VMFirmware = Get-VMFirmware -VM $VM
-		}
-		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM firmware")
-			Throw $_
-		}
+		# retrieve path to hard drive with provided controller number and location
+		$VhdPath = $VM.HardDrives.Where({ $_.ControllerNumber -eq $ControllerNumber -and $_.ControllerLocation -eq $ControllerLocation }).Path
 
-		# retrieve path to first hard drive in boot order
-		$VhdPath = $VMFirmware.BootOrder.Where({ $_.Device -is [Microsoft.HyperV.PowerShell.HardDiskDrive] }).Device.Path | Select-Object -First 1
-
-		# evaluate path to first hard drive
-		If (-not $VhdPath) {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD copy, could not locate first VHD in boot order")
+		# evaluate path to hard drive with provided controller number and location
+		If ([System.String]::IsNullOrEmpty($VhdPath)) {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD copy, could not locate VHD on controller $ControllerNumber at LUN $ControllerLocation")
 			Return
+		}
+		Else {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...found target VHD: $VhdPath")
 		}
 
 		# update argument list for Get-Item
@@ -3009,8 +3008,8 @@ Begin {
 
 		# evaluate first hard drive
 		If ($GetItem.Length -gt 4MB) {
-			Write-Warning ("$Hostname,$ComputerName,$Name - found first VHD larger than expected: '$(Format-Bytes -Size $GetItem.Length)'")
-			Write-Warning ("$Hostname,$ComputerName,$Name - replace first VHD?") -WarningAction Inquire
+			Write-Warning ("$Hostname,$ComputerName,$Name - found VHD larger than expected: '$(Format-Bytes -Size $GetItem.Length)'")
+			Write-Warning ("$Hostname,$ComputerName,$Name - replace VHD?") -WarningAction Inquire
 		}
 
 		# update argument list for Copy-Item
@@ -3042,7 +3041,7 @@ Begin {
 
 		# update permissions
 		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...updating VHD ACL")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...updating target VHD ACL")
 			Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
 				# import parameters for VMId
@@ -3102,7 +3101,7 @@ Begin {
 
 		# evaluate deployment file
 		If (-not $TestPath) {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD update, host did not find unattend file: '$UnattendFile'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping target VHD update, host did not find unattend file: '$UnattendFile'")
 			Return
 		}
 
@@ -3111,7 +3110,7 @@ Begin {
 
 		# mount VHD
 		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...mounting copied VHD: '$VhdPath")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...mounting target VHD")
 			$DriveLetter = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
 				$MountVHD = @{
@@ -3123,13 +3122,13 @@ Begin {
 			}
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not mount VHD: '$VhdPath'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not mount target VHD: '$($_.Exception.Message)'")
 			Throw $_
 		}
 
 		# evaluate deployment path
 		If (-not $DriveLetter) {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD attach, could not mount VHD: '$Destination'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD attach, could not mount target VHD: '$Destination'")
 			Return
 		}
 
@@ -3144,7 +3143,7 @@ Begin {
 
 		# copy file to VHD
 		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...updating VHD with unattend file: '$UnattendFile'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...updating target VHD with unattend file: '$UnattendFile'")
 			Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
 				$CopyItem = @{
@@ -3193,7 +3192,7 @@ Begin {
 
 			# update file on VHD
 			Try {
-				Write-Host ("$Hostname,$ComputerName,$Name - ...replacing values in deployment file: $Variable")
+				Write-Host ("$Hostname,$ComputerName,$Name - ...replacing values in deployment file: '$Variable'")
 				Invoke-Command @InvokeCommand -ScriptBlock {
 					Param($ArgumentList)
 					# get variables from arguments
@@ -3217,7 +3216,7 @@ Begin {
 
 		# dismount VHD
 		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...dismounting updated VHD: '$VhdPath")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...dismounting target VHD after updates")
 			Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
 				$DismountVHD = @{
@@ -3228,7 +3227,7 @@ Begin {
 			}
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not dismount VHD: '$VhdPath'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not dismount target VHD: '$($_.Exception.Message)'")
 			Throw $_
 		}
 	}
@@ -3540,7 +3539,7 @@ Process {
 	:VMName ForEach ($Name in $VMName) {
 		# check if JSON contains VM
 		If ($null -eq $JsonData.$Name) {
-			Write-Host ("$Hostname - VM not found in Json: '$Name")
+			Write-Host ("$Hostname - VM not found in Json: '$Name'")
 			Continue
 		}
 
@@ -3911,6 +3910,8 @@ Process {
 						$CopyVHDFromParams = @{
 							VM                 = $VM
 							DeploymentPath     = $JsonData.$Name.OSDeployment.DeploymentPath
+							ControllerNumber   = $JsonData.$Name.OSDeployment.ControllerNumber
+							ControllerLocation = $JsonData.$Name.OSDeployment.ControllerLocation
 							UnattendFile       = $JsonData.$Name.OSDeployment.UnattendFile
 							DomainName         = $JsonData.$Name.OSDeployment.DomainName
 							OrganizationalUnit = $JsonData.$Name.OSDeployment.OrganizationalUnit

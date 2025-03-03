@@ -1270,7 +1270,7 @@ Begin {
 				}
 
 				# dismount disk image from system
-				Dismount-DiskImage @DismountDiskImage
+				$null = Dismount-DiskImage @DismountDiskImage
 			}
 		}
 		Catch {
@@ -1655,7 +1655,7 @@ Process {
 	:VMName ForEach ($Name in $VMName) {
 		# check if VMParams contains VM
 		If ($null -eq $JsonData.$Name) {
-			Write-Host ("$Hostname - VM not found in Json: '$Name")
+			Write-Host ("$Hostname - VM not found in Json: '$Name'")
 			Continue
 		}
 
