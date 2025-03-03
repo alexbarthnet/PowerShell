@@ -3,6 +3,7 @@ Param(
     [string[]]$Name,
     [string[]]$Principals,
     [string[]]$AccessRights,
+    [string]$ComputerName,
     [ValidateSet('Default', 'SDDL', 'SecurityDescriptor')]
     [string]$Output = 'Default',
     [switch]$RequireAllAccessRights
@@ -214,19 +215,28 @@ If ($PSBoundParameters.ContainsKey('Principals')) {
     }
 }
 
+# define parameters for Get-Service
+$GetService = @{
+    ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+}
+
+# if name provided...
+If ($PSBoundParameters.ContainsKey($Name)) {
+    $GetService.Add('Name', $Name)
+}
+
+# if computer name provided...
+If ($PSBoundParameters.ContainsKey($ComputerName)) {
+    $GetService.Add('ComputerName', $ComputerName)
+}
+
 # retrieve services
 Try {
-    $Services = Get-Service
+    $Services = Get-Service @GetService
 }
 Catch {
     Write-Warning -Message "could not retrieve services: $($_.Exception.Message)"
     $PSCmdlet.ThrowTerminatingError($_)
-}
-
-# if name requested...
-If ($PSBoundParameters.ContainsKey('Name')) {
-    # filter services
-    $Services = $Services | Where-Object { $_.Name -in $Name }
 }
 
 # loop through each service
