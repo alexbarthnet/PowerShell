@@ -3,7 +3,6 @@ Param(
     [string[]]$Name,
     [string[]]$Principals,
     [string[]]$AccessRights,
-    [string]$ComputerName,
     [ValidateSet('Default', 'SDDL', 'SecurityDescriptor')]
     [string]$Output = 'Default',
     [switch]$RequireAllAccessRights
@@ -215,28 +214,19 @@ If ($PSBoundParameters.ContainsKey('Principals')) {
     }
 }
 
-# define parameters for Get-Service
-$GetService = @{
-    ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-}
-
-# if name provided...
-If ($PSBoundParameters.ContainsKey($Name)) {
-    $GetService.Add('Name', $Name)
-}
-
-# if computer name provided...
-If ($PSBoundParameters.ContainsKey($ComputerName)) {
-    $GetService.Add('ComputerName', $ComputerName)
-}
-
 # retrieve services
 Try {
-    $Services = Get-Service @GetService
+    $Services = Get-Service
 }
 Catch {
     Write-Warning -Message "could not retrieve services: $($_.Exception.Message)"
     $PSCmdlet.ThrowTerminatingError($_)
+}
+
+# if name requested...
+If ($PSBoundParameters.ContainsKey('Name')) {
+    # filter services
+    $Services = $Services | Where-Object { $_.Name -in $Name }
 }
 
 # loop through each service
@@ -256,13 +246,22 @@ Catch {
         Continue NextService
     }
     
-    # retrieve value of security subkey
+    # retrieve security subkey as read-only
     Try {
-        $Bytes = $RegistryKey.OpenSubKey('Security', $false).GetValue('Security')
+        $SecuritySubKey = $RegistryKey.OpenSubKey('Security', $false)
     }
     Catch {
-        Write-Warning -Message "could not retrieve value of Security key for '$Service' service: $($_.Exception.Message)"
-        Continue NextService
+        Write-Warning -Message "could not open Security subkey for '$Service' service: $($_.Exception.Message)"
+        Return $_
+    }
+
+    # retrieve byte array from security property of security subkey
+    Try {
+        $Bytes = $SecuritySubKey.GetValue('Security')
+    }
+    Catch {
+        Write-Warning -Message "could not retrieve value of Security property of Security subkey for '$Service' service: $($_.Exception.Message)"
+        Return $_
     }
 
     # create a security descriptor object
@@ -275,14 +274,14 @@ Catch {
         Continue NextService
     }
 
-    # loop through each discretionary ACL
-    :NextDiscretionaryAcl ForEach ($DiscretionaryAcl in $SecurityDescriptor.DiscretionaryAcl) {
+    # loop through each ACE in discretionary ACL
+    :NextAccessControlEntry ForEach ($AccessControlEntry in $SecurityDescriptor.DiscretionaryAcl) {
         # if Principals provided...
         If ($PSBoundParameters.ContainsKey('Principals') -and $SecurityIdentifiers) {
-            # if security identifier is NOT in the list contains ANY of the provided access rights...
-            If ($DiscretionaryAcl.SecurityIdentifier -notin $SecurityIdentifiers) {
-                # continue to next ACL
-                Continue NextDiscretionaryAcl
+            # if security identifier in ACE is NOT security identifier of provided principals...
+            If ($AccessControlEntry.SecurityIdentifier -notin $SecurityIdentifiers) {
+                # continue to next ACE
+                Continue NextAccessControlEntry
             }
         }
 
@@ -291,42 +290,43 @@ Catch {
             # if all access rights are required...
             If ($PSBoundParameters.ContainsKey('RequireAllAccessRights') -and $RequireAllAccessRights) {
                 # if access mask lacks ALL of the provided access rights...
-                If (($DiscretionaryAcl.AccessMask -band $AccessMask) -ne $AccessMask) {
-                    # continue to next ACL
-                    Continue NextDiscretionaryAcl
+                If (($AccessControlEntry.AccessMask -band $AccessMask) -ne $AccessMask) {
+                    # continue to next ACE
+                    Continue NextAccessControlEntry
                 }
             }
             # if any access rights are required...
             Else {
                 # if access mask lacks ANY of the provided access rights...
-                If (($DiscretionaryAcl.AccessMask -band $AccessMask) -eq 0) {
-                    # continue to next ACL
-                    Continue NextDiscretionaryAcl
+                If (($AccessControlEntry.AccessMask -band $AccessMask) -eq 0) {
+                    # continue to next ACE
+                    Continue NextAccessControlEntry
                 }
             }
         }
 
         # if output is not default...
         If ($Output -ne 'Default') {
-            Continue NextDiscretionaryAcl
+            # continue to next ACE
+            Continue NextAccessControlEntry
         }
 
         # translate principal
         Try {
-            $Principal = $DiscretionaryAcl.SecurityIdentifier.Translate([System.Security.Principal.NTAccount]).Value
+            $Principal = $AccessControlEntry.SecurityIdentifier.Translate([System.Security.Principal.NTAccount]).Value
         }
         Catch {
-            $Principal = $DiscretionaryAcl.SecurityIdentifier.Value
+            $Principal = $AccessControlEntry.SecurityIdentifier.Value
         }
 
-        # create object discretionary ACL
+        # create object representing ACE
         $ServiceSecurity = [pscustomobject]@{
             Name         = $Service
             Principal    = $Principal
-            AccessRights = [ServiceAccessRights]$DiscretionaryAcl.AccessMask
+            AccessRights = [ServiceAccessRights]$AccessControlEntry.AccessMask
         }
 
-        # return 
+        # write object to pipline and continue to next ACE
         Write-Output -InputObject $ServiceSecurity
     }
 
