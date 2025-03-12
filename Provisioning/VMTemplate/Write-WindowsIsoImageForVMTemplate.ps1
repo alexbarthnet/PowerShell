@@ -41,13 +41,6 @@ None.
 .OUTPUTS
 None. The function does not generate any output.
 
-.NOTES
-This script creates and leverages an "applied updates" to avoid a potential loop during Windows setup to address the historical requirement to run Windows Update multiple times to completely update Windows.
-This script returns the "The command is still in process" exit code when updates have been installed which enables Windows setup to restart the system and apply the updates and then re-run the script to apply any additional updates.
-Windows Update MAY determine that a particular update is required during the search operation but not apply the update during the install operation which can result in an endless loop.
-The "applied updates" file contains the ID of any update that was passed to the install function of the Windows Update COM object.
-This script will return the "The command was successful. No reboot is required." return code when all updates found by the search operation have been passed to the install function in a previous run.
-
 .LINK
 https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nn-wuapi-iinstallationresult
 
@@ -83,6 +76,7 @@ Param(
 	[string]$PathToToolsFolder,
 	[switch]$NoNewWindow,
 	[switch]$SkipRemove,
+	[switch]$SkipExclude,
 	[string]$StagingPath,
 	[string]$ProductKey = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF',
 	[uint16]$Index = 4
@@ -135,6 +129,16 @@ Begin {
 	}
 	Catch {
 		$PSCmdlet.ThrowTerminatingError($_)
+	}
+
+	# if Skip Exclude not requested...
+	If (!$SkipExclude) {
+		Try {
+			Add-MpPreference -ExclusionPath $StagingPath -ErrorAction Stop
+		}
+		Catch {
+			Write-Warning -Message "could not create exclusion for temporary path: $StagingPath"
+		}
 	}
 
 	# define relative items
@@ -281,7 +285,17 @@ Process {
 }
 
 End {
-	# if skip remove not requested...
+	# if Skip Exclude not requested...
+	If (!$SkipExclude) {
+		Try {
+			Remove-MpPreference -ExclusionPath $StagingPath -ErrorAction Stop
+		}
+		Catch {
+			Write-Warning -Message "could not remove exclusion for temporary path: $StagingPath"
+		}
+	}
+
+	# if Skip Remove not requested...
 	If (!$SkipRemove) {
 		# report state
 		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Removing temporary files...'
