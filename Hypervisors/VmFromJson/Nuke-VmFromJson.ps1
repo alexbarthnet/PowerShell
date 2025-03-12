@@ -1055,13 +1055,38 @@ Begin {
 			Throw $_
 		}
 
+		# update argument list for removing paths
+		$InvokeCommand['ArgumentList']['Path'] = $Path
+
+		# test path
+		Try {
+			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				# define parameters for Test-Path
+				$TestPath = @{
+					Path        = $ArgumentList['Path']
+					PathType    = [Microsoft.PowerShell.Commands.TestPathType]::Container
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				# test path
+				Test-Path @TestPath
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not check provided path")
+			Throw $_
+		}
+
+		# if path not found...
+		If (!$TestPath) {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping empty path removal, path not found: '$Path'")
+			Return
+		}
+
 		# update argument list for reporting
 		$InvokeCommand['ArgumentList']['Hostname'] = $Hostname
 		$InvokeCommand['ArgumentList']['ComputerName'] = $ComputerName
 		$InvokeCommand['ArgumentList']['Name'] = $Name
-
-		# update argument list for removing paths
-		$InvokeCommand['ArgumentList']['Path'] = $Path
 
 		# remove empty path
 		Invoke-Command @InvokeCommand -ScriptBlock {
@@ -1075,16 +1100,6 @@ Begin {
 			# create object for path
 			$Path = $ArgumentList['Path']
 
-			# if path not found....
-			If ( -not (Test-Path -Path $Path -PathType Container)) {
-				# warn and return
-				Write-Host ("$Hostname,$ComputerName,$Name - WARNING: path not found")
-				Return
-			}
-
-			# declare and being
-			Write-Host ("$Hostname,$ComputerName,$Name - ...located path: $Path")
-
 			# define parameters for Get-ChildItem
 			$GetChildItem = @{
 				Path        = $Path
@@ -1095,7 +1110,7 @@ Begin {
 
 			# retrieve items in path
 			Try {
-				Write-Host ("$Hostname,$ComputerName,$Name - ...checking path for child items")
+				Write-Host ("$Hostname,$ComputerName,$Name - ...checking path for child items: '$Path'")
 				$ChildItems = Get-ChildItem @GetChildItem
 			}
 			Catch {
@@ -1106,7 +1121,7 @@ Begin {
 			# if items are in path...
 			If ($null -ne $ChildItems) {
 				# warn and return
-				Write-Host ("$Hostname,$ComputerName,$Name - WARNING: path not empty")
+				Write-Host ("$Hostname,$ComputerName,$Name - WARNING: path not empty: '$Path'")
 				Return
 			}
 
@@ -1149,13 +1164,40 @@ Begin {
 			Throw $_
 		}
 
+		# update argument list for removing files
+		$InvokeCommand['ArgumentList']['Path'] = $Path
+
+		# test path
+		Try {
+			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				# define parameters for Test-Path
+				$TestPath = @{
+					Path        = $ArgumentList['Path']
+					PathType    = [Microsoft.PowerShell.Commands.TestPathType]::Container
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				# test path
+				Test-Path @TestPath
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not check provided path")
+			Throw $_
+		}
+
+		# if path not found...
+		If (!$TestPath) {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping item removal, path not found: '$Path'")
+			Return
+		}
+
 		# update argument list for reporting
 		$InvokeCommand['ArgumentList']['Hostname'] = $Hostname
 		$InvokeCommand['ArgumentList']['ComputerName'] = $ComputerName
 		$InvokeCommand['ArgumentList']['Name'] = $Name
 
 		# update argument list for removing files
-		$InvokeCommand['ArgumentList']['Path'] = $Path
 		$InvokeCommand['ArgumentList']['Items'] = $Items
 
 		# remove items from path
@@ -1169,13 +1211,6 @@ Begin {
 
 			# create object for path
 			$Path = $ArgumentList['Path']
-
-			# if path does not exist...
-			If ( -not (Test-Path -Path $Path -PathType Container)) {
-				# declare and return
-				Write-Host ("$Hostname,$ComputerName,$Name - ...path not found")
-				Return
-			}
 
 			# define parameters for Get-ChildItem
 			$GetChildItem = @{
@@ -1191,7 +1226,7 @@ Begin {
 				$ChildItems = Get-ChildItem @GetChildItem
 			}
 			Catch {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve items in path")
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve items in path: '$Path'")
 				Throw $_
 			}
 
@@ -1250,6 +1285,34 @@ Begin {
 
 		# update argument list for removing files
 		$InvokeCommand['ArgumentList']['Path'] = $Path
+
+		# test path
+		Try {
+			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				# define parameters for Test-Path
+				$TestPath = @{
+					Path        = $ArgumentList['Path']
+					PathType    = [Microsoft.PowerShell.Commands.TestPathType]::Leaf
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				# test path
+				Test-Path @TestPath
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not check provided path")
+			Throw $_
+		}
+
+		# if path found...
+		If ($TestPath) {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...found source VHD: '$Path'")
+		}
+		Else {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD remove, host did not find file: '$Path'")
+			Return
+		}
 
 		# dismount VHD from system before removal
 		Try {
@@ -1670,12 +1733,15 @@ Process {
 
 		# override VirtualMachinePath with bound parameters if provided
 		If ($PSBoundParameters['Path']) {
-			$Path = $Path
 			Write-Host ("$Hostname,$ComputerName,$Name - WARNING: overriding Path from JSON: '$($JsonData.$Name.Path)'")
 		}
 		Else {
 			$Path = $JsonData.$Name.Path
 		}
+
+		# define list for paths
+		$VMPaths = [System.Collections.Generic.List[string]]::new()
+		$VMPaths.Add("$Path\$Name")
 
 		# if VM has host...
 		If ($null -ne $ComputerName) {
@@ -1926,9 +1992,6 @@ Process {
 
 		# get VM paths
 		If ($null -ne $VM) {
-			# define lists
-			$VMPaths = [System.Collections.Generic.List[string]]::new()
-
 			# get path information
 			$VMPaths.Add($VM.CheckpointFileLocation)
 			$VMPaths.Add($VM.ConfigurationLocation)
@@ -2030,6 +2093,17 @@ Process {
 			# filter VM paths
 			$VMPaths = $VMPaths | Select-Object -Unique | Sort-Object -Descending
 
+			# define list for VM items
+			$Items = [System.Collections.Generic.List[System.String]]::new()
+
+			# add required items
+			$Items.Add($Name)
+
+			# add optional items
+			If ($null -ne $VMId) {
+				$Items.Add($VMId)
+			}
+
 			# remove files from paths
 			ForEach ($Path in $VMPaths) {
 				# declare and begin
@@ -2039,7 +2113,7 @@ Process {
 				$RemoveItemsFromPath = @{
 					ComputerName = $ComputerName
 					Path         = $Path
-					Items        = @($Name, $VMId)
+					Items        = $Items
 				}
 
 				# remove VHD from host
