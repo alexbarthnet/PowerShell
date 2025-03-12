@@ -1,12 +1,71 @@
+<#
+.SYNOPSIS
+Retrieves service access rights on one or more Windows services.
+
+.DESCRIPTION
+Retrieves service access rights on one or more Windows services.
+
+.PARAMETER Name
+String for filtering the output to specific services. The access rights for all services are returned when this parameter is not provided.
+
+.PARAMETER Principals
+String for filtering the output to specific principals. The access rights for all principals are returned when this parameter is not provided.
+
+.PARAMETER AccessRights
+Strings for filtering the output to specific access rights. The unfiltered access rights are returned when this parameter is not provided. Must be one of the following values:
+- SERVICE_QUERY_CONFIG - Required to call the QueryServiceConfig and QueryServiceConfig2 functions to query the service configuration.
+- SERVICE_CHANGE_CONFIG - Required to call the ChangeServiceConfig or ChangeServiceConfig2 function to change the service configuration. Because this grants the caller the right to change the executable file that the system runs, it should be granted only to administrators.
+- SERVICE_QUERY_STATUS - Required to call the QueryServiceStatus or QueryServiceStatusEx function to ask the service control manager about the status of the service.
+- SERVICE_ENUMERATE_DEPENDENTS - Required to call the EnumDependentServices function to enumerate all the services dependent on the service.
+- SERVICE_START - Required to call the StartService function to start the service.
+- SERVICE_STOP - Required to call the ControlService function to stop the service.
+- SERVICE_PAUSE_CONTINUE - Required to call the ControlService function to pause or continue the service.
+- SERVICE_INTERROGATE - Required to call the ControlService function to ask the service to report its status immediately.
+- SERVICE_USER_DEFINED_CONTROL - Required to call the ControlService function to specify a user-defined control code.
+- DELETE - Required to call the DeleteService function to delete the service.
+- READ_CONTROL - Required to call the QueryServiceObjectSecurity function to query the security descriptor of the service object.
+- WRITE_DAC - Required to call the SetServiceObjectSecurity function to modify the Dacl member of the service object's security descriptor.
+- WRITE_OWNER - Required to call the SetServiceObjectSecurity function to modify the Owner and Group members of the service object's security descriptor.
+- SERVICE_ALL_ACCESS - Includes all access rights in this list.
+
+.PARAMETER Output
+String parameter to define the output of the script. The default value is 'Default' and the following values are supported:
+- Default: returns the enumerated Access Rights from the Access Control Entries in the SecurityDescriptior for the service(s)
+- AccessMask: returns the AccessMask value from the Access Control Entries in the SecurityDescriptior for the service(s)
+- SDDL: returns the SDDL form of the SecurityDescriptior for the service(s)
+- SecurityDescriptor: returns a SecurityDescriptior object for the service(s)
+
+.PARAMETER ExactMatch
+Switch parameter to return the service access rights only when they are an exact match of provided access rights.
+
+.INPUTS
+None.
+
+.OUTPUTS
+None. The script reports the actions taken and does not provide any actionable output.
+
+.EXAMPLE
+.\Get-ServiceSecurity.ps1
+
+.EXAMPLE
+.\Get-ServiceSecurity.ps1 -Name 'dnscache'
+
+.EXAMPLE
+.\Get-ServiceSecurity.ps1 -Principal 'NT AUTHORITY\Authenticated Users'
+
+.EXAMPLE
+.\Get-ServiceSecurity.ps1 -Name 'dnscache' -Principal 'NT AUTHORITY\Authenticated Users'
+#>
+
 [CmdletBinding()]
 Param(
+    [Parameter(ValueFromPipeline)]
     [string[]]$Name,
     [string[]]$Principals,
     [string[]]$AccessRights,
-    [string]$ComputerName,
-    [ValidateSet('Default', 'SDDL', 'SecurityDescriptor')]
+    [ValidateSet('Default', 'AccessMask', 'SDDL', 'SecurityDescriptor')]
     [string]$Output = 'Default',
-    [switch]$RequireAllAccessRights
+    [switch]$ExactMatch
 )
 
 # define enum for service access rights
@@ -215,28 +274,25 @@ If ($PSBoundParameters.ContainsKey('Principals')) {
     }
 }
 
-# define parameters for Get-Service
-$GetService = @{
-    ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+# retrieve services
+Try {
+    $Services = Get-Service -ErrorAction Stop
+}
+Catch {
+    Write-Warning -Message $_.Exception.Message
+    Return
 }
 
 # if name provided...
-If ($PSBoundParameters.ContainsKey($Name)) {
-    $GetService.Add('Name', $Name)
-}
-
-# if computer name provided...
-If ($PSBoundParameters.ContainsKey($ComputerName)) {
-    $GetService.Add('ComputerName', $ComputerName)
-}
-
-# retrieve services
-Try {
-    $Services = Get-Service @GetService
-}
-Catch {
-    Write-Warning -Message "could not retrieve services: $($_.Exception.Message)"
-    $PSCmdlet.ThrowTerminatingError($_)
+If ($PSBoundParameters.ContainsKey('Name')) {
+    # filter services
+    Try {
+        $Services = $Services | Where-Object { $_.Name -in $Name }
+    }
+    Catch {
+        Write-Warning -Message "could not filter services with provided '$Name' name(s): $($_.Exception.Message)"
+        Continue NextService
+    }
 }
 
 # loop through each service
@@ -256,13 +312,22 @@ Catch {
         Continue NextService
     }
     
-    # retrieve value of security subkey
+    # retrieve security subkey as read-only
     Try {
-        $Bytes = $RegistryKey.OpenSubKey('Security', $false).GetValue('Security')
+        $SecuritySubKey = $RegistryKey.OpenSubKey('Security', $false)
     }
     Catch {
-        Write-Warning -Message "could not retrieve value of Security key for '$Service' service: $($_.Exception.Message)"
-        Continue NextService
+        Write-Warning -Message "could not open Security subkey for '$Service' service: $($_.Exception.Message)"
+        Return $_
+    }
+
+    # retrieve byte array from security property of security subkey
+    Try {
+        $Bytes = $SecuritySubKey.GetValue('Security')
+    }
+    Catch {
+        Write-Warning -Message "could not retrieve value of Security property of Security subkey for '$Service' service: $($_.Exception.Message)"
+        Return $_
     }
 
     # create a security descriptor object
@@ -275,66 +340,74 @@ Catch {
         Continue NextService
     }
 
-    # loop through each discretionary ACL
-    :NextDiscretionaryAcl ForEach ($DiscretionaryAcl in $SecurityDescriptor.DiscretionaryAcl) {
+    # loop through each ACE in discretionary ACL
+    :NextAccessControlEntry ForEach ($AccessControlEntry in $SecurityDescriptor.DiscretionaryAcl) {
         # if Principals provided...
         If ($PSBoundParameters.ContainsKey('Principals') -and $SecurityIdentifiers) {
-            # if security identifier is NOT in the list contains ANY of the provided access rights...
-            If ($DiscretionaryAcl.SecurityIdentifier -notin $SecurityIdentifiers) {
-                # continue to next ACL
-                Continue NextDiscretionaryAcl
+            # if security identifier in ACE is NOT security identifier of provided principals...
+            If ($AccessControlEntry.SecurityIdentifier -notin $SecurityIdentifiers) {
+                # continue to next ACE
+                Continue NextAccessControlEntry
             }
         }
 
         # if AccessRights provided...
         If ($PSBoundParameters.ContainsKey('AccessRights') -and $AccessMask) {
             # if all access rights are required...
-            If ($PSBoundParameters.ContainsKey('RequireAllAccessRights') -and $RequireAllAccessRights) {
+            If ($PSBoundParameters.ContainsKey('ExactMatch') -and $ExactMatch) {
                 # if access mask lacks ALL of the provided access rights...
-                If (($DiscretionaryAcl.AccessMask -band $AccessMask) -ne $AccessMask) {
-                    # continue to next ACL
-                    Continue NextDiscretionaryAcl
+                If (($AccessControlEntry.AccessMask -band $AccessMask) -ne $AccessMask) {
+                    # continue to next ACE
+                    Continue NextAccessControlEntry
                 }
             }
             # if any access rights are required...
             Else {
                 # if access mask lacks ANY of the provided access rights...
-                If (($DiscretionaryAcl.AccessMask -band $AccessMask) -eq 0) {
-                    # continue to next ACL
-                    Continue NextDiscretionaryAcl
+                If (($AccessControlEntry.AccessMask -band $AccessMask) -eq 0) {
+                    # continue to next ACE
+                    Continue NextAccessControlEntry
                 }
             }
         }
 
         # if output is not default...
-        If ($Output -ne 'Default') {
-            Continue NextDiscretionaryAcl
+        If ($Output -notin 'Default', 'AccessMask') {
+            # continue to next ACE
+            Continue NextAccessControlEntry
         }
 
         # translate principal
         Try {
-            $Principal = $DiscretionaryAcl.SecurityIdentifier.Translate([System.Security.Principal.NTAccount]).Value
+            $Principal = $AccessControlEntry.SecurityIdentifier.Translate([System.Security.Principal.NTAccount]).Value
         }
         Catch {
-            $Principal = $DiscretionaryAcl.SecurityIdentifier.Value
+            $Principal = $AccessControlEntry.SecurityIdentifier.Value
         }
 
-        # create object discretionary ACL
-        $ServiceSecurity = [pscustomobject]@{
-            Name         = $Service
-            Principal    = $Principal
-            AccessRights = [ServiceAccessRights]$DiscretionaryAcl.AccessMask
+        # define hashtable for ACE
+        $ServiceSecurityHashtable = [ordered]@{ Name = $Service; Principal = $Principal }
+
+        # if access mask requested...
+        If ($Output -eq 'AccessMask') {
+            # add access mask to hashtable for ACE
+            $ServiceSecurityHashtable.Add('AccessMask', $AccessControlEntry.AccessMask)
+        }
+        # if access mask not requested...
+        Else {
+            # add expanded access rights to hashtable for ACE
+            $ServiceSecurityHashtable.Add('AccessRights', [ServiceAccessRights]$AccessControlEntry.AccessMask)
         }
 
-        # return 
-        Write-Output -InputObject $ServiceSecurity
+        # create and write object to pipline and continue to next ACE
+        Write-Output -InputObject ([pscustomobject]$ServiceSecurityHashtable)
     }
 
     # process output
     switch ($Output) {
         'SecurityDescriptor' {
             # create object with service name and security descriptor
-            $ServiceSecurity = [pscustomobject]@{
+            $ServiceSecurity = [pscustomobject][ordered]@{
                 Name               = $Service
                 SecurityDescriptor = $SecurityDescriptor
             }
@@ -344,7 +417,7 @@ Catch {
         }
         'SDDL' {
             # create object with service name and SDDL
-            $ServiceSecurity = [pscustomobject]@{
+            $ServiceSecurity = [pscustomobject][ordered]@{
                 Name = $Service
                 SDDL = $SecurityDescriptor.GetSddlForm([System.Security.AccessControl.AccessControlSections]('Access', 'Audit'))
             }

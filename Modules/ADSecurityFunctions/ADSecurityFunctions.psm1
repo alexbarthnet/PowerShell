@@ -565,7 +565,7 @@ Function New-ADAccessRule {
 	The security identifier to include in the access rule.
 
 	.PARAMETER Preset
-	A string parameter defining a preset to create multiple access rules for the provided security identifier.
+	One or more strings defining a preset that creates multiple access rules for the provided security identifier.
 
 	.PARAMETER Rights
 	The Active Directory rights for the access rule. The default value is 'GenericRead'
@@ -592,6 +592,9 @@ Function New-ADAccessRule {
 	System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule].
 
 	.EXAMPLE
+	PS> New-ADAccessRule -SecurityIdentifier (Get-ADSecurityIdentifier -Principal 'Domain Users') -Preset 'ComputerCreate', 'ComputerJoin'
+
+	.EXAMPLE
 	PS> New-ADAccessRule -SecurityIdentifier (Get-ADSecurityIdentifier -Principal 'Domain Users') -Rights 'CreateChild' -ObjectName 'Computer' -AccessControlType 'Allow' -InheritanceType 'Descendents' -InheritingObjectName 'organizationalUnit'
 	#>
 
@@ -602,7 +605,7 @@ Function New-ADAccessRule {
 		[System.Security.Principal.SecurityIdentifier]$SecurityIdentifier,
 		# a preset that returns multiple access rules
 		[Parameter(Mandatory = $true, Position = 1, ParameterSetName = 'Preset')]
-		[string]$Preset,
+		[string[]]$Preset,
 		# the rights for the access rule, the default is "Read", set to "Self" for extended rights
 		[Parameter(Mandatory = $false, ParameterSetName = 'Default')]
 		[System.DirectoryServices.ActiveDirectoryRights]$Rights = 'GenericRead',

@@ -3132,14 +3132,12 @@ Begin {
 			Return
 		}
 
-		# update argument list for Copy-Item with original unattend file
+		# define unattend file on VHD
+		$UnattendFileOnVHD = '{0}:\Windows\Panther\unattend.xml' -f $DriveLetter
+
+		# update argument list for Copy-Item with unattend files on VHD
 		$InvokeCommand['ArgumentList']['Path'] = $UnattendFile
-
-		# update unattend file path
-		$UnattendFile = '{0}:\Windows\Panther\unattend.xml' -f $DriveLetter
-
-		# update argument list for Copy-Item with original unattend file
-		$InvokeCommand['ArgumentList']['Destination'] = $UnattendFile
+		$InvokeCommand['ArgumentList']['Destination'] = $UnattendFileOnVHD
 
 		# copy file to VHD
 		Try {
@@ -3161,7 +3159,7 @@ Begin {
 		}
 
 		# update argument list for Get-Content and Set-Content
-		$InvokeCommand['ArgumentList']['Path'] = $UnattendFile
+		$InvokeCommand['ArgumentList']['Path'] = $UnattendFileOnVHD
 
 		# define hashtable for variables
 		$VariableHashtable = [ordered]@{
