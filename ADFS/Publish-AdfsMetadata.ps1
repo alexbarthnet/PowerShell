@@ -27,7 +27,7 @@ Param(
 	[string]$Path,
 	# file paths for metadata files
 	[Parameter(Position = 1, Mandatory = $False)]
-	[string[]]$ChildPaths = @('saml-single-logout.xml', 'custom-logout.xml')
+	[string]$ChildPaths = 'saml-single-logout.xml'
 )
 
 Begin {
