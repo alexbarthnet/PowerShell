@@ -1,3 +1,35 @@
+<#
+.SYNOPSIS
+Run PowerShell scripts from a 'CD-ROM' drive.
+
+.DESCRIPTION
+Run PowerShell scripts from a 'CD-ROM' drive. The primary intent is enable arbitrary scripts to be run during Windows setup from one or more mounted ISO images without manipulation of the WIM image.
+
+.INPUTS
+None.
+
+.OUTPUTS
+None. The function does not generate any output.
+
+.NOTES
+This script will search for scripts in a 'Scripts' folder on mounted volumes with the 'CD-ROM' drive type. The scripts are run in alphabetical order from the volumes
+
+.LINK
+https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nn-wuapi-iinstallationresult
+
+.LINK
+https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatesearcher-search
+
+.LINK
+https://learn.microsoft.com/en-us/windows/win32/api/wuapi/ne-wuapi-operationresultcode
+
+.LINK
+https://learn.microsoft.com/en-us/windows/win32/wua_sdk/searching--downloading--and-installing-updates
+
+.LINK
+https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-deployment-runsynchronous-runsynchronouscommand-willreboot
+
+#>
 # define transcript path
 $BaseName = Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty BaseName
 $TranscriptPath = Join-Path -Path ([System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')) -ChildPath "$BaseName.txt"
