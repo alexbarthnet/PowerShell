@@ -66,18 +66,26 @@ If ($Volumes.Count -eq 0) {
 # define overall exit code
 [int]$ExitCode = 0
 
-# loop through drive letters
-ForEach ($DriveLetter in $Volumes.DriveLetter) {
-    # define path from drive letter
-    $Path = '{0}:\scripts' -f $DriveLetter
+# loop through volume
+:NextVolume ForEach ($Volume in $Volumes) {
+	# define path from drive letter
+	$Path = '{0}:\scripts' -f $Volume.DriveLetter
 
-    # if path not found...
-    If (![System.IO.Directory]::Exists($Path)) {
-        Continue
-    }
+	# if path not found...
+	If (![System.IO.Directory]::Exists($Path)) {
+		# report and continue to next volume
+		Write-Host "No 'scripts' path found on '$($Volume.DriveLetter)' drive with '$($Volume.FriendlyName)' label"
+		Continue NextVolume
+	}
 
-    # retrieve scripts in path
-    $Scripts = Get-ChildItem -Path $Path | Sort-Object -Property FullName
+	# retrieve scripts in path
+	Try {
+		$Scripts = Get-ChildItem -Path $Path | Where-Object { $_.Extension -eq '.ps1' } | Select-Object -ExpandProperty FullName | Sort-Object
+	}
+	Catch {
+		Write-Warning -Message "could not retrieve scripts from '$Path' path: $($_.Exception.Message)"
+		$ExitCodeFromScript = $_.Exception.HResult
+	}
 
     # loop through scripts in path
     :NextScript ForEach ($Script in $Scripts.FullName) {
