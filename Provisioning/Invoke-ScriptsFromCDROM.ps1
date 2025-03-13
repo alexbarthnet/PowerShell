@@ -40,27 +40,27 @@ $null = Start-Transcript -Path $TranscriptPath -Force -Append
 
 # if state file found...
 If ([System.IO.File]::Exists($ScriptStateXML)) {
-    # retrieve state
-    Try {
-        $ScriptStates = Import-Clixml -Path $ScriptStateXML
-    }
-    Catch {
-        Exit 101
-    }
+	# retrieve state
+	Try {
+		$ScriptStates = Import-Clixml -Path $ScriptStateXML
+	}
+	Catch {
+		Exit 101
+	}
 }
 # if state file not found...
 Else {
-    # create empty array for script states
-    $ScriptStates = @()
+	# create empty array for script states
+	$ScriptStates = @()
 }
 
 # get optical drive volumes with mounted images
-$Volumes = (Get-Volume).Where({ $_.DriveType -eq 'CD-ROM' -and $_.Size -gt 0 })
+$Volumes = (Get-Volume).Where({ $_.DriveType -eq 'CD-ROM' -and $_.Size -gt 0 }) | Sort-Object -Property DriveLetter
 
 # if no optional drive volumes found...
 If ($Volumes.Count -eq 0) {
-    Write-Host "No volumes found with drive type of 'CD-ROM'"
-    Exit 0
+	Write-Host "No volumes found with drive type of 'CD-ROM'"
+	Exit 0
 }
 
 # define overall exit code
@@ -87,48 +87,50 @@ If ($Volumes.Count -eq 0) {
 		$ExitCodeFromScript = $_.Exception.HResult
 	}
 
-    # loop through scripts in path
-    :NextScript ForEach ($Script in $Scripts.FullName) {
-        # retrieve script state from previous run
-        $ScriptState = $ScriptStates.Where({ $_.Script -eq $Script })
+	# loop through scripts in path
+	:NextScript ForEach ($Script in $Scripts.FullName) {
+		# retrieve script state from previous run
+		$ScriptState = $ScriptStates.Where({ $_.Script -eq $Script })
 
-        # process exit code from previous run
-        If ($ScriptState.ExitCode -eq 0) {
-            Continue NextScript
-        }
+		# process exit code from previous run
+		If ($ScriptState.ExitCode -in 0, 1) {
+			Write-Verbose -Message "Skipping completed '$Script' with existing exit code: $($ScriptState.ExitCode)"
+			Continue NextScript
+		}
 
-        # define parameters
-        $StartProcess = @{
-            FilePath     = 'PowerShell.exe'
-            ArgumentList = '-File "{0}"' -f $Script
-            Wait         = $true
-            Passthru     = $true
-        }
+		# clear exit code
+		$ExitCodeFromScript = $null
 
-        # run script
-        Try {
-            Start-Process $StartProcess
-        }
-        Catch {
-            Write-Warning -Message "could not run '$Script' script: $($_.Exception.Message)"
-        }
+		# report state
+		Write-Host "Running script: $Script"
 
-        # record exit code from current run
-        $ExitCodeFromCurrentRun = $LASTEXITCODE
+		# run script
+		Try {
+			& $Script
+		}
+		Catch {
+			Write-Warning -Message "could not run '$Script' script: $($_.Exception.Message)"
+			$ExitCodeFromScript = $_.Exception.HResult
+		}
 
-        # if script state exists...
-        If ($ScriptState.Script) {
-            # update exit code for script state
-            $ScriptState.ExitCode = $ExitCodeFromCurrentRun
-        }
-        # if script state does not exist...
-        Else {
-            # add entry to script states
-            $ScriptStates += [pscustomobject]@{
-                Script   = $Script
-                ExitCode = $ExitCodeFromCurrentRun
-            }
-        }
+		# record exit code from script
+		If ($null -ne $ExitCodeFromScript) {
+			$ExitCodeFromScript = $LASTEXITCODE
+		}
+
+		# if script state exists...
+		If ($ScriptState.Script) {
+			# update exit code for script state
+			$ScriptState.ExitCode = $ExitCodeFromScript
+		}
+		# if script state does not exist...
+		Else {
+			# add entry to script states
+			$ScriptStates += [pscustomobject]@{
+				Script   = $Script
+				ExitCode = $ExitCodeFromScript
+			}
+		}
 
 		# update script state file
 		Try {
@@ -145,12 +147,12 @@ If ($Volumes.Count -eq 0) {
 			Exit $ExitCodeFromScript
 		}
 
-        # if exit code from current run is greater than overall exit code...
-        If ($ExitCodeFromCurrentRun -gt $ExitCode) {
-            # update overall exit code
-            $ExitCode = $ExitCodeFromCurrentRun
-        }
-    }
+		# if exit code from script is greater than overall exit code...
+		If ($ExitCodeFromScript -gt $ExitCode) {
+			# update overall exit code
+			$ExitCode = $ExitCodeFromScript
+		}
+	}
 }
 
 # return overall exit code
