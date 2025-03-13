@@ -130,14 +130,20 @@ If ($Volumes.Count -eq 0) {
             }
         }
 
-        # update script state file
-        $ScriptStates | Export-Clixml -Path $ScriptStateXML
+		# update script state file
+		Try {
+			Export-Clixml -Path $ScriptStateXML -InputObject $ScriptStates
+		}
+		Catch {
+			Write-Warning -Message "could not write script state to '$ScriptStateXML' file: $($_.Exception.Message)"
+			$ExitCodeFromScript = $_.Exception.HResult
+		}
 
-        # if exit code from current run is an error...
-        If ($ExitCodeFromCurrentRun -notin 0, 1, 2) {
-            # immediately exit with exit code from current run
-            Exit $ExitCodeFromCurrentRun
-        }
+		# if exit code from script is an error...
+		If ($ExitCodeFromScript -ne 0) {
+			# immediately exit with exit code from script
+			Exit $ExitCodeFromScript
+		}
 
         # if exit code from current run is greater than overall exit code...
         If ($ExitCodeFromCurrentRun -gt $ExitCode) {
@@ -147,7 +153,5 @@ If ($Volumes.Count -eq 0) {
     }
 }
 
-# return highest exit code
-
-# stop transcript
-$null = Stop-Transcript
+# return overall exit code
+Exit $ExitCode
