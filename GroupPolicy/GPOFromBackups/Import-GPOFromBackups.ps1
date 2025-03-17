@@ -1,4 +1,4 @@
-[CmdletBinding()]
+[CmdletBinding(SupportsShouldProcess)]
 Param(
     [Parameter(Mandatory)]
     [string]$Path,
@@ -84,7 +84,7 @@ ForEach ($GpoId in $GpoIdHashtable.Keys) {
 
     # import GPO
     Try {
-        Import-GPO -BackupId $BackupId -Path $Path -TargetName $TargetName -CreateIfNeeded -WhatIf
+        Import-GPO -BackupId $BackupId -Path $Path -TargetName $TargetName -CreateIfNeeded -WhatIf:$WhatIfPreference
     }
     Catch {
         Write-Warning -Message "could not import GPO with '$BackupId' backup ID to GPO with name: $TargetName"
