@@ -6,6 +6,7 @@ Param(
 	[string]$ComputerName,
 	[string]$Path,
 	[switch]$UseDefaultPathOnHost,
+	[switch]$UseExistingDisks,
 	[switch]$SkipProvisioning,
 	[switch]$SkipStart,
 	[switch]$SkipClustering,
@@ -3318,7 +3319,14 @@ Begin {
 
 		# if VHD found...
 		If ($null -ne $VHD) {
+			# report VHD found
 			Write-Host ("$Hostname,$ComputerName,$Name - ...found existing VHD with Path: '$Path'")
+			# if use existing VHDs not provided...
+			If (!$UseExistingDisks) {
+				# warn and inquire
+				Write-Warning -Message ("$Hostname,$ComputerName,$Name - continue and use existing VHD?") -WarningAction Inquire
+			}
+			# return
 			Return
 		}
 
@@ -3681,9 +3689,20 @@ Process {
 		If ($null -ne $VM -and $null -ne $JsonData.$Name.VMHardDiskDrives) {
 			# create hard drives
 			ForEach ($VMHardDiskDrive in $JsonData.$Name.VMHardDiskDrives) {
+				# if path provided...
+				If ($PSBoundParameters.ContainsKey('Path')) {
+					# retrieve modified VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path.Replace($JsonData.$Name.Path, $Path)
+				}
+				Else {
+					# retrieve original VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
+				}
+
+				# create VHD
 				$NewVHDFromParams = @{
 					ComputerName = $ComputerName
-					Path         = $VMHardDiskDrive.Path
+					Path         = $VMHardDiskDrivePath
 					SizeBytes    = $VMHardDiskDrive.SizeBytes
 				}
 				Try {
@@ -3699,11 +3718,21 @@ Process {
 
 			# attach hard drives with controller number and controller location
 			ForEach ($VMHardDiskDrive in $VMHardDiskDrivesWithNumberAndLocation) {
-				$VMHardDiskDrives
+				# if path provided...
+				If ($PSBoundParameters.ContainsKey('Path')) {
+					# retrieve modified VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path.Replace($JsonData.$Name.Path, $Path)
+				}
+				Else {
+					# retrieve original VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
+				}
+
+				# add VHD to VM
 				$AddVHDFromParams = @{
 					ComputerName       = $ComputerName
 					VM                 = $VM
-					Path               = $VMHardDiskDrive.Path
+					Path               = $VMHardDiskDrivePath
 					ControllerNumber   = $VMHardDiskDrive.ControllerNumber
 					ControllerLocation = $VMHardDiskDrive.ControllerLocation
 				}
@@ -3720,10 +3749,21 @@ Process {
 
 			# attach hard drives with controller number and without controller location
 			ForEach ($VMHardDiskDrive in $VMHardDiskDrivesWithNumberWithoutLocation) {
+				# if path provided...
+				If ($PSBoundParameters.ContainsKey('Path')) {
+					# retrieve modified VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path.Replace($JsonData.$Name.Path, $Path)
+				}
+				Else {
+					# retrieve original VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
+				}
+
+				# add VHD to VM
 				$AddVHDFromParams = @{
 					ComputerName     = $ComputerName
 					VM               = $VM
-					Path             = $VMHardDiskDrive.Path
+					Path             = $VMHardDiskDrivePath
 					ControllerNumber = $VMHardDiskDrive.ControllerNumber
 				}
 				Try {
@@ -3739,10 +3779,21 @@ Process {
 
 			# attach hard drives without controller number but with controller location
 			ForEach ($VMHardDiskDrive in $VMHardDiskDrivesWithoutNumberWithLocation) {
+				# if path provided...
+				If ($PSBoundParameters.ContainsKey('Path')) {
+					# retrieve modified VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path.Replace($JsonData.$Name.Path, $Path)
+				}
+				Else {
+					# retrieve original VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
+				}
+
+				# add VHD to VM
 				$AddVHDFromParams = @{
 					ComputerName       = $ComputerName
 					VM                 = $VM
-					Path               = $VMHardDiskDrive.Path
+					Path               = $VMHardDiskDrivePath
 					ControllerLocation = $VMHardDiskDrive.ControllerLocation
 				}
 				Try {
@@ -3758,10 +3809,21 @@ Process {
 
 			# attach hard drives without controller number or controller location
 			ForEach ($VMHardDiskDrive in $VMHardDiskDrivesWithoutNumberWithoutLocation) {
+				# if path provided...
+				If ($PSBoundParameters.ContainsKey('Path')) {
+					# retrieve modified VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path.Replace($JsonData.$Name.Path, $Path)
+				}
+				Else {
+					# retrieve original VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
+				}
+
+				# add VHD to VM
 				$AddVHDFromParams = @{
 					ComputerName = $ComputerName
 					VM           = $VM
-					Path         = $VMHardDiskDrive.Path
+					Path         = $VMHardDiskDrivePath
 				}
 				Try {
 					Add-VHDFromParams @AddVHDFromParams
