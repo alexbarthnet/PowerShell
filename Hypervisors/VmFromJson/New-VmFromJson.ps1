@@ -3164,7 +3164,7 @@ Begin {
 
 		# define hashtable for variables
 		$VariableHashtable = [ordered]@{
-			'%COMPUTERNAME%' = $VMName
+			'%COMPUTERNAME%' = $VMName.Split('.')[0]
 		}
 
 		# if Username provided...
