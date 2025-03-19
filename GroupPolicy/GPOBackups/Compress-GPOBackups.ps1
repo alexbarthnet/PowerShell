@@ -14,6 +14,11 @@ Param(
         'gpreport.xml'
     ), 
     [Parameter(DontShow)]
+    [string[]]$GPOsToRemove = @(
+        'Default Domain Policy'
+        'Default Domain Controllers Policy'
+    ), 
+    [Parameter(DontShow)]
     [string[]]$GroupsToPreserve = @(
         'Domain Admins'
         'Enterprise Admins'
@@ -35,7 +40,7 @@ If (![System.IO.Path]::IsPathRooted($Path)) {
     Write-Warning -Message "converted relative path in provided Path parameter to absolute path: $Path"
 }
 
-# remove manifet file
+# remove manifest file
 $FileToRemove = Join-Path -Path $Path -ChildPath 'manifest.xml'
 
 # if manifest file exists...
@@ -85,6 +90,9 @@ Write-Verbose -Message "found GPO backup folders: $($GPOBackupFolders.Count)"
     }
 }
 
+# define list of backup IDs to remove
+$BackupsToRemove = [System.Collections.Generic.List[System.String]]::new()
+
 # loop through each GPO backup folders - replace text
 :NextGPOBackupFolder ForEach ($GPOBackupFolder in $GPOBackupFolders) {
     # define backup XML file
@@ -108,33 +116,21 @@ Write-Verbose -Message "found GPO backup folders: $($GPOBackupFolders.Count)"
     # replace domain name with generic domain name
     $Content = $Content.Replace($Domain, 'domain.local')
 
-    # # retrieve original content of backup XML file
-    # Try {
-    #     $Content | Set-Content -Path $BackupXmlPath
-    # }
-    # Catch {
-    #     Write-Warning -Message "could not save XML document from existing file: $($BackupXmlPath.FullName)"
-    #     Return $_
-    # }
-# }
-
-# # loop through each GPO backup folders - update XML
-# :NextGPOBackupFolder ForEach ($GPOBackupFolder in $GPOBackupFolders) {
-#     # define backup XML file
-#     $BackupXmlPath = Join-Path -Path $GPOBackupFolder -ChildPath 'Backup.xml'
-
-#     # define XML document
-#     $Xml = [System.Xml.XmlDocument]::new()
-
-    # load backup XML file into XML document
     # load updated content into XML document
     Try {
         $Xml.LoadXml($Content)
-        # $Xml.Load($BackupXmlPath)
     }
     Catch {
         Write-Warning -Message "could not load XML document from existing file: $($BackupXmlPath.FullName)"
         Return $_
+    }
+
+    # retrieve GPO name
+    $Name = $xml.GroupPolicyBackupScheme.GroupPolicyObject.GroupPolicyCoreSettings.DisplayName.'#cdata-section'
+
+    # if name in GPOs to remove...
+    If ($Name -in $GPOsToRemove) {
+        $BackupsToRemove.Add($GPOBackupFolder)
     }
 
     # retrieve group nodes that are not default values
@@ -156,6 +152,18 @@ Write-Verbose -Message "found GPO backup folders: $($GPOBackupFolders.Count)"
 
     # report state
     Write-Verbose -Message "updated XML file: $BackupXmlPath"
+}
+
+# loop through backups to remove
+ForEach ($BackupToRemove in $BackupsToRemove) {
+    # remove backup
+    Try {
+        Remove-Item -Path $BackupToRemove -Force -Recurse
+    }
+    Catch {
+        Write-Warning -Message "could not remove GPO backup with id: $BackupToRemove"
+        Return $_
+    }
 }
 
 # create archive
