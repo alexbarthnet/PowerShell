@@ -79,8 +79,8 @@ Write-Verbose -Message "found unqiue GPOs in backup XML files: $($GpoIdHashtable
 
 ForEach ($GpoId in $GpoIdHashtable.Keys) {
     # retrieve values from hashtable
-    $BackupId = $GpoBackupHashtable[$GpoId].BackupId
-    $TargetName = $GpoBackupHashtable[$GpoId].TargetName
+    $BackupId = $GpoIdHashtable[$GpoId].BackupId
+    $TargetName = $GpoIdHashtable[$GpoId].TargetName
 
     # import GPO
     Try {
