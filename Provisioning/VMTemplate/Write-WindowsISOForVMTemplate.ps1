@@ -232,15 +232,18 @@ Process {
 		Return $_
 	}
 
-	# report state
-	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating WIM with "invoke" script', $InvokePs1OnWIM
+	# if invoke script provided...
+	If ($PSBoundParameters.ContainsKey('PathToInvokeScript')) {
+		# report state
+		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating WIM with "invoke" script', $InvokePs1OnWIM
 
-	# add PS1 script to windows image
-	Try {
-		Copy-Item -Path $PathToInvokeScript -Destination $InvokePs1OnWIM
-	}
-	Catch {
-		Return $_
+		# add PS1 script to windows image
+		Try {
+			Copy-Item -Path $PathToInvokeScript -Destination $InvokePs1OnWIM
+		}
+		Catch {
+			Return $_
+		}
 	}
 
 	# report state
@@ -277,8 +280,8 @@ Process {
 		Return $_
 	}
 
-	# if script folder defined...
-	If ($PathToScriptFolder) {
+	# if script folder provided...
+	If ($PSBoundParameters.ContainsKey('PathToScriptFolder')) {
 		# define scripts folder on ISO
 		$ScriptFolderForISO = Join-Path -Path $TemporaryPathForISO -ChildPath 'scripts'
 
