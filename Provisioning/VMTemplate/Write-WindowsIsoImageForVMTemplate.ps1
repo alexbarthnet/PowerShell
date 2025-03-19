@@ -1,23 +1,29 @@
 <#
 .SYNOPSIS
-Create a Windows Server ISO image for virtual machine templates.
+Create a Windows ISO image for virtual machine templates.
 
 .DESCRIPTION
-Create a Windows Server ISO image for virtual machine templates that will install and patch Windows Server then generalize (sysprep) the image.
+Create a Windows ISO image for virtual machine templates that will install and patch Windows then generalize (sysprep) the image.
 
 .PARAMETER PathToOriginalIsoImage
-Path to the original Windows Server ISO image.
+Path to the original Windows ISO image.
 
 .PARAMETER PathForUpdatedIsoImage
-Path for the updated Windows Server ISO image.
+Path for the updated Windows ISO image.
 
 .PARAMETER PathToUnattendFile
-Path to unattend XML file to add to Windows Server ISO image. The file will be saved as 'Autounattend.xml' at the root of the ISO file system. This file must call the update script during the auditUser pass.
+Path to unattend XML file to add to Windows ISO image. The file will be saved as 'Autounattend.xml' at the root of the ISO file system. This file must call the update and invoke scripts during the auditUser pass.
 
 .PARAMETER PathToUpdateScript
-Path to unattend PS1 file to add to Windows Server WIM image. The file will be saved as 'Update-Windows.ps1' under the Windows directory in the WIM image.
+Path to required "update" PS1 file to add to Windows WIM image. The file will be saved as 'Update-Windows.ps1' under the Windows directory in the WIM image.
 
-.PARAMETER PathToToolsFolder
+.PARAMETER PathToInvokeScript
+Path to required "invoke" PS1 file to add to Windows WIM image. The file will be saved as 'Invoke-ScriptsFromCDROM.ps1' under the Windows directory in the WIM image.
+
+.PARAMETER PathToScriptFolder
+Path to optional folder containing PS1 scripts to add to Windows ISO image.
+
+.PARAMETER PathToBinaryFolder
 Path to folder containing required oscdimg.exe program. Required when the deployment tools oscdimg has not been installed in the default location.
 
 .PARAMETER NoNewWindow
@@ -73,7 +79,9 @@ Param(
 	[string]$PathToUnattendFile,
 	[Parameter(Mandatory = $true)]
 	[string]$PathToUpdateScript,
-	[string]$PathToToolsFolder,
+	[string]$PathToInvokeScript,
+	[string]$PathToScriptFolder,
+	[string]$PathToBinaryFolder,
 	[switch]$NoNewWindow,
 	[switch]$SkipRemove,
 	[switch]$SkipExclude,
@@ -84,13 +92,13 @@ Param(
 
 Begin {
 	# if path to oscdimg folder not provided...
-	If (!$PSBoundParameters.ContainsKey('PathToToolsFolder')) {
+	If (!$PSBoundParameters.ContainsKey('PathToBinaryFolder')) {
 		# define default folder path
-		$PathToToolsFolder = Join-Path -Path ([System.Environment]::GetFolderPath('ProgramFilesx86')) -ChildPath '\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg'
+		$PathToBinaryFolder = Join-Path -Path ([System.Environment]::GetFolderPath('ProgramFilesx86')) -ChildPath '\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg'
 	}
 
 	# define path to required program
-	$FilePath = Join-Path -Path $PathToToolsFolder -ChildPath 'oscdimg.exe'
+	$FilePath = Join-Path -Path $PathToBinaryFolder -ChildPath 'oscdimg.exe'
 
 	# validate application path
 	Try {
@@ -144,7 +152,8 @@ Begin {
 	# define relative items
 	$WimPathOnISO = "$TemporaryPathForISO\sources\install.wim"
 	$XmlPathOnISO = "$TemporaryPathForISO\Autounattend.xml"
-	$Ps1PathOnWIM = "$TemporaryPathForWIM\Windows\Update-Windows.ps1"
+	$UpdatePs1OnWIM = "$TemporaryPathForWIM\Windows\Update-Windows.ps1"
+	$InvokePs1OnWIM = "$TemporaryPathForWIM\Windows\Invoke-ScriptsFromCDROM.ps1"
 }
 
 Process {
@@ -213,11 +222,22 @@ Process {
 	}
 
 	# report state
-	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating WIM with file', $Ps1PathOnWIM
+	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating WIM with "update" script', $UpdatePs1OnWIM
 
 	# add PS1 script to windows image
 	Try {
-		Copy-Item -Path $PathToUpdateScript -Destination $Ps1PathOnWIM
+		Copy-Item -Path $PathToUpdateScript -Destination $UpdatePs1OnWIM
+	}
+	Catch {
+		Return $_
+	}
+
+	# report state
+	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating WIM with "invoke" script', $InvokePs1OnWIM
+
+	# add PS1 script to windows image
+	Try {
+		Copy-Item -Path $PathToInvokeScript -Destination $InvokePs1OnWIM
 	}
 	Catch {
 		Return $_
@@ -255,6 +275,43 @@ Process {
 	}
 	Catch {
 		Return $_
+	}
+
+	# if script folder defined...
+	If ($PathToScriptFolder) {
+		# define scripts folder on ISO
+		$ScriptFolderForISO = Join-Path -Path $TemporaryPathForISO -ChildPath 'scripts'
+
+		# if script folder on ISO not found...
+		If (![System.IO.Directory]::Exists($ScriptFolderForISO)) {
+			# report state
+			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Creating ISO scripts folder', $ScriptFolderForISO
+
+			# create folder
+			Try {
+				$null = New-Item -ItemType Directory -Path $ScriptFolderForISO
+			}
+			Catch {
+				Return $_
+			}
+		}
+
+		# retrieve files in script folder
+		$Files = Get-ChildItem -Path $PathToScriptFolder -Filter '*.ps1'
+
+		# loop through files
+		ForEach ($File in $Files) {
+			# report state
+			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding script to ISO scripts folder', $File.Name
+
+			# copy item to folder
+			Try {
+				Copy-Item -Path $File -Destination $ScriptFolderForISO
+			}
+			Catch {
+				Return $_
+			}
+		}
 	}
 
 	# report state
