@@ -58,7 +58,7 @@ $GpoIdHashtable = @{}
     # create hashtable for GPO backup
     $GpoBackupHashtable = @{
         LastWriteTime = $BackupXmlFile.LastWriteTime
-        BackupId      = $BackupXmlFile.Name
+        BackupId      = $BackupXmlFile.Directory.Name
         TargetName    = $Xml.GroupPolicyBackupScheme.GroupPolicyObject.GroupPolicyCoreSettings.DisplayName.InnerText
     }
 
