@@ -9,6 +9,6 @@
 # ignore archive files
 *.7z
 *.cab
-*.zip
+# *.zip
 # ignore Mac specific files
 .DS_Store
