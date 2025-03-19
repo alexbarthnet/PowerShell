@@ -138,7 +138,7 @@ $BackupsToRemove = [System.Collections.Generic.List[System.String]]::new()
 
     # loop through nodes
     ForEach ($Node in $Nodes) {
-        $Xml.GroupPolicyBackupScheme.GroupPolicyObject.SecurityGroups.RemoveChild($Node)
+        $null = $Xml.GroupPolicyBackupScheme.GroupPolicyObject.SecurityGroups.RemoveChild($Node)
     }
 
     # save XML document to backup XML file 
