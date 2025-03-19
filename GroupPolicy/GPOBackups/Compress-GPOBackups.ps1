@@ -10,7 +10,6 @@ Param(
     [string[]]$DomainControllers = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().DomainControllers.Name,
     [Parameter(DontShow)]
     [string[]]$FileNamesToRemove = @(
-        'bkupInfo.xml'
         'gpreport.xml'
     ), 
     [Parameter(DontShow)]
@@ -68,18 +67,11 @@ Write-Verbose -Message "found GPO backup folders: $($GPOBackupFolders.Count)"
 
 # loop through each GPO backup folders - remove files
 :NextGPOBackupFolder ForEach ($GPOBackupFolder in $GPOBackupFolders) {
-    # retrieve files to remove
-    Try {
-        $FilesToRemove = Get-ChildItem -Path $GPOBackupFolder | Where-Object { $_.Name -in $FileNamesToRemove } | Select-Object -ExpandProperty FullName
-    }
-    Catch {
-        Write-Warning -Message "could not retrieve 'Backup.xml' files from path: $Path"
-        Return $_
-    }
+    # remove manifest file
+    $FileToRemove = Join-Path -Path $GPOBackupFolder -ChildPath 'gpreport.xml'
 
-    # loop through files to remove
-    ForEach ($FileToRemove in $FilesToRemove) {
-        # remove file
+    # if manifest file exists...
+    If ([System.IO.File]::Exists($FileToRemove)) {
         Try {
             Remove-Item -Path $FileToRemove -Confirm:$false -WhatIf:$WhatIfPreference
         }
