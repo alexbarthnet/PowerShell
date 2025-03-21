@@ -277,15 +277,18 @@ Catch {
 	# define path to GPO backup
 	$BackupPath = Join-Path -Path $Path -ChildPath "{$($Backup.Id)}"
 
-	# define path to backup information file
-	$PathToInfoFile = Join-Path -Path $BackupPath -ChildPath 'bkupInfo.xml'
+	# get hidden items in path
+	$HiddenFiles = Get-ChildItem -Path $Path -Hidden -File -Recurse
 
-	# clear the hidden attribute on backup information file
-	Try {
-		Clear-HiddenFileAttribute -Path $PathToInfoFile
-	}
-	Catch {
-		Return $_
+	# loop through hidden files
+	ForEach ($HiddenFile in $HiddenFiles) {
+		# clear the hidden attribute on backup information file
+		Try {
+			Clear-HiddenFileAttribute -Path $HiddenFile.FullName
+		}
+		Catch {
+			Return $_
+		}
 	}
 
 	# if minimum requested...
