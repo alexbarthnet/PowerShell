@@ -165,7 +165,7 @@ Begin {
 			# combine TEMP path and temporary folder name
 			$PathForTemporaryFolder = Join-Path -Path $PathForTEMP -ChildPath $NameForTemporaryFolder
 		}
-		Until ([System.IO.Directory]::Exists($PathForTemporaryFolder))
+		Until (![System.IO.Directory]::Exists($PathForTemporaryFolder))
 
 		# create temporary folder
 		Try {
