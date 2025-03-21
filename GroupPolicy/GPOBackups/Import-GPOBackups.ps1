@@ -51,7 +51,7 @@ Write-Verbose -Message "found GPO backup folders: $($GPOBackups.Count)"
 	}
 
 	# define XML file for GPO backup
-	$BackupXml = Join-Path -Path $GPOBackup -ChildPath 'Backup.xml'
+	$BackupXml = Join-Path -Path $GPOBackup.FullName -ChildPath 'Backup.xml'
 
 	# if XML file not found...
 	If (![System.IO.File]::Exists($BackupXml)) {
@@ -94,10 +94,17 @@ Write-Verbose -Message "found GPO backup folders: $($GPOBackups.Count)"
 
 	# import GPO
 	Try {
-		Import-GPO -BackupId $BackupId -Path $Path -TargetGuid $TargetGuid -TargetName $TargetName -CreateIfNeeded -WhatIf:$WhatIfPreference
+		$GPO = Import-GPO -BackupId $BackupId -Path $Path -TargetGuid $TargetGuid -TargetName $TargetName -CreateIfNeeded -WhatIf:$WhatIfPreference
 	}
 	Catch {
 		Write-Warning -Message "could not import GPO with '$BackupId' backup ID to GPO with name: $TargetName"
 		Return $_
 	}
+
+	# create objects for GPO properties
+	$DisplayName = $GPO.DisplayName
+	$Guid = $GPO.Id
+
+	# report state
+	Write-Host "$Guid; imported GPO: $DisplayName"
 }
