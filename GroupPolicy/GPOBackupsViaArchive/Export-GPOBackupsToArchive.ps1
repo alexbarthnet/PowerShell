@@ -14,6 +14,8 @@ Param(
 	[switch]$Generalize,
 	[Parameter(Position = 7)]
 	[switch]$Minimize,
+	[Parameter(Position = 8)]
+	[switch]$Force,
 	[Parameter(DontShow)]
 	[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain().PdcRoleOwner.Name,
 	[Parameter(DontShow)]
@@ -277,8 +279,14 @@ Process {
 
 	# if Path is an existing file...
 	If ([System.IO.File]::Exists($Path)) {
-		# warn and inquire
-		Write-Warning -Message 'The provided Path is an existing file. Continue to overwrite existing file' -WarningAction Inquire
+		# if Force provided...
+		If ($Force) {
+			Write-Warning -Message 'The provided Path is an existing file. Overwriting existing file' -WarningAction Continue
+		}
+		Else {
+			# warn and inquire
+			Write-Warning -Message 'The provided Path is an existing file. Continue to overwrite existing file' -WarningAction Inquire
+		}
 	}
 
 	# retrieve all GPOs
