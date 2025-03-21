@@ -94,7 +94,7 @@ Write-Verbose -Message "found GPO backup folders: $($GPOBackups.Count)"
 
 	# import GPO
 	Try {
-		$GPO = Import-GPO -BackupId $BackupId -Path $Path -TargetGuid $TargetGuid -TargetName $TargetName -CreateIfNeeded -WhatIf:$WhatIfPreference
+		$GPO = Import-GPO -BackupId $BackupId -Path $Path -TargetName $TargetName -CreateIfNeeded -WhatIf:$WhatIfPreference
 	}
 	Catch {
 		Write-Warning -Message "could not import GPO with '$BackupId' backup ID to GPO with name: $TargetName"
