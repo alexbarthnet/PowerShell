@@ -83,13 +83,16 @@ Begin {
 			Return $_
 		}
 
-		# replace NetBIOS domain name with NetBIOS domain name
+		# replace bracketed NetBIOS domain name with bracketed generic NetBIOS domain name
 		$Text = $Text.Replace("[CDATA[$DomainNBName]]", "[CDATA[$GenericDomainNBName]]")
+
+		# replace suffixed NetBIOS domain name with suffixed generic NetBIOS domain name
+		$Text = $Text.Replace("$DomainNBName\", "$GenericDomainNBName\")
 
 		# replace domain controller with generic domain controller
 		$Text = $Text.Replace($Server, $GenericServer)
 
-		# replace domain name with generic domain name
+		# replace DNS domain name with generic DNS domain name
 		$Text = $Text.Replace($Domain, $GenericDomain)
 
 		# update content of XML file
@@ -381,7 +384,7 @@ Process {
 		# if generalize requested...
 		If ($Generalize) {
 			# define GPO backup XML files
-			$XMLFilePaths = @('Backup.xml', 'bkupInfo.xml')
+			$XMLFilePaths = @('Backup.xml', 'bkupInfo.xml', 'DomainSysvol\GPO\Machine\Preferences\Groups\Groups.xml')
 
 			# loop through GPO backup XML files
 			ForEach ($ChildPath in $XMLFilePaths) {
@@ -401,7 +404,7 @@ Process {
 			}
 
 			# define GPO backup POL files
-			$POLFilePaths = @('\DomainSysvol\GPO\Machine\registry.pol', '\DomainSysvol\GPO\User\registry.pol')
+			$POLFilePaths = @('DomainSysvol\GPO\Machine\registry.pol', 'DomainSysvol\GPO\User\registry.pol')
 
 			# loop through GPO backup POL files
 			ForEach ($ChildPath in $POLFilePaths) {
