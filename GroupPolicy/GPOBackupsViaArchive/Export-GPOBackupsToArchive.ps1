@@ -58,7 +58,7 @@ Begin {
 
 		# update content of XML file
 		Try {
-			[System.IO.File]::WriteAllText($Path, $Text)
+			[System.IO.File]::WriteAllText($Path, $Text, [System.Text.Encoding]::ASCII)
 		}
 		Catch {
 			Return $_
