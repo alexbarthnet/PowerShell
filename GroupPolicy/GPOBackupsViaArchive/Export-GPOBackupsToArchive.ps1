@@ -27,7 +27,7 @@ Param(
 	[Parameter(DontShow)]
 	[string]$DomainNBName = [System.DirectoryServices.DirectorySearcher]::new("LDAP://$PartitionsDN", "(nCName=$DomainNCName)", 'CN', 'OneLevel').FindOne().Properties['CN'],
 	[Parameter(DontShow)]
-	[string]$GenericServer = 'DC-1.domain.local',
+	[string]$GenericServer = 'dc-1.domain.local',
 	[Parameter(DontShow)]
 	[string]$GenericDomain = 'domain.local',
 	[Parameter(DontShow)]
