@@ -97,17 +97,17 @@ Begin {
 		# define modified text to preserve original text
 		$ModifiedText = $OriginalText
 
-		# replace bracketed NetBIOS domain name with bracketed generic NetBIOS domain name
-		$ModifiedText = $ModifiedText.Replace("[CDATA[$DomainNBName]]", "[CDATA[$GenericDomainNBName]]")
+		# replace generic bracketed NetBIOS domain name with current bracketed NetBIOS domain name
+		$ModifiedText = $ModifiedText.Replace("[CDATA[$GenericDomainNBName]]", "[CDATA[$DomainNBName]]")
 
-		# replace suffixed NetBIOS domain name with suffixed generic NetBIOS domain name
-		$ModifiedText = $ModifiedText.Replace("$DomainNBName\", "$GenericDomainNBName\")
+		# replace generic suffixed NetBIOS domain name with current suffixed NetBIOS domain name
+		$ModifiedText = $ModifiedText.Replace("$GenericDomainNBName\", "$DomainNBName\")
 
-		# replace domain controller with generic domain controller
-		$ModifiedText = $ModifiedText.Replace($Server, $GenericServer)
+		# replace generic domain controller with current domain controller
+		$ModifiedText = $ModifiedText.Replace($GenericServer, $Server)
 
-		# replace DNS domain name with generic DNS domain name
-		$ModifiedText = $ModifiedText.Replace($Domain, $GenericDomain)
+		# replace generic DNS domain name with current DNS domain name
+		$ModifiedText = $ModifiedText.Replace($GenericDomain, $Domain)
 
 		# if text is the same...
 		If ($ModifiedText -eq $OriginalText) {
