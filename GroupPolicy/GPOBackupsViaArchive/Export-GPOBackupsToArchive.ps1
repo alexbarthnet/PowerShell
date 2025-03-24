@@ -65,7 +65,7 @@ Begin {
 		}
 
 		# report state
-		Write-Host "$Guid; generalized POL file: $Path"
+		Write-Verbose -Message "$Guid; generalized POL file: $Path"
 	}
 
 	Function ConvertTo-GenericGroupPolicyXmlFile {
@@ -104,7 +104,7 @@ Begin {
 		}
 
 		# report state
-		Write-Host "$Guid; generalized XML file: $Path"
+		Write-Verbose -Message "$Guid; generalized XML file: $Path"
 	}
 
 	Function Clear-HiddenFileAttribute {
