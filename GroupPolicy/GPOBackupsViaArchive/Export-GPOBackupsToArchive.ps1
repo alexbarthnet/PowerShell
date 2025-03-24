@@ -44,7 +44,7 @@ Begin {
 
 		# retrieve content of XML file
 		Try {
-			$Text = [System.IO.File]::ReadAllText($Path)
+			$Text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::ASCII)
 		}
 		Catch {
 			Return $_
