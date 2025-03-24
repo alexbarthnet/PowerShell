@@ -364,7 +364,7 @@ Process {
 
 			# if include not found...
 			If ($IncludeNotFound) {
-				Write-Host "$BackupId; skipping GPO backup: display name of '$DisplayName' does not match one of the provided Include strings: '$($Include.Join(', '))'"
+				Write-Verbose -Message "$BackupId; skipping GPO backup: display name of '$DisplayName' does not match one of the provided Include strings: '$($Include -join ', ')'"
 				Continue NextGPOBackup
 			}
 		}
@@ -375,7 +375,7 @@ Process {
 			ForEach ($ExcludeString in $Exclude) {
 				# if GPO display name matches exclude string...
 				If ($DisplayName -like $ExcludeString) {
-					Write-Host "$BackupId; skipping GPO backup: display name of '$DisplayName' matches Exclude string: '$ExcludeString'"
+					Write-Verbose -Message "$BackupId; skipping GPO backup: display name of '$DisplayName' matches Exclude string: '$ExcludeString'"
 					Continue NextGPOBackup
 				}
 			}
