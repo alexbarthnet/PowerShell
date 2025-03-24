@@ -357,7 +357,7 @@ Process {
 
 			# if include not found...
 			If ($IncludeNotFound) {
-				Write-Host "$Guid; skipping GPO: display name of '$DisplayName' does not match one of the provided Include strings: '$($Include.Join(', '))'"
+				Write-Verbose -Message "$Guid; skipping GPO: display name of '$DisplayName' does not match one of the provided Include strings: '$($Include -join ', ')'"
 				Continue NextGPO
 			}
 		}
@@ -368,7 +368,7 @@ Process {
 			ForEach ($ExcludeString in $Exclude) {
 				# if GPO display name matches exclude string...
 				If ($GPO.DisplayName -like $ExcludeString) {
-					Write-Host "$Guid; skipping GPO: display name of '$DisplayName' matches Exclude string: '$ExcludeString'"
+					Write-Verbose -Message "$Guid; skipping GPO: display name of '$DisplayName' matches Exclude string: '$ExcludeString'"
 					Continue NextGPO
 				}
 			}
@@ -383,7 +383,7 @@ Process {
 		}
 
 		# report state
-		Write-Host "$Guid; exported GPO: $DisplayName"
+		Write-Host "$Guid; $($Backup.Id); exported GPO: $DisplayName"
 
 		# define path to GPO backup
 		$BackupPath = Join-Path -Path $StagingPath -ChildPath "{$($Backup.Id)}"
