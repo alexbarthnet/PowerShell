@@ -67,7 +67,7 @@ Begin {
 
 		# if text is the same...
 		If ($ModifiedText -eq $OriginalText) {
-			Write-Verbose -Message "$Guid; generalization not required for POL file: $Path"
+			Write-Verbose -Message "GpoId: $Guid; generalization not required for POL file: $Path"
 			Return
 		}
 
@@ -83,7 +83,7 @@ Begin {
 		}
 
 		# report state
-		Write-Verbose -Message "$Guid; generalized POL file: $Path"
+		Write-Verbose -Message "GpoId: $Guid; generalized POL file: $Path"
 	}
 
 	Function ConvertTo-GenericGroupPolicyXmlFile {
@@ -118,7 +118,7 @@ Begin {
 
 		# if text is the same...
 		If ($ModifiedText -eq $OriginalText) {
-			Write-Verbose -Message "$Guid; generalization not required for XML file: $Path"
+			Write-Verbose -Message "GpoId: $Guid; generalization not required for XML file: $Path"
 			Return
 		}
 
@@ -131,7 +131,7 @@ Begin {
 		}
 
 		# report state
-		Write-Verbose -Message "$Guid; generalized XML file: $Path"
+		Write-Verbose -Message "GpoId: $Guid; generalized XML file: $Path"
 	}
 
 	Function Clear-HiddenFileAttribute {
@@ -357,7 +357,7 @@ Process {
 
 			# if include not found...
 			If ($IncludeNotFound) {
-				Write-Verbose -Message "$Guid; skipping GPO: display name of '$DisplayName' does not match one of the provided Include strings: '$($Include -join ', ')'"
+				Write-Verbose -Message "GpoId: $Guid; skipping GPO: display name of '$DisplayName' does not match one of the provided Include strings: '$($Include -join ', ')'"
 				Continue NextGPO
 			}
 		}
@@ -368,7 +368,7 @@ Process {
 			ForEach ($ExcludeString in $Exclude) {
 				# if GPO display name matches exclude string...
 				If ($GPO.DisplayName -like $ExcludeString) {
-					Write-Verbose -Message "$Guid; skipping GPO: display name of '$DisplayName' matches Exclude string: '$ExcludeString'"
+					Write-Verbose -Message "GpoId: $Guid; skipping GPO: display name of '$DisplayName' matches Exclude string: '$ExcludeString'"
 					Continue NextGPO
 				}
 			}
@@ -383,7 +383,7 @@ Process {
 		}
 
 		# report state
-		Write-Host "$Guid; $($Backup.Id); exported GPO: $DisplayName"
+		Write-Host "GpoId: $Guid; BackupId: $($Backup.Id); exported GPO with display name: $DisplayName"
 
 		# define path to GPO backup
 		$BackupPath = Join-Path -Path $StagingPath -ChildPath "{$($Backup.Id)}"

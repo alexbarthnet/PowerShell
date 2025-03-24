@@ -60,7 +60,7 @@ Begin {
 
 		# if text is the same...
 		If ($ModifiedText -eq $OriginalText) {
-			Write-Verbose -Message "$Guid; specialization not required for POL file: $Path"
+			Write-Verbose -Message "BackupId: $Guid; specialization not required for POL file: $Path"
 			Return
 		}
 
@@ -76,7 +76,7 @@ Begin {
 		}
 
 		# report state
-		Write-Verbose -Message "$Guid; specialized POL file: $Path"
+		Write-Verbose -Message "BackupId: $Guid; specialized POL file: $Path"
 	}
 
 	Function ConvertFrom-GenericGroupPolicyXmlFile {
@@ -111,7 +111,7 @@ Begin {
 
 		# if text is the same...
 		If ($ModifiedText -eq $OriginalText) {
-			Write-Verbose -Message "$Guid; specialization not required for XML file: $Path"
+			Write-Verbose -Message "BackupId: $Guid; specialization not required for XML file: $Path"
 			Return
 		}
 
@@ -124,7 +124,7 @@ Begin {
 		}
 
 		# report state
-		Write-Verbose -Message "$Guid; specialized XML file: $Path"
+		Write-Verbose -Message "BackupId: $Guid; specialized XML file: $Path"
 	}
 
 	Function New-TemporaryFolder {
@@ -364,7 +364,7 @@ Process {
 
 			# if include not found...
 			If ($IncludeNotFound) {
-				Write-Verbose -Message "$BackupId; skipping GPO backup: display name of '$DisplayName' does not match one of the provided Include strings: '$($Include -join ', ')'"
+				Write-Verbose -Message "BackupId: $BackupId; skipping GPO backup: display name of '$DisplayName' does not match one of the provided Include strings: '$($Include -join ', ')'"
 				Continue NextGPOBackup
 			}
 		}
@@ -375,7 +375,7 @@ Process {
 			ForEach ($ExcludeString in $Exclude) {
 				# if GPO display name matches exclude string...
 				If ($DisplayName -like $ExcludeString) {
-					Write-Verbose -Message "$BackupId; skipping GPO backup: display name of '$DisplayName' matches Exclude string: '$ExcludeString'"
+					Write-Verbose -Message "BackupId: $BackupId; skipping GPO backup: display name of '$DisplayName' matches Exclude string: '$ExcludeString'"
 					Continue NextGPOBackup
 				}
 			}
@@ -455,12 +455,12 @@ Process {
 				$GPO = Import-GPO @ImportGPO
 			}
 			Catch {
-				Write-Warning -Message "could not import GPO with '$BackupId' backup ID into $Adjective GPO with name: $DisplayName"
+				Write-Warning -Message "could not import GPO with '$BackupId' backup ID and display name: $DisplayName"
 				Return $_
 			}
 
 			# report state
-			Write-Host "$BackupId; imported GPO into $Adjective GPO with '$($GPO.Id)' GUID and display name: $DisplayName"
+			Write-Host "BackupId: $BackupId; GpoId: $($GPO.Id); imported GPO with display name: $DisplayName"
 		}
 	}
 }
