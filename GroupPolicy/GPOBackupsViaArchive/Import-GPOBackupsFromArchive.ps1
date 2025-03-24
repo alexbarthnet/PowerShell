@@ -306,8 +306,11 @@ Process {
 		# convert GPO backup id to GUID
 		$BackupId = [System.Guid]::Parse($GPOBackup.Name).Guid
 
+		# define path to GPO backup
+		$BackupPath = $GPOBackup.FullName
+
 		# define XML file for GPO backup
-		$BackupXml = Join-Path -Path $GPOBackup.FullName -ChildPath 'Backup.xml'
+		$BackupXml = Join-Path -Path $BackupPath -ChildPath 'Backup.xml'
 
 		# if XML file not found...
 		If (![System.IO.File]::Exists($BackupXml)) {
@@ -384,7 +387,7 @@ Process {
 		# if specialize requested...
 		If ($Specialize) {
 			# retrieve XML files in GPO backup
-			$XMLFiles = Get-ChildItem -Path $GPOBackup -Filter '*.xml' -Recurse
+			$XMLFiles = Get-ChildItem -Path $BackupPath -Filter '*.xml' -Recurse
 
 			# loop through XML files
 			ForEach ($XMLFile in $XMLFiles) {
@@ -403,7 +406,7 @@ Process {
 			# # loop through GPO backup POL files
 			# ForEach ($ChildPath in $POLFilePaths) {
 			# 	# define path for GPO backup POL file
-			# 	$PathToPolFile = Join-Path -Path $GPOBackup.FullName -ChildPath $ChildPath
+			# 	$PathToPolFile = Join-Path -Path $BackupPath -ChildPath $ChildPath
 
 			# 	# if POL file exists...
 			# 	If ([System.IO.File]::Exists($PathToPolFile)) {
