@@ -473,7 +473,7 @@ Process {
 
 End {
 	# if TemporaryFolder created...
-	If ($script:TemporaryFolder) {
+	If ([System.IO.Directory]::Exists($script:TemporaryFolder)) {
 		# remove temporary folder and all child items
 		Try {
 			Remove-Item -Path $TemporaryFolder -Recurse -Force
