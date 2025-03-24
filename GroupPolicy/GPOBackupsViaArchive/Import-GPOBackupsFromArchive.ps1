@@ -383,45 +383,39 @@ Process {
 
 		# if specialize requested...
 		If ($Specialize) {
-			# define GPO backup XML files
-			$XMLFilePaths = @('Backup.xml', 'bkupInfo.xml', 'DomainSysvol\GPO\Machine\Preferences\Groups\Groups.xml')
+			# retrieve XML files in GPO backup
+			$XMLFiles = Get-ChildItem -Path $GPOBackup -Filter '*.xml' -Recurse
 
-			# loop through GPO backup XML files
-			ForEach ($ChildPath in $XMLFilePaths) {
-				# define path for GPO backup XML file
-				$PathToXmlFile = Join-Path -Path $GPOBackup.FullName -ChildPath $ChildPath
-
-				# if XML file exists...
-				If ([System.IO.File]::Exists($PathToXmlFile)) {
-					# specialize XML file
-					Try {
-						ConvertFrom-GenericGroupPolicyXmlFile -Path $PathToXmlFile -Guid $BackupId
-					}
-					Catch {
-						Return $_
-					}
+			# loop through XML files
+			ForEach ($XMLFile in $XMLFiles) {
+				# specialize XML file
+				Try {
+					ConvertFrom-GenericGroupPolicyXmlFile -Path $XMLFile.FullName -Guid $BackupId
+				}
+				Catch {
+					Return $_
 				}
 			}
 
-			# define GPO backup POL files
-			$POLFilePaths = @('DomainSysvol\GPO\Machine\registry.pol', 'DomainSysvol\GPO\User\registry.pol')
+			# # define GPO backup POL files
+			# $POLFilePaths = @('DomainSysvol\GPO\Machine\registry.pol', 'DomainSysvol\GPO\User\registry.pol')
 
-			# loop through GPO backup POL files
-			ForEach ($ChildPath in $POLFilePaths) {
-				# define path for GPO backup POL file
-				$PathToPolFile = Join-Path -Path $GPOBackup.FullName -ChildPath $ChildPath
+			# # loop through GPO backup POL files
+			# ForEach ($ChildPath in $POLFilePaths) {
+			# 	# define path for GPO backup POL file
+			# 	$PathToPolFile = Join-Path -Path $GPOBackup.FullName -ChildPath $ChildPath
 
-				# if POL file exists...
-				If ([System.IO.File]::Exists($PathToPolFile)) {
-					# specialize POL file
-					Try {
-						ConvertFrom-GenericGroupPolicyPolFile -Path $PathToPolFile -Guid $BackupId
-					}
-					Catch {
-						Return $_
-					}
-				}
-			}
+			# 	# if POL file exists...
+			# 	If ([System.IO.File]::Exists($PathToPolFile)) {
+			# 		# specialize POL file
+			# 		Try {
+			# 			ConvertFrom-GenericGroupPolicyPolFile -Path $PathToPolFile -Guid $BackupId
+			# 		}
+			# 		Catch {
+			# 			Return $_
+			# 		}
+			# 	}
+			# }
 		}
 
 		# define base parameters for Import-GPO

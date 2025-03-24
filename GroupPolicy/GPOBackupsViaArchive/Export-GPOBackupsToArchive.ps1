@@ -418,45 +418,39 @@ Process {
 
 		# if generalize requested...
 		If ($Generalize) {
-			# define GPO backup XML files
-			$XMLFilePaths = @('Backup.xml', 'bkupInfo.xml', 'DomainSysvol\GPO\Machine\Preferences\Groups\Groups.xml')
+			# retrieve XML files in GPO backup
+			$XMLFiles = Get-ChildItem -Path $BackupPath -Filter '*.xml' -Recurse
 
-			# loop through GPO backup XML files
-			ForEach ($ChildPath in $XMLFilePaths) {
-				# define path for GPO backup XML file
-				$PathToXmlFile = Join-Path -Path $BackupPath -ChildPath $ChildPath
-
-				# if XML file exists...
-				If ([System.IO.File]::Exists($PathToXmlFile)) {
-					# generalize XML file
-					Try {
-						ConvertTo-GenericGroupPolicyXmlFile -Path $PathToXmlFile -Guid $Guid
-					}
-					Catch {
-						Return $_
-					}
+			# loop through XML files
+			ForEach ($XMLFile in $XMLFiles) {
+				# generalize XML file
+				Try {
+					ConvertTo-GenericGroupPolicyXmlFile -Path $XMLFile.FullName -Guid $Guid
+				}
+				Catch {
+					Return $_
 				}
 			}
 
-			# define GPO backup POL files
-			$POLFilePaths = @('DomainSysvol\GPO\Machine\registry.pol', 'DomainSysvol\GPO\User\registry.pol')
+			# # define GPO backup POL files
+			# $POLFilePaths = @('DomainSysvol\GPO\Machine\registry.pol', 'DomainSysvol\GPO\User\registry.pol')
 
-			# loop through GPO backup POL files
-			ForEach ($ChildPath in $POLFilePaths) {
-				# define path for GPO backup POL file
-				$PathToPolFile = Join-Path -Path $BackupPath -ChildPath $ChildPath
+			# # loop through GPO backup POL files
+			# ForEach ($ChildPath in $POLFilePaths) {
+			# 	# define path for GPO backup POL file
+			# 	$PathToPolFile = Join-Path -Path $BackupPath -ChildPath $ChildPath
 
-				# if POL file exists...
-				If ([System.IO.File]::Exists($PathToPolFile)) {
-					# generalize POL file
-					Try {
-						ConvertTo-GenericGroupPolicyPolFile -Path $PathToPolFile -Guid $Guid
-					}
-					Catch {
-						Return $_
-					}
-				}
-			}
+			# 	# if POL file exists...
+			# 	If ([System.IO.File]::Exists($PathToPolFile)) {
+			# 		# generalize POL file
+			# 		Try {
+			# 			ConvertTo-GenericGroupPolicyPolFile -Path $PathToPolFile -Guid $Guid
+			# 		}
+			# 		Catch {
+			# 			Return $_
+			# 		}
+			# 	}
+			# }
 		}
 	}
 
