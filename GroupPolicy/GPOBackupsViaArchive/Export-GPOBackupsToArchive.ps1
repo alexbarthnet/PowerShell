@@ -290,6 +290,14 @@ Process {
 			# warn and inquire
 			Write-Warning -Message 'The provided Path is an existing file. Continue to overwrite existing file' -WarningAction Inquire
 		}
+
+		# remove file
+		Try {
+			Remove-Item -Path $Path -Force
+		}
+		Catch {
+			Return $_
+		}
 	}
 
 	# retrieve all GPOs
