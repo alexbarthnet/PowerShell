@@ -97,7 +97,7 @@ Process {
 
 			# remove child items in StagingPath
 			Try {
-				Get-ChildItem -Path $StagingPath -Force -Recurse | Remove-Item -Force
+				Get-ChildItem -Path $StagingPath -Force -Recurse | Remove-Item -Force -Recurse
 			}
 			Catch {
 				Return $_
