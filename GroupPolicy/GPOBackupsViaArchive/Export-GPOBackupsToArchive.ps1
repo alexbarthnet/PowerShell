@@ -42,23 +42,41 @@ Begin {
 			$Guid = [System.Guid]::Empty
 		)
 
-		# retrieve content of XML file
+		# read text of POL file as bytes
 		Try {
-			$Text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::ASCII)
+			$Bytes = [System.IO.File]::ReadAllBytes($Path)
 		}
 		Catch {
 			Return $_
 		}
 
-		# replace domain controller with generic domain controller
-		$Text = $Text.Replace($ExpandedServer, $ExpandedGenericServer)
+		# convert bytes to hex string as text
+		$OriginalText = [System.BitConverter]::ToString($Bytes)
 
-		# replace expanded domain name with generic expanded domain name
-		$Text = $Text.Replace($ExpandedDomain, $ExpandedGenericDomain)
+		# define modified text to preserve original text
+		$ModifiedText = $OriginalText
 
-		# update content of XML file
+		# replace current server name with generic server name
+		$ModifiedText = $ModifiedText.Replace($CurrentServerAsPaddedHex, $GenericServerAsPaddedHex)
+		
+		# replace current domain name with generic domain name
+		$ModifiedText = $ModifiedText.Replace($CurrentDomainAsPaddedHex, $GenericDomainAsPaddedHex)
+
+		# format modified text for conversation to byte array then cast to byte array
+		$Bytes = $ModifiedText -split '-' -replace '..', '0x$&' -as [System.Byte[]]
+
+		# if text is the same...
+		If ($ModifiedText -eq $OriginalText) {
+			Write-Verbose -Message "$Guid; generalization not required for POL file: $Path"
+			Return
+		}
+
+		# format modified text for conversation to byte array then cast to byte array
+		$Bytes = $ModifiedText -split '-' -replace '..', '0x$&' -as [System.Byte[]]
+
+		# write modified text as bytes to POL file
 		Try {
-			[System.IO.File]::WriteAllText($Path, $Text, [System.Text.Encoding]::ASCII)
+			[System.IO.File]::WriteAllBytes($Path, $Bytes)
 		}
 		Catch {
 			Return $_
@@ -75,29 +93,38 @@ Begin {
 			$Guid = [System.Guid]::Empty
 		)
 
-		# retrieve content of XML file
+		# read original text of XML file
 		Try {
-			$Text = [System.IO.File]::ReadAllText($Path)
+			$OriginalText = [System.IO.File]::ReadAllText($Path)
 		}
 		Catch {
 			Return $_
 		}
 
+		# define modified text to preserve original text
+		$ModifiedText = $OriginalText
+
 		# replace bracketed NetBIOS domain name with bracketed generic NetBIOS domain name
-		$Text = $Text.Replace("[CDATA[$DomainNBName]]", "[CDATA[$GenericDomainNBName]]")
+		$ModifiedText = $ModifiedText.Replace("[CDATA[$DomainNBName]]", "[CDATA[$GenericDomainNBName]]")
 
 		# replace suffixed NetBIOS domain name with suffixed generic NetBIOS domain name
-		$Text = $Text.Replace("$DomainNBName\", "$GenericDomainNBName\")
+		$ModifiedText = $ModifiedText.Replace("$DomainNBName\", "$GenericDomainNBName\")
 
 		# replace domain controller with generic domain controller
-		$Text = $Text.Replace($Server, $GenericServer)
+		$ModifiedText = $ModifiedText.Replace($Server, $GenericServer)
 
 		# replace DNS domain name with generic DNS domain name
-		$Text = $Text.Replace($Domain, $GenericDomain)
+		$ModifiedText = $ModifiedText.Replace($Domain, $GenericDomain)
 
-		# update content of XML file
+		# if text is the same...
+		If ($ModifiedText -eq $OriginalText) {
+			Write-Verbose -Message "$Guid; generalization not required for XML file: $Path"
+			Return
+		}
+
+		# write modified text to XML file
 		Try {
-			[System.IO.File]::WriteAllText($Path, $Text)
+			[System.IO.File]::WriteAllText($Path, $ModifiedText)
 		}
 		Catch {
 			Return $_
@@ -186,11 +213,11 @@ Begin {
 
 	# if generalize requested...
 	If ($Generalize) {
-		# define expanded strings for .pol files
-		$ExpandedServer = [System.String]::Join(' ', [System.Char[]]$Server)
-		$ExpandedDomain = [System.String]::Join(' ', [System.Char[]]$Domain)
-		$ExpandedGenericServer = [System.String]::Join(' ', [System.Char[]]$GenericServer)
-		$ExpandedGenericDomain = [System.String]::Join(' ', [System.Char[]]$GenericDomain)
+		# define padded hex strings for .pol files
+		$CurrentServerAsPaddedHex = [System.BitConverter]::ToString([System.Text.Encoding]::ASCII.GetBytes($Server.ToLowerInvariant())) -split '-' -join '-00-'
+		$CurrentDomainAsPaddedHex = [System.BitConverter]::ToString([System.Text.Encoding]::ASCII.GetBytes($Domain.ToLowerInvariant())) -split '-' -join '-00-'
+		$GenericServerAsPaddedHex = [System.BitConverter]::ToString([System.Text.Encoding]::ASCII.GetBytes($GenericServer.ToLowerInvariant())) -split '-' -join '-00-'
+		$GenericDomainAsPaddedHex = [System.BitConverter]::ToString([System.Text.Encoding]::ASCII.GetBytes($GenericDomain.ToLowerInvariant())) -split '-' -join '-00-'
 	}
 }
 
