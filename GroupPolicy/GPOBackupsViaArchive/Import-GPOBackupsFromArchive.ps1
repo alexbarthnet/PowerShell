@@ -10,11 +10,123 @@ Param(
 	[string]$StagingPath,
 	[Parameter(Position = 5)]
 	[switch]$EmptyStagingPath,
+	[Parameter(Position = 6)]
+	[switch]$Specialize,
 	[Parameter(DontShow)]
-	[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain().PdcRoleOwner.Name
+	[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain().PdcRoleOwner.Name,
+	[Parameter(DontShow)]
+	[string]$Domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain().Name,
+	[Parameter(DontShow)]
+	[string]$PartitionsDN = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().Schema.Name.Replace('CN=Schema', 'CN=Partitions'),
+	[Parameter(DontShow)]
+	[string]$DomainNCName = [System.DirectorySErvices.ActiveDirectory.Domain]::GetCurrentDomain().GetDirectoryEntry().DistinguishedName,
+	[Parameter(DontShow)]
+	[string]$DomainNBName = [System.DirectoryServices.DirectorySearcher]::new("LDAP://$PartitionsDN", "(nCName=$DomainNCName)", 'CN', 'OneLevel').FindOne().Properties['CN'],
+	[Parameter(DontShow)]
+	[string]$GenericServer = 'dc-1.generic.local',
+	[Parameter(DontShow)]
+	[string]$GenericDomain = 'generic.local',
+	[Parameter(DontShow)]
+	[string]$GenericDomainNBName = 'GENERIC'
 )
 
 Begin {
+	Function ConvertFrom-GenericGroupPolicyPolFile {
+		Param(
+			[Parameter(Mandatory)]
+			$Path,
+			$Guid = [System.Guid]::Empty
+		)
+
+		# read text of POL file as bytes
+		Try {
+			$Bytes = [System.IO.File]::ReadAllBytes($Path)
+		}
+		Catch {
+			Return $_
+		}
+
+		# convert bytes to hex string as text
+		$OriginalText = [System.BitConverter]::ToString($Bytes)
+
+		# define modified text to preserve original text
+		$ModifiedText = $OriginalText
+
+		# replace generic server name with current server name
+		$ModifiedText = $ModifiedText.Replace($GenericServerAsPaddedHex, $CurrentServerAsPaddedHex)
+		
+		# replace generic domain name with current domain name
+		$ModifiedText = $ModifiedText.Replace($GenericDomainAsPaddedHex, $CurrentDomainAsPaddedHex)
+
+		# if text is the same...
+		If ($ModifiedText -eq $OriginalText) {
+			Write-Verbose -Message "$Guid; specialization not required for POL file: $Path"
+			Return
+		}
+
+		# format modified text for conversation to byte array then cast to byte array
+		$Bytes = $ModifiedText -split '-' -replace '..', '0x$&' -as [System.Byte[]]
+
+		# write modified text as bytes to POL file
+		Try {
+			[System.IO.File]::WriteAllBytes($Path, $Bytes)
+		}
+		Catch {
+			Return $_
+		}
+
+		# report state
+		Write-Verbose -Message "$Guid; specialized POL file: $Path"
+	}
+
+	Function ConvertFrom-GenericGroupPolicyXmlFile {
+		Param(
+			[Parameter(Mandatory)]
+			$Path,
+			$Guid = [System.Guid]::Empty
+		)
+
+		# read original text of XML file
+		Try {
+			$OriginalText = [System.IO.File]::ReadAllText($Path)
+		}
+		Catch {
+			Return $_
+		}
+
+		# define modified text to preserve original text
+		$ModifiedText = $OriginalText
+
+		# replace bracketed NetBIOS domain name with bracketed generic NetBIOS domain name
+		$ModifiedText = $ModifiedText.Replace("[CDATA[$DomainNBName]]", "[CDATA[$GenericDomainNBName]]")
+
+		# replace suffixed NetBIOS domain name with suffixed generic NetBIOS domain name
+		$ModifiedText = $ModifiedText.Replace("$DomainNBName\", "$GenericDomainNBName\")
+
+		# replace domain controller with generic domain controller
+		$ModifiedText = $ModifiedText.Replace($Server, $GenericServer)
+
+		# replace DNS domain name with generic DNS domain name
+		$ModifiedText = $ModifiedText.Replace($Domain, $GenericDomain)
+
+		# if text is the same...
+		If ($ModifiedText -eq $OriginalText) {
+			Write-Verbose -Message "$Guid; specialization not required for XML file: $Path"
+			Return
+		}
+
+		# write modified text to XML file
+		Try {
+			[System.IO.File]::WriteAllText($Path, $ModifiedText)
+		}
+		Catch {
+			Return $_
+		}
+
+		# report state
+		Write-Verbose -Message "$Guid; specialized XML file: $Path"
+	}
+
 	Function New-TemporaryFolder {
 		Param(
 			[switch]$ForMachine
@@ -52,6 +164,16 @@ Begin {
 		# return temporary folder
 		Return $TemporaryFolder
 	}
+
+	# if specialize requested...
+	If ($Specialize) {
+		# define padded hex strings for .pol files
+		$CurrentServerAsPaddedHex = [System.BitConverter]::ToString([System.Text.Encoding]::ASCII.GetBytes($Server.ToLowerInvariant())) -split '-' -join '-00-'
+		$CurrentDomainAsPaddedHex = [System.BitConverter]::ToString([System.Text.Encoding]::ASCII.GetBytes($Domain.ToLowerInvariant())) -split '-' -join '-00-'
+		$GenericServerAsPaddedHex = [System.BitConverter]::ToString([System.Text.Encoding]::ASCII.GetBytes($GenericServer.ToLowerInvariant())) -split '-' -join '-00-'
+		$GenericDomainAsPaddedHex = [System.BitConverter]::ToString([System.Text.Encoding]::ASCII.GetBytes($GenericDomain.ToLowerInvariant())) -split '-' -join '-00-'
+	}
+	
 }
 
 Process {
@@ -255,6 +377,49 @@ Process {
 				If ($DisplayName -like $ExcludeString) {
 					Write-Host "$BackupId; skipping GPO backup: display name of '$DisplayName' matches Exclude string: '$ExcludeString'"
 					Continue NextGPOBackup
+				}
+			}
+		}
+
+		# if specialize requested...
+		If ($Specialize) {
+			# define GPO backup XML files
+			$XMLFilePaths = @('Backup.xml', 'bkupInfo.xml', 'DomainSysvol\GPO\Machine\Preferences\Groups\Groups.xml')
+
+			# loop through GPO backup XML files
+			ForEach ($ChildPath in $XMLFilePaths) {
+				# define path for GPO backup XML file
+				$PathToXmlFile = Join-Path -Path $GPOBackup.FullName -ChildPath $ChildPath
+
+				# if XML file exists...
+				If ([System.IO.File]::Exists($PathToXmlFile)) {
+					# specialize XML file
+					Try {
+						ConvertFrom-GenericGroupPolicyXmlFile -Path $PathToXmlFile -Guid $BackupId
+					}
+					Catch {
+						Return $_
+					}
+				}
+			}
+
+			# define GPO backup POL files
+			$POLFilePaths = @('DomainSysvol\GPO\Machine\registry.pol', 'DomainSysvol\GPO\User\registry.pol')
+
+			# loop through GPO backup POL files
+			ForEach ($ChildPath in $POLFilePaths) {
+				# define path for GPO backup POL file
+				$PathToPolFile = Join-Path -Path $GPOBackup.FullName -ChildPath $ChildPath
+
+				# if POL file exists...
+				If ([System.IO.File]::Exists($PathToPolFile)) {
+					# specialize POL file
+					Try {
+						ConvertFrom-GenericGroupPolicyPolFile -Path $PathToPolFile -Guid $BackupId
+					}
+					Catch {
+						Return $_
+					}
 				}
 			}
 		}
