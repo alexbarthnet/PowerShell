@@ -96,24 +96,24 @@ Process {
 	}
 
 	# define list for old files
-	$Files = [System.Collections.Generic.List[System.Object]]::new()
+	$Files = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
 
 	# retrieve old files first
 	Write-Host "Retrieving files written before '$DateTime' from '$Path'"
 	Get-ChildItem -Path $Path -Recurse -Force -File | Where-Object { $_.LastWriteTime -lt $DateTime } | ForEach-Object {
-		$Files.Add($_.FullName)
+		$Files.Add($_)
 	}
 
 	# remove old files first
 	Write-Host "Removing '$($Files.Count)' file item(s) written before '$DateTime' from '$Path'"
 	ForEach ($File in $Files) {
-		If ($PSCmdlet.ShouldProcess($File, 'Remove File')) {
+		If ($PSCmdlet.ShouldProcess($File.FullName, 'Remove File')) {
 			# remove file
 			Try {
-				Remove-Item -Path $File -Force -ErrorAction 'Stop' -WarningAction 'Continue'
+				Remove-Item -Path $File.FullName -Force -ErrorAction 'Stop' -WarningAction 'Continue'
 			}
 			Catch {
-				Write-Warning -Message "could not perform `"Remove File`" on target `"$File`": $($_.ToString())"
+				Write-Warning -Message "could not perform `"Remove File`" on target `"$($File.FullName)`": $($_.Exception.Message)"
 			}
 
 			# report file removed
@@ -122,7 +122,7 @@ Process {
 	}
 
 	# define list for old directories
-	$Directories = [System.Collections.Generic.List[System.Object]]::new()
+	$Directories = [System.Collections.Generic.List[System.IO.DirectoryInfo]]::new()
 
 	# retrieve old directories
 	Write-Host "Retrieving directories written before '$DateTime' from '$Path'"
@@ -139,13 +139,13 @@ Process {
 	# remove old directories last
 	Write-Host "Removing '$($Directories.Count)' directory item(s) written before '$DateTime' from '$Path'"
 	ForEach ($Directory in $Directories) {
-		If ($PSCmdlet.ShouldProcess($Directory, 'Remove Directory')) {
+		If ($PSCmdlet.ShouldProcess($Directory.FullName, 'Remove Directory')) {
 			# remove directory
 			Try {
-				Remove-Item -Path $Directory -Force -ErrorAction 'Stop' -WarningAction 'Continue'
+				Remove-Item -Path $Directory.FullName -Force -ErrorAction 'Stop' -WarningAction 'Continue'
 			}
 			Catch {
-				Write-Warning -Message "could not perform `"Remove Directory`" on target `"$Directory`": $($_.ToString())"
+				Write-Warning -Message "could not perform `"Remove Directory`" on target `"$($Directory.FullName)`": $($_.Exception.Message)"
 			}
 
 			# report directory removed
