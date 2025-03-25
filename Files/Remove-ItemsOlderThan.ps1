@@ -134,7 +134,7 @@ Process {
 	Get-ChildItem -Path $Path -Recurse -Force -Directory | Where-Object { $_.LastWriteTime -lt $DateTime } | Sort-Object -Property 'FullName' -Descending | ForEach-Object {
 		# if old directory has files
 		If ((Get-ChildItem -Path $_ -Recurse -Force)) {
-			Write-Warning -Message "will not perform `"Remove Directory`" on target `"$($_.FullName)`": has child items last written after '$DateTime'"
+			Write-Warning -Message "will not perform `"Remove Directory`" on target `"$($_.FullName)`": path has child items last written after '$DateTime'"
 		}
 		Else {
 			$Directories.Add($_)	
