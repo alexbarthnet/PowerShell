@@ -6,6 +6,7 @@ Param(
 	[string]$ComputerName,
 	[string]$Path,
 	[switch]$UseDefaultPathOnHost,
+	[switch]$UseExistingDisks,
 	[switch]$SkipProvisioning,
 	[switch]$SkipStart,
 	[switch]$SkipClustering,
@@ -1853,7 +1854,9 @@ Begin {
 			[string]$ComputerName,
 			[string]$ScopeId,
 			[string]$IPAddress,
-			[string]$MacAddress
+			[string]$MacAddress,
+			[string]$Router,
+			[boolean]$ReservationRequired = $true
 		)
 
 		# define parameters for Get-DhcpServerv4Scope
@@ -1900,84 +1903,147 @@ Begin {
 		# convert MAC address into client ID
 		$ClientId = $MacAddress -replace '(..(?!$))', '$1-'
 
-		# filter DHCP reservations
+		# declare state
 		Write-Host ("$Hostname,$ComputerName,$Name - checking for DHCP reservations with...")
 		Write-Host ("$Hostname,$ComputerName,$Name -  IP Address : '$IPAddress'")
 		Write-Host ("$Hostname,$ComputerName,$Name -  Client ID  : '$ClientId'")
+
+		# filter DHCP reservations
 		$Reservations = $Reservations | Where-Object { $_.IPAddress -eq $IPAddress -or $_.ClientId -eq $ClientId }
 
-		# check DHCP reservations
+		# if matching DHCP reservations not found...
 		If ($null -eq $Reservations) {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...existing DHCP reservation not found")
 		}
+		# if matching DHCP reservations found...
+		Else {
+			# loop through DHCP reservations
+			:NextReservation ForEach ($Reservation in $Reservations) {
+				# if reservation found with both IP and client id...
+				If ($Reservation.IPAddress -eq $IPAddress -and $Reservation.ClientId -eq $ClientId) {
+					Write-Host ("$Hostname,$ComputerName,$Name - ...found existing DHCP reservation with requested IP address and client ID")
+					$ReservationRequired = $false
+					Continue NextReservation
+				}
+				ElseIf ($Reservation.IPAddress -ne $IPAddress) {
+					# define parameters for Remove-DhcpServerv4Reservation
+					$RemoveDhcpServerv4Reservation = @{
+						ComputerName = $ComputerName
+						IPAddress    = $IPAddress
+						ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+					}
 
-		# check DHCP reservations
-		ForEach ($Reservation in $Reservations) {
-			If ($Reservation.IPAddress -eq $IPAddress -and $Reservation.ClientId -eq $ClientId) {
-				Write-Host ("$Hostname,$ComputerName,$Name - ...found existing DHCP reservation with requested IP address and client ID")
-				Return
+					# remove DHCP reservation with same IP addresss
+					Try {
+						Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing DHCP reservation with conflicting IP address: '$($Reservation.IPAddress)'")
+						Remove-DhcpServerv4Reservation @RemoveDhcpServerv4Reservation
+					}
+					Catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: removing existing DHCP reservation'")
+						Throw $_
+					}
+				}
+				ElseIf ($Reservation.ClientId -ne $ClientId) {
+					# define parameters for Remove-DhcpServerv4Reservation
+					$RemoveDhcpServerv4Reservation = @{
+						ComputerName = $ComputerName
+						ScopeId      = $ScopeId
+						ClientId     = $ClientId
+						ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+					}
+
+					# remove DHCP reservation with same client ID
+					Try {
+						Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing DHCP reservation with conflicting client ID: '$($Reservation.ClientId)'")
+						Remove-DhcpServerv4Reservation @RemoveDhcpServerv4Reservation
+					}
+					Catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: removing existing DHCP reservation")
+						Throw $_
+					}
+				}
 			}
-			ElseIf ($Reservation.IPAddress -ne $IPAddress) {
-				# define parameters for Remove-DhcpServerv4Reservation
-				$RemoveDhcpServerv4Reservation = @{
+		}
+
+		# if reservation required...
+		If ($ReservationRequired) {
+			# define parameters for Add-DhcpServerv4Reservation
+			$AddDhcpServerv4Reservation = @{
+				ComputerName = $ComputerName
+				Name         = $Name
+				ScopeId      = $ScopeId
+				IPAddress    = $IPAddress
+				ClientId     = $ClientId
+				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# create DHCP reservation
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - creating DHCP reservation...")
+				Add-DhcpServerv4Reservation @AddDhcpServerv4Reservation
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: creating DHCP reservcation")
+				Throw $_
+			}
+
+			# declare action and set repliation required
+			Write-Host ("$Hostname,$ComputerName,$Name - ...created DHCP reservation")
+		}
+
+		# if router provided...
+		If ($PSBoundParameters.ContainsKey('Router') -and $null -ne $Router) {
+			# define parameters for Get-DhcpServerv4OptionValue
+			$GetDhcpServerv4OptionValue = @{
+				ComputerName = $ComputerName
+				IPAddress    = $IPAddress
+				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# retrieve options
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - checking for DHCP option for router...")
+				$DhcpServerv4OptionValue = Get-DhcpServerv4OptionValue @GetDhcpServerv4OptionValue
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving DHCP options")
+				Throw $_
+			}
+
+			# filter DHCP options
+			$DhcpServerv4OptionValue = $DhcpServerv4OptionValue | Where-Object { $_.Name -eq 'Router' }
+
+			# if DHPC option exists
+			If ($DhcpServerv4OptionValue.Value -eq $Router ) {
+				# declare state
+				Write-Host ("$Hostname,$ComputerName,$Name - ...existing DHCP option for router found")
+			}
+			Else {
+				# declare state
+				Write-Host ("$Hostname,$ComputerName,$Name - ...existing DHCP option for router not found")
+
+				# define parameters for Get-DhcpServerv4OptionValue
+				$SetDhcpServerv4OptionValue = @{
 					ComputerName = $ComputerName
 					IPAddress    = $IPAddress
+					Router       = $Router
 					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 				}
 
-				# remove DHCP reservation with same IP addresss
+				# update options for IP address
 				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing DHCP reservation with conflicting IP address: '$($Reservation.IPAddress)'")
-					Remove-DhcpServerv4Reservation @RemoveDhcpServerv4Reservation
+					Write-Host ("$Hostname,$ComputerName,$Name - creating DHCP option for router...")
+					Set-DhcpServerv4OptionValue @SetDhcpServerv4OptionValue
 				}
 				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: removing existing DHCP reservation'")
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: creating DHCP option for router")
 					Throw $_
 				}
-			}
-			ElseIf ($Reservation.ClientId -ne $ClientId) {
-				# define parameters for Remove-DhcpServerv4Reservation
-				$RemoveDhcpServerv4Reservation = @{
-					ComputerName = $ComputerName
-					ScopeId      = $ScopeId
-					ClientId     = $ClientId
-					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
-				}
 
-				# remove DHCP reservation with same client ID
-				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing DHCP reservation with conflicting client ID: '$($Reservation.ClientId)'")
-					Remove-DhcpServerv4Reservation @RemoveDhcpServerv4Reservation
-				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: removing existing DHCP reservation")
-					Throw $_
-				}
+				# declare action and set repliation required
+				Write-Host ("$Hostname,$ComputerName,$Name - ...created DHCP option for router: $Router")
 			}
 		}
-
-		# define parameters for Add-DhcpServerv4Reservation
-		$AddDhcpServerv4Reservation = @{
-			ComputerName = $ComputerName
-			Name         = $Name
-			ScopeId      = $ScopeId
-			IPAddress    = $IPAddress
-			ClientId     = $ClientId
-			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# create DHCP reservation
-		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - creating DHCP reservation...")
-			Add-DhcpServerv4Reservation @AddDhcpServerv4Reservation
-		}
-		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: creating DHCP reservcation")
-			Return
-		}
-
-		# declare action
-		Write-Host ("$Hostname,$ComputerName,$Name - ...created DHCP reservation")
 
 		# define parameters for DHCP reservation
 		$GetDhcpServerv4Failover = @{
@@ -1991,7 +2057,7 @@ Begin {
 			$Failover = Get-DhcpServerv4Failover @GetDhcpServerv4Failover
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving DHCP failover")
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving DHCP failover configuration")
 			Throw $_
 		}
 
@@ -3163,7 +3229,7 @@ Begin {
 
 		# define hashtable for variables
 		$VariableHashtable = [ordered]@{
-			'%COMPUTERNAME%' = $VMName
+			'%COMPUTERNAME%' = $VMName.Split('.')[0]
 		}
 
 		# if Username provided...
@@ -3318,7 +3384,14 @@ Begin {
 
 		# if VHD found...
 		If ($null -ne $VHD) {
+			# report VHD found
 			Write-Host ("$Hostname,$ComputerName,$Name - ...found existing VHD with Path: '$Path'")
+			# if use existing VHDs not provided...
+			If (!$UseExistingDisks) {
+				# warn and inquire
+				Write-Warning -Message ("$Hostname,$ComputerName,$Name - continue and use existing VHD?") -WarningAction Inquire
+			}
+			# return
 			Return
 		}
 
@@ -3681,9 +3754,20 @@ Process {
 		If ($null -ne $VM -and $null -ne $JsonData.$Name.VMHardDiskDrives) {
 			# create hard drives
 			ForEach ($VMHardDiskDrive in $JsonData.$Name.VMHardDiskDrives) {
+				# if path provided...
+				If ($PSBoundParameters.ContainsKey('Path')) {
+					# retrieve modified VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path.Replace($JsonData.$Name.Path, $Path)
+				}
+				Else {
+					# retrieve original VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
+				}
+
+				# create VHD
 				$NewVHDFromParams = @{
 					ComputerName = $ComputerName
-					Path         = $VMHardDiskDrive.Path
+					Path         = $VMHardDiskDrivePath
 					SizeBytes    = $VMHardDiskDrive.SizeBytes
 				}
 				Try {
@@ -3699,11 +3783,21 @@ Process {
 
 			# attach hard drives with controller number and controller location
 			ForEach ($VMHardDiskDrive in $VMHardDiskDrivesWithNumberAndLocation) {
-				$VMHardDiskDrives
+				# if path provided...
+				If ($PSBoundParameters.ContainsKey('Path')) {
+					# retrieve modified VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path.Replace($JsonData.$Name.Path, $Path)
+				}
+				Else {
+					# retrieve original VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
+				}
+
+				# add VHD to VM
 				$AddVHDFromParams = @{
 					ComputerName       = $ComputerName
 					VM                 = $VM
-					Path               = $VMHardDiskDrive.Path
+					Path               = $VMHardDiskDrivePath
 					ControllerNumber   = $VMHardDiskDrive.ControllerNumber
 					ControllerLocation = $VMHardDiskDrive.ControllerLocation
 				}
@@ -3720,10 +3814,21 @@ Process {
 
 			# attach hard drives with controller number and without controller location
 			ForEach ($VMHardDiskDrive in $VMHardDiskDrivesWithNumberWithoutLocation) {
+				# if path provided...
+				If ($PSBoundParameters.ContainsKey('Path')) {
+					# retrieve modified VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path.Replace($JsonData.$Name.Path, $Path)
+				}
+				Else {
+					# retrieve original VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
+				}
+
+				# add VHD to VM
 				$AddVHDFromParams = @{
 					ComputerName     = $ComputerName
 					VM               = $VM
-					Path             = $VMHardDiskDrive.Path
+					Path             = $VMHardDiskDrivePath
 					ControllerNumber = $VMHardDiskDrive.ControllerNumber
 				}
 				Try {
@@ -3739,10 +3844,21 @@ Process {
 
 			# attach hard drives without controller number but with controller location
 			ForEach ($VMHardDiskDrive in $VMHardDiskDrivesWithoutNumberWithLocation) {
+				# if path provided...
+				If ($PSBoundParameters.ContainsKey('Path')) {
+					# retrieve modified VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path.Replace($JsonData.$Name.Path, $Path)
+				}
+				Else {
+					# retrieve original VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
+				}
+
+				# add VHD to VM
 				$AddVHDFromParams = @{
 					ComputerName       = $ComputerName
 					VM                 = $VM
-					Path               = $VMHardDiskDrive.Path
+					Path               = $VMHardDiskDrivePath
 					ControllerLocation = $VMHardDiskDrive.ControllerLocation
 				}
 				Try {
@@ -3758,10 +3874,21 @@ Process {
 
 			# attach hard drives without controller number or controller location
 			ForEach ($VMHardDiskDrive in $VMHardDiskDrivesWithoutNumberWithoutLocation) {
+				# if path provided...
+				If ($PSBoundParameters.ContainsKey('Path')) {
+					# retrieve modified VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path.Replace($JsonData.$Name.Path, $Path)
+				}
+				Else {
+					# retrieve original VHD path
+					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
+				}
+
+				# add VHD to VM
 				$AddVHDFromParams = @{
 					ComputerName = $ComputerName
 					VM           = $VM
-					Path         = $VMHardDiskDrive.Path
+					Path         = $VMHardDiskDrivePath
 				}
 				Try {
 					Add-VHDFromParams @AddVHDFromParams
@@ -3856,12 +3983,19 @@ Process {
 
 				# add VM IP address and MAC address to DHCP server
 				If ($null -ne $VMNetworkAdapterEntry.DhcpServer -and $null -ne $VMNetworkAdapterEntry.DhcpScope -and $null -ne $VMNetworkAdapterEntry.IPAddress) {
+					# define required parameters for DHCP reservation
 					$AddVMNetworkAdapterToDHCP = @{
 						ComputerName = $VMNetworkAdapterEntry.DhcpServer
 						ScopeId      = $VMNetworkAdapterEntry.DhcpScope
 						IPAddress    = $VMNetworkAdapterEntry.IPAddress
 						MacAddress   = $VMNetworkAdapter.MacAddress
 					}
+
+					# define optional parameters for DHCP reservation
+					If (![System.String]::IsNullOrEmpty($VMNetworkAdapterEntry.Router)) {
+						$AddVMNetworkAdapterToDHCP['Router'] = $VMNetworkAdapterEntry.Router
+					}
+					# create DHCP reservation
 					Try {
 						Add-VMNetworkAdapterToDHCP @AddVMNetworkAdapterToDHCP
 					}

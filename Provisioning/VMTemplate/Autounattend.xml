@@ -107,6 +107,12 @@
                     <Path>PowerShell.exe -ExecutionPolicy Bypass -File "%SystemRoot%\Update-Windows.ps1"</Path>
                     <WillReboot>OnRequest</WillReboot>
                 </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Description>Invoke Scripts</Description>
+                    <Order>3</Order>
+                    <Path>PowerShell.exe -ExecutionPolicy Bypass -File "%SystemRoot%\Invoke-ScriptsFromCDROM.ps1"</Path>
+                    <WillReboot>OnRequest</WillReboot>
+                </RunSynchronousCommand>
             </RunSynchronous>
             <Generalize>
                 <ForceShutdownNow>true</ForceShutdownNow>
