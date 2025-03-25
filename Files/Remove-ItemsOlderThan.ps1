@@ -20,6 +20,9 @@ The number of datetime units to create the computed datetime. Cannot be combined
 .PARAMETER OlderThanType
 The type of datetime units to create the computed datetime. Cannot be combined with the DateTime or TimeSpan parameters. Valid values are 'Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', and 'Years'
 
+.PARAMETER RemoveEmptyPath
+Switch parameter to remove provided path if empty.
+
 .INPUTS
 None.
 
@@ -46,7 +49,9 @@ Param(
 	[uint16]$OlderThanUnits,
 	# type for computing previous datetime
 	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'Computed')][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
-	[string]$OlderThanType
+	[string]$OlderThanType,
+	# switch to remove empty path
+	[switch]$RemoveEmptyPath
 )
 
 Begin {
@@ -150,6 +155,24 @@ Process {
 
 			# report directory removed
 			Write-Verbose -Message "removed '$($Directory.FullName)' directory with '$($Directory.LastWriteTime)' LastWriteTime"
+		}
+	}
+
+	# if remove empty path requested...
+	If ($RemoveEmptyPath) {
+		# if path is not empty...
+		If ((Get-ChildItem -Path $Path -Recurse -Force)) {
+			Write-Warning -Message "will not perform `"Remove Directory`" on target `"$Path`": path has existing child items"
+		}
+		# if path is empty...
+		Else {
+			# remove path
+			Try {
+				Remove-Item -Path $Path -Force -ErrorAction 'Stop' -WarningAction 'Continue'
+			}
+			Catch {
+				Write-Warning -Message "could not perform `"Remove Directory`" on target `"$Path`": $($_.Exception.Message)"
+			}
 		}
 	}
 }
