@@ -127,24 +127,13 @@ Process {
 	# retrieve old directories
 	Write-Host "Retrieving directories written before '$DateTime' from '$Path'"
 	Get-ChildItem -Path $Path -Recurse -Force -Directory | Where-Object { $_.LastWriteTime -lt $DateTime } | Sort-Object -Property 'FullName' -Descending | ForEach-Object {
-		$Directories.Add($_.FullName)
-	}
-
-	# define list for excluded directories
-	$DirectoriesToExclude = [System.Collections.Generic.List[System.Object]]::new()
-
-	# checking directories
-	Write-Host "Checking directories for child objects in '$Path'"
-	ForEach ($Directory in $Directories) {
-		If ($null -ne (Get-ChildItem -Path $Directory -Recurse -Force)) {
-			Write-Warning -Message "will not perform `"Remove Directory`" on target `"$Directory`": has child items last written after '$DateTime'"
-			$DirectoriesToExclude.Add($Directory)
+		# if old directory has files
+		If ((Get-ChildItem -Path $_ -Recurse -Force)) {
+			Write-Warning -Message "will not perform `"Remove Directory`" on target `"$($_.FullName)`": has child items last written after '$DateTime'"
 		}
-	}
-
-	# remove directories to exclude from old directories
-	ForEach ($Directory in $DirectoriesToExclude) {
-		$Directories.Remove($Directory)
+		Else {
+			$Directories.Add($_)	
+		}
 	}
 
 	# remove old directories last
