@@ -33,7 +33,7 @@ None. The script reports the actions taken and does not provide any actionable o
 [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Computed')]
 Param(
 	# path for items to remove
-	[Parameter(Mandatory = $True, Position = 0)][ValidateScript({ Test-Path -Path $_ -PathType 'Container' })]
+	[Parameter(Mandatory = $True, Position = 0)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$Path,
 	# previous datetime
 	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'DateTime')]
