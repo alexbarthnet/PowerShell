@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-Run PowerShell scripts from a 'CD-ROM' drive.
+Run PowerShell scripts from removable media.
 
 .DESCRIPTION
-Run PowerShell scripts from a 'CD-ROM' drive. The primary intent is enable arbitrary scripts to be run during Windows setup from one or more mounted ISO images without manipulation of the WIM image.
+Run PowerShell scripts from removable media. The primary intent is enable arbitrary scripts to be run during Windows setup from one or more mounted ISO images without manipulation of the WIM image.
 
 .INPUTS
 None.
@@ -12,7 +12,7 @@ None.
 None. The function does not generate any output.
 
 .NOTES
-This script will search for scripts in a 'Scripts' folder on mounted volumes with the 'CD-ROM' drive type. The scripts are run in alphabetical order from the volumes
+This script will search for scripts in a 'Scripts' folder on mounted volumes of removable media. The scripts are run in alphabetical order from the volumes
 
 .LINK
 https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nn-wuapi-iinstallationresult
@@ -54,11 +54,11 @@ Else {
 	$ScriptStates = @()
 }
 
-# get optical drive volumes with mounted images
-$Volumes = (Get-Volume).Where({ $_.DriveType -eq 'CD-ROM' -and $_.Size -gt 0 }) | Sort-Object -Property DriveLetter
+# get volumes with recognized file systems on non-fixed drives
+$Volumes = (Get-Volume).Where({ $_.DriveType -ne 'Fixed' -and $_.FileSystemType -ne 'Unknown' -and $_.OperationalStatus -eq 'OK' -and $_.Size -gt 0 }) | Sort-Object -Property DriveLetter
 
 # if no optional drive volumes found...
-If ($Volumes.Count -eq 0) {
+If ((Measure-Object -InputObject $Volumes).Count -eq 0) {
 	Write-Host "No volumes found with drive type of 'CD-ROM'"
 	Exit 0
 }
