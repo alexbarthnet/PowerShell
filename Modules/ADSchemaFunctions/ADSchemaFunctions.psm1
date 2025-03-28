@@ -22,7 +22,9 @@ Function Add-ADSchemaAttributes {
 		[Parameter(Position = 4)][ValidateRange(1, 65535)]
 		[uint16]$Count = 1,
 		[Parameter(Position = 5)][ValidateRange(0, 8191)]
-		[uint16]$SearchFlags = 0
+		[uint16]$SearchFlags = 0,
+		[Parameter(Position = 6)]
+		[switch]$AddToGlobalCatalog
 	)
 
 	# set values for attribute
@@ -106,6 +108,11 @@ Function Add-ADSchemaAttributes {
 			isSingleValued   = $AttributeProperties.isSingleValued
 			oMSyntax         = $AttributeProperties.oMSyntax
 			searchFlags      = $SearchFlags
+		}
+
+		# if attribute should be added to global catalog...
+		If ($AddToGlobalCatalog) {
+			$OtherAttributes['isMemberOfPartialAttributeSet'] = $true
 		}
 		
 		# declare values
