@@ -35,7 +35,13 @@ Path to folder for staging the ISO file contents and mounting the WIM image. The
 .PARAMETER EmptyStagingPath
 Switch parameter to remove any existing files and folders in the StagingPath folder.
 
-.PARAMETER FileSystem
+.PARAMETER ReuseStagingPath
+Switch parameter to use any existing files and folders in the StagingPath folder rather than copying new files from the original ISO image or script folders.
+
+.PARAMETER SkipExclude
+Switch parameter to skip creating Microsoft Defender path exclusion for the staging path.
+
+x.PARAMETER FileSystem
 String with file system to apply to USB drive. The default value is "NTFS" and the value must be "NTFS" or "FAT32".
 
 .PARAMETER ProductKey

@@ -38,6 +38,12 @@ Path to folder for staging the ISO file contents and mounting the WIM image. The
 .PARAMETER EmptyStagingPath
 Switch parameter to remove any existing files and folders in the StagingPath folder.
 
+.PARAMETER ReuseStagingPath
+Switch parameter to use any existing files and folders in the StagingPath folder rather than copying new files from the original ISO image or script folders.
+
+.PARAMETER SkipExclude
+Switch parameter to skip creating Microsoft Defender path exclusion for the staging path.
+
 .PARAMETER ProductKey
 String with product key for the Windows image. The default value is the KMS key for Windows Server 2025 Datacenter.
 
