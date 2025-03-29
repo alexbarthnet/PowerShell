@@ -74,19 +74,25 @@ https://learn.microsoft.com/en-us/windows-server/get-started/automatic-vm-activa
 #>
 
 Param(
-	[Parameter(Mandatory = $true)]
+	[Parameter(Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToOriginalIsoImage,
 	[string]$DriveLetter,
 	[uint32]$DiskNumber,
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToAutounattendFile,
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToUnattendFile,
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToUpdateScript,
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToInvokeScript,
+	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$PathToScriptFolder,
-	[switch]$SkipExclude,
+	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$StagingPath,
 	[switch]$EmptyStagingPath,
 	[switch]$ReuseStagingPath,
+	[switch]$SkipExclude,
 	[string]$FileSystem = 'NTFS',
 	[string]$ProductKey = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF',
 	[uint16]$Index = 4
