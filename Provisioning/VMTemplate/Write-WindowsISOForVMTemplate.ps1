@@ -38,6 +38,12 @@ Path to folder for staging the ISO file contents and mounting the WIM image. The
 .PARAMETER EmptyStagingPath
 Switch parameter to remove any existing files and folders in the StagingPath folder.
 
+.PARAMETER ReuseStagingPath
+Switch parameter to use any existing files and folders in the StagingPath folder rather than copying new files from the original ISO image or script folders.
+
+.PARAMETER SkipExclude
+Switch parameter to skip creating Microsoft Defender path exclusion for the staging path.
+
 .PARAMETER ProductKey
 String with product key for the Windows image. The default value is the KMS key for Windows Server 2025 Datacenter.
 
@@ -74,23 +80,28 @@ https://learn.microsoft.com/en-us/windows-server/get-started/automatic-vm-activa
 #>
 
 Param(
-	[Parameter(Mandatory = $true)]
+	[Parameter(Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToOriginalIsoImage,
-	[Parameter(Mandatory = $true)]
+	[Parameter(Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathForUpdatedIsoImage,
-	[Parameter(Mandatory = $true)]
+	[Parameter(Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToAutounattendFile,
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToUnattendFile,
-	[Parameter(Mandatory = $true)]
+	[Parameter(Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToUpdateScript,
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToInvokeScript,
+	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$PathToScriptFolder,
+	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$PathToBinaryFolder,
 	[switch]$NoNewWindow,
-	[switch]$SkipExclude,
+	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$StagingPath,
 	[switch]$EmptyStagingPath,
 	[switch]$ReuseStagingPath,
+	[switch]$SkipExclude,
 	[string]$ProductKey = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF',
 	[uint16]$Index = 4
 )

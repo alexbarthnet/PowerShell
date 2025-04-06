@@ -35,7 +35,13 @@ Path to folder for staging the ISO file contents and mounting the WIM image. The
 .PARAMETER EmptyStagingPath
 Switch parameter to remove any existing files and folders in the StagingPath folder.
 
-.PARAMETER FileSystem
+.PARAMETER ReuseStagingPath
+Switch parameter to use any existing files and folders in the StagingPath folder rather than copying new files from the original ISO image or script folders.
+
+.PARAMETER SkipExclude
+Switch parameter to skip creating Microsoft Defender path exclusion for the staging path.
+
+x.PARAMETER FileSystem
 String with file system to apply to USB drive. The default value is "NTFS" and the value must be "NTFS" or "FAT32".
 
 .PARAMETER ProductKey
@@ -74,19 +80,25 @@ https://learn.microsoft.com/en-us/windows-server/get-started/automatic-vm-activa
 #>
 
 Param(
-	[Parameter(Mandatory = $true)]
+	[Parameter(Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToOriginalIsoImage,
 	[string]$DriveLetter,
 	[uint32]$DiskNumber,
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToAutounattendFile,
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToUnattendFile,
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToUpdateScript,
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToInvokeScript,
+	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$PathToScriptFolder,
-	[switch]$SkipExclude,
+	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$StagingPath,
 	[switch]$EmptyStagingPath,
 	[switch]$ReuseStagingPath,
+	[switch]$SkipExclude,
 	[string]$FileSystem = 'NTFS',
 	[string]$ProductKey = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF',
 	[uint16]$Index = 4
