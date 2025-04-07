@@ -92,7 +92,7 @@ If ($Rename) {
 		}
  
 		# retrieve Hyper-V network adapter name
-		$HyperVNetworkAdapterName = $NetAdapter | Get-NetAdapterAdvancedProperty -ErrorAction SilentlyContinue | Where-Object { $_.RegistryKeyword -eq 'HyperVNetworkAdapterName' } | Select-Object -ExpandPropty 'DisplayValue'
+		$HyperVNetworkAdapterName = $NetAdapter | Get-NetAdapterAdvancedProperty -ErrorAction SilentlyContinue | Where-Object { $_.RegistryKeyword -eq 'HyperVNetworkAdapterName' } | Select-Object -ExpandProperty 'DisplayValue'
 		
 		# if Hyper-V network adapter name found...
 		If (![System.String]::IsNullOrEmpty($HyperVNetworkAdapterName)) {
