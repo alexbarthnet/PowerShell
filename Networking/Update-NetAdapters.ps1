@@ -79,7 +79,7 @@ If ($InterfaceAlias) {
 		}
  
 		# retrieve PCI device label
-		$PciDeviceLabelString = $NetAdapter | Get-NetAdapterHardwareInfo -ErrorAction SilentlyContinue | Select-Object -ExpandPropty 'PciDeviceLabelString'
+		$PciDeviceLabelString = $NetAdapter | Get-NetAdapterHardwareInfo -ErrorAction SilentlyContinue | Select-Object -ExpandProperty 'PciDeviceLabelString'
 
 		# if PCI device label found
 		If (![System.String]::IsNullOrEmpty($PciDeviceLabelString)) {
@@ -112,7 +112,7 @@ If ($InterfaceAlias) {
 
 		# rename network adapter
 		Try {
-			Rename-NetAdapter -InterfaceIndex $InterfaceIndex -NewName $NewName
+			Rename-NetAdapter -InputObject $NetAdapter -NewName $NewName
 		}
 		Catch {
 			Write-Error -Message "$InterfaceGuid; $InterfaceName; Could not rename adapter: $($_.Exception.Message)"
