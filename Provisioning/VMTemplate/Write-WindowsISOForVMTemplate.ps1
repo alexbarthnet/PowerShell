@@ -44,11 +44,8 @@ Switch parameter to use any existing files and folders in the StagingPath folder
 .PARAMETER SkipExclude
 Switch parameter to skip creating Microsoft Defender path exclusion for the staging path.
 
-.PARAMETER ProductKey
-String with product key for the Windows image. The default value is the KMS key for Windows Server 2025 Datacenter.
-
-.PARAMETER Index
-Integer for index of Windows image. The default value is 4 which maps to the Datacenter with Desktop Experience for Windows Server 2016 and later.
+.PARAMETER UnattendExpandStrings
+Hashtable of expand strings and values for autounattend and unattend XML files
 
 .INPUTS
 None.
@@ -56,54 +53,52 @@ None.
 .OUTPUTS
 None. The function does not generate any output.
 
-.LINK
-https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nn-wuapi-iinstallationresult
-
-.LINK
-https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatesearcher-search
-
-.LINK
-https://learn.microsoft.com/en-us/windows/win32/api/wuapi/ne-wuapi-operationresultcode
-
-.LINK
-https://learn.microsoft.com/en-us/windows/win32/wua_sdk/searching--downloading--and-installing-updates
-
-.LINK
-https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-deployment-runsynchronous-runsynchronouscommand-willreboot
-
-.LINK
-https://learn.microsoft.com/en-us/windows-server/get-started/kms-client-activation-keys
-
-.LINK
-https://learn.microsoft.com/en-us/windows-server/get-started/automatic-vm-activation
-
 #>
 
 Param(
-	[Parameter(Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter(Position = 0, Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToOriginalIsoImage,
-	[Parameter(Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter(Position = 1, Mandatory = $true)]
 	[string]$PathForUpdatedIsoImage,
-	[Parameter(Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter(Position = 2)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToAutounattendFile,
-	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter(Position = 3)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToUnattendFile,
-	[Parameter(Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter(Position = 4)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToUpdateScript,
-	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter(Position = 5)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToInvokeScript,
-	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[Parameter(Position = 6)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$PathToScriptFolder,
-	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[Parameter(Position = 7)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$PathToBinaryFolder,
-	[switch]$NoNewWindow,
-	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[Parameter(Position = 8, ParameterSetName = 'StagingPath', Mandatory = $true)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$StagingPath,
+	[Parameter(Position = 9, ParameterSetName = 'StagingPath')]
 	[switch]$EmptyStagingPath,
+	[Parameter(Position = 10, ParameterSetName = 'StagingPath')]
 	[switch]$ReuseStagingPath,
+	[Parameter(Position = 11, ParameterSetName = 'StagingPath')]
+	[switch]$SkipWrite,
+	[Parameter(Position = 12)]
 	[switch]$SkipExclude,
-	[string]$ProductKey = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF',
-	[uint16]$Index = 4
+	[Parameter(Position = 13)]
+	[switch]$NoNewWindow,
+	[Parameter(Position = 14)]
+	[hashtable]$UnattendExpandStrings = @{
+		'%INDEX%'      = 4
+		'%PRODUCTKEY%' = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF'
+	},
+	[Parameter(DontShow)]
+	[string[]]$ExpandStringsForUnattendFiles = @(
+		'%INDEX%'
+		'%PRODUCTKEY%'
+		'%COMPUTERNAME%'
+		'%USERNAME%'
+		'%PASSWORD%'
+		'%DOMAINNAME%'
+		'%ORGANIZATIONALUNIT%'
+	)
 )
 
 Begin {
@@ -267,8 +262,8 @@ Begin {
 }
 
 Process {
-	# if staging path provided and reuse staging path not set...
-	If ($StagingPath -and -not $ReuseStagingPath) {
+	# if reuse staging path not set...
+	If (!$ReuseStagingPath) {
 		# report state
 		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Mounting ISO image', $PathToOriginalIsoImage
 
@@ -316,11 +311,12 @@ Process {
 
 		# clear readonly flag on windows image
 		Try {
-		(Get-Item -Path $ImagePathForWIM).IsReadOnly = $false
+			Set-ItemProperty -Path $ImagePathForWIM -Name 'IsReadOnly' -Value $false
 		}
 		Catch {
 			Return $_
 		}
+
 
 		# report state
 		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Mounting WIM image', $ImagePathForWIM
@@ -369,27 +365,46 @@ Process {
 			Return $_
 		}
 
-		# report state
-		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating ISO contents with unattend file for sysprep', $AutounattendXmlOnISO
+		# if autounattend file provided...
+		If ($PSBoundParameters.ContainsKey('PathToAutounattendFile')) {
+			# report state
+			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating ISO contents with unattend file for sysprep', $AutounattendXmlOnISO
 
-		# get contents of unattend file
-		Try {
-			$Content = Get-Content -Path $PathToAutounattendFile -Raw
-		}
-		Catch {
-			Return $_
-		}
+			# get contents of unattend file
+			Try {
+				$Content = Get-Content -Path $PathToAutounattendFile -Raw
+			}
+			Catch {
+				Return $_
+			}
 
-		# update content with index and product key
-		$Content = $Content.Replace('%INDEX%', $Index)
-		$Content = $Content.Replace('%PRODUCTKEY%', $ProductKey)
+			# loop through unattend parameter strings
+			ForEach ($ExpandString in $ExpandStringsForUnattendFiles) {
+				# while content contains XML element with expand string as value...
+				While ($Content -match "<\w*>$ExpandString</\w*>") {
+					# retrieve original XML element
+					$OriginalString = $Matches[0]
+					# if expand string and value provided parameters...
+					If ($UnattendExpandStrings.ContainsKey($ExpandString)) {
+						# replace the expand string with the provided value
+						$ModifiedString = $OriginalString -replace $ExpandString, $UnattendExpandStrings[$ExpandString]
+					}
+					Else {
+						# comment out the original XML element
+						$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace "%")
+					}
+					# replace original XML element with modified XML element
+					$Content = $Content -replace $OriginalString, $ModifiedString
+				}
+			}
 
-		# add unattend file to ISO
-		Try {
-			$Content | Set-Content -Path $AutounattendXmlOnISO
-		}
-		Catch {
-			Return $_
+			# add unattend file to ISO
+			Try {
+				$Content | Set-Content -Path $AutounattendXmlOnISO
+			}
+			Catch {
+				Return $_
+			}
 		}
 
 		# if unattend file provided...
@@ -405,8 +420,25 @@ Process {
 				Return $_
 			}
 
-			# update content with index and product key
-			$Content = $Content.Replace('%PRODUCTKEY%', $ProductKey)
+			# loop through unattend parameter strings
+			ForEach ($ExpandString in $ExpandStringsForUnattendFiles) {
+				# while content contains XML element with expand string as value...
+				While ($Content -match "<\w*>$ExpandString</\w*>") {
+					# retrieve original XML element
+					$OriginalString = $Matches[0]
+					# if expand string and value provided parameters...
+					If ($UnattendExpandStrings.ContainsKey($ExpandString)) {
+						# replace the expand string with the provided value
+						$ModifiedString = $OriginalString -replace $ExpandString, $UnattendExpandStrings[$ExpandString]
+					}
+					Else {
+						# comment out the original XML element
+						$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace "%")
+					}
+					# replace original XML element with modified XML element
+					$Content = $Content -replace $OriginalString, $ModifiedString
+				}
+			}
 
 			# add unattend file to ISO
 			Try {

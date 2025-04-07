@@ -1,18 +1,18 @@
 <#
 .SYNOPSIS
-Create a bootable Windows installer USB drive from a Windows ISO image.
+Create a bootable USB drive from a Windows ISO image.
 
 .DESCRIPTION
-Create a bootable Windows installer USB drive from a Windows ISO image.
+Create a bootable USB drive from a Windows ISO image.
 
 .PARAMETER PathToOriginalIsoImage
 Path to the original Windows ISO image.
 
 .PARAMETER DriveLetter
-Path for the updated Windows ISO image.
+Character for the drive letter of an existing volume on the USB drive.
 
-.PARAMETER DiskNumber
-Path for the updated Windows ISO image.
+.PARAMETER Number
+Integer for the disk number of the USB drive.
 
 .PARAMETER PathToAutounattendFile
 Path to autounattend XML file to add to Windows ISO image. The file will be saved as 'Autounattend.xml' at the root of the ISO file system. This file must enter the auditUser pass and call the update and invoke scripts during the auditUser pass.
@@ -41,14 +41,14 @@ Switch parameter to use any existing files and folders in the StagingPath folder
 .PARAMETER SkipExclude
 Switch parameter to skip creating Microsoft Defender path exclusion for the staging path.
 
-x.PARAMETER FileSystem
+.PARAMETER SkipWrite
+Switch parameter to skip writing updated Windows ISO contents to the USB drive.
+
+.PARAMETER FileSystem
 String with file system to apply to USB drive. The default value is "NTFS" and the value must be "NTFS" or "FAT32".
 
-.PARAMETER ProductKey
-String with product key for the Windows image. The default value is the KMS key for Windows Server 2025 Datacenter.
-
-.PARAMETER Index
-Integer for index of Windows image. The default value is 4 which maps to the Datacenter with Desktop Experience for Windows Server 2016 and later.
+.PARAMETER UnattendExpandStrings
+Hashtable of expand strings and values for autounattend and unattend XML files
 
 .INPUTS
 None.
@@ -56,52 +56,56 @@ None.
 .OUTPUTS
 None. The function does not generate any output.
 
-.LINK
-https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nn-wuapi-iinstallationresult
-
-.LINK
-https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatesearcher-search
-
-.LINK
-https://learn.microsoft.com/en-us/windows/win32/api/wuapi/ne-wuapi-operationresultcode
-
-.LINK
-https://learn.microsoft.com/en-us/windows/win32/wua_sdk/searching--downloading--and-installing-updates
-
-.LINK
-https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-deployment-runsynchronous-runsynchronouscommand-willreboot
-
-.LINK
-https://learn.microsoft.com/en-us/windows-server/get-started/kms-client-activation-keys
-
-.LINK
-https://learn.microsoft.com/en-us/windows-server/get-started/automatic-vm-activation
-
 #>
 
 Param(
-	[Parameter(Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter(Position = 0, Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToOriginalIsoImage,
+	[Parameter(Position = 1)]
 	[string]$DriveLetter,
-	[uint32]$DiskNumber,
-	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter(Position = 2)]
+	[uint32]$Number,
+	[Parameter(Position = 3)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToAutounattendFile,
-	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter(Position = 4)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToUnattendFile,
-	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter(Position = 5)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToUpdateScript,
-	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter(Position = 6)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToInvokeScript,
-	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[Parameter(Position = 7)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$PathToScriptFolder,
-	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[Parameter(Position = 8)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[string]$PathToBinaryFolder,
+	[Parameter(Position = 9, ParameterSetName = 'StagingPath', Mandatory = $true)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$StagingPath,
+	[Parameter(Position = 10, ParameterSetName = 'StagingPath')]
 	[switch]$EmptyStagingPath,
+	[Parameter(Position = 11, ParameterSetName = 'StagingPath')]
 	[switch]$ReuseStagingPath,
+	[Parameter(Position = 12, ParameterSetName = 'StagingPath')]
+	[switch]$SkipWrite,
+	[Parameter(Position = 13)]
 	[switch]$SkipExclude,
+	[Parameter(Position = 14)]
 	[string]$FileSystem = 'NTFS',
-	[string]$ProductKey = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF',
-	[uint16]$Index = 4
+	[Parameter(Position = 15)]
+	[hashtable]$UnattendExpandStrings = @{
+		'%INDEX%'      = 4
+		'%PRODUCTKEY%' = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF'
+	},
+	[Parameter(DontShow)]
+	[string[]]$ExpandStringsForUnattendFiles = @(
+		'%INDEX%'
+		'%PRODUCTKEY%'
+		'%TIMEZONE%'
+		'%COMPUTERNAME%'
+		'%USERNAME%'
+		'%PASSWORD%'
+		'%DOMAINNAME%'
+		'%ORGANIZATIONALUNIT%'
+		'%ADMINISTRATORPASSWORD%'
+	)
 )
 
 Begin {
@@ -292,14 +296,14 @@ Process {
 			Return
 		}
 	}
-	# if drive letter provided...
-	ElseIf ($DiskNumber) {
+	# if disk number provided...
+	ElseIf ($Number) {
 		# retrieve USB disk by disk number
-		$Disk = $Disks | Where-Object { $_.BusType -eq 'USB' -and $_.Number -eq $DiskNumber }
+		$Disk = $Disks | Where-Object { $_.BusType -eq 'USB' -and $_.Number -eq $Number }
 
 		# if disk with disk number not found...
 		If ($null -eq $Disk) {
-			Write-Warning -Message 'no USB disks found with '$DiskNumber' disk number, exiting!'
+			Write-Warning -Message 'no USB disks found with '$Number' disk number, exiting!'
 			Return
 		}
 	}
@@ -315,7 +319,7 @@ Process {
 
 			# if disk count is greater than 1...
 			If ((Measure-Object -InputObject $Disk).Count -gt 1) {
-				Write-Warning -Message 'multiple removable volumes on USB disks found, use DriveLetter or DiskNumber parameter to define a specific volume or disk, exiting!'
+				Write-Warning -Message 'multiple removable volumes on USB disks found, use the DriveLetter or Number parameter to define a specific volume or disk, exiting!'
 				Return
 			}
 
@@ -333,7 +337,7 @@ Process {
 
 			# if disk count is greater than 1...
 			If ((Measure-Object -InputObject $Disk).Count -gt 1) {
-				Write-Warning -Message 'multiple USB disks found, use DiskNumber parameter to define a specific disk, exiting!'
+				Write-Warning -Message 'multiple USB disks found, use the Number parameter from the Get-Disk command to define a specific disk, exiting!'
 				Return
 			}
 
@@ -345,14 +349,13 @@ Process {
 		}
 	}
 
-	# if disk found...
-	If ($null -ne $Disk) {
-		# report state
-		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Found USB disk', $Disk.Number
-	}
+	# report state
+	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Found USB disk', $Disk.Number
 
-	# if staging path provided and reuse staging path not set...
-	If ($StagingPath -and -not $ReuseStagingPath) {
+	# test disk for multiple volumes or partitions
+
+	# if reuse staging path not set...
+	If (!$ReuseStagingPath) {
 		# report state
 		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Mounting ISO image', $PathToOriginalIsoImage
 
@@ -398,16 +401,16 @@ Process {
 			Return $_
 		}
 
-		# clear readonly flag on windows image
-		Try {
-		(Get-Item -Path $ImagePathForWIM).IsReadOnly = $false
-		}
-		Catch {
-			Return $_
-		}
-
 		# if scripts provided...
 		If ($PathToInvokeScript -or $PathToUpdateScript) {
+			# clear readonly flag on windows image
+			Try {
+				Set-ItemProperty -Path $ImagePathForWIM -Name 'IsReadOnly' -Value $false
+			}
+			Catch {
+				Return $_
+			}
+
 			# report state
 			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Mounting WIM image', $ImagePathForWIM
 
@@ -494,9 +497,31 @@ Process {
 				Return $_
 			}
 
-			# update content with index and product key
-			$Content = $Content.Replace('%INDEX%', $Index)
-			$Content = $Content.Replace('%PRODUCTKEY%', $ProductKey)
+			# loop through unattend parameter strings
+			ForEach ($ExpandString in $ExpandStringsForUnattendFiles) {
+				# while content contains XML element with expand string as value...
+				While ($Content -match "<\w*>$ExpandString</\w*>") {
+					# retrieve original XML element
+					$OriginalString = $Matches[0]
+					# if expand string and value provided parameters...
+					If ($UnattendExpandStrings.ContainsKey($ExpandString)) {
+						# replace the expand string with the provided value
+						$ModifiedString = $OriginalString -replace $ExpandString, $UnattendExpandStrings[$ExpandString]
+
+						# report state
+						"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Replaced expand string in unattend file for sysprep', $ExpandString
+					}
+					Else {
+						# comment out the original XML element
+						$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace '%')
+
+						# report state
+						"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Excluded expand string in unattend file for sysprep', $ExpandString
+					}
+					# replace original XML element with modified XML element
+					$Content = $Content -replace $OriginalString, $ModifiedString
+				}
+			}
 
 			# add unattend file to ISO
 			Try {
@@ -520,8 +545,31 @@ Process {
 				Return $_
 			}
 
-			# update content with index and product key
-			$Content = $Content.Replace('%PRODUCTKEY%', $ProductKey)
+			# loop through unattend parameter strings
+			ForEach ($ExpandString in $ExpandStringsForUnattendFiles) {
+				# while content contains XML element with expand string as value...
+				While ($Content -match "<\w*>$ExpandString</\w*>") {
+					# retrieve original XML element
+					$OriginalString = $Matches[0]
+					# if expand string and value provided parameters...
+					If ($UnattendExpandStrings.ContainsKey($ExpandString)) {
+						# replace the expand string with the provided value
+						$ModifiedString = $OriginalString -replace $ExpandString, $UnattendExpandStrings[$ExpandString]
+
+						# report state
+						"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Replaced expand string in unattend file for install', $ExpandString
+					}
+					Else {
+						# comment out the original XML element
+						$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace '%')
+
+						# report state
+						"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Excluded expand string in unattend file for install', $ExpandString
+					}
+					# replace original XML element with modified XML element
+					$Content = $Content -replace $OriginalString, $ModifiedString
+				}
+			}
 
 			# add unattend file to ISO
 			Try {
@@ -531,6 +579,12 @@ Process {
 				Return $_
 			}
 		}
+	}
+
+	# if skip write requested...
+	If ($SkipWrite) {
+		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Skipping write to USB drive'
+		Return
 	}
 
 	# report state
@@ -543,21 +597,50 @@ Process {
 	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Partitioning USB drive', $Disk.Number
 
 	# configure disk
-	$Disk | Set-Disk -PartitionStyle GPT
+	Try {
+		$Disk | Set-Disk -PartitionStyle GPT
+	}
+	Catch {
+		Return $_
+	}
+
+	# define empty parameters for New-Partition
+	$NewPartition = @{}
+	
+	# if disk is larger than 32GB...
+	If ($Disk.Size -gt 32GB) {
+		$NewPartition['Size'] = 32GB
+	}
+	Else {
+		$NewPartition['UseMaximumSize'] = $true
+	}
 
 	# if drive letter provided...
 	If ($DriveLetter) {
-		$Partition = $Disk | New-Partition -Size 16GB -DriveLetter $DriveLetter
+		$NewPartition['DriveLetter'] = $DriveLetter
 	}
 	Else { 
-		$Partition = $Disk | New-Partition -Size 16GB -AssignDriveLetter
+		$NewPartition['AssignDriveLetter'] = $true
+	}
+
+	# create partition
+	Try {
+		$Partition = $Disk | New-Partition @NewPartition
+	}
+	Catch {
+		Return $_
 	}
 
 	# report state
 	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Formatting USB drive with file system', $FileSystem
 
 	# partition and format disk
-	$Volume = $Partition | Format-Volume -FileSystem $FileSystem -NewFileSystemLabel $FileSystemLabel
+	Try {
+		$Volume = $Partition | Format-Volume -FileSystem $FileSystem -NewFileSystemLabel $FileSystemLabel
+	}
+	Catch {
+		Return $_
+	}
 
 	# report state
 	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Copying ISO contents to USB drive', $Volume.DriveLetter
