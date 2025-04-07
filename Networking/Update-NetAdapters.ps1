@@ -77,7 +77,7 @@ If ($Rename) {
 		# if slot number found...
 		If (![System.String]::IsNullOrEmpty($NetAdapterHardwareInfo.SlotNumber)) {
 			# build the new name from slot and port information
-			$NewName = 'Slot {0} Port {0}' -f $NetAdapterHardwareInfo.SlotNumber, ($NetAdapterHardwareInfo.FunctionNumber + 1)
+			$NewName = 'Slot {0} Port {1}' -f $NetAdapterHardwareInfo.SlotNumber, ($NetAdapterHardwareInfo.FunctionNumber + 1)
 			$RenameSource = 'slot/port number'
 		}
  
