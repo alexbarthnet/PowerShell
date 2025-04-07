@@ -1,17 +1,19 @@
 [CmdletBinding()]
 Param(
     [Parameter(DontShow)]
-    $ComputerSystem = (Get-CimInstance -ClassName Win32_ComputerSystem),
+    [string]$ComputerSystem = (Get-CimInstance -ClassName Win32_ComputerSystem),
     [Parameter(DontShow)]
-    $ComputerName = $ComputerSystem.Name,
+    [string]$ComputerName = $ComputerSystem.Name,
     [Parameter(DontShow)]
-    $DomainName = $ComputerSystem.Domain,
+    [string]$DomainName = $ComputerSystem.Domain,
     [Parameter(Position = 0, Mandatory)]
-    $GroupName,
+    [string]$GroupName,
     [Parameter(Position = 1, Mandatory)]
-    $ContentPath,
+    [string]$ContentPath,
     [Parameter(Position = 2)]
-    $AccountName
+    [string]$AccountName,
+    [Parameter(Position = 3)]
+    [switch]$ForcePrimaryMember
 )
 
 # import module
@@ -20,35 +22,69 @@ Import-Module -Name ServerManager
 # install feature
 $WindowsFeature = Install-WindowsFeature -Name 'FS-DFS-Replication' -IncludeManagementTools
 
-# restart service if feature installed
-If ($WindowsFeature.ExitCode -eq 'Success') { Restart-Service -Name 'DFSR' }
+# if feature installed...
+If ($WindowsFeature.ExitCode -eq 'Success') {
+    # restart service to address WMI issues
+    Restart-Service -Name 'DFSR'
+}
 
 # define common parameters
 $Dfsr = @{ DomainName = $DomainName; GroupName = $GroupName }
 
 # create content path if not found
-If (![System.IO.Directory]::Exists($ContentPath)) { New-Item -ItemType 'Directory' -Path $ContentPath }
+If (![System.IO.Directory]::Exists($ContentPath)) { 
+    $null = [System.IO.Directory]::CreateDirectory($ContentPath)
+}
 
-# retrieve existing DFS replication groups
+# retrieve existing DFSR groups
 $DfsReplicationGroup = Get-DfsReplicationGroup @Dfsr
 
-# create the DFS replication group and folder if necessary
-If (!$DfsReplicationGroup) { New-DfsReplicationGroup @Dfsr; New-DfsReplicatedFolder @Dfsr -FolderName $GroupName }
+# if DFSR group not found...
+If (!$DfsReplicationGroup) { 
+    # create DFSR group
+    New-DfsReplicationGroup @Dfsr
 
-# delegate permissions to the DFSR group if necessary
-If ($AccountName) { Grant-DfsrDelegation @Dfsr -AccountName $AccountName -Force }
+    # create DFSR folder
+    New-DfsReplicatedFolder @Dfsr -FolderName $GroupName
+}
+
+# if account name provided
+If ($AccountName) {
+    # delegate permissions to the DFSR group if necessary
+    Grant-DfsrDelegation @Dfsr -AccountName $AccountName -Force
+}
 
 # retrieve DFS members and split into former and current members
 $DfsrFormerMembers, $DfsrMembers = (Get-DfsrMember @Dfsr).Where({ [string]::IsNullOrEmpty($_.ComputerName) }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
 
-# set primary member is group has no members or if current computer is only member
-If ($DfsrMembers.Count -eq 0) { $PrimaryMember = $true } ElseIf ($DfsrMembers.Count -eq 1 -and $DfsrMembers.ComputerName -eq $ComputerName) { $PrimaryMember = $true } Else { $PrimaryMember = $false }
+# if group has no members or force primary member was set...
+If ($DfsrMembers.Count -eq 0 -or $ForcePrimaryMember) {
+    # set primary member to true
+    $PrimaryMember = $true
+# if group has only computer as member...
+} ElseIf ($DfsrMembers.Count -eq 1 -and $DfsrMembers.ComputerName -eq $ComputerName) {
+    # set primary member to true
+    $PrimaryMember = $true
+# if group has multiple members...
+} Else {
+    # set primary member to false
+    $PrimaryMember = $false
+}
 
-# remove former members
-ForEach ($Guid in $DfsrFormerMembers.Identifier.Guid) { Start-Process -Wait -NoNewWindow -FilePath 'dfsradmin.exe' -ArgumentList 'mem', 'delete', "/RgName:$GroupName", "/MemGuid:$Guid" }
+# loop through former members
+ForEach ($Guid in $DfsrFormerMembers.Identifier.Guid) { 
+    # remove former members
+    Start-Process -Wait -NoNewWindow -FilePath 'dfsradmin.exe' -ArgumentList 'mem', 'delete', "/RgName:$GroupName", "/MemGuid:$Guid"
+}
 
-# join DFSR group is not a member
-If ($ComputerName -notin $DfsrMembers.ComputerName) { Add-DfsrMember @Dfsr -ComputerName $ComputerName; Start-Sleep -Seconds 30 }
+# if computer is not a member...
+If ($ComputerName -notin $DfsrMembers.ComputerName) { 
+    # join DFSR group
+    Add-DfsrMember @Dfsr -ComputerName $ComputerName
+
+    # allow 30 seconds for AD replication
+    Start-Sleep -Seconds 30
+}
 
 # retrieve connections from current computer
 $DfsrConnections = Get-DfsrConnection @Dfsr | Where-Object { $_.SourceComputerName -eq $ComputerName }
@@ -68,5 +104,20 @@ $NewDfsrConnections | Format-Table -Property GroupName, SourceComputerName, Dest
 # define local content path for DFSR membership
 Set-DfsrMembership @Dfsr -ComputerName $ComputerName -FolderName $GroupName -ContentPath $ContentPath -PrimaryMember $PrimaryMember -Force
 
-# refresh DFSR on computers with a new connection to current computer
-If (!$PrimaryMember -and $NewDfsrConnections) { Stop-Service -Name 'DFSR'; Start-Sleep -Seconds 30; $DestinationComputerNames | Update-DfsrConfigurationFromAD -Verbose; Start-Sleep -Seconds 30; Start-Service -Name 'DFSR' }
+# if new connections created and not primary member...
+If ($NewDfsrConnections -and -not $PrimaryMember) { 
+    # stop service on current computer
+    Stop-Service -Name 'DFSR'
+
+    # allow 30 seconds for AD replication
+    Start-Sleep -Seconds 30
+
+    # update configuration on remote computers
+    $DestinationComputerNames | Update-DfsrConfigurationFromAD -Verbose
+
+    # allow 30 seconds for service on remote computers to update
+    Start-Sleep -Seconds 30
+
+    # start service on current computer
+    Start-Service -Name 'DFSR'
+}
