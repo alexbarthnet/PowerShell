@@ -6,18 +6,19 @@ Param(
 )
 
 # retrieve network adapters with hardware interfaces to exclude virtual adapters
-$NetAdapters = Get-NetAdapter | Where-Object { $_.HardwareInterface } | Sort-Object InterfaceAlias
+$NetAdapters = Get-NetAdapter | Where-Object { $_.HardwareInterface } | Sort-Object InterfaceName
 
 # if interface aliases provided...
-$NetAdapters = $NetAdapters.Where({ $_.InterfaceAlias -in $InterfaceAlias })
+If ($InterfaceAlias) {
+	$NetAdapters = $NetAdapters.Where({ $_.InterfaceAlias -in $InterfaceAlias })	
+}
 
 # loop through network adapters
 :NextNetAdapter ForEach ($NetAdapter in $NetAdapters) {
 	# retrieve current interface guid and alias
+	$InterfaceName = $NetAdapter.Name
 	$InterfaceGuid = $NetAdapter.InterfaceGuid
 	$InterfaceIndex = $NetAdapter.InterfaceIndex
-	$InterfaceAlias = $NetAdapter.Name
-	
 
 	# if disable netbios requested...
 	If ($DisableNetbios) {
@@ -29,13 +30,13 @@ $NetAdapters = $NetAdapters.Where({ $_.InterfaceAlias -in $InterfaceAlias })
 			$Value = Get-ItemPropertyValue -Path $Path -Name 'NetbiosOptions' -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Error -Message "$InterfaceGuid; $InterfaceAlias; Could not retrieve NetBT setting for adapter: $($_.Exception.Message)"
+			Write-Error -Message "$InterfaceGuid; $InterfaceName; Could not retrieve NetBT setting for adapter: $($_.Exception.Message)"
 			Continue NextNetAdapter
 		}
 
 		# if NetBIOS transport already disabled...
 		If ($Value -eq 2) {
-			Write-Host "$InterfaceGuid; $InterfaceAlias; Found NetBT already disabled on adapter"
+			Write-Host "$InterfaceGuid; $InterfaceName; Found NetBT already disabled on adapter"
 			Continue NextNetAdapter
 		}
 
@@ -44,12 +45,12 @@ $NetAdapters = $NetAdapters.Where({ $_.InterfaceAlias -in $InterfaceAlias })
 			Set-ItemProperty -Path $Path -Name 'NetbiosOptions' -Value 2 -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "$InterfaceGuid; $InterfaceAlias; Could not disable NetBT on adapter: $($_.Exception.Message)"
+			Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not disable NetBT on adapter: $($_.Exception.Message)"
 			Continue NextNetAdapter
 		}
 
 		# report state
-		Write-Host "$InterfaceGuid; $InterfaceAlias; Disabled NetBT on adapter"
+		Write-Host "$InterfaceGuid; $InterfaceName; Disabled NetBT on adapter"
 	}
 
 	# if rename requested...
@@ -96,13 +97,13 @@ $NetAdapters = $NetAdapters.Where({ $_.InterfaceAlias -in $InterfaceAlias })
 
 		# if new name not generated...
 		If ([System.String]::IsNullOrEmpty($NewName)) {
-			Write-Host "$InterfaceGuid; $InterfaceAlias; Skipped renaming adapter: could not generate name"
+			Write-Host "$InterfaceGuid; $InterfaceName; Skipped renaming adapter: could not generate name"
 			Continue NextNetAdapter
 		}
 
 		# if new name matches current name...
 		If ($NewName -eq $NetAdapter.Name) { 
-			Write-Host "$InterfaceGuid; $InterfaceAlias; Skipped renaming adapter: generated name matches current name"
+			Write-Host "$InterfaceGuid; $InterfaceName; Skipped renaming adapter: generated name matches current name"
 			Continue NextNetAdapter
 		}
 
@@ -111,11 +112,11 @@ $NetAdapters = $NetAdapters.Where({ $_.InterfaceAlias -in $InterfaceAlias })
 			Rename-NetAdapter -InterfaceIndex $InterfaceIndex -NewName $NewName
 		}
 		Catch {
-			Write-Error -Message "$InterfaceGuid; $InterfaceAlias; Could not rename adapter: $($_.Exception.Message)"
+			Write-Error -Message "$InterfaceGuid; $InterfaceName; Could not rename adapter: $($_.Exception.Message)"
 			Continue NextNetAdapter
 		}
 
 		# report state
-		Write-Host "$InterfaceGuid; $InterfaceAlias; Renamed adapter to '$NewName' from $RenameSource"
+		Write-Host "$InterfaceGuid; $InterfaceName; Renamed adapter to '$NewName' from $RenameSource"
 	}
 }
