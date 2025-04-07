@@ -20,6 +20,9 @@ If ($InterfaceAlias) {
 	$InterfaceGuid = $NetAdapter.InterfaceGuid
 	$InterfaceIndex = $NetAdapter.InterfaceIndex
 
+	# declare adapter
+	Write-Host "$InterfaceGuid; $InterfaceName; Found adapter"
+
 	# if disable netbios requested...
 	If ($DisableNetbios) {
 		# define path to NetBT interface from interface guid
