@@ -15,9 +15,8 @@ If ($InterfaceAlias) {
 
 # if disable netbios requested...
 If ($DisableNetbios) {
-
 	# loop through network adapters
-	:NextNetAdapter ForEach ($NetAdapter in $NetAdapters) {
+	:NextNetAdapterForDisableNetbios ForEach ($NetAdapter in $NetAdapters) {
 		# retrieve current interface guid and alias
 		$InterfaceName = $NetAdapter.Name
 		$InterfaceGuid = $NetAdapter.InterfaceGuid
@@ -31,13 +30,13 @@ If ($DisableNetbios) {
 		}
 		Catch {
 			Write-Error -Message "$InterfaceGuid; $InterfaceName; Could not retrieve NetBT setting for adapter: $($_.Exception.Message)"
-			Continue NextNetAdapter
+			Continue NextNetAdapterForDisableNetbios
 		}
 
 		# if NetBIOS transport already disabled...
 		If ($Value -eq 2) {
 			Write-Host "$InterfaceGuid; $InterfaceName; Found NetBT already disabled on adapter"
-			Continue NextNetAdapter
+			Continue NextNetAdapterForDisableNetbios
 		}
 
 		# disable NetBIOS transport
@@ -46,7 +45,7 @@ If ($DisableNetbios) {
 		}
 		Catch {
 			Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not disable NetBT on adapter: $($_.Exception.Message)"
-			Continue NextNetAdapter
+			Continue NextNetAdapterForDisableNetbios
 		}
 
 		# report state
@@ -57,7 +56,7 @@ If ($DisableNetbios) {
 # if rename requested...
 If ($Rename) {
 	# loop through network adapters
-	:NextNetAdapter ForEach ($NetAdapter in $NetAdapters) {
+	:NextNetAdapterForRename ForEach ($NetAdapter in $NetAdapters) {
 		# retrieve current interface guid and alias
 		$InterfaceName = $NetAdapter.Name
 		$InterfaceGuid = $NetAdapter.InterfaceGuid
@@ -105,13 +104,13 @@ If ($Rename) {
 		# if new name not generated...
 		If ([System.String]::IsNullOrEmpty($NewName)) {
 			Write-Host "$InterfaceGuid; $InterfaceName; Skipped renaming adapter: could not generate name"
-			Continue NextNetAdapter
+			Continue NextNetAdapterForRename
 		}
 
 		# if new name matches current name...
 		If ($NewName -eq $NetAdapter.Name) { 
 			Write-Host "$InterfaceGuid; $InterfaceName; Skipped renaming adapter: generated name matches current name"
-			Continue NextNetAdapter
+			Continue NextNetAdapterForRename
 		}
 
 		# rename network adapter
@@ -120,7 +119,7 @@ If ($Rename) {
 		}
 		Catch {
 			Write-Error -Message "$InterfaceGuid; $InterfaceName; Could not rename adapter: $($_.Exception.Message)"
-			Continue NextNetAdapter
+			Continue NextNetAdapterForRename
 		}
 
 		# report state
