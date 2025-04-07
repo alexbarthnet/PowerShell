@@ -13,18 +13,15 @@ If ($InterfaceAlias) {
 	$NetAdapters = $NetAdapters.Where({ $_.InterfaceAlias -in $InterfaceAlias })	
 }
 
-# loop through network adapters
-:NextNetAdapter ForEach ($NetAdapter in $NetAdapters) {
-	# retrieve current interface guid and alias
-	$InterfaceName = $NetAdapter.Name
-	$InterfaceGuid = $NetAdapter.InterfaceGuid
-	$InterfaceIndex = $NetAdapter.InterfaceIndex
+# if disable netbios requested...
+If ($DisableNetbios) {
 
-	# declare adapter
-	Write-Host "$InterfaceGuid; $InterfaceName; Found adapter"
+	# loop through network adapters
+	:NextNetAdapter ForEach ($NetAdapter in $NetAdapters) {
+		# retrieve current interface guid and alias
+		$InterfaceName = $NetAdapter.Name
+		$InterfaceGuid = $NetAdapter.InterfaceGuid
 
-	# if disable netbios requested...
-	If ($DisableNetbios) {
 		# define path to NetBT interface from interface guid
 		$Path = 'HKLM:SYSTEM\CurrentControlSet\services\NetBT\Parameters\Interfaces\Tcpip_{0}' -f $InterfaceGuid
 
@@ -55,9 +52,16 @@ If ($InterfaceAlias) {
 		# report state
 		Write-Host "$InterfaceGuid; $InterfaceName; Disabled NetBT on adapter"
 	}
+}
 
-	# if rename requested...
-	If ($Rename) {
+# if rename requested...
+If ($Rename) {
+	# loop through network adapters
+	:NextNetAdapter ForEach ($NetAdapter in $NetAdapters) {
+		# retrieve current interface guid and alias
+		$InterfaceName = $NetAdapter.Name
+		$InterfaceGuid = $NetAdapter.InterfaceGuid
+
 		# set base names
 		$NewName = $null
 
