@@ -241,10 +241,10 @@ Begin {
 		# define default folder path
 		$PathToBinaryFolder = Join-Path -Path ([System.Environment]::GetFolderPath('ProgramFilesx86')) -ChildPath '\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg'
 	}
-	
+
 	# define path to required program
 	$FilePath = Join-Path -Path $PathToBinaryFolder -ChildPath 'oscdimg.exe'
-	
+
 	# validate application path
 	Try {
 		$null = Get-Item -Path $FilePath
@@ -524,7 +524,7 @@ End {
 			Write-Warning -Message "could not remove exclusion for temporary path: $StagingPath"
 		}
 	}
-	
+
 	# if TemporaryFolder created...
 	If ([System.IO.Directory]::Exists($script:TemporaryFolder)) {
 		# remove temporary folder and all child items
