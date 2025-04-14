@@ -3,158 +3,190 @@ Param(
 	[string]$Identity,
 	[switch]$ClearHiddenItemsFromEmptyFolders,
 	[switch]$CreateMissingFolders,
-	[string[]]$ExcludeOneDriveFolders
+	[string[]]$ExcludeOneDriveFolders,
+	[string[]]$IncludeOneDriveFolders
 )
 
-# buffer output
-Write-Output "`n"
+# if identity provided...
+If ($PSBoundParameters.ContainsKey('Identity')) {
+	# report state
+	Write-Host 'Searching for OneDrive container where name matches the Identity parameter...'
 
-# get the OneDrive path(s) so we can filter which path(s) to junction
-$onedrive_directory = $null
-If ([string]::IsNullOrEmpty($Identity)) {
-	Write-Output ('Searching for OneDrive directory...')
-	$onedrive_directory = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object { $_.Name -match 'OneDrive' }
+	# define filter script
+	$FilterScript = { $_.Name -match '^OneDrive - ' -and $_.Name -match $Identity }
 }
 Else {
-	Write-Output ('Searching for OneDrive directory where name matches the Identity parameter...')
-	$onedrive_directory = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object { $_.Name -match 'OneDrive - ' -and $_.Name -match $Identity }
+	# report state
+	Write-Host 'Searching for OneDrive container...'
+
+	# define filter script
+	$FilterScript = { $_.Name -match '^OneDrive' }
 }
 
-# test for 0 (can't junction) or 2+ (can't determine which to junction) OneDrive directories
-switch (($onedrive_directory).Count) {
-	1 { Write-Output ('...found the OneDrive directory: ' + $onedrive_directory.FullName) }
-	0 { Write-Output ('...found no OneDrive directories; exiting!'); Return }
-	Default {
-		If ([string]::IsNullOrEmpty($Identity)) {
-			Write-Output ('...found multiple OneDrive directories; the Identity parameter was not provided to limit scope to single directory, exiting!')
-			Return
-		}
-		Else {
-			Write-Output ('...found multiple OneDrive directories; the Identity parameter did not limit scope to single directory, exiting!')
-			Return
-		}
-	}
+# retrieve OneDrice container(s) matching filterscript
+Try {
+	$OneDrive = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object -FilterScript $FilterScript
+}
+Catch {
+	Return $_
 }
 
-# buffer output
-Write-Output "`n"
-Write-Output ('-----')
+# if multiple OneDrive containers found with Identity...
+If ($OneDrive.Count -gt 1 -and $PSBoundParameters.ContainsKey('Identity')) {
+	Write-Warning -Message 'multiple OneDrive containers found in the user profile folder; the Identity parameter did not limit scope to single container'
+	Return
+}
 
-# retrieve directories in OneDrive directory
-$folders_onedrive = Get-ChildItem -Path $onedrive_directory.FullName | Where-Object { $_.PSIsContainer }
+# if multiple OneDrive containers found without Identity...
+If ($OneDrive.Count -gt 1) {
+	Write-Warning -Message 'multiple OneDrive containers found in the user profile folder; the Identity parameter was not provided to limit scope to single container'
+	Return
+}
 
-# loop through directories inside OneDrive directory
-:folder ForEach ($folder_onedrive in $folders_onedrive) {
+# if no OneDrive containers found....
+If ($OneDrive.Count -eq 0) {
+	Write-Warning -Message 'a OneDrive container was not found in the user profile folder'
+	Return
+}
+
+# report OneDrive container:
+Write-Host "...found OneDrive container: $($OneDrive.FullName)"
+
+# retrieve folders in OneDrive container
+Try {
+	$OneDriveFolders = $OneDrive | Get-ChildItem -Directory
+}
+Catch {
+	Return $_
+}
+
+# loop through folders in OneDrive container
+:NextOneDriveFolder ForEach ($OneDriveFolder in $OneDriveFolders) {
 	# define variables and declare folder
-	$folder_hidden = @()
-	$folder_short = ($folder_onedrive.BaseName)
-	$folder_cloud = ($folder_onedrive.FullName)
-	$folder_local = ($env:USERPROFILE + '\' + $folder_short)
-	Write-Output (' ')
-	Write-Output ("Found OneDrive folder: '" + $folder_cloud + "'")
+	$OneDriveFolderBaseName = $OneDriveFolder.BaseName
+	$OneDriveFolderFullName = $OneDriveFolder.FullName
+	$ExistingFolderFullName = Join-Path -Path $env:USERPROFILE -ChildPath $OneDriveFolderBaseName
 
-	# check if folder short name matches the block list
-	If ($folder_short -in $ExcludeOneDriveFolders) {
-		Write-Output ("...'" + $folder_short + "' skipped; folder name is blocked")
-		Continue :folder
+	# report state
+	Write-Host "Found OneDrive folder: $OneDriveFolderBaseName"
+
+	# if include folders provided...
+	If ($PSBoundParameters.ContainsKey('IncludeOneDriveFolders')) {
+		# check if OneDrive folder base name matches the include list
+		If ($OneDriveFolderBaseName -notin $IncludeOneDriveFolders -and $OneDriveFolderFullName -notin $IncludeOneDriveFolders -and $ExistingFolderFullName -notin $IncludeOneDriveFolders) {
+			Write-Host "...skipped '$OneDriveFolderBaseName' folder; folder name is not in IncludeOneDriveFolders"
+			Continue NextOneDriveFolder
+		}
 	}
 
-	# check if folder path in OneDrive matches the block list
-	If ($folder_cloud -in $ExcludeOneDriveFolders) {
-		Write-Output ("...'" + $folder_cloud + "' skipped; folder name is blocked")
-		Continue :folder
+	# check if OneDrive folder base name matches the exclude list
+	If ($OneDriveFolderBaseName -in $ExcludeOneDriveFolders -or $OneDriveFolderFullName -in $ExcludeOneDriveFolders -or $ExistingFolderFullName -in $ExcludeOneDriveFolders) {
+		Write-Host "...skipped '$OneDriveFolderBaseName' folder; folder name is in ExcludeOneDriveFolders"
+		Continue NextOneDriveFolder
 	}
 
-	# check if folder path on machine matches the block list
-	If ($folder_local -in $ExcludeOneDriveFolders) {
-		Write-Output ("...'" + $folder_local + "' skipped; folder name is blocked")
-		Continue :folder
+	# if existing folder not found...
+	If (![System.IO.Directory]::Exists($ExistingFolderFullName)) {
+		# if CreateMissingFolders requested...
+		If ($CreateMissingFolders) {
+			Write-Host  "...will create '$OneDriveFolderBaseName' folder; folder does not exist locally but CreateMissingFolders was set"
+		}
+		# if CreateMissingFolders not requested...
+		Else {
+			Write-Host  "...skipped '$OneDriveFolderBaseName' folder; folder does not exist locally and CreateMissingFolders was not set"
+			Continue NextOneDriveFolder
+		}
 	}
 
-	# if OneDrive folder exists locally...
-	If (Test-Path $folder_local) {
-		# check if current folder is already junctioned
-		If ((Get-Item -Path $folder_local).LinkType -eq 'Junction') {
-			Write-Output ("...'$folder_local' skipped; folder already junctioned")
-			Continue :folder
+	# if existing folder found...
+	If ([System.IO.Directory]::Exists($ExistingFolderFullName)) {
+		# retrieve existing folder
+		Try {
+			$ExistingFolder = Get-Item -Path $ExistingFolderFullName
+		}
+		Catch {
+			Write-Warning -Message "...skipped '$OneDriveFolderBaseName' folder; could not retrieve existing folder: $($_.Exception.Message)"
+			Continue NextOneDriveFolder
 		}
 
-		# check if current folder is empty
-		If ((Get-ChildItem -Path $folder_local -Recurse).Count -eq 0) {
-			# check if current folder contains hidden items
-			$folder_hidden = Get-ChildItem -Force -Path $folder_local
-			If ($folder_hidden.Count -gt 0 -and -not $ClearHiddenItemsFromEmptyFolders) {
-				Write-Output ("...'$folder_local' skipped; folder is empty but contains hidden items")
-				$HiddenItemsFound = $true
-				Continue
+		# check if current folder is already junctioned
+		If ($ExistingFolder.LinkType -eq 'Junction') {
+			Write-Host "...skipped '$OneDriveFolderBaseName' folder; existing folder already junctioned"
+			Continue NextOneDriveFolder
+		}
+
+		# retrieve all child items
+		Try {
+			$ChildItems = Get-ChildItem -Path $ExistingFolderFullName -Force -Recurse
+		}
+		Catch {
+			Write-Warning -Message "...skipped '$OneDriveFolderBaseName' folder; could not check existing folder for child items: $($_.Exception.Message)"
+			Continue NextOneDriveFolder
+		}
+
+		# if existing folder contains files that are not hidden...
+		If ($ChildItems.Where({ ($_.Attributes -band [System.IO.FileAttributes]::Hidden) -ne [System.IO.FileAttributes]::Hidden -and -not $_.PSIsContainer }).Count -gt 0) {
+			Write-Host "...skipped '$OneDriveFolderBaseName' folder: existing folder contains existing files"
+			Continue NextOneDriveFolder
+		}
+
+		# if existing folder contains files that are hidden...
+		If ($ChildItems.Where({ ($_.Attributes -band [System.IO.FileAttributes]::Hidden) -eq [System.IO.FileAttributes]::Hidden -and -not $_.PSIsContainer }).Count -gt 0) {
+			# if clear hidden items from empty folders not requested...
+			If (!$ClearHiddenItemsFromEmptyFolders) {
+				Write-Host "...skipped '$OneDriveFolderBaseName' folder: folder contains hidden files and ClearHiddenItemsFromEmptyFolders not set"
+				Continue NextOneDriveFolder
 			}
-			If ($folder_hidden.Count -gt 0) {
-				Write-Output ("...'$folder_local' is empty but contains hidden items, updating ACLs on hidden items...")
-				# retrieve current folder ACL
-				$folder_acl = Get-Acl $folder_local
-				# update ACLs on all hidden items in current folder
-				if ($PSCmdlet.ShouldProcess($folder_local, 'Remove hidden items')) {
-					ForEach ($item_hidden in $folder_hidden) {
-						# reset ACL
-						Try {
-							$item_hidden | Set-Acl -AclObject $folder_acl
-						}
-						Catch {
-							Write-Error "...'$folder_local' skipped; could not reset ACL on hidden item: $($item_hidden.FullName)"
-							Continue :folder
-						}
-					}
-					Write-Output ("...'$folder_local' hidden items updated, emptying directory...")
-					# remove item
+
+			# if what if not requested...
+			If ($PSCmdlet.ShouldProcess($ExistingFolderFullName, 'Update ACL on child items')) {
+				# retrieve ACL from existing folder
+				$AclObject = Get-Acl -Path $ExistingFolder
+
+				# reset ACL on each item
+				ForEach ($ChildItem in $ChildItems) {
+					# reset ACL
 					Try {
-						Get-ChildItem -Force -Recurse -Path $folder_local | Remove-Item -Force -Recurse
+						Set-Acl -Path $ChildItem.FullName -AclObject $AclObject -ErrorAction Stop
 					}
 					Catch {
-						Write-Error "...'$folder_local' skipped; could not remove hidden items"
-						Continue :folder
+						Write-Error "...skipped '$OneDriveFolderBaseName' folder; could not reset ACL on hidden item: $($ChildItem.FullName)"
+						Continue NextOneDriveFolder
 					}
-					Write-Output ("...'$folder_local' hidden items removed")
 				}
+
+				# report state
+				Write-Host "...updated hidden items in existing '$OneDriveFolderBaseName' folder, emptying existing folder..."
 			}
-		}
-		Else {
-			Write-Warning "...'$folder_local' directory is NOT empty, skipping!"
-			Continue :folder
-		}
-	}
-	# if OneDrive folder missing locally...
-	Else {
-		If ($CreateMissingFolders) {
-			Write-Output "...'$folder_local' will be created; folder does not exist locally but CreateMissingFolders was set"
-		}
-		Else {
-			Write-Output "...'$folder_local' skipped; folder does not exist locally and CreateMissingFolders was not set"
-			Continue :folder
+
+			# if what if not requested...
+			If ($PSCmdlet.ShouldProcess($ExistingFolderFullName, 'Remove child items')) {
+				# remove items
+				Try {
+					Get-ChildItem -Path $ExistingFolderFullName -Force -Recurse | Remove-Item -Force -Recurse
+				}
+				Catch {
+					Write-Error "...skipped '$OneDriveFolderBaseName' folder; could not remove hidden items"
+					Continue NextOneDriveFolder
+				}
+
+				# report state
+				Write-Host "...removed hidden items from existing '$OneDriveFolderBaseName' folder removed"
+			}
 		}
 	}
 
 	# create junction
-	Try {
-		if ($PSCmdlet.ShouldProcess($folder_local, 'Junction folder')) {
-			$null = New-Item -ItemType Junction -Path $folder_local -Target $folder_cloud
-			Write-Output ("...'$folder_local' junctioned!")
+	If ($PSCmdlet.ShouldProcess($ExistingFolderFullName, 'Junction folder')) {
+		Try {
+			$null = New-Item -ItemType Junction -Path $ExistingFolderFullName -Target $OneDriveFolderFullName
 		}
-	}
-	Catch {
-		Write-Error "...'$folder_local' skipped; could not junction"
+		Catch {
+			Write-Error "...skipped '$OneDriveFolderBaseName' folder; could not junction OneDrive folder to existing folder: $ExistingFolderFullName"
+			Continue NextOneDriveFolder
+		}
+
+		# report state
+		Write-Host "...junctioned '$OneDriveFolderBaseName' folder to '$ExistingFolderFullName' folder"
 	}
 }
-
-# inform user how to handle hidden items if encountered
-If ($HiddenItemsFound) {
-	Write-Output (' ')
-	Write-Output ('-----')
-	Write-Output (' ')
-	Write-Output ('One or more folders contain hidden items and could not be junctioned; use the -ClearHiddenItemsFromEmptyFoldersItemsFromEmptyFolders switch to permit the script to remove hidden items from otherwise empty folders')
-}
-
-# close out
-Write-Output (' ')
-Write-Output ('-----')
-Write-Output (' ')
-Write-Output ('All permitted OneDrive directories are now locally junctioned!')
