@@ -15,16 +15,25 @@ Character for the drive letter of an existing volume on the USB drive.
 Integer for the disk number of the USB drive.
 
 .PARAMETER PathToAutounattendFile
-Path to autounattend XML file to add to Windows ISO image. The file will be saved as 'Autounattend.xml' at the root of the ISO file system. This file must enter the auditUser pass and call the update and invoke scripts during the auditUser pass.
+Path to autounattend XML file to add to Windows ISO image. The file will be saved as 'Autounattend.xml' at the root of the ISO file system and will be executed by Windows Setup after booting from the ISO. The file should include the following passes and components:
+ - windowsPE pass and Microsoft-Windows-International-Core-WinPE component with the language settings for setup
+ - windowsPE pass Microsoft-Windows-Setup component with the UserData section to set the product key for setup and the DiskConfiguration section to partition and format the disks
+ - specialize pass and Microsoft-Windows-International-Core component with the language settings for the Windows installation
+ - specialize pass and Microsoft-Windows-Shell-Setup component with the product key for the Windows installation
+ - oobeSystem pass and Microsoft-Windows-Deployment component with the Reseal settings to enter the auditUser pass
+ - auditUser pass and Microsoft-Windows-Deployment component with the RunSynchronous settings to run the Update and Invoke scripts
+ - auditUser pass and Microsoft-Windows-Deployment component with the Generalize settings to generalize the image at the end of Windows setup
 
 .PARAMETER PathToUnattendFile
-Path to unattend XML file to add to Windows ISO image. The file will be saved as 'Unattend.xml' at the root of the ISO file system. This file is called when the autounattend file does not shutdown after the auditUser pass.
+Path to unattend XML file to add to Windows ISO image. The file will be saved as 'Unattend.xml' at the root of the ISO file system and will be executed by Windows Setup after generalization is complete. The file should include the following passes and components:
+ - oobeSystem pass and Microsoft-Windows-International-Core component with the language settings for the Windows installation
+ - oobeSystem pass and Microsoft-Windows-Shell-Setup component with the administrator password settings
 
 .PARAMETER PathToUpdateScript
-Path to required "update" PS1 file to add to Windows WIM image. The file will be saved as 'Update-Windows.ps1' under the Windows directory in the WIM image.
+Path to required "update" PowerShell file to add to Windows WIM image. The file will be saved as 'Update-Windows.ps1' under the Windows directory in the WIM image.
 
 .PARAMETER PathToInvokeScript
-Path to required "invoke" PS1 file to add to Windows WIM image. The file will be saved as 'Invoke-ScriptsFromRemovableMedia.ps1' under the Windows directory in the WIM image.
+Path to required "invoke" PowerShell file to add to Windows WIM image. The file will be saved as 'Invoke-ScriptsFromRemovableMedia.ps1' under the Windows directory in the WIM image.
 
 .PARAMETER PathToScriptFolder
 Path to optional folder containing PS1 scripts to add to Windows ISO image.
