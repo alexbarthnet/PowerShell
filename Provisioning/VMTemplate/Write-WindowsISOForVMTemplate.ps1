@@ -59,6 +59,9 @@ Switch parameter to update all images on the Windows ISO regardless of Index val
 .PARAMETER NoNewWindow
 Switch parameter to start the oscdimg program in the current window. Primarily used to debug any issues with creating the updated ISO image.
 
+.PARAMETER AdministratorPassword
+Credential containing administrator password for unattend XML files.
+
 .PARAMETER UnattendExpandStrings
 Hashtable of expand strings and values for autounattend and unattend XML files. The default values are as follows:
  - Index = 4 (default index for Datacenter with Desktop Experience since Windows Server 2016)
@@ -102,6 +105,8 @@ Param(
 	[Parameter(Position = 13)]
 	[switch]$NoNewWindow,
 	[Parameter(Position = 14)]
+	[pscredential]$AdministratorPassword,
+	[Parameter(Position = 15)]
 	[hashtable]$UnattendExpandStrings = @{
 		'Index'      = 4
 		'ProductKey' = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF'
@@ -143,6 +148,31 @@ Begin {
 
 		# return temporary folder
 		Return $TemporaryFolder
+	}
+
+	# if administrator password provided...
+	If ($PSBoundParameters.ContainsKey('AdministratorPassword')) {
+		# retrieve plaintext password from credential object
+		Try {
+			$PlainText = $AdministratorPassword.GetNetworkCredential().Password
+		}
+		Catch {
+			Throw $_
+		}
+
+		# append required string to plaintext password
+		$AppendedPlainText = '{0}?AdministratorPassword' -f $PlainText
+
+		# encode appended password
+		Try {
+			$EncodedAdministratorPassword = [System.Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($AppendedPlainText))
+		}
+		Catch {
+			Throw $_
+		}
+
+		# add encoded plaintext password to expand strings hashtable
+		$UnattendExpandStrings['AdministratorPassword'] = $EncodedAdministratorPassword
 	}
 
 	# if staging path defined...
@@ -413,6 +443,11 @@ Process {
 				Return $_
 			}
 
+			# if administrator password provided...
+			If ($PSBoundParameters.ContainsKey('AdministratorPassword')) { 
+				
+			}
+
 			# while content contains XML element with expand string as value...
 			While ($Content -match '<\w+>%(?<ExpandString>\w+)%</\w+>') {
 				# retrieve original XML element
@@ -452,6 +487,11 @@ Process {
 			}
 			Catch {
 				Return $_
+			}
+
+			# if administrator password provided...
+			If ($PSBoundParameters.ContainsKey('AdministratorPassword')) { 
+				
 			}
 
 			# while content contains XML element with expand string as value...
