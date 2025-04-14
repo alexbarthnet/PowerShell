@@ -38,11 +38,11 @@ Switch parameter to remove any existing files and folders in the StagingPath fol
 .PARAMETER ReuseStagingPath
 Switch parameter to use any existing files and folders in the StagingPath folder rather than copying new files from the original ISO image or script folders.
 
+.PARAMETER StopAfterPreparingImage
+Switch parameter to stop after preparing the contents Windows ISO image. Requires StagingPath parameter.
+
 .PARAMETER SkipExclude
 Switch parameter to skip creating Microsoft Defender path exclusion for the staging path.
-
-.PARAMETER SkipWrite
-Switch parameter to skip writing updated Windows ISO contents to the USB drive.
 
 .PARAMETER FileSystem
 String with file system to apply to USB drive. The default value is "NTFS" and the value must be "NTFS" or "FAT32".
@@ -84,7 +84,7 @@ Param(
 	[Parameter(Position = 11, ParameterSetName = 'StagingPath')]
 	[switch]$ReuseStagingPath,
 	[Parameter(Position = 12, ParameterSetName = 'StagingPath')]
-	[switch]$SkipWrite,
+	[switch]$StopAfterPreparingImage,
 	[Parameter(Position = 13)]
 	[switch]$SkipExclude,
 	[Parameter(Position = 14)]
@@ -581,9 +581,9 @@ Process {
 		}
 	}
 
-	# if skip write requested...
-	If ($SkipWrite) {
-		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Skipping write to USB drive'
+	# if stop requested...
+	If ($StopAfterPreparingImage) {
+		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Image prepared in staging path', $TemporaryPathForISO
 		Return
 	}
 
