@@ -48,7 +48,9 @@ Switch parameter to skip creating Microsoft Defender path exclusion for the stag
 Switch parameter to start the oscdimg program in the current window. Primarily used to debug any issues with creating the updated ISO image.
 
 .PARAMETER UnattendExpandStrings
-Hashtable of expand strings and values for autounattend and unattend XML files
+Hashtable of expand strings and values for autounattend and unattend XML files. The default values are as follows:
+ - Index = 4 (default index for Datacenter with Desktop Experience since Windows Server 2016)
+ - ProductKey = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF' (KMS activation key for Windows Server 2025 Datacenter)
 
 .INPUTS
 None.
@@ -57,7 +59,7 @@ None.
 None. The function does not generate any output.
 
 #>
-
+[CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
 	[Parameter(Position = 0, Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToOriginalIsoImage,
@@ -89,19 +91,9 @@ Param(
 	[switch]$NoNewWindow,
 	[Parameter(Position = 14)]
 	[hashtable]$UnattendExpandStrings = @{
-		'%INDEX%'      = 4
-		'%PRODUCTKEY%' = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF'
-	},
-	[Parameter(DontShow)]
-	[string[]]$ExpandStringsForUnattendFiles = @(
-		'%INDEX%'
-		'%PRODUCTKEY%'
-		'%COMPUTERNAME%'
-		'%USERNAME%'
-		'%PASSWORD%'
-		'%DOMAINNAME%'
-		'%ORGANIZATIONALUNIT%'
-	)
+		'Index'      = 4
+		'ProductKey' = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF'
+	}
 )
 
 Begin {
@@ -381,24 +373,23 @@ Process {
 				Return $_
 			}
 
-			# loop through unattend parameter strings
-			ForEach ($ExpandString in $ExpandStringsForUnattendFiles) {
-				# while content contains XML element with expand string as value...
-				While ($Content -match "<\w*>$ExpandString</\w*>") {
-					# retrieve original XML element
-					$OriginalString = $Matches[0]
-					# if expand string and value provided parameters...
-					If ($UnattendExpandStrings.ContainsKey($ExpandString)) {
-						# replace the expand string with the provided value
-						$ModifiedString = $OriginalString -replace $ExpandString, $UnattendExpandStrings[$ExpandString]
-					}
-					Else {
-						# comment out the original XML element
-						$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace "%")
-					}
-					# replace original XML element with modified XML element
-					$Content = $Content -replace $OriginalString, $ModifiedString
+			# while content contains XML element with expand string as value...
+			While ($Content -match '<\w+>%(?<ExpandString>\w+)%</\w+>') {
+				# retrieve original XML element
+				$OriginalString = $Matches[0]
+				# retrieve expand string
+				$ExpandString = $Matches['ExpandString']
+				# if value for expand string provided...
+				If ($UnattendExpandStrings.ContainsKey($ExpandString)) {
+					# replace the expand string with the provided value
+					$ModifiedString = $OriginalString -replace "%$ExpandString%", $UnattendExpandStrings[$ExpandString]
 				}
+				Else {
+					# comment out the original XML element
+					$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace '%')
+				}
+				# replace original XML element with modified XML element
+				$Content = $Content -replace $OriginalString, $ModifiedString
 			}
 
 			# add unattend file to ISO
@@ -423,24 +414,23 @@ Process {
 				Return $_
 			}
 
-			# loop through unattend parameter strings
-			ForEach ($ExpandString in $ExpandStringsForUnattendFiles) {
-				# while content contains XML element with expand string as value...
-				While ($Content -match "<\w*>$ExpandString</\w*>") {
-					# retrieve original XML element
-					$OriginalString = $Matches[0]
-					# if expand string and value provided parameters...
-					If ($UnattendExpandStrings.ContainsKey($ExpandString)) {
-						# replace the expand string with the provided value
-						$ModifiedString = $OriginalString -replace $ExpandString, $UnattendExpandStrings[$ExpandString]
-					}
-					Else {
-						# comment out the original XML element
-						$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace "%")
-					}
-					# replace original XML element with modified XML element
-					$Content = $Content -replace $OriginalString, $ModifiedString
+			# while content contains XML element with expand string as value...
+			While ($Content -match '<\w+>%(?<ExpandString>\w+)%</\w+>') {
+				# retrieve original XML element
+				$OriginalString = $Matches[0]
+				# retrieve expand string
+				$ExpandString = $Matches['ExpandString']
+				# if value for expand string provided...
+				If ($UnattendExpandStrings.ContainsKey($ExpandString)) {
+					# replace the expand string with the provided value
+					$ModifiedString = $OriginalString -replace "%$ExpandString%", $UnattendExpandStrings[$ExpandString]
 				}
+				Else {
+					# comment out the original XML element
+					$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace '%')
+				}
+				# replace original XML element with modified XML element
+				$Content = $Content -replace $OriginalString, $ModifiedString
 			}
 
 			# add unattend file to ISO
@@ -500,7 +490,7 @@ Process {
 	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Creating ISO image', $PathForUpdatedIsoImage
 
 	# define label for ISO image
-	$Label = '{0}-{1}-Unattend' -f $FileSystemLabel, $Index
+	$Label = '{0}-Unattend' -f $FileSystemLabel
 
 	# define timestamp for files in ISO image
 	# $Timestamp = Get-Date -Format "MM/dd/yyyy,HH:mm:ss"
