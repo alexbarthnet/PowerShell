@@ -401,54 +401,77 @@ Process {
 				Return $_
 			}
 
-			# report state
-			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Mounting WIM image', $ImagePathForWIM
-
-			# mount windows image
+			# retrieve windows image
 			Try {
-				$null = Mount-WindowsImage -Path $TemporaryPathForWIM -ImagePath $ImagePathForWIM -Index $Index -ScratchDirectory $TemporaryPathForDSD
+				$WindowsImage = Get-WindowsImage -ImagePath $ImagePathForWIM
 			}
 			Catch {
 				Return $_
 			}
 
-			# if update script provided...
-			If ($PSBoundParameters.ContainsKey('PathToUpdateScript')) {
-				# report state
-				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating WIM with "update" script', $UpdatePs1OnWIM
+			# loop through indices
+			:NextIndex ForEach ($Index in $WindowsImage.ImageIndex) {
+				# if index provided in unattend strings
+				If ($UnattendExpandStrings.ContainsKey('Index')) {
+					# if current index does not provided index...
+					If ($Index -ne $UnattendExpandStrings['Index']) {
+						# report state
+						"{0}`t{1}: {2}:{3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Skipping WIM image and index', $ImagePathForWIM, $Index
 
-				# add update script to windows image
+						# continue to next index
+						Continue NextIndex
+					}
+				}
+
+				# report state
+				"{0}`t{1}: {2}:{3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Mounting WIM image and index', $ImagePathForWIM, $Index
+
+				# mount windows image
 				Try {
-					Copy-Item -Path $PathToUpdateScript -Destination $UpdatePs1OnWIM
+					$null = Mount-WindowsImage -Path $TemporaryPathForWIM -ImagePath $ImagePathForWIM -Index $Index -ScratchDirectory $TemporaryPathForDSD
 				}
 				Catch {
 					Return $_
 				}
-			}
 
-			# if invoke script provided...
-			If ($PSBoundParameters.ContainsKey('PathToInvokeScript')) {
+				# if update script provided...
+				If ($PSBoundParameters.ContainsKey('PathToUpdateScript')) {
+					# report state
+					"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating WIM with "update" script', $UpdatePs1OnWIM
+
+					# add update script to windows image
+					Try {
+						Copy-Item -Path $PathToUpdateScript -Destination $UpdatePs1OnWIM
+					}
+					Catch {
+						Return $_
+					}
+				}
+
+				# if invoke script provided...
+				If ($PSBoundParameters.ContainsKey('PathToInvokeScript')) {
+					# report state
+					"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating WIM with "invoke" script', $InvokePs1OnWIM
+
+					# add invoke script to windows image
+					Try {
+						Copy-Item -Path $PathToInvokeScript -Destination $InvokePs1OnWIM
+					}
+					Catch {
+						Return $_
+					}
+				}
+
 				# report state
-				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating WIM with "invoke" script', $InvokePs1OnWIM
+				"{0}`t{1}: {2}:{3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Dismounting WIM image and index', $ImagePathForWIM, $Index
 
-				# add invoke script to windows image
+				# dismount windows image
 				Try {
-					Copy-Item -Path $PathToInvokeScript -Destination $InvokePs1OnWIM
+					$null = Dismount-WindowsImage -Path $TemporaryPathForWIM -Save -CheckIntegrity -ScratchDirectory $TemporaryPathForDSD
 				}
 				Catch {
 					Return $_
 				}
-			}
-
-			# report state
-			"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Dismounting WIM image...'
-
-			# dismount windows image
-			Try {
-				$null = Dismount-WindowsImage -Path $TemporaryPathForWIM -Save -CheckIntegrity -ScratchDirectory $TemporaryPathForDSD
-			}
-			Catch {
-				Return $_
 			}
 		}
 
