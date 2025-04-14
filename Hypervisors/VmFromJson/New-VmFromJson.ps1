@@ -3432,6 +3432,7 @@ Begin {
 			[ValidateScript({ ($_ -ge 32MB) -and ($_ -le 12TB) })]
 			[uint64]$MemoryMaximumBytes,
 			[switch]$EnableVMTPM,
+			[switch]$DisableSMT,
 			[uint16]$Generation = 2
 		)
 
@@ -3480,7 +3481,6 @@ Begin {
 			Throw $_
 		}
 
-
 		# define parameters for integration services
 		$EnableVMIntegrationService = @{
 			VM          = $VM
@@ -3504,6 +3504,11 @@ Begin {
 			Count                          = $ProcessorCount
 			ExposeVirtualizationExtensions = $true
 			ErrorAction                    = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# if SMT should be disabled...
+		If ($DisableSMT) {
+			$SetVMProcessor['HwThreadCountPerCore'] = 1
 		}
 
 		# configure VM processor
@@ -3730,6 +3735,10 @@ Process {
 			If ($null -ne $JsonData.$Name.MemoryMaximumBytes) {
 				$NewVMFromParams['MemoryMaximumBytes'] = $JsonData.$Name.MemoryMaximumBytes
 				Write-Host ("$Hostname,$ComputerName,$Name -   MemoryMaximumBytes: $(Format-Bytes -Size $($NewVMFromParams['MemoryMaximumBytes']))")
+			}
+			If ($null -ne $JsonData.$Name.DisableSMT) {
+				$NewVMFromParams['DisableSMT'] = $JsonData.$Name.DisableSMT
+				Write-Host ("$Hostname,$ComputerName,$Name -   DisableSMT: $($NewVMFromParams['DisableSMT'])")
 			}
 			If ($null -ne $JsonData.$Name.EnableVMTPM) {
 				$NewVMFromParams['EnableVMTPM'] = $JsonData.$Name.EnableVMTPM
