@@ -363,19 +363,19 @@ Process {
 		}
 	}
 
-	# if rename requested...
-	If ($PSBoundParameters.ContainsKey('Rename')) {
-		# loop through network adapters
-		ForEach ($NetAdapter in $NetAdapters ) {
-			Rename-NetAdapterViaProperties -NetAdapter $NetAdapter
-		}
-	}
-
 	# if static requested...
 	If ($PSBoundParameters.ContainsKey('ConvertFromDhcpToStatic')) {
 		# loop through network adapters
 		ForEach ($NetAdapter in $NetAdapters) {
 			Convert-NetAdapterFromDhcpToStatic -NetAdapter $NetAdapter
+		}
+	}
+
+	# if rename requested...
+	If ($PSBoundParameters.ContainsKey('Rename')) {
+		# loop through network adapters
+		ForEach ($NetAdapter in $NetAdapters ) {
+			Rename-NetAdapterViaProperties -NetAdapter $NetAdapter
 		}
 	}
 }
