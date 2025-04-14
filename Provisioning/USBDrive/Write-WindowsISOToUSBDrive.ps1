@@ -48,7 +48,9 @@ Switch parameter to skip creating Microsoft Defender path exclusion for the stag
 String with file system to apply to USB drive. The default value is "NTFS" and the value must be "NTFS" or "FAT32".
 
 .PARAMETER UnattendExpandStrings
-Hashtable of expand strings and values for autounattend and unattend XML files
+Hashtable of expand strings and values for autounattend and unattend XML files. The default values are as follows:
+ - Index = 4 (default index for Datacenter with Desktop Experience since Windows Server 2016)
+ - ProductKey = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF' (KMS activation key for Windows Server 2025 Datacenter)
 
 .INPUTS
 None.
@@ -91,21 +93,9 @@ Param(
 	[string]$FileSystem = 'NTFS',
 	[Parameter(Position = 15)]
 	[hashtable]$UnattendExpandStrings = @{
-		'%INDEX%'      = 4
-		'%PRODUCTKEY%' = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF'
-	},
-	[Parameter(DontShow)]
-	[string[]]$ExpandStringsForUnattendFiles = @(
-		'%INDEX%'
-		'%PRODUCTKEY%'
-		'%TIMEZONE%'
-		'%COMPUTERNAME%'
-		'%USERNAME%'
-		'%PASSWORD%'
-		'%DOMAINNAME%'
-		'%ORGANIZATIONALUNIT%'
-		'%ADMINISTRATORPASSWORD%'
-	)
+		'Index'      = 4
+		'ProductKey' = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF'
+	}
 )
 
 Begin {
@@ -497,30 +487,23 @@ Process {
 				Return $_
 			}
 
-			# loop through unattend parameter strings
-			ForEach ($ExpandString in $ExpandStringsForUnattendFiles) {
-				# while content contains XML element with expand string as value...
-				While ($Content -match "<\w*>$ExpandString</\w*>") {
-					# retrieve original XML element
-					$OriginalString = $Matches[0]
-					# if expand string and value provided parameters...
-					If ($UnattendExpandStrings.ContainsKey($ExpandString)) {
-						# replace the expand string with the provided value
-						$ModifiedString = $OriginalString -replace $ExpandString, $UnattendExpandStrings[$ExpandString]
-
-						# report state
-						"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Replaced expand string in unattend file for sysprep', $ExpandString
-					}
-					Else {
-						# comment out the original XML element
-						$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace '%')
-
-						# report state
-						"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Excluded expand string in unattend file for sysprep', $ExpandString
-					}
-					# replace original XML element with modified XML element
-					$Content = $Content -replace $OriginalString, $ModifiedString
+			# while content contains XML element with expand string as value...
+			While ($Content -match '<\w+>%(?<ExpandString>\w+)%</\w+>') {
+				# retrieve original XML element
+				$OriginalString = $Matches[0]
+				# retrieve expand string
+				$ExpandString = $Matches['ExpandString']
+				# if value for expand string provided...
+				If ($UnattendExpandStrings.ContainsKey($ExpandString)) {
+					# replace the expand string with the provided value
+					$ModifiedString = $OriginalString -replace "%$ExpandString%", $UnattendExpandStrings[$ExpandString]
 				}
+				Else {
+					# comment out the original XML element
+					$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace '%')
+				}
+				# replace original XML element with modified XML element
+				$Content = $Content -replace $OriginalString, $ModifiedString
 			}
 
 			# add unattend file to ISO
@@ -545,30 +528,23 @@ Process {
 				Return $_
 			}
 
-			# loop through unattend parameter strings
-			ForEach ($ExpandString in $ExpandStringsForUnattendFiles) {
-				# while content contains XML element with expand string as value...
-				While ($Content -match "<\w*>$ExpandString</\w*>") {
-					# retrieve original XML element
-					$OriginalString = $Matches[0]
-					# if expand string and value provided parameters...
-					If ($UnattendExpandStrings.ContainsKey($ExpandString)) {
-						# replace the expand string with the provided value
-						$ModifiedString = $OriginalString -replace $ExpandString, $UnattendExpandStrings[$ExpandString]
-
-						# report state
-						"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Replaced expand string in unattend file for install', $ExpandString
-					}
-					Else {
-						# comment out the original XML element
-						$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace '%')
-
-						# report state
-						"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Excluded expand string in unattend file for install', $ExpandString
-					}
-					# replace original XML element with modified XML element
-					$Content = $Content -replace $OriginalString, $ModifiedString
+			# while content contains XML element with expand string as value...
+			While ($Content -match '<\w+>%(?<ExpandString>\w+)%</\w+>') {
+				# retrieve original XML element
+				$OriginalString = $Matches[0]
+				# retrieve expand string
+				$ExpandString = $Matches['ExpandString']
+				# if value for expand string provided...
+				If ($UnattendExpandStrings.ContainsKey($ExpandString)) {
+					# replace the expand string with the provided value
+					$ModifiedString = $OriginalString -replace "%$ExpandString%", $UnattendExpandStrings[$ExpandString]
 				}
+				Else {
+					# comment out the original XML element
+					$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace '%')
+				}
+				# replace original XML element with modified XML element
+				$Content = $Content -replace $OriginalString, $ModifiedString
 			}
 
 			# add unattend file to ISO
