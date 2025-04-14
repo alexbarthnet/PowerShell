@@ -445,7 +445,8 @@ Process {
 
 			# if administrator password provided...
 			If ($PSBoundParameters.ContainsKey('AdministratorPassword')) { 
-				
+				$Content = $Content -replace '<!-- <AdministratorPassword>', '<AdministratorPassword>'
+				$Content = $Content -replace '</AdministratorPassword> -->', '</AdministratorPassword>'
 			}
 
 			# while content contains XML element with expand string as value...
@@ -491,7 +492,8 @@ Process {
 
 			# if administrator password provided...
 			If ($PSBoundParameters.ContainsKey('AdministratorPassword')) { 
-				
+				$Content = $Content -replace '<!-- <AdministratorPassword>', '<AdministratorPassword>'
+				$Content = $Content -replace '</AdministratorPassword> -->', '</AdministratorPassword>'
 			}
 
 			# while content contains XML element with expand string as value...
