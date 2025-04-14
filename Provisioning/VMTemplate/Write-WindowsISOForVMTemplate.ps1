@@ -44,6 +44,9 @@ Switch parameter to stop after preparing the contents Windows ISO image. Require
 .PARAMETER SkipExclude
 Switch parameter to skip creating Microsoft Defender path exclusion for the staging path.
 
+.PARAMETER UpdateAllWindowsImages
+Switch parameter to update all images on the Windows ISO regardless of Index value in UnattendExpandStrings hashtable.
+
 .PARAMETER NoNewWindow
 Switch parameter to start the oscdimg program in the current window. Primarily used to debug any issues with creating the updated ISO image.
 
@@ -325,7 +328,7 @@ Process {
 			# loop through indices
 			:NextIndex ForEach ($Index in $WindowsImage.ImageIndex) {
 				# if index provided in unattend strings
-				If ($UnattendExpandStrings.ContainsKey('Index')) {
+				If ($UnattendExpandStrings.ContainsKey('Index') -and -not $UpdateAllWindowsImages) {
 					# if current index does not provided index...
 					If ($Index -ne $UnattendExpandStrings['Index']) {
 						# report state
