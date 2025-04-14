@@ -53,6 +53,9 @@ Switch parameter to stop after preparing the contents Windows ISO image. Require
 .PARAMETER SkipExclude
 Switch parameter to skip creating Microsoft Defender path exclusion for the staging path.
 
+.PARAMETER UpdateAllWindowsImages
+Switch parameter to update all images on the Windows ISO regardless of Index value in UnattendExpandStrings hashtable.
+
 .PARAMETER FileSystem
 String with file system to apply to USB drive. The default value is "NTFS" and the value must be "NTFS" or "FAT32".
 
@@ -421,7 +424,7 @@ Process {
 			# loop through indices
 			:NextIndex ForEach ($Index in $WindowsImage.ImageIndex) {
 				# if index provided in unattend strings
-				If ($UnattendExpandStrings.ContainsKey('Index')) {
+				If ($UnattendExpandStrings.ContainsKey('Index') -and -not $UpdateAllWindowsImages) {
 					# if current index does not provided index...
 					If ($Index -ne $UnattendExpandStrings['Index']) {
 						# report state
