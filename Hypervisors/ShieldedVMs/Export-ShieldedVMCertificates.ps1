@@ -15,6 +15,9 @@ Param(
 	# switch to overwrite existing PFX files
 	[Parameter(Mandatory = $false)]
 	[switch]$Force,
+	# switch to export all Shielded VM certificates
+	[Parameter(Mandatory = $false)]
+	[switch]$All,
 	# path to certificate store containing Shielded VM certificates
 	[Parameter(DontShow)]
 	[string]$CertStoreLocation = 'Cert:\LocalMachine\Shielded VM Local Certificates',
@@ -264,11 +267,16 @@ Process {
 
 	# retrieve shielded VM certificates from certificate store
 	Try {
-		$ShieldedVMCertificates = Get-ChildItem -Path $CertStoreLocation | Where-Object { $_.Subject -match $Hostname }
+		$ShieldedVMCertificates = Get-ChildItem -Path $CertStoreLocation
 	}
 	Catch {
 		Write-Warning -Message "could not search '$CertStoreLocation' for certificates: $($_.Exception.Message)"
 		Return $_
+	}
+
+	# if all not requested...
+	If (!$All) {
+		$ShieldedVMCertificates = $ShieldedVMCertificates | Where-Object { $_.Subject -match $Hostname }
 	}
 
 	# export shielded VM certificates to path
@@ -287,8 +295,11 @@ Process {
 			}
 		}
 
+		# extract hypervisor hostname from certificate subject
+		$HypervisorHostname = $Certificate.Subject.Replace('CN=Shielded VM Encryption Certificate (UntrustedGuardian) (', '').Replace('CN=Shielded VM Signing Certificate (UntrustedGuardian) (', '').Replace(')', '')
+
 		# define base name
-		$BaseName = 'untrustedguardian', $HostName, $MidFix, $Certificate.NotBefore.ToUniversalTime().ToString('yyyyMMddThhmmssZ') -join '_'
+		$BaseName = 'untrustedguardian', $HypervisorHostname, $MidFix, $Certificate.NotBefore.ToUniversalTime().ToString('yyyyMMddThhmmssZ') -join '_'
 
 		# define file path
 		$FilePath = Join-Path -Path $Path -ChildPath "$BaseName.pfx"
