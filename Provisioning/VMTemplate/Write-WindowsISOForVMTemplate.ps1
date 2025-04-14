@@ -29,9 +29,6 @@ Path to optional folder containing PS1 scripts to add to Windows ISO image.
 .PARAMETER PathToBinaryFolder
 Path to folder containing required oscdimg.exe program. Required when the deployment tools oscdimg has not been installed in the default location.
 
-.PARAMETER NoNewWindow
-Switch parameter to start the oscdimg program in the current window. Primarily used to debug any issues with creating the updated ISO image.
-
 .PARAMETER StagingPath
 Path to folder for staging the ISO file contents and mounting the WIM image. The default staging path is a randomly named folder in the system temp directory.
 
@@ -41,8 +38,14 @@ Switch parameter to remove any existing files and folders in the StagingPath fol
 .PARAMETER ReuseStagingPath
 Switch parameter to use any existing files and folders in the StagingPath folder rather than copying new files from the original ISO image or script folders.
 
+.PARAMETER StopAfterPreparingImage
+Switch parameter to stop after preparing the contents Windows ISO image. Requires StagingPath parameter.
+
 .PARAMETER SkipExclude
 Switch parameter to skip creating Microsoft Defender path exclusion for the staging path.
+
+.PARAMETER NoNewWindow
+Switch parameter to start the oscdimg program in the current window. Primarily used to debug any issues with creating the updated ISO image.
 
 .PARAMETER UnattendExpandStrings
 Hashtable of expand strings and values for autounattend and unattend XML files
@@ -79,7 +82,7 @@ Param(
 	[Parameter(Position = 10, ParameterSetName = 'StagingPath')]
 	[switch]$ReuseStagingPath,
 	[Parameter(Position = 11, ParameterSetName = 'StagingPath')]
-	[switch]$SkipWrite,
+	[switch]$StopAfterPreparingImage,
 	[Parameter(Position = 12)]
 	[switch]$SkipExclude,
 	[Parameter(Position = 13)]
@@ -485,6 +488,12 @@ Process {
 				}
 			}
 		}
+	}
+
+	# if stop requested...
+	If ($StopAfterPreparingImage) {
+		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Image prepared in staging path', $TemporaryPathForISO
+		Return
 	}
 
 	# report state
