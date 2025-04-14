@@ -108,9 +108,9 @@
                     <WillReboot>OnRequest</WillReboot>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
-                    <Description>Invoke Scripts</Description>
+                    <Description>Invoke Scripts From Removable Media</Description>
                     <Order>3</Order>
-                    <Path>PowerShell.exe -ExecutionPolicy Bypass -File "%SystemRoot%\Invoke-ScriptsFromCDROM.ps1"</Path>
+                    <Path>PowerShell.exe -ExecutionPolicy Bypass -File "%SystemRoot%\Invoke-ScriptsFromRemovableMedia.ps1"</Path>
                     <WillReboot>OnRequest</WillReboot>
                 </RunSynchronousCommand>
             </RunSynchronous>
