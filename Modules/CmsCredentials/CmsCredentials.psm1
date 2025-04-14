@@ -267,7 +267,7 @@ Function Find-CmsCertificate {
 
 		# filter certificate where subject matches pattern and ends with tail
 		Try {
-			$MatchingCertificates = $local:Certificates.Where({ $_.GetNameInfo('SimpleName', $false) -match $local:Pattern -and $_.Subject.EndsWith($local:Tail, [System.StringComparer]::InvariantCultureIgnoreCase) })
+			$MatchingCertificates = $local:Certificates.Where({ $_.GetNameInfo('SimpleName', $false) -match $local:Pattern -and $_.Subject.EndsWith($local:Tail, [System.StringComparison]::InvariantCultureIgnoreCase) })
 		}
 		Catch {
 			Write-Warning -Message "could not filter Document Encryption certificates from '$local:CertStoreLocation' store on host: $local:Hostname"
