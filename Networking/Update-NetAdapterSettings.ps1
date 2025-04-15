@@ -99,7 +99,7 @@ Begin {
 			}
 
 			# report state
-			Write-Verbose -Message "$InterfaceGuid; $InterfaceName; Will assign '$($NetIPAddress.IPv4Address)/$($NetIPAddress.PrefixLength)' as address for adapter"
+			Write-Host "$InterfaceGuid; $InterfaceName; Will assign '$($NetIPAddress.IPv4Address)/$($NetIPAddress.PrefixLength)' as address for adapter"
 
 			# assign IP address
 			Try {
@@ -111,34 +111,43 @@ Begin {
 			}
 
 			# report state
-			Write-Verbose -Message "$InterfaceGuid; $InterfaceName; Assign IP address"
+			Write-Host "$InterfaceGuid; $InterfaceName; Assigned IP address"
 		}
 
 		# if default IPv4 route was on adapter and assigned by DHCP
 		If ($NetRoute) {
 			# report state
-			Write-Verbose -Message "$InterfaceGuid; $InterfaceName; Will assign '$($NetRoute.NextHop)' as gateway for adapter"
+			Write-Host "$InterfaceGuid; $InterfaceName; Will add '$($NetRoute.NextHop)' as default gateway for adapter"
 
 			# assign default route to adapter statically 
 			Try {
 				$null = $NetAdapter | New-NetRoute -DestinationPrefix '0.0.0.0/0' -NextHop $NetRoute.NextHop
 			}
 			Catch {
-				Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not remove default route for adapter: $($_.Exception.Message)"
+				Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not add default gateway for adapter: $($_.Exception.Message)"
 				Return $_
 			}
 
 			# report state
-			Write-Verbose -Message "$InterfaceGuid; $InterfaceName; Added default route"
+			Write-Host "$InterfaceGuid; $InterfaceName; Added default gateway"
 		}
 
-		# assign DNS client server addresses
-		Try {
-			$NetAdapter | Set-DnsClientServerAddress -ServerAddresses $DnsClientServerAddress.ServerAddresses
-		}
-		Catch {
-			Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not assign DNS servers to adapter: $($_.Exception.Message)"
-			Return $_
+		# if DNS client server addresses were assigned by DHCP...
+		If ($DnsClientServerAddress) {
+			# report state
+			Write-Host "$InterfaceGuid; $InterfaceName; Will assign '$($DnsClientServerAddress.ServerAddresses)' as DNS servers for adapter"
+
+			# assign DNS client server addresses
+			Try {
+				$NetAdapter | Set-DnsClientServerAddress -ServerAddresses $DnsClientServerAddress.ServerAddresses
+			}
+			Catch {
+				Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not assign DNS servers to adapter: $($_.Exception.Message)"
+				Return $_
+			}
+
+			# report state
+			Write-Host "$InterfaceGuid; $InterfaceName; Assigned DNS servers"
 		}
 	}
 
