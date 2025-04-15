@@ -276,6 +276,30 @@ Begin {
 		Write-Host "$InterfaceGuid; $InterfaceName; Renamed adapter to '$NewName' from $RenameSource"
 	}
 
+	# retrieve advanced properties
+	Try {
+		$NetAdapterAdvancedProperties = Get-NetAdapterAdvancedProperty
+	}
+	Catch {
+		Throw $_
+	}
+
+	# retrieve bindings
+	Try {
+		$NetAdapterBindings = Get-NetAdapterBinding
+	}
+	Catch {
+		Throw $_
+	}
+
+	# retrieve advanced properties
+	Try {
+		$NetAdapterHardwareInfos = Get-NetAdapterHardwareInfo
+	}
+	Catch {
+		Throw $_
+	}
+
 	# switch on parameter set name
 	switch ($PSCmdlet.ParameterSetName) {
 		'InputObject' {
