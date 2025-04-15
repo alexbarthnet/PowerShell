@@ -24,17 +24,8 @@ Begin {
 		$InterfaceName = $NetAdapter.Name
 		$InterfaceGuid = $NetAdapter.InterfaceGuid
 
-		# retrieve adapter bindings
-		Try {
-			$NetAdapterBindings = $NetAdapter | Get-NetAdapterBinding
-		}
-		Catch {
-			Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not retrieve bindings for adapter: $($_.Exception.Message)"
-			Return $_
-		}
-
-		# filter adapter bindings for IPv4
-		$NetAdapterBinding = $NetAdapterBindings | Where-Object { $_.ComponentID -eq 'ms_tcpip' }
+		# filter adapter bindings to adapter and IPv4
+		$NetAdapterBinding = $NetAdapterBindings | Where-Object { $_.InterfaceDescription -eq $NetAdapter.InterfaceDescription } | Where-Object { $_.ComponentID -eq 'ms_tcpip' }
 
 		# if IPv4 not bound to adapter...
 		If (!$NetAdapterBinding.Enabled) {
@@ -108,7 +99,7 @@ Begin {
 			}
 
 			# report state
-			Write-Verbose -Message "$InterfaceGuid; $InterfaceName; Will assign '$($NetIPAddress.IPv4Address)/$($NetIPAddress.PrefixLength)' as address for adapter"
+			Write-Host "$InterfaceGuid; $InterfaceName; Will assign '$($NetIPAddress.IPv4Address)/$($NetIPAddress.PrefixLength)' as address for adapter"
 
 			# assign IP address
 			Try {
@@ -120,34 +111,43 @@ Begin {
 			}
 
 			# report state
-			Write-Verbose -Message "$InterfaceGuid; $InterfaceName; Assign IP address"
+			Write-Host "$InterfaceGuid; $InterfaceName; Assigned IP address"
 		}
 
 		# if default IPv4 route was on adapter and assigned by DHCP
 		If ($NetRoute) {
 			# report state
-			Write-Verbose -Message "$InterfaceGuid; $InterfaceName; Will assign '$($NetRoute.NextHop)' as gateway for adapter"
+			Write-Host "$InterfaceGuid; $InterfaceName; Will add '$($NetRoute.NextHop)' as default gateway for adapter"
 
 			# assign default route to adapter statically 
 			Try {
 				$null = $NetAdapter | New-NetRoute -DestinationPrefix '0.0.0.0/0' -NextHop $NetRoute.NextHop
 			}
 			Catch {
-				Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not remove default route for adapter: $($_.Exception.Message)"
+				Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not add default gateway for adapter: $($_.Exception.Message)"
 				Return $_
 			}
 
 			# report state
-			Write-Verbose -Message "$InterfaceGuid; $InterfaceName; Added default route"
+			Write-Host "$InterfaceGuid; $InterfaceName; Added default gateway"
 		}
 
-		# assign DNS client server addresses
-		Try {
-			$NetAdapter | Set-DnsClientServerAddress -ServerAddresses $DnsClientServerAddress.ServerAddresses
-		}
-		Catch {
-			Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not assign DNS servers to adapter: $($_.Exception.Message)"
-			Return $_
+		# if DNS client server addresses were assigned by DHCP...
+		If ($DnsClientServerAddress) {
+			# report state
+			Write-Host "$InterfaceGuid; $InterfaceName; Will assign '$($DnsClientServerAddress.ServerAddresses)' as DNS servers for adapter"
+
+			# assign DNS client server addresses
+			Try {
+				$NetAdapter | Set-DnsClientServerAddress -ServerAddresses $DnsClientServerAddress.ServerAddresses
+			}
+			Catch {
+				Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not assign DNS servers to adapter: $($_.Exception.Message)"
+				Return $_
+			}
+
+			# report state
+			Write-Host "$InterfaceGuid; $InterfaceName; Assigned DNS servers"
 		}
 	}
 
@@ -204,24 +204,14 @@ Begin {
 		$InterfaceName = $NetAdapter.Name
 		$InterfaceGuid = $NetAdapter.InterfaceGuid
 
-		# retrieve hardware information for network adapter
-		$NetAdapterHardwareInfo = Get-NetAdapterHardwareInfo -InterfaceDescription $NetAdapter.InterfaceDescription -ErrorAction 'SilentlyContinue'
+		# filter hardware information to network adapter
+		$NetAdapterHardwareInfo = $NetAdapterHardwareInfos | Where-Object { $_.InterfaceDescription -eq $NetAdapter.InterfaceDescription }
 
-		# retrieve advanced properties for network adapter
-		Try {
-			$NetAdapterAdvancedProperty = Get-NetAdapterAdvancedProperty -InterfaceDescription $NetAdapter.InterfaceDescription -ErrorAction 'Stop'
-		}
-		Catch {
-			Return $_
-		}
+		# filter advanced properties to network adapter
+		$NetAdapterAdvancedProperty = $NetAdapterAdvancedProperties | Where-Object { $_.InterfaceDescription -eq $NetAdapter.InterfaceDescription }
 
 		# retrieve Hyper-V network adapter name from advanced properties
-		Try {
-			$HyperVNetworkAdapterName = $NetAdapterAdvancedProperty.Where({ $_.RegistryKeyword -eq 'HyperVNetworkAdapterName' }).RegistryValue
-		}
-		Catch {
-			Return $_
-		}
+		$HyperVNetworkAdapterName = $NetAdapterAdvancedProperty | Where-Object { $_.RegistryKeyword -eq 'HyperVNetworkAdapterName' } | Select-Object -ExpandProperty 'RegistryValue'
 
 		# if port number found...
 		If (![System.String]::IsNullOrEmpty($NetAdapterHardwareInfo.FunctionNumber)) {
@@ -274,6 +264,30 @@ Begin {
 
 		# report state
 		Write-Host "$InterfaceGuid; $InterfaceName; Renamed adapter to '$NewName' from $RenameSource"
+	}
+
+	# retrieve advanced properties
+	Try {
+		$NetAdapterAdvancedProperties = Get-NetAdapterAdvancedProperty
+	}
+	Catch {
+		Throw $_
+	}
+
+	# retrieve bindings
+	Try {
+		$NetAdapterBindings = Get-NetAdapterBinding
+	}
+	Catch {
+		Throw $_
+	}
+
+	# retrieve advanced properties
+	Try {
+		$NetAdapterHardwareInfos = Get-NetAdapterHardwareInfo
+	}
+	Catch {
+		Throw $_
 	}
 
 	# switch on parameter set name
