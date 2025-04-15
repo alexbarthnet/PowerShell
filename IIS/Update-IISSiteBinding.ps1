@@ -1,4 +1,4 @@
-#requires -Module IISAdministration, TranscriptWithHostAndDate
+#requires -Module IISAdministration
 
 [CmdletBinding()]
 Param(
@@ -6,17 +6,6 @@ Param(
 )
 
 Begin {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# start transcript with default parameters
-		Try {
-			Start-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
-	}
-
 	# queue updates to IIS
 	Try {
 		Start-IISCommitDelay
@@ -160,16 +149,5 @@ End {
 	}
 	Catch {
 		Throw $_
-	}
-
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# stop transcript with default parameters
-		Try {
-			Stop-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
 	}
 }
