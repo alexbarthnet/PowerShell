@@ -38,6 +38,9 @@ Path to required "invoke" PowerShell file to add to Windows WIM image. The file 
 .PARAMETER PathToScriptFolder
 Path to optional folder containing PS1 scripts to add to Windows ISO image.
 
+.PARAMETER PathToResourcesFolder
+Path to optional folder containing file resources to add to Windows ISO image.
+
 .PARAMETER StagingPath
 Path to folder for staging the ISO file contents and mounting the WIM image. The default staging path is a randomly named folder in the system temp directory.
 
@@ -93,22 +96,24 @@ Param(
 	[Parameter(Position = 7)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$PathToScriptFolder,
 	[Parameter(Position = 8)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[string]$PathToResourcesFolder,
+	[Parameter(Position = 9)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$PathToBinaryFolder,
-	[Parameter(Position = 9, ParameterSetName = 'StagingPath', Mandatory = $true)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[Parameter(Position = 10, ParameterSetName = 'StagingPath', Mandatory = $true)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$StagingPath,
-	[Parameter(Position = 10, ParameterSetName = 'StagingPath')]
-	[switch]$EmptyStagingPath,
 	[Parameter(Position = 11, ParameterSetName = 'StagingPath')]
-	[switch]$ReuseStagingPath,
+	[switch]$EmptyStagingPath,
 	[Parameter(Position = 12, ParameterSetName = 'StagingPath')]
+	[switch]$ReuseStagingPath,
+	[Parameter(Position = 13, ParameterSetName = 'StagingPath')]
 	[switch]$StopAfterPreparingImage,
-	[Parameter(Position = 13)]
-	[switch]$SkipExclude,
 	[Parameter(Position = 14)]
-	[string]$FileSystem = 'NTFS',
+	[switch]$SkipExclude,
 	[Parameter(Position = 15)]
-	[pscredential]$AdministratorPassword,
+	[string]$FileSystem = 'NTFS',
 	[Parameter(Position = 16)]
+	[pscredential]$AdministratorPassword,
+	[Parameter(Position = 17)]
 	[hashtable]$UnattendExpandStrings = @{
 		'Index'      = 4
 		'ProductKey' = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF'
@@ -553,7 +558,7 @@ Process {
 			}
 
 			# if administrator password provided...
-			If ($PSBoundParameters.ContainsKey('AdministratorPassword')) { 
+			If ($PSBoundParameters.ContainsKey('AdministratorPassword')) {
 				$Content = $Content -replace '<!-- <AdministratorPassword>', '<AdministratorPassword>'
 				$Content = $Content -replace '</AdministratorPassword> -->', '</AdministratorPassword>'
 			}
@@ -600,7 +605,7 @@ Process {
 			}
 
 			# if administrator password provided...
-			If ($PSBoundParameters.ContainsKey('AdministratorPassword')) { 
+			If ($PSBoundParameters.ContainsKey('AdministratorPassword')) {
 				$Content = $Content -replace '<!-- <AdministratorPassword>', '<AdministratorPassword>'
 				$Content = $Content -replace '</AdministratorPassword> -->', '</AdministratorPassword>'
 			}
@@ -632,6 +637,127 @@ Process {
 				Return $_
 			}
 		}
+
+		# if script folder provided...
+		If ($PSBoundParameters.ContainsKey('PathToScriptFolder')) {
+			# define scripts folder on ISO
+			$ScriptFolderForISO = Join-Path -Path $TemporaryPathForISO -ChildPath 'scripts'
+
+			# if script folder on ISO not found...
+			If (![System.IO.Directory]::Exists($ScriptFolderForISO)) {
+				# report state
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Creating ISO scripts folder', $ScriptFolderForISO
+
+				# create folder
+				Try {
+					$null = New-Item -ItemType Directory -Path $ScriptFolderForISO
+				}
+				Catch {
+					Return $_
+				}
+			}
+
+			# retrieve files in script folder
+			$Files = Get-ChildItem -Path $PathToScriptFolder -Filter '*.ps1'
+
+			# loop through files
+			ForEach ($File in $Files) {
+				# report state
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding script to ISO scripts folder', $File.Name
+
+				# copy item to folder
+				Try {
+					Copy-Item -Path $File -Destination $ScriptFolderForISO
+				}
+				Catch {
+					Return $_
+				}
+			}
+		}
+
+		# if resources folder provided...
+		If ($PSBoundParameters.ContainsKey('PathToResourcesFolder')) {
+			# define resources folder on ISO
+			$ResourcesFolderForISO = Join-Path -Path $TemporaryPathForISO -ChildPath 'resources'
+
+			# if resources folder on ISO not found...
+			If (![System.IO.Directory]::Exists($FilesFolderForISO)) {
+				# report state
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Creating ISO resources folder', $ResourcesFolderForISO
+
+				# create folder
+				Try {
+					$null = New-Item -ItemType Directory -Path $ResourcesFolderForISO
+				}
+				Catch {
+					Return $_
+				}
+			}
+
+			# retrieve resources folder
+			Try {
+				$ResourcesFolder = Get-Item -Path $PathToResourcesFolder
+			}
+			Catch {
+				Return $_
+			}
+
+			# retrieve folders in resources folder
+			Try {
+				$Folders = Get-ChildItem -Recurse -Path $PathToResourcesFolder -Directory
+			}
+			Catch {
+				Return $_
+			}
+
+			# loop through folders
+			ForEach ($Folder in $Folders) {
+				# define relative folder path
+				$RelativeFolderPath = $Folder.FullName.Replace($ResourcesFolder.FullName, '')
+
+				# report state
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding folder to ISO resources folder', $RelativeFolderPath
+
+				# file path in ISO
+				$FolderPath = Join-Path -Path $ResourcesFolderForISO -ChildPath $RelativeFolderPath
+
+				# copy item to folder
+				Try {
+					$null = New-Item -Path $FolderPath -ItemType Directory -Force
+				}
+				Catch {
+					Return $_
+				}
+			}
+
+			# retrieve files in resources folder
+			Try {
+				$Files = Get-ChildItem -Recurse -Path $PathToResourcesFolder -File
+			}
+			Catch {
+				Return $_
+			}
+
+			# loop through files
+			ForEach ($File in $Files) {
+				# define relative file path
+				$RelativeFilePath = $File.FullName.Replace($ResourcesFolder.FullName, '')
+
+				# report state
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding file to ISO resources folder', $RelativeFilePath
+
+				# file path in ISO
+				$FilePath = Join-Path -Path $ResourcesFolderForISO -ChildPath $RelativeFilePath
+
+				# copy item to folder
+				Try {
+					$null = Copy-Item -Path $File.FullName -Destination $FilePath -Force
+				}
+				Catch {
+					Return $_
+				}
+			}
+		}
 	}
 
 	# if stop requested...
@@ -659,7 +785,7 @@ Process {
 
 	# define empty parameters for New-Partition
 	$NewPartition = @{}
-	
+
 	# if disk is larger than 32GB...
 	If ($Disk.Size -gt 32GB) {
 		$NewPartition['Size'] = 32GB
@@ -672,7 +798,7 @@ Process {
 	If ($DriveLetter) {
 		$NewPartition['DriveLetter'] = $DriveLetter
 	}
-	Else { 
+	Else {
 		$NewPartition['AssignDriveLetter'] = $true
 	}
 
@@ -717,7 +843,7 @@ End {
 			Write-Warning -Message "could not remove exclusion for temporary path: $StagingPath"
 		}
 	}
-	
+
 	# if TemporaryFolder created...
 	If ([System.IO.Directory]::Exists($script:TemporaryFolder)) {
 		# remove temporary folder and all child items
