@@ -24,17 +24,8 @@ Begin {
 		$InterfaceName = $NetAdapter.Name
 		$InterfaceGuid = $NetAdapter.InterfaceGuid
 
-		# retrieve adapter bindings
-		Try {
-			$NetAdapterBindings = $NetAdapter | Get-NetAdapterBinding
-		}
-		Catch {
-			Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not retrieve bindings for adapter: $($_.Exception.Message)"
-			Return $_
-		}
-
-		# filter adapter bindings for IPv4
-		$NetAdapterBinding = $NetAdapterBindings | Where-Object { $_.ComponentID -eq 'ms_tcpip' }
+		# filter adapter bindings to adapter and IPv4
+		$NetAdapterBinding = $NetAdapterBindings | Where-Object { $_.InterfaceDescription -eq $NetAdapter.InterfaceDescription } | Where-Object { $_.ComponentID -eq 'ms_tcpip' }
 
 		# if IPv4 not bound to adapter...
 		If (!$NetAdapterBinding.Enabled) {
@@ -204,24 +195,14 @@ Begin {
 		$InterfaceName = $NetAdapter.Name
 		$InterfaceGuid = $NetAdapter.InterfaceGuid
 
-		# retrieve hardware information for network adapter
-		$NetAdapterHardwareInfo = Get-NetAdapterHardwareInfo -InterfaceDescription $NetAdapter.InterfaceDescription -ErrorAction 'SilentlyContinue'
+		# filter hardware information to network adapter
+		$NetAdapterHardwareInfo = $NetAdapterHardwareInfos | Where-Object { $_.InterfaceDescription -eq $NetAdapter.InterfaceDescription }
 
-		# retrieve advanced properties for network adapter
-		Try {
-			$NetAdapterAdvancedProperty = Get-NetAdapterAdvancedProperty -InterfaceDescription $NetAdapter.InterfaceDescription -ErrorAction 'Stop'
-		}
-		Catch {
-			Return $_
-		}
+		# filter advanced properties to network adapter
+		$NetAdapterAdvancedProperty = $NetAdapterAdvancedProperties | Where-Object { $_.InterfaceDescription -eq $NetAdapter.InterfaceDescription }
 
 		# retrieve Hyper-V network adapter name from advanced properties
-		Try {
-			$HyperVNetworkAdapterName = $NetAdapterAdvancedProperty.Where({ $_.RegistryKeyword -eq 'HyperVNetworkAdapterName' }).RegistryValue
-		}
-		Catch {
-			Return $_
-		}
+		$HyperVNetworkAdapterName = $NetAdapterAdvancedProperty | Where-Object { $_.RegistryKeyword -eq 'HyperVNetworkAdapterName' } | Select-Object -ExpandProperty 'RegistryValue'
 
 		# if port number found...
 		If (![System.String]::IsNullOrEmpty($NetAdapterHardwareInfo.FunctionNumber)) {
