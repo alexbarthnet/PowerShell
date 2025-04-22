@@ -77,13 +77,13 @@ Process {
 			# if certificate is latest...
 			If ($LatestCertificate.Thumbprint -eq $Certificate.Thumbprint) {
 				# report then continue to next IIS Site Binding
-				Write-Information -MessageData "found '$($IISSiteBinding.BindingInformation)' binding on '$($IISSite.Name)' site with latest certificate: $($Certificate.Thumbprint)"
+				Write-Host "found '$($IISSiteBinding.BindingInformation)' binding on '$($IISSite.Name)' site with latest certificate: $($Certificate.Thumbprint)"
 				Continue NextIISSiteBinding
 			}
 			# if certificate is not latest...
 			Else {
 				# report before updating hashtable
-				Write-Information -MessageData "found '$($IISSiteBinding.BindingInformation)' binding on '$($IISSite.Name)' site with old certificate: $($Certificate.Thumbprint)"
+				Write-Host "found '$($IISSiteBinding.BindingInformation)' binding on '$($IISSite.Name)' site with old certificate: $($Certificate.Thumbprint)"
 			}
 
 			# create hashtable with values for binding to update
@@ -138,7 +138,7 @@ Process {
 		}
 
 		# declare updated
-		Write-Information "updated '$($BindingToUpdate.BindingInformation)' binding on '$($BindingToUpdate.Name)' site with new certificate: $($BindingToUpdate.CertificateThumbprint)"
+		Write-Host "updated '$($BindingToUpdate.BindingInformation)' binding on '$($BindingToUpdate.Name)' site with new certificate: $($BindingToUpdate.CertificateThumbprint)"
 	}
 }
 
