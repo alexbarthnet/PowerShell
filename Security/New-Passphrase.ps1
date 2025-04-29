@@ -17,6 +17,9 @@ Param(
 	# array of simple delimiters
 	[Parameter(DontShow)]
 	$DelimiterList = ('-', '_', '=', '+', ';', ':', ',', '.'),
+	# array of permitted cases
+	[Parameter(DontShow)]
+	$CaseList = ('Lower', 'Title', 'Upper'),
 	# number of words required in passphrase
 	[Parameter()][ValidateRange(2, 16)]
 	[uint16]$WordCount = 2,
@@ -39,6 +42,8 @@ Param(
 	[switch]$RandomizeDelimiters,
 	# switch to use complex delimiters
 	[switch]$UseComplexDelimiters,
+	# switch to randomize case of words
+	[switch]$RandomizeCase,
 	# preset for Direction, SkipExisting, SkipDelete
 	[ValidateSet('Words', 'WithNumbers', 'WithNumbersAndDelimiter', 'WithNumbersWithRandomDelimiters', 'WithRandomDelimiters')]
 	[string]$Preset = 'Words'
@@ -207,8 +212,27 @@ While ($WordCounter -lt $WordCount -or $Passphrase.Length -lt $Length) {
 	# retrieve random line from word list
 	$RandomLine = $WordList[(Get-RandomNumber -UpperBound $WordList.Count)]
 
-	# retrieve word after dice value and tab character then update the case
+	# retrieve word after dice value and tab character then update to title case
 	$RandomWord = [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.ToTitleCase($RandomLine.Substring(6))
+
+	# if random case requested...
+	If ($RandomizeCase) {
+		# retrieve random case
+		$RandomCase = $CaseList[(Get-RandomNumber -UpperBound $CaseList.Count)]
+
+		# update word to random case
+		switch ($RandomCase) {
+			'Lower' {
+				$RandomWord = [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.ToLower($RandomWord)
+			}
+			'Upper' {
+				$RandomWord = [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.ToUpper($RandomWord)
+			}
+			Default {
+				# no change required for TitleCase as word is already in title case
+			}
+		}
+	}
 
 	# append random word to passphrase
 	$Passphrase = '{0}{1}' -f $Passphrase, $RandomWord
