@@ -30,6 +30,7 @@ https://learn.microsoft.com/en-us/windows/win32/wua_sdk/searching--downloading--
 https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-deployment-runsynchronous-runsynchronouscommand-willreboot
 
 #>
+
 # define transcript path
 $BaseName = Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty BaseName
 $TranscriptPath = Join-Path -Path ([System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')) -ChildPath "$BaseName.txt"
