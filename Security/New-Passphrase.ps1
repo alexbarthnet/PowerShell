@@ -22,10 +22,10 @@ Param(
 	$CaseList = ('Lower', 'Title', 'Upper'),
 	# number of words required in passphrase
 	[Parameter()][ValidateRange(2, 16)]
-	[uint16]$WordCount = 2,
+	[uint16]$WordCount = 4,
 	# minimum length of generated passphrase
 	[Parameter()][ValidateRange(16, 256)]
-	[uint16]$Length = 16,
+	[uint16]$Length = 25,
 	# length of number strings added to passphrase
 	[Parameter()][ValidateRange(1, 8)]
 	[uint16]$NumberLength = 2,
@@ -46,7 +46,9 @@ Param(
 	[switch]$RandomizeCase,
 	# preset for Direction, SkipExisting, SkipDelete
 	[ValidateSet('Words', 'WithNumbers', 'WithNumbersAndDelimiter', 'WithNumbersWithRandomDelimiters', 'WithRandomDelimiters')]
-	[string]$Preset = 'Words'
+	[string]$Preset = 'WithNumbersAndDelimiter',
+	# switch to skip checking size of local word list file against online word list
+	[switch]$Offline
 )
 
 Function Get-RandomNumber {
@@ -111,8 +113,51 @@ Catch {
 	Throw $_
 }
 
+# if path found...
+If ([System.IO.File]::Exists($Path) -and -not $script:Offline) {
+	# retrive file length
+	Try {
+		$FileInfo = [System.IO.FileInfo]::new($Path)
+	}
+	Catch {
+		Write-Warning "could not retrieve length of existing EFF wordlist : $($_.Exception.Message)"
+		Return $_
+	}
+
+	# retrieve headers from URI
+	Try {
+		$WebRequest = Invoke-WebRequest -Uri $Uri -Method Head -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning "could not download EFF wordlist: $($_.Exception.Message)"
+		Return $_
+	}
+
+	# if headers length does not match file length...
+	If ($WebRequest.Headers.'Content-Length' -ne $FileInfo.Length) {
+		# report length mismatch
+		Write-Warning -Message "found size of local EFF wordlist does not match size of online EFF wordlist; removing local file"
+
+		# remove local file
+		Try {
+			Remove-Item -Path $Path -Force
+		}
+		Catch {
+			Write-Warning "could not download EFF wordlist: $($_.Exception.Message)"
+			Return $_
+		}
+	}
+}
+
 # if path not found...
 If (![System.IO.File]::Exists($Path)) {
+	# if offline...
+	If ($script:Offline) {
+		Write-Warning -Message "could not locate EFF wordlist at '$Path' path and running in Offline mode; exiting"
+		Return
+	}
+
+	# download word list file
 	Try {
 		Start-BitsTransfer -Source $Uri -Destination $Path
 	}
