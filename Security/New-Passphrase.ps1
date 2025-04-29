@@ -66,7 +66,10 @@ Function Get-RandomNumber {
 	$RandomNumberGenerator.GetBytes($Bytes)
 
 	# convert byte array to 64-bit integer
-	$RandomNumber = [BitConverter]::ToUInt64($Bytes, 0) % $UpperBound
+	$RandomInteger = [BitConverter]::ToUInt64($Bytes, 0)
+
+	# retrieve remainder of dividing 64-bit integer by upperbound
+	$RandomNumber = $RandomInteger % $UpperBound
 
 	# Print the random number
 	Return $RandomNumber
