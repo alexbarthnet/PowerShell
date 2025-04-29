@@ -11,8 +11,8 @@ Switch parameter to restart the computer after applying updates. This parameter 
 .PARAMETER IncludePreview
 Switch parameter to include preview updates when searching for updates. Preview updates are not included in the default search criteria.
 
-.PARAMETER ExcludeDrivers
-Switch parameter to exclude drivers when searching for updates. Driver updates are included in the default search criteria.
+.PARAMETER IncludeDrivers
+Switch parameter to include drivers when searching for updates. Driver updates are not included in the default search criteria.
 
 .INPUTS
 None.
@@ -51,7 +51,7 @@ Param(
 	[Parameter(Position = 1)]
 	[switch]$IncludePreview,
 	[Parameter(Position = 2)]
-	[switch]$ExcludeDrivers,
+	[switch]$IncludeDrivers,
 	[Parameter(DontShow)]
 	[string]$SystemRoot = [System.Environment]::GetEnvironmentVariable('SystemRoot')
 )
@@ -163,8 +163,8 @@ Process {
 		$Criteria = "$Criteria AND AutoSelectOnWebSites = 1"
 	}
 
-	# if driver updates should be excluded...
-	If ($ExcludeDrivers) {
+	# if driver updates not requested...
+	If (!$IncludeDrivers) {
 		# update criteria to exclude drivers
 		$Criteria = "$Criteria AND Type='software'"
 	}
