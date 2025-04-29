@@ -17,12 +17,15 @@ Param(
 	# array of simple delimiters
 	[Parameter(DontShow)]
 	$DelimiterList = ('-', '_', '=', '+', ';', ':', ',', '.'),
+	# array of permitted cases
+	[Parameter(DontShow)]
+	$CaseList = ('Lower', 'Title', 'Upper'),
 	# number of words required in passphrase
 	[Parameter()][ValidateRange(2, 16)]
-	[uint16]$WordCount = 2,
+	[uint16]$WordCount = 4,
 	# minimum length of generated passphrase
 	[Parameter()][ValidateRange(16, 256)]
-	[uint16]$Length = 16,
+	[uint16]$Length = 25,
 	# length of number strings added to passphrase
 	[Parameter()][ValidateRange(1, 8)]
 	[uint16]$NumberLength = 2,
@@ -35,13 +38,17 @@ Param(
 	[switch]$IncludeNumbers,
 	# switch to include delimiters in the passphrase
 	[switch]$IncludeDelimiters,
-	# switch to randomize any delimiters
+	# switch to randomize delimiters
 	[switch]$RandomizeDelimiters,
 	# switch to use complex delimiters
 	[switch]$UseComplexDelimiters,
+	# switch to randomize case of words
+	[switch]$RandomizeCase,
 	# preset for Direction, SkipExisting, SkipDelete
 	[ValidateSet('Words', 'WithNumbers', 'WithNumbersAndDelimiter', 'WithNumbersWithRandomDelimiters', 'WithRandomDelimiters')]
-	[string]$Preset = 'Words'
+	[string]$Preset = 'WithNumbersAndDelimiter',
+	# switch to skip checking size of local word list file against online word list
+	[switch]$Offline
 )
 
 Function Get-RandomNumber {
@@ -59,7 +66,10 @@ Function Get-RandomNumber {
 	$RandomNumberGenerator.GetBytes($Bytes)
 
 	# convert byte array to 64-bit integer
-	$RandomNumber = [BitConverter]::ToUInt64($Bytes, 0) % $UpperBound
+	$RandomInteger = [BitConverter]::ToUInt64($Bytes, 0)
+
+	# retrieve remainder of dividing 64-bit integer by upperbound
+	$RandomNumber = $RandomInteger % $UpperBound
 
 	# Print the random number
 	Return $RandomNumber
@@ -106,8 +116,51 @@ Catch {
 	Throw $_
 }
 
+# if path found...
+If ([System.IO.File]::Exists($Path) -and -not $script:Offline) {
+	# retrive file length
+	Try {
+		$FileInfo = [System.IO.FileInfo]::new($Path)
+	}
+	Catch {
+		Write-Warning "could not retrieve length of existing EFF wordlist : $($_.Exception.Message)"
+		Return $_
+	}
+
+	# retrieve headers from URI
+	Try {
+		$WebRequest = Invoke-WebRequest -Uri $Uri -Method Head -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning "could not download EFF wordlist: $($_.Exception.Message)"
+		Return $_
+	}
+
+	# if headers length does not match file length...
+	If ($WebRequest.Headers.'Content-Length' -ne $FileInfo.Length) {
+		# report length mismatch
+		Write-Warning -Message "found size of local EFF wordlist does not match size of online EFF wordlist; removing local file"
+
+		# remove local file
+		Try {
+			Remove-Item -Path $Path -Force
+		}
+		Catch {
+			Write-Warning "could not download EFF wordlist: $($_.Exception.Message)"
+			Return $_
+		}
+	}
+}
+
 # if path not found...
 If (![System.IO.File]::Exists($Path)) {
+	# if offline...
+	If ($script:Offline) {
+		Write-Warning -Message "could not locate EFF wordlist at '$Path' path and running in Offline mode; exiting"
+		Return
+	}
+
+	# download word list file
 	Try {
 		Start-BitsTransfer -Source $Uri -Destination $Path
 	}
@@ -183,7 +236,7 @@ While ($WordCounter -lt $WordCount -or $Passphrase.Length -lt $Length) {
 
 			# if include delimiters requested...
 			If ($IncludeDelimiters) {
-				# if delimiter mode is random or random with numbers...
+				# if random delimiters requested...
 				If ($RandomizeDelimiters) {
 					# define empty delimiter string
 					$Delimiter = [System.String]::Empty
@@ -207,8 +260,27 @@ While ($WordCounter -lt $WordCount -or $Passphrase.Length -lt $Length) {
 	# retrieve random line from word list
 	$RandomLine = $WordList[(Get-RandomNumber -UpperBound $WordList.Count)]
 
-	# retrieve word after dice value and tab character then update the case
+	# retrieve word after dice value and tab character then update to title case
 	$RandomWord = [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.ToTitleCase($RandomLine.Substring(6))
+
+	# if random case requested...
+	If ($RandomizeCase) {
+		# retrieve random case
+		$RandomCase = $CaseList[(Get-RandomNumber -UpperBound $CaseList.Count)]
+
+		# update word to random case
+		switch ($RandomCase) {
+			'Lower' {
+				$RandomWord = [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.ToLower($RandomWord)
+			}
+			'Upper' {
+				$RandomWord = [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.ToUpper($RandomWord)
+			}
+			Default {
+				# no change required for TitleCase as word is already in title case
+			}
+		}
+	}
 
 	# append random word to passphrase
 	$Passphrase = '{0}{1}' -f $Passphrase, $RandomWord
