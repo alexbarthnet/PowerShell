@@ -38,7 +38,7 @@ Param(
 	[switch]$IncludeNumbers,
 	# switch to include delimiters in the passphrase
 	[switch]$IncludeDelimiters,
-	# switch to randomize any delimiters
+	# switch to randomize delimiters
 	[switch]$RandomizeDelimiters,
 	# switch to use complex delimiters
 	[switch]$UseComplexDelimiters,
@@ -233,7 +233,7 @@ While ($WordCounter -lt $WordCount -or $Passphrase.Length -lt $Length) {
 
 			# if include delimiters requested...
 			If ($IncludeDelimiters) {
-				# if delimiter mode is random or random with numbers...
+				# if random delimiters requested...
 				If ($RandomizeDelimiters) {
 					# define empty delimiter string
 					$Delimiter = [System.String]::Empty
