@@ -69,7 +69,7 @@ Process {
 	$CrtFile = Get-ChildItem -Path $CertEnroll | Where-Object { $_.Extension -eq '.crt' } | Sort-Object LastWriteTime | Select-Object -Last 1
 
 	# define preferred CRT file name
-	$CrtName = $CrtFile.Name.Replace(('{0}_' -f $DnsHostName), [System.String]::Empty)
+	$CrtName = $CrtFile.Name -replace ('{0}_' -f $DnsHostName)
 
 	# add CRT file to dictionary
 	$SourceFileDictionary.Add($CrtName, $CrtFile.FullName)
