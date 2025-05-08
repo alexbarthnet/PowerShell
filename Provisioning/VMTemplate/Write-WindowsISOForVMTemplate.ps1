@@ -67,8 +67,9 @@ Credential containing administrator password for unattend XML files.
 
 .PARAMETER UnattendExpandStrings
 Hashtable of expand strings and values for autounattend and unattend XML files. The default values are as follows:
+ - DiskID = 0 (default ID for first hard disk drive)
  - Index = 4 (default index for Datacenter with Desktop Experience since Windows Server 2016)
- - ProductKey = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF' (KMS activation key for Windows Server 2025 Datacenter)
+ - ProductKey = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF' (KMS client key for Windows Server 2025 Datacenter)
 
 .INPUTS
 None.
@@ -113,8 +114,9 @@ Param(
 	[pscredential]$AdministratorPassword,
 	[Parameter(Position = 16)]
 	[hashtable]$UnattendExpandStrings = @{
-		'Index'      = 4
-		'ProductKey' = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF'
+		DiskID     = 0
+		Index      = 4
+		ProductKey = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF'
 	}
 )
 
