@@ -187,7 +187,7 @@ If ($Purge -and $Items) {
 		# get hash of path in destination
 		$DestinationHash = Invoke-Command -Session $Session -ScriptBlock { Get-FileHash -Path $using:DestinationPath -Algorithm SHA384 | Select-Object -ExpandProperty Hash }
 		# get hash of path in source
-		$SourceHash = Get-FileHash -Path $Item -Algorithm SHA384 | Select-Object -ExpandProperty Hash
+		$SourceHash = Get-FileHash -Path $Item.FullName -Algorithm SHA384 | Select-Object -ExpandProperty Hash
 		# if hashes match...
 		If ($SourceHash -eq $DestinationHash) {
 			Write-Verbose -Message "Skipped '$($Item.FullName)' file; '$($DestinationPath)' file on '$VMName' VM has matching file hash: $($DestinationHash)"
