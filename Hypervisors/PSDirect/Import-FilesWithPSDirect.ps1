@@ -150,7 +150,7 @@ If ($Purge -and $Items) {
 }
 
 # copy files from path on host to destination on VM
-ForEach ($Item in $Items) {
+:NextItem ForEach ($Item in $Items) {
 	# define destination item path
 	$DestinationPath = Join-Path -Path $Destination -ChildPath $Item.Name
 
