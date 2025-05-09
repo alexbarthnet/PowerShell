@@ -20,7 +20,10 @@ Param(
 	[System.Management.Automation.PSCredential]$Credential,
 	# switch to empty destination folder before import
 	[Parameter(Mandatory = $false)]
-	[switch]$Purge
+	[switch]$Purge,
+	# switch to create destination folder if missing
+	[Parameter(Mandatory = $false)]
+	[switch]$Force
 )
 
 # if parameter from JSON file provided...
@@ -83,7 +86,7 @@ Try {
 	$VMs = Get-VM -ErrorAction 'Stop' | Where-Object { $_.Name -eq $VMName }
 }
 Catch {
-	Write-Warning -Message 'could call Get-VM'
+	Write-Warning -Message 'could not call Get-VM'
 	Return $_
 }
 
@@ -109,24 +112,46 @@ Catch {
 }
 
 # test path on host
-If (!(Test-Path -Path $Path)) {
-	Write-Warning -Message "could not find '$Path' on host"
+Try {
+	$TestPath = Test-Path -Path $Path -PathType 'Container'
+}
+Catch {
+	Write-Warning -Message "could not test '$Path' path on host: $($_.Exception.Message)"
+	Return $_
+}
+
+# verify path on host
+If (!$TestPath) {
+	Write-Warning -Message "could not find '$Path' path on host"
 	Return
 }
 
 # test destination on VM
 Try {
-	$TestDestination = Invoke-Command -Session $Session -ScriptBlock { Test-Path -Path $using:Destination -PathType Container } -ErrorAction 'Stop'
+	$TestDestination = Invoke-Command -Session $Session -ScriptBlock { Test-Path -Path $using:Destination -PathType 'Container' -ErrorAction 'Stop' }
 }
 Catch {
-	Write-Warning -Message "could not test path '$Destination' on VM: '$VMName'"
+	Write-Warning -Message "could not test '$Destination' path on '$VMName' VM: $($_.Exception.Message)"
 	Return $_
 }
 
 # verify path on VM
 If (!$TestDestination) {
-	Write-Warning -Message "could not find '$Destination' on VM: '$VMName'"
-	Return
+	# if force requested...
+	If ($Force) {
+		# create destination on host
+		Try {
+			Invoke-Command -Session $Session -ScriptBlock { $null = New-Item -Path $using:Destination -ItemType 'Directory' -Force -ErrorAction 'Stop' }
+		}
+		Catch {
+			Write-Warning -Message "could not create '$Destination' path on '$VMName' VM: $($_.Exception.Message)"
+			Return
+		}
+	}
+	Else {
+		Write-Warning -Message "could not find '$Destination' path on '$VMName' VM"
+		Return
+	}
 }
 
 # retrieve files from path on host
@@ -144,7 +169,7 @@ If ($Purge -and $Items) {
 		Invoke-Command -Session $Session -ScriptBlock { Get-ChildItem -Path $using:Destination -Recurse -Force -ErrorAction 'Stop' | Remove-Item -Force -Verbose -ErrorAction 'Stop' }
 	}
 	Catch {
-		Write-Warning -Message "could not clear destination folder '$Destination' on VM before file copy"
+		Write-Warning -Message "could not clear destination folder '$Destination' on '$VMName' VM before file copy"
 		Return $_
 	}
 }
@@ -165,7 +190,7 @@ If ($Purge -and $Items) {
 		$SourceHash = Get-FileHash -Path $Item -Algorithm SHA384 | Select-Object -ExpandProperty Hash
 		# if hashes match...
 		If ($SourceHash -eq $DestinationHash) {
-			Write-Verbose -Message "Found matching file hashes for '$($Item.FullName)' file and '$($DestinationPath)' file on '$VMName' VM"
+			Write-Verbose -Message "Skipped '$($Item.FullName)' file; '$($DestinationPath)' file on '$VMName' VM has matching file hash: $($DestinationHash)"
 			Continue NextItem
 		}
 	}
@@ -175,8 +200,8 @@ If ($Purge -and $Items) {
 		Copy-Item -ToSession $Session -Path $Item.FullName -Destination $Destination -Force -Verbose -ErrorAction 'Stop'
 	}
 	Catch {
-		Write-Warning -Message "could not copy '$($Item.FullName)' to '$($DestinationPath)'  on '$VMName' VM: $($_.Exception.Message)"
-		Return $_
+		Write-Warning -Message "could not copy '$($Item.FullName)' to '$($DestinationPath)' on '$VMName' VM: $($_.Exception.Message)"
+		Continue NextItem
 	}
 
 	# report file copied

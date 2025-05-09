@@ -20,7 +20,10 @@ Param(
 	[System.Management.Automation.PSCredential]$Credential,
 	# switch to empty destination folder before import
 	[Parameter(Mandatory = $false)]
-	[switch]$Purge
+	[switch]$Purge,
+	# switch to create destination folder if missing
+	[Parameter(Mandatory = $false)]
+	[switch]$Force
 )
 
 # if parameter from JSON file provided...
@@ -113,20 +116,42 @@ Try {
 	$TestPath = Invoke-Command -Session $Session -ScriptBlock { Test-Path -Path $using:Path } -ErrorAction 'Stop'
 }
 Catch {
-	Write-Warning -Message "could not test path '$Path' on VM: '$VMName'"
+	Write-Warning -Message "could not test '$Path' path on '$VMName' VM: $($_.Exception.Message)"
 	Return $_
 }
 
 # verify path on VM
 If (!$TestPath) {
-	Write-Warning -Message "could not find '$Path' on VM: '$VMName'"
+	Write-Warning -Message "could not find '$Path' path on '$VMName' VM"
 	Return
 }
 
 # test destination on host
-If (!(Test-Path -Path $Destination -PathType Container )) {
-	Write-Warning -Message "could not find '$Destination' on host"
-	Return
+Try {
+	$TestDestination = Test-Path -Path $Destination -PathType 'Container'
+}
+Catch {
+	Write-Warning -Message "could not test '$Path' path on '$VMName' VM: $($_.Exception.Message)"
+	Return $_
+}
+
+# verify destination on host
+If (!$TestDestination) {
+	# if force requested...
+	If ($Force) {
+		# create destination on host
+		Try {
+			$null = New-Item -Path $Destination -ItemType 'Directory' -Force -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not create '$Destination' path on host: $($_.Exception.Message)"
+			Return
+		}
+	}
+	Else {
+		Write-Warning -Message "could not find '$Destination' path on host"
+		Return
+	}
 }
 
 # retrieve files from path on VM
@@ -165,7 +190,7 @@ If ($Purge -and $Items) {
 		$SourceHash = Invoke-Command -Session $Session -ScriptBlock { Get-FileHash -Path $using:Item.FullName -Algorithm SHA384 | Select-Object -ExpandProperty Hash }
 		# if hashes match...
 		If ($SourceHash -eq $DestinationHash) {
-			Write-Verbose -Message "Found matching file hashes for '$($Item.FullName)' file on '$VMName' VM and '$($DestinationPath)' file"
+			Write-Verbose -Message "Skipped '$($Item.FullName)' file on '$VMName' VM; '$($DestinationPath)' file has matching file hash: $($DestinationHash)"
 			Continue NextItem
 		}
 	}
@@ -176,6 +201,7 @@ If ($Purge -and $Items) {
 	}
 	Catch {
 		Write-Warning -Message "could not copy '$($Item.FullName)' on '$VMName' VM to '$($DestinationPath)': $($_.Exception.Message)"
+		Continue NextItem
 	}
 
 	# report file copied
