@@ -1866,6 +1866,21 @@ Process {
 					}
 				}
 
+				# if modules defined...
+				If ($HashtableFromJsonEntry.ContainsKey('Modules')) {
+					# process each module name
+					ForEach ($ModuleName in $HashtableFromJsonEntry['Modules']) {
+						# import module
+						Try {
+							Import-Module -Name $ModuleName -ErrorAction Stop
+						}
+						Catch {
+							Write-Warning -Message "could not import PowerShell module: '$ModuleName'"
+							Continue NextJsonEntry
+						}
+					}
+				}
+
 				# if command is a file
 				If (Test-Path -Path $HashtableFromJsonEntry['Command'] -PathType 'Leaf') {
 					# retrieve file
@@ -1904,21 +1919,6 @@ Process {
 
 					# define command name from PowerShell command
 					$HashtableFromJsonEntry['CommandName'] = $HashtableFromJsonEntry['Command']
-				}
-
-				# if modules defined...
-				If ($HashtableFromJsonEntry.ContainsKey('Modules')) {
-					# process each module name
-					ForEach ($ModuleName in $HashtableFromJsonEntry['Modules']) {
-						# import module
-						Try {
-							Import-Module -Name $ModuleName -ErrorAction Stop
-						}
-						Catch {
-							Write-Warning -Message "could not import PowerShell module: '$ModuleName'"
-							Continue NextJsonEntry
-						}
-					}
 				}
 
 				# if trigger expression defined...
