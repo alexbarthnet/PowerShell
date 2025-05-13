@@ -1,77 +1,119 @@
+[CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	[Parameter(Position = 0, Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
-	[string]$Path,
-	[Parameter(DontShow)]
-	[string]$HostName = ([System.Environment]::MachineName.ToLowerInvariant())
+	[Parameter(ParameterSetName = 'Default', Position = 0, Mandatory = $True)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
+	[string]$RequestFile,
+	[Parameter(ParameterSetName = 'Request', Position = 0, Mandatory = $True)]
+	[uint32]$RequestID,
+	[Parameter(ParameterSetName = 'Default', Position = 1)]
+	[Parameter(ParameterSetName = 'Request', Position = 1, Mandatory = $True)]
+	[string]$OutFile
 )
 
-# define transcript file from script path and start transcript
-Start-Transcript -Path $PSCommandPath.Replace((Get-Item -Path $PSCommandPath).Extension, "_$HostName.txt") -Force
-
-# retrieve requests from path
-$certreq_files = @()
-$certreq_files = Get-ChildItem -Path $Path -Filter *.req
-
-# proocess requests
-ForEach ($certreq_file in $certreq_files) {
-	# submit request
-	$certreq_response = [string]::Empty
-	$certreq_response = Invoke-Expression -Command "certreq -f -q -config - -submit $($certreq_file.FullName)"
-	If (($certreq_response -join ',') -notmatch 'pending') {
-		Write-Output 'ERROR: submitting certificate request'
-		$certreq_response -join ','
-		Return
-	}
-	Else {
-		Write-Output 'Submitted certificate request'
-	}
-
-	# retrieve requests
-	$certreq_submitted = $null
-	$certreq_submitted = Invoke-Expression -Command 'certutil -view -out RequestId,CommonName queue csv' | ConvertFrom-Csv
-	If ($null -eq $certreq_submitted) {
-		Write-Output 'ERROR: retrieving request IDs'
-		Return
-	}
-	Else {
-		$certreq_id = ($certreq_submitted | Select-Object -Last 1).'Issued Request ID'
-		Write-Output "Retrieved request ID: $certreq_id"
-	}
-
-	# issue certificate via resubmit
-	$certreq_resubmit = [string]::Empty
-	$certreq_resubmit = Invoke-Expression -Command "certutil -resubmit $certreq_id"
-	If (($certreq_resubmit -join ',') -notmatch 'successfully') { 
-		Write-Output 'ERROR: issuing certificate'
-		$certreq_resubmit -join ','
-		Return
-	}
-	Else {
-		Write-Output 'Issued certificate'
-	}
-	
-	# define certificate file
-	$certreq_cer = $certreq_file.FullName.Replace($certreq_file.Extension, '.cer')
-	$certreq_p7b = $certreq_file.FullName.Replace($certreq_file.Extension, '.p7b')
-	
-	# retrieve certificate
-	$certreq_retrieve = [string]::Empty
-	$certreq_retrieve = Invoke-Expression -Command "certreq -f -q -config - -retrieve $certreq_id $certreq_cer $certreq_p7b"
-	If ((Test-Path -Path $certreq_cer) -and (Test-Path -Path $certreq_p7b)) {
-		# report certificates
-		Write-Output "Retrieved signed certificate: $certreq_cer"
-		Write-Output "Retrieved complete P7B chain: $certreq_p7b"
-
-		# remove request
-		$certreq_file | Remove-Item -Force
-		Write-Output "Deleted certificate request: $certreq_file"
-	}
-	Else {
-		Write-Output 'ERROR: retrieving certificate'
-		$certreq_retrieve -join ','
-		Return
-	}
+# create configuration object
+Try {
+	$ConfigObject = New-Object -ComObject 'CertificateAuthority.Config'
+}
+Catch {
+	Write-Warning -Message "could not create CA configuration object: $($_.Exception.Message)"
+	Return
 }
 
-# start transcript
-Stop-Transcript
+# retrieve configuration string
+Try {
+	$ConfigString = $ConfigObject.GetConfig(4)
+}
+Catch {
+	Write-Warning -Message "could not retrieve configuration string: $($_.Exception.Message)"
+	Return
+}
+
+# if request file provided...
+If ($PSBoundParameters.ContainsKey('RequestFile')) {
+	# retrieve text of request
+	Try {
+		$RequestText = [System.IO.File]::ReadAllText($RequestFile)
+	}
+	Catch {
+		Write-Warning -Message "could not retrieve text from '$RequestFile' file: $($_.Exception.Message)"
+		Return
+	}
+
+	# create request object
+	Try {
+		$RequestObject = New-Object -ComObject 'CertificateAuthority.Request'
+	}
+	Catch {
+		Write-Warning -Message "could not create CA request object: $($_.Exception.Message)"
+		Return
+	}
+
+	# submit request to CA
+	Try {
+		$Status = $RequestObject.Submit(0, $RequestText, $null, $ConfigString)
+	}
+	Catch {
+		Write-Warning -Message "could not submit request to CA object: $($_.Exception.Message)"
+		Return
+	}
+
+	# report state
+	Write-Host "submitted certificate request for file: $($RequestFile.FullName)"
+
+	# reference: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-wcce/c084a3e3-4df3-4a28-9a3b-6b08487b04f3
+	# if status is not 5...
+	If ($Status -ne '5') {
+		Write-Warning -Message "request not in a valid state; status is '$Status'"
+		Return
+	}
+
+	# retrieve request id
+	Try {
+		$RequestID = $RequestObject.GetRequestId()
+	}
+	Catch {
+		Write-Warning -Message "could not retrieve request ID: $($_.Exception.Message)"
+		Return
+	}
+
+	# report state
+	Write-Host "created certificate request ID: $RequestID"
+}
+
+# if outfile provided...
+If ($PSBoundParameters.('OutFile')) {
+	# resubmit request
+	Try {
+		$ConfigObject.ResubmitRequest($ConfigString, $RequestID)
+	}
+	Catch {
+		Write-Warning -Message "could not issue pending certificate with '$RequestID' request ID: $($_.Exception.Message)"
+		Return
+	}
+
+	# report state
+	Write-Host "issued certificate from request ID: $RequestID"
+
+	# load request object with certificate
+	Try {
+		$RequestObject.RetrievePending($RequestID, $ConfigString)
+	}
+	Catch {
+		Write-Warning -Message "could not retrieve issued certificate with '$RequestID' request ID: $($_.Exception.Message)"
+		Return
+	}
+
+	# retrieve base64 encoded certificate text from request object
+	$Value = $RequestObject.GetCertificate(0)
+
+	# save certificate to file
+	Try {
+		Set-Content -Path $OutFile -Value $Value
+	}
+	Catch {
+		Write-Warning -Message "could not save issued certificate with '$RequestID' request ID to '$OutFile' file: $($_.Exception.Message)"
+		Return
+	}
+
+	# report state
+	Write-Host "saved certificate from '$RequestID' request ID to file: $OutFile"
+}
