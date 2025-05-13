@@ -1,6 +1,6 @@
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-    [Parameter(Position = 0, Mandatory = $True, ValueFromPipeline)]
+    [Parameter(Position = 0, Mandatory, ValueFromPipeline)]
     [uint32]$RequestID,
     [Parameter(Position = 1)]
     [switch]$PassThru
