@@ -9,10 +9,10 @@ Param(
 	# name of VM to export files from
 	[Parameter(ParameterSetName = 'Default', Mandatory = $true, Position = 0)]
 	[string]$VMName,
-	# path to folder on VM containing files to export
+	# path to file or folder on VM to export
 	[Parameter(ParameterSetName = 'Default', Mandatory = $true, Position = 1)]
 	[string]$Path,
-	# path to destination folder for exported files from hypervisor perspective
+	# path to destination folder from hypervisor perspective for exported files
 	[Parameter(ParameterSetName = 'Default', Mandatory = $true, Position = 2)]
 	[string]$Destination,
 	# credential for accessing the VM with PowerShell Direct
@@ -23,7 +23,7 @@ Param(
 	[switch]$Purge,
 	# switch to create destination folder if missing
 	[Parameter(Mandatory = $false)]
-	[switch]$Force
+	[switch]$CreateDestination
 )
 
 # if parameter from JSON file provided...
@@ -111,37 +111,44 @@ Catch {
 	Return $_
 }
 
-# test path on VM
+# trim path
+$Path = $Path.TrimEnd('\')
+
+# retrieve path info on VM
 Try {
-	$TestPath = Invoke-Command -Session $Session -ScriptBlock { Test-Path -Path $using:Path } -ErrorAction 'Stop'
+	$PathInfo = Invoke-Command -Session $Session -ScriptBlock { [System.IO.FileInfo]::new($using:Path) } -ErrorAction 'Stop'
 }
 Catch {
-	Write-Warning -Message "could not test '$Path' path on '$VMName' VM: $($_.Exception.Message)"
+	Write-Warning -Message "could not retrieve info for '$Path' path on '$VMName' VM: $($_.Exception.Message)"
 	Return $_
 }
 
-# verify path on VM
-If (!$TestPath) {
-	Write-Warning -Message "could not find '$Path' path on '$VMName' VM"
+# if path not found on VM...
+If (!$PathInfo.Exists) {
+	# warn and return
+	Write-Warning -Message "could not locate '$Path' path on '$VMName' VM"
 	Return
 }
 
-# test destination on host
+# trim destination
+$Destination = $Destination.TrimEnd('\')
+
+# retrieve destination info on host
 Try {
-	$TestDestination = Test-Path -Path $Destination -PathType 'Container'
+	$DestinationInfo = [System.IO.FileInfo]::new($Destination)
 }
 Catch {
-	Write-Warning -Message "could not test '$Path' path on '$VMName' VM: $($_.Exception.Message)"
+	Write-Warning -Message "could not retrieve info for '$Destination' path on host: $($_.Exception.Message)"
 	Return $_
 }
 
-# verify destination on host
-If (!$TestDestination) {
-	# if force requested...
-	If ($Force) {
+# if destination not found on host...
+If (!$DestinationInfo.Exists) {
+	# if create destination requested...
+	If ($CreateDestination) {
 		# create destination on host
 		Try {
-			$null = New-Item -Path $Destination -ItemType 'Directory' -Force -ErrorAction 'Stop'
+			[System.IO.Directory]::CreateDirectory($Destination)
 		}
 		Catch {
 			Write-Warning -Message "could not create '$Destination' path on host: $($_.Exception.Message)"
@@ -149,18 +156,43 @@ If (!$TestDestination) {
 		}
 	}
 	Else {
-		Write-Warning -Message "could not find '$Destination' path on host"
+		Write-Warning -Message "could not locate '$Destination' path on host"
 		Return
 	}
 }
 
-# retrieve files from path on VM
+# determine if path is a directory; perform functions in session to avoid deserialization issues
 Try {
-	$Items = Invoke-Command -Session $Session -ScriptBlock { Get-ChildItem -Path $using:Path -ErrorAction 'Stop' }
+	$PathIsDirectory = Invoke-Command -Session $Session -ScriptBlock { $FileInfo = [System.IO.FileInfo]::new($using:Path); $IsDirectory = $FileInfo.Attributes -band [System.IO.FileAttributes]::Directory; $IsDirectory -as [bool] }
 }
 Catch {
-	Write-Warning -Message "could not retrieve files in '$Path' on VM: '$VMName'"
-	Return $_
+	Write-Warning -Message "could not determine if '$Path' on '$VMName' VM is a file or directory"
+}
+
+# if path is a directory...
+If ($PathIsDirectory) {
+	# retrieve files from path on VM
+	Try {
+		$Items = Invoke-Command -Session $Session -ScriptBlock { Get-ChildItem -Path $using:Path -ErrorAction 'Stop' }
+	}
+	Catch {
+		Write-Warning -Message "could not retrieve files in '$Path' on VM: '$VMName'"
+		Return $_
+	}
+}
+# if path is a file...
+Else {
+	# retrieve file from path on VM
+	Try {
+		$Items = Invoke-Command -Session $Session -ScriptBlock { @(Get-Item -Path $using:Path -ErrorAction 'Stop') }
+	}
+	Catch {
+		Write-Warning -Message "could not retrieve file with '$Path' on VM: '$VMName'"
+		Return $_
+	}
+
+	# update path to parent directory of file
+	$Path = $PathInfo.DirectoryName.TrimEnd('\')
 }
 
 # remove files in destination on host before copying files from path on VM
@@ -176,22 +208,41 @@ If ($Purge -and $Items) {
 
 # copy files from path on VM to destination on host
 :NextItem ForEach ($Item in $Items) {
-	# define destination item path
-	$DestinationPath = Join-Path -Path $Destination -ChildPath $Item.Name
+	# replace path with destination to define destination item path
+	$DestinationPath = $Item.FullName -replace [System.Text.RegularExpressions.Regex]::Escape($Path), $Destination
 
-	# check if path in destination exists...
-	$DestinationExists = [System.IO.File]::Exists($DestinationPath)
+	# retrieve file information for destination item
+	$FileInfo = [System.IO.FileInfo]::new($DestinationPath)
 
-	# if path in destination found...
-	If ($DestinationExists) {
+	# if destination item found...
+	If ($FileInfo.Exists) {
 		# get hash of path in destination
 		$DestinationHash = Get-FileHash -Path $DestinationPath -Algorithm SHA384 | Select-Object -ExpandProperty Hash
+
 		# get hash of path in source
 		$SourceHash = Invoke-Command -Session $Session -ScriptBlock { Get-FileHash -Path $using:Item.FullName -Algorithm SHA384 | Select-Object -ExpandProperty Hash }
+
 		# if hashes match...
 		If ($SourceHash -eq $DestinationHash) {
 			Write-Verbose -Message "Skipped '$($Item.FullName)' file on '$VMName' VM; '$($DestinationPath)' file has matching file hash: $($DestinationHash)"
 			Continue NextItem
+		}
+	}
+	# if destination item not found...
+	Else {
+		# retrieve information for directory for destination item
+		$DirectoryInfo = [System.IO.DirectoryInfo]::new($FileInfo.DirectoryName)
+
+		# if directory for destination item not found...
+		If (!$DirectoryInfo.Exists) {
+			# create directory for destination item
+			Try {
+				[System.IO.Directory]::CreateDirectory($FileInfo.DirectoryName)
+			}
+			Catch {
+				Write-Warning -Message "could not create '$($FileInfo.DirectoryName)' directory: $($_.Exception.Message)"
+				Continue NextItem
+			}
 		}
 	}
 
