@@ -1,8 +1,8 @@
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-    [Parameter(Position = 0, Mandatory = $True, ValueFromPipeline)]
+    [Parameter(Position = 0, Mandatory, ValueFromPipeline)]
     [uint32]$RequestID,
-    [Parameter(Position = 1, Mandatory = $True)]
+    [Parameter(Position = 1, Mandatory)]
     [string]$OutFile
 )
 
@@ -55,4 +55,4 @@ Catch {
 }
 
 # report state
-Write-Host "wrote certificate from '$RequestID' request ID to file: $OutFile"
+Write-Host "published certificate with '$RequestID' request ID to file: $OutFile"
