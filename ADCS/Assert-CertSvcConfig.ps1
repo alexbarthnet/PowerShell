@@ -1,9 +1,7 @@
 [CmdletBinding(SupportsShouldProcess)]
 Param(
 	[Parameter(Position = 0, Mandatory = $True)]
-	[string]$Url,
-	[Parameter(Position = 1)]
-	[switch]$Root
+	[string]$Url
 )
 
 Function Assert-ItemPropertyValue {
@@ -49,18 +47,18 @@ Function Assert-ItemPropertyValue {
 				$null = New-ItemProperty -Path $Path -Name $Name -Value $Value -PropertyType $PropertType -Force
 			}
 			Catch {
-				Write-Warning -Message "could not update value(s) of '$Name' property at '$Path' path: $($_.Exception.Message)"
+				Write-Warning -Message "could not update value(s) of '$Name' property: $($_.Exception.Message)"
 				Return
 			}
 
 			# report state and return true
-			Write-Host "Updated value(s) of '$Name' property at '$Path' path: $Value"
+			Write-Host "Updated value(s) of '$Name' property: $Value"
 			Return $true
 		}
 	}
 	Else {
 		# report state
-		Write-Host "Verified value(s) of '$Name' property at '$Path' path: $Value"
+		Write-Host "Verified value(s) of '$Name' property: $Value"
 	}
 
 
@@ -69,414 +67,156 @@ Function Assert-ItemPropertyValue {
 # retrieve required values from registry
 $Path = (Get-ChildItem -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\CertSvc\Configuration').PSPath
 
-################
-# AIA
-################
-
-# define parameters
-$AssertItemPropertyValue = @{
-	Path         = $Path
-	Name         = 'CACertPublicationURLs'
-	Value        = '0:C:\Windows\system32\CertSrv\CertEnroll\%3%4.crt', "2:http://$Url/pki/%3%4.crt"
-	PropertyType = 'MultiString'
+# if URL not provided...
+if (!$PSBoundParameters.ContainsKey('Url')) {
+	# retrieve pre-configured URL from registry
+	Try {
+		$Url = Get-ItemPropertyValue -Path $Path -Name 'CAServiceURL'
+	}
+	Catch {
+		Return $_
+	}
 }
 
-# assert values
+# retrieve CA type
 Try {
-	$ValueUpdated = Assert-ItemPropertyValue @AssertItemPropertyValue
+	$CAType = Get-ItemPropertyValue -Path $Path -Name 'CAType'
 }
 Catch {
-	Write-Warning -Message 'could not assert value(s) for '$($AssertItemPropertyValue['Name'])''
+	Return $_
 }
 
-# if value updated...
-If ($ValueUpdated) {
-	$RestartRequired = $true
+# reference: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-wcce/4fa5241c-d10e-4011-87e0-c74753d725a3
+# if CAType maps to Enterprise Root CA or Standalone Root CA...
+If ($CAType -in 0, 3) {
+	$Root = $true
 }
 
-################
-# CDP
-################
-
-# if root requested...
+# if root CA requested...
 If ($Root) {
-	# define value(s) for root CA
-	$Value = '1:C:\Windows\system32\CertSrv\CertEnroll\%3%8.crl', "2:http://$Url/pki/%3%8.crl"
+	# define ordered dictionary of hashtables for root CAs
+	$Dictionary = [ordered]@{
+		CACertPublicationURLs = @{
+			Value        = '0:C:\Windows\system32\CertSrv\CertEnroll\%3%4.crt', "2:http://$Url/pki/%3%4.crt"
+			PropertyType = 'MultiString'
+		}
+		CRLPublicationURLs    = @{
+			Value        = '1:C:\Windows\system32\CertSrv\CertEnroll\%3%8.crl', "2:http://$Url/pki/%3%8.crl"
+			PropertyType = 'MultiString'
+		}
+		CRLPeriod             = @{
+			Value        = 'Months'
+			PropertyType = 'String'
+		}
+		CRLPeriodUnits        = @{
+			Value        = 1
+			PropertyType = 'DWord'
+		}
+		CRLOverlapPeriod      = @{
+			Value        = 'Weeks'
+			PropertyType = 'String'
+		}
+		CRLOverlapUnits       = @{
+			Value        = 1
+			PropertyType = 'DWord'
+		}
+		CRLDeltaPeriod        = @{
+			Value        = 'Days'
+			PropertyType = 'String'
+		}
+		CRLDeltaPeriodUnits   = @{
+			Value        = 0
+			PropertyType = 'DWord'
+		}
+		CRLDeltaOverlapPeriod = @{
+			Value        = 'Hours'
+			PropertyType = 'String'
+		}
+		CRLDeltaOverlapUnits  = @{
+			Value        = 0
+			PropertyType = 'DWord'
+		}
+		ValidityPeriod        = @{
+			Value        = 'Years'
+			PropertyType = 'String'
+		}
+		ValidityPeriodUnits   = @{
+			Value        = 10
+			PropertyType = 'DWord'
+		}
+	}
 }
 Else {
-	# define value(s) for issuing CA
-	$Value = '65:C:\Windows\system32\CertSrv\CertEnroll\%3%8%9.crl', "6:http://$Url/pki/%3%8%9.crl"
+	# define ordered dictionary of hashtables for issuing CAs
+	$Dictionary = [ordered]@{
+		CACertPublicationURLs = @{
+			Value        = '0:C:\Windows\system32\CertSrv\CertEnroll\%3%4.crt', "2:http://$Url/pki/%3%4.crt"
+			PropertyType = 'MultiString'
+		}
+		CRLPublicationURLs    = @{
+			Value        = '65:C:\Windows\system32\CertSrv\CertEnroll\%3%8%9.crl', "6:http://$Url/pki/%3%8%9.crl"
+			PropertyType = 'MultiString'
+		}
+		CRLPeriod             = @{
+			Value        = 'Weeks'
+			PropertyType = 'String'
+		}
+		CRLPeriodUnits        = @{
+			Value        = 2
+			PropertyType = 'DWord'
+		}
+		CRLOverlapPeriod      = @{
+			Value        = 'Days'
+			PropertyType = 'String'
+		}
+		CRLOverlapUnits       = @{
+			Value        = 4
+			PropertyType = 'DWord'
+		}
+		CRLDeltaPeriod        = @{
+			Value        = 'Days'
+			PropertyType = 'String'
+		}
+		CRLDeltaPeriodUnits   = @{
+			Value        = 1
+			PropertyType = 'DWord'
+		}
+		CRLDeltaOverlapPeriod = @{
+			Value        = 'Hours'
+			PropertyType = 'String'
+		}
+		CRLDeltaOverlapUnits  = @{
+			Value        = 6
+			PropertyType = 'DWord'
+		}
+		ValidityPeriod        = @{
+			Value        = 'Years'
+			PropertyType = 'String'
+		}
+		ValidityPeriodUnits   = @{
+			Value        = 3
+			PropertyType = 'DWord'
+		}
+	}
 }
 
-# define parameters
-$AssertItemPropertyValue = @{
-	Path         = $Path
-	Name         = 'CRLPublicationURLs'
-	Value        = $Value
-	PropertyType = 'MultiString'
-}
+# loop through keys in dictionary
+ForEach ($Name in $Dictionary.Keys) {
+	# retrieve parameters hashtable from dictionary
+	$Parameters = $Dictionary[$Name]
 
-# assert values
-Try {
-	$ValueUpdated = Assert-ItemPropertyValue @AssertItemPropertyValue
-}
-Catch {
-	Write-Warning -Message 'could not assert value(s) for '$($AssertItemPropertyValue['Name'])''
-}
+	# assert values
+	Try {
+		$ValueUpdated = Assert-ItemPropertyValue @Parameters -Path $Path -Name $Name
+	}
+	Catch {
+		Write-Warning -Message "could not assert value(s) for '$Name'"
+	}
 
-# if value updated...
-If ($ValueUpdated) {
-	$RestartRequired = $true
-}
-
-####################
-# CRL period type
-####################
-
-# if root requested...
-If ($Root) {
-	# define desired value(s) for root CAs
-	$Value = 'Months'
-}
-Else {
-	# define desired value(s) for issuing CAs
-	$Value = 'Weeks'
-}
-
-# define parameters
-$AssertItemPropertyValue = @{
-	Path         = $Path
-	Name         = 'CRLPeriod'
-	Value        = $Value
-	PropertyType = 'String'
-}
-
-# assert values
-Try {
-	$ValueUpdated = Assert-ItemPropertyValue @AssertItemPropertyValue
-}
-Catch {
-	Write-Warning -Message 'could not assert value(s) for '$($AssertItemPropertyValue['Name'])''
-}
-
-# if value updated...
-If ($ValueUpdated) {
-	$RestartRequired = $true
-}
-
-####################
-# CRL period unit
-####################
-
-# if root requested...
-If ($Root) {
-	# define desired value(s) for root CAs
-	$Value = 1
-}
-Else {
-	# define desired value(s) for issuing CAs
-	$Value = 2
-}
-
-# define parameters
-$AssertItemPropertyValue = @{
-	Path         = $Path
-	Name         = 'CRLPeriodUnits'
-	Value        = $Value
-	PropertyType = 'DWord'
-}
-
-# assert values
-Try {
-	$ValueUpdated = Assert-ItemPropertyValue @AssertItemPropertyValue
-}
-Catch {
-	Write-Warning -Message 'could not assert value(s) for '$($AssertItemPropertyValue['Name'])''
-}
-
-# if value updated...
-If ($ValueUpdated) {
-	$RestartRequired = $true
-}
-
-####################
-# CRL overlap type
-####################
-
-# if root requested...
-If ($Root) {
-	# define desired value(s) for root CAs
-	$Value = 'Weeks'
-}
-Else {
-	# define desired value(s) for issuing CAs
-	$Value = 'Days'
-}
-
-# define parameters
-$AssertItemPropertyValue = @{
-	Path         = $Path
-	Name         = 'CRLOverlapPeriod'
-	Value        = $Value
-	PropertyType = 'String'
-}
-
-# assert values
-Try {
-	$ValueUpdated = Assert-ItemPropertyValue @AssertItemPropertyValue
-}
-Catch {
-	Write-Warning -Message 'could not assert value(s) for '$($AssertItemPropertyValue['Name'])''
-}
-
-# if value updated...
-If ($ValueUpdated) {
-	$RestartRequired = $true
-}
-
-####################
-# CRL overlap unit
-####################
-
-# if root requested...
-If ($Root) {
-	# define desired value(s) for root CAs
-	$Value = 1
-}
-Else {
-	# define desired value(s) for issuing CAs
-	$Value = 4
-}
-
-# define parameters
-$AssertItemPropertyValue = @{
-	Path         = $Path
-	Name         = 'CRLOverlapUnits'
-	Value        = $Value
-	PropertyType = 'DWord'
-}
-
-# assert values
-Try {
-	$ValueUpdated = Assert-ItemPropertyValue @AssertItemPropertyValue
-}
-Catch {
-	Write-Warning -Message 'could not assert value(s) for '$($AssertItemPropertyValue['Name'])''
-}
-
-# if value updated...
-If ($ValueUpdated) {
-	$RestartRequired = $true
-}
-
-########################
-# Delta CRL period type
-########################
-
-# if root requested...
-If ($Root) {
-	# define desired value(s) for root CAs
-	$Value = 'Days'
-}
-Else {
-	# define desired value(s) for issuing CAs
-	$Value = 'Days'
-}
-
-# define parameters
-$AssertItemPropertyValue = @{
-	Path         = $Path
-	Name         = 'CRLDeltaPeriod'
-	Value        = $Value
-	PropertyType = 'String'
-}
-
-# assert values
-Try {
-	$ValueUpdated = Assert-ItemPropertyValue @AssertItemPropertyValue
-}
-Catch {
-	Write-Warning -Message 'could not assert value(s) for '$($AssertItemPropertyValue['Name'])''
-}
-
-# if value updated...
-If ($ValueUpdated) {
-	$RestartRequired = $true
-}
-
-####################
-# Delta CRL period unit
-####################
-
-# if root requested...
-If ($Root) {
-	# define desired value(s) for root CAs
-	$Value = 0
-}
-Else {
-	# define desired value(s) for issuing CAs
-	$Value = 1
-}
-
-# define parameters
-$AssertItemPropertyValue = @{
-	Path         = $Path
-	Name         = 'CRLDeltaPeriodUnits'
-	Value        = $Value
-	PropertyType = 'DWord'
-}
-
-# assert values
-Try {
-	$ValueUpdated = Assert-ItemPropertyValue @AssertItemPropertyValue
-}
-Catch {
-	Write-Warning -Message 'could not assert value(s) for '$($AssertItemPropertyValue['Name'])''
-}
-
-# if value updated...
-If ($ValueUpdated) {
-	$RestartRequired = $true
-}
-
-####################
-# Delta CRL overlap type
-####################
-
-# if root requested...
-If ($Root) {
-	# define desired value(s) for root CAs
-	$Value = 'Hours'
-}
-Else {
-	# define desired value(s) for issuing CAs
-	$Value = 'Hours'
-}
-
-# define parameters
-$AssertItemPropertyValue = @{
-	Path         = $Path
-	Name         = 'CRLDeltaOverlapPeriod'
-	Value        = $Value
-	PropertyType = 'String'
-}
-
-# assert values
-Try {
-	$ValueUpdated = Assert-ItemPropertyValue @AssertItemPropertyValue
-}
-Catch {
-	Write-Warning -Message 'could not assert value(s) for '$($AssertItemPropertyValue['Name'])''
-}
-
-# if value updated...
-If ($ValueUpdated) {
-	$RestartRequired = $true
-}
-
-########################
-# Delta CRL overlap unit
-########################
-
-# if root requested...
-If ($Root) {
-	# define desired value(s) for root CAs
-	$Value = 0
-}
-Else {
-	# define desired value(s) for issuing CAs
-	$Value = 6
-}
-
-# define parameters
-$AssertItemPropertyValue = @{
-	Path         = $Path
-	Name         = 'CRLDeltaOverlapUnits'
-	Value        = $Value
-	PropertyType = 'DWord'
-}
-
-# assert values
-Try {
-	$ValueUpdated = Assert-ItemPropertyValue @AssertItemPropertyValue
-}
-Catch {
-	Write-Warning -Message 'could not assert value(s) for '$($AssertItemPropertyValue['Name'])''
-}
-
-# if value updated...
-If ($ValueUpdated) {
-	$RestartRequired = $true
-}
-
-########################
-# validity type
-########################
-
-# if root requested...
-If ($Root) {
-	# define desired value(s) for root CAs
-	$Value = 'Years'
-}
-Else {
-	# define desired value(s) for issuing CAs
-	$Value = 'Years'
-}
-
-# define parameters
-$AssertItemPropertyValue = @{
-	Path         = $Path
-	Name         = 'ValidityPeriod'
-	Value        = $Value
-	PropertyType = 'String'
-}
-
-# assert values
-Try {
-	$ValueUpdated = Assert-ItemPropertyValue @AssertItemPropertyValue
-}
-Catch {
-	Write-Warning -Message 'could not assert value(s) for '$($AssertItemPropertyValue['Name'])''
-}
-
-# if value updated...
-If ($ValueUpdated) {
-	$RestartRequired = $true
-}
-
-########################
-# validity unit
-########################
-
-# if root requested...
-If ($Root) {
-	# define desired value(s) for root CAs
-	$Value = 10
-}
-Else {
-	# define desired value(s) for issuing CAs
-	$Value = 3
-}
-
-# define parameters
-$AssertItemPropertyValue = @{
-	Path         = $Path
-	Name         = 'ValidityPeriodUnits'
-	Value        = $Value
-	PropertyType = 'DWord'
-}
-
-# assert values
-Try {
-	$ValueUpdated = Assert-ItemPropertyValue @AssertItemPropertyValue
-}
-Catch {
-	Write-Warning -Message 'could not assert value(s) for '$($AssertItemPropertyValue['Name'])''
-}
-
-# if value updated...
-If ($ValueUpdated) {
-	$RestartRequired = $true
+	# if value updated...
+	If ($ValueUpdated) {
+		$RestartRequired = $true
+	}
 }
 
 # if restart required...
