@@ -24,9 +24,18 @@ Catch {
     Return
 }
 
+# create admin object
+Try {
+    $AdminObject = New-Object -ComObject 'CertificateAuthority.Admin'
+}
+Catch {
+    Write-Warning -Message "could not create CA admin object: $($_.Exception.Message)"
+    Return
+}
+
 # resubmit request
 Try {
-    $ConfigObject.ResubmitRequest($ConfigString, $RequestID)
+    $AdminObject.ResubmitRequest($ConfigString, $RequestID)
 }
 Catch {
     Write-Warning -Message "could not issue pending certificate with '$RequestID' request ID: $($_.Exception.Message)"
