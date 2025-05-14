@@ -23,6 +23,7 @@ Param(
 	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'RemoveOSD')]
 	[switch]$RemoveOSD,
 	# All - name of VM
+	[Parameter(Mandatory = $False, Position = 1, ParameterSetName = 'Default')]
 	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'Add')]
 	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'Remove')]
 	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'AddVMHardDiskDrive')]
@@ -516,17 +517,21 @@ Begin {
 		$JsonKey = $JsonData.$JsonKeyName
 
 		# if verbose...
-		If ($VerbosePreference -eq 'Continue' -or $null -eq $JsonKey) {
+		If ($VerbosePreference -eq 'Continue') {
 			# ...display full file
 			Write-Host "`nDisplaying full configuration file: '$Json'"
 			$JsonData | ConvertTo-Json -Depth 100
 		}
 		# if not verbose...
 		Else {
-			# ...and display JSON item if it exists (i.e. wasn't removed)
+			# ...and JSON item exists (i.e. wasn't removed)...
 			If ($null -ne $JsonKey) {
+				# ...display JSON item if it exists (i.e. wasn't removed)
 				Write-Host "`nDisplaying '$(Get-Variable -Name $JsonKeyParameter -ValueOnly)' entry in configuration file: '$Json'"
 				$JsonKey | ConvertTo-Json -Depth 100
+			}
+			ElseIf ($PSCmdlet.ParameterSetName -eq 'Default') {
+				Write-Warning "`nCould not locate'$(Get-Variable -Name $JsonKeyParameter -ValueOnly)' entry in configuration file: '$Json'"
 			}
 		}
 	}
