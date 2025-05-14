@@ -114,17 +114,26 @@ Catch {
 # trim path
 $Path = $Path.TrimEnd('\')
 
-# retrieve path info on host
+# test path as file on host
 Try {
-	$PathInfo = [System.IO.FileInfo]::new($Path)
+	$PathIsFile = [System.IO.File]::Exists($Path)
 }
 Catch {
-	Write-Warning -Message "could not retrieve info for '$Path' path on host: $($_.Exception.Message)"
+	Write-Warning -Message "could not test '$Path' path as file on host: $($_.Exception.Message)"
 	Return $_
 }
 
-# verify path on host
-If (!$PathInfo.Exists) {
+# test path as directory on host
+Try {
+	$PathIsDirectory = [System.IO.Directory]::Exists($Path)
+}
+Catch {
+	Write-Warning -Message "could not test '$Path' path as directory on host: $($_.Exception.Message)"
+	Return $_
+}
+
+# if path not found on host...
+If (!$PathIsFile -and !$PathIsDirectory) {
 	# warn and return
 	Write-Warning -Message "could not locate '$Path' path on host"
 	Return
@@ -133,9 +142,9 @@ If (!$PathInfo.Exists) {
 # trim destination
 $Destination = $Destination.TrimEnd('\')
 
-# retrieve destination info on VM
+# test destination on VM
 Try {
-	$DestinationInfo = Invoke-Command -Session $Session -ScriptBlock { [System.IO.FileInfo]::new($using:Destination) }
+	$DestinationExists = Invoke-Command -Session $Session -ScriptBlock { [System.IO.Directory]::Exists($using:Destination) }
 }
 Catch {
 	Write-Warning -Message "could not retrieve info for '$Destination' path on '$VMName' VM: $($_.Exception.Message)"
@@ -143,7 +152,7 @@ Catch {
 }
 
 # if destination not found on VM...
-If (!$DestinationInfo.Exists) {
+If (!$DestinationExists) {
 	# if create destination requested...
 	If ($CreateDestination) {
 		# create destination on VM
@@ -161,14 +170,6 @@ If (!$DestinationInfo.Exists) {
 	}
 }
 
-# determine if path is a directory; mirror commands in export function for parity
-Try {
-	$PathIsDirectory = Invoke-Command -ScriptBlock { $IsDirectory = $PathInfo.Attributes -band [System.IO.FileAttributes]::Directory; $IsDirectory -as [bool] }
-}
-Catch {
-	Write-Warning -Message "could not determine if '$Path' on host is a file or directory"
-}
-
 # if path is a directory...
 If ($PathIsDirectory) {
 	# retrieve files from path on VM
@@ -184,15 +185,18 @@ If ($PathIsDirectory) {
 Else {
 	# retrieve file from path on VM
 	Try {
-		$Items = @(Get-Item -Path $Path -ErrorAction 'Stop')
+		$Item = Get-Item -Path $Path -ErrorAction 'Stop'
 	}
 	Catch {
 		Write-Warning -Message "could not retrieve file with '$Path' on host"
 		Return $_
 	}
 
+	# create array containing item for file
+	$Items = @($Item)
+
 	# update path to parent directory of file
-	$Path = $PathInfo.DirectoryName.TrimEnd('\')
+	$Path = $Item.DirectoryName.TrimEnd('\')
 }
 
 # remove files in destination on VM before copying files from path on host
