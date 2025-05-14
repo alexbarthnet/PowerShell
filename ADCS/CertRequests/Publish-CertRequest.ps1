@@ -42,8 +42,11 @@ Catch {
     Return
 }
 
+# define enum for get certificate
+enum EncodingType { Base64WithHeader = 0x0; Base64 = 0x1 }
+
 # retrieve base64 encoded certificate text from request object
-$Value = $RequestObject.GetCertificate(0)
+$Value = $RequestObject.GetCertificate([EncodingType]::Base64WithHeader)
 
 # save certificate to file
 Try {
