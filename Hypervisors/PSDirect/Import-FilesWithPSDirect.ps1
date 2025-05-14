@@ -157,7 +157,7 @@ If (!$DestinationExists) {
 	If ($CreateDestination) {
 		# create destination on VM
 		Try {
-			Invoke-Command -Session $Session -ScriptBlock { [System.IO.Directory]::CreateDirectory($using:Destination) }
+			Invoke-Command -Session $Session -ScriptBlock { $null = [System.IO.Directory]::CreateDirectory($using:Destination) }
 		}
 		Catch {
 			Write-Warning -Message "could not create '$Destination' path on '$VMName' VM: $($_.Exception.Message)"

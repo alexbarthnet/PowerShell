@@ -157,7 +157,7 @@ If (!$DestinationExists) {
 	If ($CreateDestination) {
 		# create destination on host
 		Try {
-			[System.IO.Directory]::CreateDirectory($Destination)
+			$null = [System.IO.Directory]::CreateDirectory($Destination)
 		}
 		Catch {
 			Write-Warning -Message "could not create '$Destination' path on host: $($_.Exception.Message)"
