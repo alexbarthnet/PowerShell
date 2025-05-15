@@ -1,11 +1,9 @@
 [CmdletBinding()]
 Param(
     [Parameter(DontShow)]
-    [string]$ComputerSystem = (Get-CimInstance -ClassName Win32_ComputerSystem),
+    [string]$ComputerName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
     [Parameter(DontShow)]
-    [string]$ComputerName = $ComputerSystem.Name,
-    [Parameter(DontShow)]
-    [string]$DomainName = $ComputerSystem.Domain,
+    [string]$DomainName = [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain().Name,
     [Parameter(Position = 0, Mandatory)]
     [string]$GroupName,
     [Parameter(Position = 1, Mandatory)]
