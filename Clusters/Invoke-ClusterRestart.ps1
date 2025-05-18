@@ -1498,6 +1498,8 @@ Process {
 		$ScheduledTaskTrigger = @{
 			# run immediately
 			At                 = [System.Datetime]::Now
+			# run "once" to allow sub-daily repetition
+			Once = $true
 			# run every minute
 			RepetitionInterval = [System.Timespan]::FromMinutes(1)
 			# run for (node count * days) to permit a day for storage jobs
