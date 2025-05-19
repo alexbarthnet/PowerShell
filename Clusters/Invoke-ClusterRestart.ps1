@@ -2,28 +2,32 @@
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
-	# define task name
-	[Parameter(DontShow)]
-	[string]$TaskName = 'Invoke-ClusterRestart',
 	# mode switches
-	[Parameter(Mandatory, ParameterSetName = 'Invoke')]
-	[switch]$Invoke,
-	[Parameter(Mandatory, ParameterSetName = 'Restart')]
-	[switch]$Restart,
-	[Parameter(Mandatory, ParameterSetName = 'Resume')]
-	[switch]$Resume,
 	[Parameter(Mandatory, ParameterSetName = 'Start')]
 	[switch]$Start,
 	[Parameter(Mandatory, ParameterSetName = 'Stop')]
 	[switch]$Stop,
+	[Parameter(Mandatory, ParameterSetName = 'Restart')]
+	[switch]$Restart,
 	[Parameter(Mandatory, ParameterSetName = 'Suspend')]
 	[switch]$Suspend,
+	[Parameter(Mandatory, ParameterSetName = 'Resume')]
+	[switch]$Resume,
 	# mode to initiate process
 	[Parameter(ParameterSetName = 'Start')]
 	[switch]$Suspended,
 	# path to state file
 	[Parameter(ParameterSetName = 'Start')]
-	[string]$Path
+	[string]$Path,
+	# define task name
+	[Parameter(DontShow)]
+	[string]$TaskName = 'Invoke-ClusterRestart',
+	# switch to skip transcript logging
+	[Parameter(DontShow)]
+	[switch]$SkipTranscript,
+	# switch to skip text output logging
+	[Parameter(DontShow)]
+	[switch]$SkipTextOutput
 )
 
 Begin {
@@ -1335,6 +1339,39 @@ Begin {
 
 	## end TranscriptForCommand functions
 
+	Function Test-ClusterForStorageJobs {
+		# define boolean
+		$StorageJobsFound = $false
+
+		# retrieve storage jobs for storage pool
+		Try {
+			$StorageJobs = Get-StorageJob | Where-Object { $_.JobState -ne 'Completed' }
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve storage jobs on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# loop through storage jobs
+		:NextStorageJob ForEach ($StorageJob in $StorageJobs) {
+			# if storage jobs not already found...
+			If (!$StorageJobsFound) {
+				Write-Host "found '$($StorageJobs.Count)' storage job(s) on '$env:COMPUTERNAME' cluster node"
+			}
+			# udpate boolean
+			$StorageJobsFound = $true
+
+			# report active job
+			Write-Host " - Name: $($StorageJob.Name); State: $($StorageJob.JobState); Percent Complete: $($StorageJob.PercentComplete)"
+		}
+
+		# if any storage jobs found...
+		If ($StorageJobsFound) {
+			Return $true
+		}
+
+	}
+
 	# if default parameter set and skip transcript not requested...
 	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $SkipTranscript) {
 		# start transcript with default parameters and skip text output if requested
@@ -1349,7 +1386,26 @@ Begin {
 
 Process {
 	# start
-	If ($Start) {
+	If ($PSCmdlet.ParameterSetName -eq 'Start') {
+		################################################
+		# check cluster scheduled task before starting
+		################################################
+
+		# retrieve clustered scheduled task for cluster
+		Try {
+			$ClusteredScheduledTask = Get-ClusteredScheduledTask -TaskName $TaskName -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not call function to retrieve '$TaskName' clustered scheduled task: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# if clustered scheduled task found...
+		If ($null -ne $ClusteredScheduledTask) {
+			Write-Warning -Message "found existing '$TaskName' clustered scheduled task, run this script with the Restart or Stop parameters to reset or remove the scheduled task"
+			Return
+		}
+
 		################################################
 		# check cluster state before starting
 		################################################
@@ -1462,7 +1518,7 @@ Process {
 		# define task action
 		$ScheduledTaskAction = @{
 			Execute  = 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
-			Argument = '-NonInteractive -NoProfile -ExecutionPolicy ByPass -File "{0}" -Invoke' -f $Path
+			Argument = '-NonInteractive -NoProfile -ExecutionPolicy ByPass -File "{0}"' -f $Path
 		}
 
 		# create task action
@@ -1474,14 +1530,17 @@ Process {
 			Return $_
 		}
 
+		# define task action
+		$ScheduledTaskSettingsSet = @{
+			AllowStartIfOnBatteries    = $true
+			DontStopIfGoingOnBatteries = $true
+			StartWhenAvailable         = $true
+		}
+
 		# if suspended start requested...
 		If ($PSBoundParameters.ContainsKey('Suspended')) {
 			# define task settings with task disabled
-			$ScheduledTaskSettingsSet = @{ Disable = $true }
-		}
-		Else {
-			# define task settings with task enabled
-			$ScheduledTaskSettingsSet = @{ Disable = $false }
+			$ScheduledTaskSettingsSet['Disable'] = $true
 		}
 
 		# create task settings
@@ -1493,13 +1552,12 @@ Process {
 			Return $_
 		}
 
-
 		# define task trigger
 		$ScheduledTaskTrigger = @{
+			# run "once" to allow sub-daily repetition
+			Once               = $true
 			# run immediately
 			At                 = [System.Datetime]::Now
-			# run "once" to allow sub-daily repetition
-			Once = $true
 			# run every minute
 			RepetitionInterval = [System.Timespan]::FromMinutes(1)
 			# run for (node count * days) to permit a day for storage jobs
@@ -1527,7 +1585,7 @@ Process {
 
 		# create scheduled task
 		Try {
-			Register-ClusteredScheduledTask @ClusteredScheduledTask
+			$null = Register-ClusteredScheduledTask @ClusteredScheduledTask
 		}
 		Catch {
 			Write-Warning -Message "could not register '$TaskName' clustered scheduled task: $($_.Exception.Message)"
@@ -1535,12 +1593,16 @@ Process {
 		}
 
 		# report state and return
-		Write-Host "registered '$TaskName' clustered scheduled task"
+		Write-Host "created '$TaskName' clustered scheduled task"
 		Return
 	}
 
 	# stop
-	If ($Stop) {
+	If ($PSCmdlet.ParameterSetName -eq 'Stop') {
+		################################################
+		# check cluster scheduled task before starting
+		################################################
+
 		# retrieve clustered scheduled task for cluster
 		Try {
 			$ClusteredScheduledTask = Get-ClusteredScheduledTask -TaskName $TaskName -ErrorAction 'Stop'
@@ -1556,112 +1618,30 @@ Process {
 			Return
 		}
 
+		################################################
+		# remove cluster scheduled task
+		################################################
+
 		# remove scheduled task
 		Try {
-			Unregister-ClusteredScheduledTask -TaskName $TaskName
+			$null = Unregister-ClusteredScheduledTask -TaskName $TaskName
 		}
 		Catch {
 			Write-Warning -Message "could not unregister '$TaskName' clustered scheduled task: $($_.Exception.Message)"
 			Return $_
 		}
-	}
 
-	# pause
-	If ($Pause) {
-		# retrieve clustered scheduled task for cluster
-		Try {
-			$ClusteredScheduledTask = Get-ClusteredScheduledTask -TaskName $TaskName -ErrorAction 'Stop'
-		}
-		Catch {
-			Write-Warning -Message "could not call function to retrieve '$TaskName' clustered scheduled task: $($_.Exception.Message)"
-			Return $_
-		}
-
-		# if clustered scheduled task not found...
-		If ($null -eq $ClusteredScheduledTask) {
-			Write-Warning -Message "could not locate '$TaskName' clustered scheduled task"
-			Return
-		}
-
-		# if clustered scheduled task is not enabled...
-		If ($ClusteredScheduledTask.TaskDefinition.Settings.Enabled -eq $false) {
-			Write-Warning -Message "found '$TaskName' clustered scheduled task already disabled (paused)"
-			Return
-		}
-
-		# define task settings
-		$ScheduledTaskSettingsSet = @{
-			Disable = $true
-		}
-
-		# create task settings
-		Try {
-			$Settings = New-ScheduledTaskSettingsSet @ScheduledTaskSettingsSet
-		}
-		Catch {
-			Write-Warning -Message "could not create scheduled task settings object: $($_.Exception.Message)"
-			Return $_
-		}
-
-		# update scheduled task
-		Try {
-			Set-ClusteredScheduledTask -TaskName $TaskName -Settings $Settings
-		}
-		Catch {
-			Write-Warning -Message "could not update and disable '$TaskName' clustered scheduled task: $($_.Exception.Message)"
-			Return $_
-		}
-	}
-
-	# resume
-	If ($Resume) {
-		# retrieve clustered scheduled task for cluster
-		Try {
-			$ClusteredScheduledTask = Get-ClusteredScheduledTask -TaskName $TaskName -ErrorAction 'Stop'
-		}
-		Catch {
-			Write-Warning -Message "could not call function to retrieve '$TaskName' clustered scheduled task: $($_.Exception.Message)"
-			Return $_
-		}
-
-		# if clustered scheduled task not found...
-		If ($null -eq $ClusteredScheduledTask) {
-			Write-Warning -Message "could not locate '$TaskName' clustered scheduled task"
-			Return
-		}
-
-		# if clustered scheduled task is not enabled...
-		If ($ClusteredScheduledTask.TaskDefinition.Settings.Enabled -eq $true) {
-			Write-Warning -Message "found '$TaskName' clustered scheduled task already enabled (active)"
-			Return
-		}
-
-		# define task settings
-		$ScheduledTaskSettingsSet = @{
-			Disable = $false
-		}
-
-		# create task settings
-		Try {
-			$Settings = New-ScheduledTaskSettingsSet @ScheduledTaskSettingsSet
-		}
-		Catch {
-			Write-Warning -Message "could not create scheduled task settings object: $($_.Exception.Message)"
-			Return $_
-		}
-
-		# update scheduled task
-		Try {
-			Set-ClusteredScheduledTask -TaskName $TaskName -Settings $Settings
-		}
-		Catch {
-			Write-Warning -Message "could not update and enable '$TaskName' clustered scheduled task: $($_.Exception.Message)"
-			Return $_
-		}
+		# report state and return
+		Write-Host "removed '$TaskName' clustered scheduled task"
+		Return
 	}
 
 	# restart
-	If ($Restart) {
+	If ($PSCmdlet.ParameterSetName -eq 'Restart') {
+		################################################
+		# check cluster scheduled task before starting
+		################################################
+
 		# retrieve clustered scheduled task for cluster
 		Try {
 			$ClusteredScheduledTask = Get-ClusteredScheduledTask -TaskName $TaskName -ErrorAction 'Stop'
@@ -1674,6 +1654,37 @@ Process {
 		# if clustered scheduled task not found...
 		If ($null -eq $ClusteredScheduledTask) {
 			Write-Warning -Message "could not locate '$TaskName' clustered scheduled task"
+			Return
+		}
+
+		################################################
+		# check cluster state before starting
+		################################################
+
+		# retrieve cluster nodes
+		Try {
+			$ClusterNodes = Get-ClusterNode | Sort-Object -Property NodeName
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve local cluster nodes: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# get nodes with state other than Up
+		$NodesThatAreNotUp = $ClusterNodes | Where-Object { $_.State -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeState]::Up }
+
+		# if any nodes are not Up...
+		If ($NodesThatAreNotUp) {
+			Write-Warning -Message "found one or more nodes not in the 'Up' state: $($NodesThatAreNotUp.NodeName)"
+			Return
+		}
+
+		# get nodes with status other than Normal
+		$NodesThatAreNotNormal = $ClusterNodes | Where-Object { $_.State -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeStatusInformation]::Normal }
+
+		# if any nodes are not Normal...
+		If ($NodesThatAreNotNormal) {
+			Write-Warning -Message "found one or more nodes not in the 'Normal' status: $($NodesThatAreNotNormal.NodeName)"
 			Return
 		}
 
@@ -1713,17 +1724,150 @@ Process {
 
 		# update description of clustered scheduled task
 		Try {
-			Set-ClusteredScheduledTask -TaskName $TaskName -Description $Description
+			$null = Set-ClusteredScheduledTask -TaskName $TaskName -Description $Description
 		}
 		Catch {
 			Write-Warning -Message "could not update '$TaskName' clustered scheduled task: $($_.Exception.Message)"
 			Return $_
 		}
 
+		# report and return
+		Write-Host "reset state for '$TaskName' clustered scheduled task"
 	}
 
-	# invoke
-	If ($Invoke) {
+	# suspend
+	If ($PSCmdlet.ParameterSetName -eq 'Suspend') {
+		################################################
+		# check cluster scheduled task before starting
+		################################################
+
+		# retrieve clustered scheduled task for cluster
+		Try {
+			$ClusteredScheduledTask = Get-ClusteredScheduledTask -TaskName $TaskName -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not call function to retrieve '$TaskName' clustered scheduled task: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# if clustered scheduled task not found...
+		If ($null -eq $ClusteredScheduledTask) {
+			Write-Warning -Message "could not locate '$TaskName' clustered scheduled task"
+			Return
+		}
+
+		# if clustered scheduled task is not enabled...
+		If ($ClusteredScheduledTask.TaskDefinition.Settings.Enabled -eq $false) {
+			Write-Warning -Message "found '$TaskName' clustered scheduled task already disabled"
+			Return
+		}
+
+		################################################
+		# disable cluster scheduled task
+		################################################
+
+		# define task settings
+		$ScheduledTaskSettingsSet = @{
+			Disable = $true
+		}
+
+		# create task settings
+		Try {
+			$Settings = New-ScheduledTaskSettingsSet @ScheduledTaskSettingsSet
+		}
+		Catch {
+			Write-Warning -Message "could not create scheduled task settings object: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# update scheduled task
+		Try {
+			$null = Set-ClusteredScheduledTask -TaskName $TaskName -Settings $Settings
+		}
+		Catch {
+			Write-Warning -Message "could not disable '$TaskName' clustered scheduled task: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# report and return
+		Write-Host "disabled '$TaskName' clustered scheduled task"
+		Return
+	}
+
+	# resume
+	If ($PSCmdlet.ParameterSetName -eq 'Resume') {
+		################################################
+		# check cluster scheduled task before starting
+		################################################
+
+		# retrieve clustered scheduled task for cluster
+		Try {
+			$ClusteredScheduledTask = Get-ClusteredScheduledTask -TaskName $TaskName -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not call function to retrieve '$TaskName' clustered scheduled task: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# if clustered scheduled task not found...
+		If ($null -eq $ClusteredScheduledTask) {
+			Write-Warning -Message "could not locate '$TaskName' clustered scheduled task"
+			Return
+		}
+
+		# if clustered scheduled task is not enabled...
+		If ($ClusteredScheduledTask.TaskDefinition.Settings.Enabled -eq $true) {
+			Write-Warning -Message "found '$TaskName' clustered scheduled task already enabled"
+			Return
+		}
+
+		################################################
+		# enable cluster scheduled task
+		################################################
+
+		# define task settings
+		$ScheduledTaskSettingsSet = @{
+			Disable = $false
+		}
+
+		# create task settings
+		Try {
+			$Settings = New-ScheduledTaskSettingsSet @ScheduledTaskSettingsSet
+		}
+		Catch {
+			Write-Warning -Message "could not create scheduled task settings object: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# update scheduled task
+		Try {
+			$null = Set-ClusteredScheduledTask -TaskName $TaskName -Settings $Settings
+		}
+		Catch {
+			Write-Warning -Message "could not enable '$TaskName' clustered scheduled task: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# report and return
+		Write-Host "enabled '$TaskName' clustered scheduled task"
+		Return
+	}
+
+	# default
+	If ($PSCmdlet.ParameterSetName -eq 'Default') {
+		################################################
+		# retrieve cluster nodes before starting
+		################################################
+
+		# retrieve cluster nodes
+		Try {
+			$ClusterNodes = Get-ClusterNode | Sort-Object -Property NodeName
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve local cluster nodes: $($_.Exception.Message)"
+			Return $_
+		}
+
 		################################################
 		# retrieve stored state for cluster from task
 		################################################
@@ -1744,7 +1888,7 @@ Process {
 		}
 
 		# if description is empty...
-		If ([string]::IsNullOrEmpty($ClusteredScheduledTask.Description)) {
+		If ([string]::IsNullOrEmpty($ClusteredScheduledTask.TaskDefinition.Description)) {
 			# warn and return
 			Write-Warning -Message "found empty description on '$TaskName' clustered scheduled task"
 			Return
@@ -1752,7 +1896,7 @@ Process {
 
 		# retrieve cluster state object from scheduled task description
 		Try {
-			$ClusterState = ConvertFrom-Json -InputObject $ClusteredScheduledTask.Description -ErrorAction 'Stop'
+			$ClusterState = ConvertFrom-Json -InputObject $ClusteredScheduledTask.TaskDefinition.Description -ErrorAction 'Stop'
 		}
 		Catch {
 			Write-Warning -Message "could not convert description of scheduled task to JSON: $($_.Exception.Message)"
@@ -1760,31 +1904,123 @@ Process {
 		}
 
 		################################################
-		# filter stored state to first incomplete node
+		# validate stored state
 		################################################
 
-		# get stored state of first node that has not reached the Complete state
-		$CurrentNode = $ClusterState | Sort-Object -Property 'Name' | Where-Object { $_.State -ne 'Complete' } | Select-Object -First 1
+		# define boolean
+		$StateIsNotValid = $false
 
-		# if no nodes have not reached the Complete state...
-		If ($null -eq $CurrentNode) {
-			# unregister scheduled task?
+		# loop through cluster nodes
+		ForEach ($ClusterNode in $ClusterNodes) {
+			# get stored state of cluster node
+			$Node = $ClusterState | Where-Object { $_.Name -eq $ClusterNode.NodeName }
 
-			# declare complete and return
-			Write-Host 'all cluster nodes have restarted; exiting!'
+			# get count of entries for cluster node
+			$Count = Measure-Object -InputObject $Node | Select-Object -ExpandProperty 'Count'
+
+			# if node not found in state object...
+			If ($Count -eq 0) {
+				Write-Warning -Message "could not locate entry for '$($ClusterNode.NodeName)' cluster node in state object"
+				$StateIsNotValid = $true
+			}
+
+			# if node found multiple times in state object...
+			If ($Count -gt 1) {
+				Write-Warning -Message "found multiple entries for '$($ClusterNode.NodeName)' cluster node in state object"
+				$StateIsNotValid = $true
+			}
+		}
+
+		# loop through cluster state
+		ForEach ($Entry in $ClusterState) {
+
+		}
+
+		# if state is not valid...
+		If ($StateIsNotValid) {
+			Write-Warning -Message 'the state object is not valid'
 			Return
 		}
 
+		################################################
+		# check cluster state
+		################################################
+
+		# define boolean
+		$StateIsComplete = $true
+
+		# loop through cluster nodes
+		ForEach ($ClusterNode in $ClusterNodes) {
+			# get stored state of cluster node that has not reached the Complete state
+			$Node = $ClusterState | Where-Object { $_.Name -eq $ClusterNode.NodeName }
+
+			# if state of node is not complete...
+			If ($Node.State -ne 'Complete') {
+				$StateIsComplete = $false
+			}
+		}
+
+		# if all nodes are complete...
+		If ($StateIsComplete) {
+			# declare complete and return
+			Write-Host 'all cluster nodes have restarted'
+
+			# retrieve owner of Cluster Group
+			Try {
+				$ClusterGroupNode = Get-ClusterGroup -Name 'Cluster Group' | Select-Object -ExpandProperty OwnerNode | Select-Object -ExpandProperty Name
+			}
+			Catch {
+				Write-Warning -Message "could not retrieve current owner of 'Cluster Group' cluster group on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
+				Return $_
+			}
+
+			# if cluster group not on current node...
+			If ($ClusterGroupNode -ne $env:COMPUTERNAME) {
+				Return
+			}
+
+			# remove scheduled task
+			Try {
+				$null = Unregister-ClusteredScheduledTask -TaskName $TaskName
+			}
+			Catch {
+				Write-Warning -Message "could not unregister '$TaskName' clustered scheduled task: $($_.Exception.Message)"
+				Return $_
+			}
+
+			# report state
+			Write-Host "removed '$TaskName' clustered scheduled task"
+
+			# loop through cluster state
+			ForEach ($ClusterNode in $ClusterNodes) {
+				# get stored state of cluster node that has not reached the Complete state
+				$Node = $ClusterState | Where-Object { $_.Name -eq $ClusterNode.NodeName }
+
+				# update state of node for final report
+				$Node.State = 'Unregistered'
+			}
+
+			# return
+			Return
+		}
+
+		################################################
+		# get current node
+		################################################
+
+		# get stored state of first node that has not reached the Complete state
+		$StoredClusterNode = $ClusterState | Sort-Object -Property 'Name' | Where-Object { $_.State -ne 'Complete' } | Select-Object -First 1
+
 		# if current node name is not local computer name...
-		If ($CurrentNode.Name -ne $env:COMPUTERNAME) {
+		If ($StoredClusterNode.Name -ne $env:COMPUTERNAME) {
 			# declare not current and return
-			Write-Host 'local computer is not current node; exiting!'
+			Write-Host 'local computer is not current node'
 			Return
 		}
 
 		# get active state of cluster node
 		Try {
-			$ClusterNode = Get-ClusterNode -Name $env:COMPUTERNAME
+			$ActiveClusterNode = Get-ClusterNode -Name $env:COMPUTERNAME
 		}
 		Catch {
 			Write-Warning -Message "could not retrieve active state of '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
@@ -1792,53 +2028,48 @@ Process {
 		}
 
 		################################################
-		# if current node state is empty...
+		# verify prerequisites for empty state...
 		################################################
 
 		# if stored state of current node is empty...
-		If ([string]::IsNullOrEmpty($CurrentNode.State)) {
+		If ([string]::IsNullOrEmpty($StoredClusterNode.State)) {
 			# if active state of current node is not up...
-			If ($ClusterNode.State -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeState]::Up ) {
-				Write-Warning -Message "the '$env:COMPUTERNAME' cluster node should have 'Up' state; found unexpected state: $($ClusterNode.State)"
+			If ($ActiveClusterNode.State -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeState]::Up ) {
+				Write-Warning -Message "the '$env:COMPUTERNAME' cluster node should have 'Up' state; found unexpected state: $($ActiveClusterNode.State)"
 				Return
 			}
 
 			# if status is not Normal...
-			If ($ClusterNode.StatusInformation -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeStatusInformation]::Normal) {
-				Write-Warning -Message "the '$env:COMPUTERNAME' cluster node should have 'Normal' status; found unexpected status: $($ClusterNode.StatusInformation)"
+			If ($ActiveClusterNode.StatusInformation -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeStatusInformation]::Normal) {
+				Write-Warning -Message "the '$env:COMPUTERNAME' cluster node should have 'Normal' status; found unexpected status: $($ActiveClusterNode.StatusInformation)"
 				Return
 			}
 
-			# define boolean
-			$StorageJobsFound = $false
-
-			# retrieve storage jobs for storage pool
+			# test cluster for storage jobs
 			Try {
-				$StorageJobs = Get-StorageJob
+				$StorageJobsFound = Test-ClusterForStorageJobs
 			}
 			Catch {
-				Write-Warning -Message "could not retrieve storage jobs on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
+				Write-Warning -Message "could not test cluster for storage jobs on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
 				Return $_
-			}
-
-			# loop through storage jobs
-			ForEach ($StorageJob in $StorageJobs) {
-				# udpate boolean
-				$StorageJobsFound = $true
-
-				# report active job
-				Write-Host "found active storage job: $($StorageJob.Name)"
 			}
 
 			# if any storage jobs found...
 			If ($StorageJobsFound) {
-				Write-Host "waiting for storage jobs to complete on '$env:COMPUTERNAME' cluster node before STARTING restart cycle"
+				Write-Host "waiting for storage jobs to complete on '$env:COMPUTERNAME' cluster node, exiting!"
 				Return
 			}
+		}
 
+		################################################
+		# if current node state is empty...
+		################################################
+
+		# if stored state of current node is empty...
+		If ([string]::IsNullOrEmpty($StoredClusterNode.State)) {
 			# suspend current node
 			Try {
-				Suspend-ClusterNode -Drain -ErrorAction 'Stop'
+				$null = Suspend-ClusterNode -Drain -RetryDrainOnFailure -ForceDrain -ErrorAction 'Stop'
 			}
 			Catch {
 				Write-Warning -Message "could not suspend '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
@@ -1846,10 +2077,10 @@ Process {
 			}
 
 			# declare state
-			Write-Host "suspended '$env:COMPUTERNAME' cluster node"
+			Write-Host "paused '$env:COMPUTERNAME' cluster node"
 
 			# update state of current node
-			$CurrentNode.State = 'Paused'
+			$StoredClusterNode.State = 'Paused'
 
 			# create task description from state object
 			Try {
@@ -1862,37 +2093,155 @@ Process {
 
 			# update description of clustered scheduled task
 			Try {
-				Set-ClusteredScheduledTask -TaskName $TaskName -Description $Description
+				$null = Set-ClusteredScheduledTask -TaskName $TaskName -Description $Description
 			}
 			Catch {
 				Write-Warning -Message "could not update '$TaskName' clustered scheduled task: $($_.Exception.Message)"
 				Return $_
 			}
 
-			# return
+			# report state and return
+			Write-Host "updated state for '$TaskName' clustered scheduled task: '$env:COMPUTERNAME' cluster node is now in '$($StoredClusterNode.State)' state"
 			Return
+		}
+
+		################################################
+		# verify prerequisites for Paused state...
+		################################################
+
+		# if stored state of current node is Paused...
+		If ($StoredClusterNode.State -eq 'Paused') {
+			# if active state of current node is not Paused...
+			If ($ActiveClusterNode.State -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeState]::Paused ) {
+				Write-Warning -Message "the '$env:COMPUTERNAME' cluster node should have 'Paused' state; found unexpected state: $($ActiveClusterNode.State)"
+				Return
+			}
+
+			# if drain not complete...
+			If ($ActiveClusterNode.StatusInformation -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeStatusInformation]::DrainCompleted) {
+				Write-Host "waiting for drain to complete on '$env:COMPUTERNAME' cluster node, current state: $($ActiveClusterNode.StatusInformation)"
+				Return
+			}
 		}
 
 		################################################
 		# if current node state is Paused...
 		################################################
 
-		# if stored state of current node is paused...
-		If ($CurrentNode.State -eq 'Paused') {
-			# if active state of current node is not Paused...
-			If ($ClusterNode.State -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeState]::Paused ) {
-				Write-Warning -Message "the '$env:COMPUTERNAME' cluster node should have 'Paused' state; found unexpected state: $($ClusterNode.State)"
-				Return
+		# if stored state of current node is Paused...
+		If ($StoredClusterNode.State -eq 'Paused') {
+			# define node-specific task name
+			$NodeTaskName = "Restore-ClusterRestart-$env:COMPUTERNAME"
+
+			# retrieve scheduled task
+			Try {
+				$ScheduledTask = Get-ScheduledTask -ErrorAction 'Stop' | Where-Object { $_.TaskName -eq $NodeTaskName }
+			}
+			Catch {
+				Write-Warning -Message "could not retrieve and filter scheduled tasks on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
+				Return $_
 			}
 
-			# if drain not complete...
-			If ($ClusterNode.StatusInformation -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeStatusInformation]::DrainCompleted) {
-				Write-Host "waiting for drain to complete on '$env:COMPUTERNAME' cluster node, current state: $($ClusterNode.StatusInformation)"
-				Return
+			# if scheduled task found...
+			If ($ScheduledTask) {
+				# remove scheduled task
+				Try {
+					$null = Unregister-ScheduledTask -InputObject $ScheduledTask -Confirm:$false -ErrorAction 'Stop'
+				}
+				Catch {
+					Write-Warning -Message "could not unregister '$NodeTaskName' scheduled task on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
+					Return $_
+				}
 			}
+
+			# define task action
+			$ScheduledTaskAction = @{
+				Execute     = 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+				Argument    = '-NonInteractive -NoProfile -ExecutionPolicy ByPass -Command "{0}"' -f "Enable-ScheduledTask -TaskPath '\Microsoft\Windows\Failover Clustering\' -TaskName 'Invoke-ClusterRestart'"
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# create task action
+			Try {
+				$Action = New-ScheduledTaskAction @ScheduledTaskAction
+			}
+			Catch {
+				Write-Warning -Message "could not create scheduled task action object: $($_.Exception.Message)"
+				Return $_
+			}
+
+			# define task principal
+			$ScheduledTaskPrincial = @{
+				LogonType = 'ServiceAccount'
+				RunLevel  = 'Highest'
+				UserId    = 'SYSTEM'
+			}
+
+			# create task principal
+			Try {
+				$Principal = New-ScheduledTaskPrincipal @ScheduledTaskPrincial
+			}
+			Catch {
+				Write-Warning -Message "could not create scheduled task action object: $($_.Exception.Message)"
+				Return $_
+			}
+
+			# define task settings
+			$ScheduledTaskSettingsSet = @{
+				AllowStartIfOnBatteries    = $true
+				DontStopIfGoingOnBatteries = $true
+				ErrorAction                = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# create task settings
+			Try {
+				$Settings = New-ScheduledTaskSettingsSet @ScheduledTaskSettingsSet
+			}
+			Catch {
+				Write-Warning -Message "could not create scheduled task settings object: $($_.Exception.Message)"
+				Return $_
+			}
+
+			# define task trigger
+			$ScheduledTaskTrigger = @{
+				# run at startup to
+				AtStartup = $true
+			}
+
+			# create task trigger
+			Try {
+				$Trigger = New-ScheduledTaskTrigger @ScheduledTaskTrigger
+			}
+			Catch {
+				Write-Warning -Message "could not create scheduled task trigger object: $($_.Exception.Message)"
+				Return $_
+			}
+
+			# define parameters
+			$ScheduledTask = @{
+				TaskName    = $NodeTaskName
+				Action      = $Action
+				Principal   = $Principal
+				Settings    = $Settings
+				Trigger     = $Trigger
+				Force       = $true
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# create scheduled task
+			Try {
+				$null = Register-ScheduledTask @ScheduledTask
+			}
+			Catch {
+				Write-Warning -Message "could not register '$NodeTaskName' scheduled task on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
+				Return $_
+			}
+
+			# report state
+			Write-Host "created '$NodeTaskName' scheduled task on '$env:COMPUTERNAME' cluster node"
 
 			# update state of current node
-			$CurrentNode.State = 'Restarted'
+			$StoredClusterNode.State = 'ReadyToRestart'
 
 			# create task description from state object
 			Try {
@@ -1905,39 +2254,76 @@ Process {
 
 			# update description of clustered scheduled task
 			Try {
-				Set-ClusteredScheduledTask -TaskName $TaskName -Description $Description
+				$null = Set-ClusteredScheduledTask -TaskName $TaskName -Description $Description -ErrorAction 'Stop'
 			}
 			Catch {
 				Write-Warning -Message "could not update '$TaskName' clustered scheduled task: $($_.Exception.Message)"
 				Return $_
 			}
 
-			# restart computer
+			# report state
+			Write-Host "updated state for '$TaskName' clustered scheduled task: '$env:COMPUTERNAME' cluster node is now in '$($StoredClusterNode.State)' state"
+			Return
+		}
+
+		################################################
+		# verify prerequisites for ReadyToRestart state...
+		################################################
+
+		# if stored state of current node is ReadyToRestart...
+		If ($StoredClusterNode.State -eq 'ReadyToRestart') {
+			# if active state of current node is not Paused...
+			If ($ActiveClusterNode.State -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeState]::Paused ) {
+				Write-Warning -Message "the '$env:COMPUTERNAME' cluster node should have 'Paused' state; found unexpected state: $($ActiveClusterNode.State)"
+				Return
+			}
+
+			# if drain not complete...
+			If ($ActiveClusterNode.StatusInformation -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeStatusInformation]::DrainCompleted) {
+				Write-Host "waiting for drain to complete on '$env:COMPUTERNAME' cluster node, current state: $($ActiveClusterNode.StatusInformation)"
+				Return
+			}
+		}
+
+		################################################
+		# if current node state is ReadyToRestart...
+		################################################
+
+		# if stored state of current node is ReadyToRestart...
+		If ($StoredClusterNode.State -eq 'ReadyToRestart') {
+			# declare state
+			Write-Host "restarting '$env:COMPUTERNAME' cluster node"
+
+			# update state of current node
+			$StoredClusterNode.State = 'Restarted'
+
+			# create task description from state object
+			Try {
+				$Description = $ClusterState | Sort-Object -Property 'Name' | ConvertTo-Json -Compress -Depth 100
+			}
+			Catch {
+				Write-Warning -Message "could not convert cluster state object to JSON: $($_.Exception.Message)"
+				Return $_
+			}
+
+			# update description of clustered scheduled task
+			Try {
+				$null = Set-ClusteredScheduledTask -TaskName $TaskName -Description $Description -ErrorAction 'Stop'
+			}
+			Catch {
+				Write-Warning -Message "could not update '$TaskName' clustered scheduled task: $($_.Exception.Message)"
+				Return $_
+			}
+
+			# report state
+			Write-Host "updated state for '$TaskName' clustered scheduled task: '$env:COMPUTERNAME' cluster node is now in '$($StoredClusterNode.State)' state"
+
+			# restart computer AFTER updating state
 			Try {
 				Restart-Computer -Force
 			}
 			Catch {
 				Write-Warning -Message "could not restart '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-			}
-
-			# update state of current node
-			$CurrentNode.State = 'RestartFailed'
-
-			# create task description from state object
-			Try {
-				$Description = $ClusterState | Sort-Object -Property 'Name' | ConvertTo-Json -Compress -Depth 100
-			}
-			Catch {
-				Write-Warning -Message "could not convert cluster state object to JSON: $($_.Exception.Message)"
-				Return $_
-			}
-
-			# update description of clustered scheduled task
-			Try {
-				Set-ClusteredScheduledTask -TaskName $TaskName -Description $Description
-			}
-			Catch {
-				Write-Warning -Message "could not update '$TaskName' clustered scheduled task: $($_.Exception.Message)"
 				Return $_
 			}
 
@@ -1946,14 +2332,20 @@ Process {
 		}
 
 		################################################
-		# if current node state is Restarted...
+		# verify prerequisites for Restarted state...
 		################################################
 
 		# if stored state of current node is Restarted...
-		If ($CurrentNode.State -eq 'Restarted') {
+		If ($StoredClusterNode.State -eq 'Restarted') {
 			# if node is not Paused...
-			If ($ClusterNode.State -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeState]::Paused ) {
-				Write-Warning -Message "the '$env:COMPUTERNAME' cluster node should have 'Paused' state; found unexpected state: $($ClusterNode.State)"
+			If ($ActiveClusterNode.State -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeState]::Paused ) {
+				Write-Warning -Message "the '$env:COMPUTERNAME' cluster node should have 'Paused' state; found unexpected state: $($ActiveClusterNode.State)"
+				Return
+			}
+
+			# if status is not Normal...
+			If ($ActiveClusterNode.StatusInformation -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeStatusInformation]::Normal) {
+				Write-Warning -Message "the '$env:COMPUTERNAME' cluster node should have 'Normal' status; found unexpected status: $($ActiveClusterNode.StatusInformation)"
 				Return
 			}
 
@@ -1980,13 +2372,17 @@ Process {
 				Write-Warning -Message "found '$env:COMPUTERNAME' cluster node in 'Restarted' state despite a last boot up time of '$LastBootUpTime' which is before the start time for '$TaskName' clustered scheduled task of '$StartBoundary'"
 				Return
 			}
+		}
 
-			# update state of current node
-			$CurrentNode.State = 'Resumed'
+		################################################
+		# if current node state is Restarted...
+		################################################
 
+		# if stored state of current node is Restarting...
+		If ($StoredClusterNode.State -eq 'Restarted') {
 			# resume current node
 			Try {
-				Resume-ClusterNode -Failback 'NoFailback' -ErrorAction 'Stop'
+				$null = Resume-ClusterNode -Failback 'NoFailback' -ErrorAction 'Stop'
 			}
 			Catch {
 				Write-Warning -Message "could not suspend '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
@@ -1997,7 +2393,7 @@ Process {
 			Write-Host "resumed '$env:COMPUTERNAME' cluster node"
 
 			# update state of current node
-			$CurrentNode.State = 'Resumed'
+			$StoredClusterNode.State = 'Resumed'
 
 			# create task description from state object
 			Try {
@@ -2010,15 +2406,50 @@ Process {
 
 			# update description of clustered scheduled task
 			Try {
-				Set-ClusteredScheduledTask -TaskName $TaskName -Description $Description
+				$null = Set-ClusteredScheduledTask -TaskName $TaskName -Description $Description
 			}
 			Catch {
 				Write-Warning -Message "could not update '$TaskName' clustered scheduled task: $($_.Exception.Message)"
 				Return $_
 			}
 
-			# return
+			# report state and return
+			Write-Host "updated state for '$TaskName' clustered scheduled task: '$env:COMPUTERNAME' cluster node is now in '$($StoredClusterNode.State)' state"
 			Return
+		}
+
+		################################################
+		# verify prerequisites for Resumed state...
+		################################################
+
+		# if stored state of current node is Resumed...
+		If ($StoredClusterNode.State -eq 'Resumed') {
+			# if node is not Up...
+			If ($ActiveClusterNode.State -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeState]::Up ) {
+				Write-Warning -Message "the '$env:COMPUTERNAME' cluster node should have 'Up' state; found unexpected state: $($ActiveClusterNode.State)"
+				Return
+			}
+
+			# if status is not Normal...
+			If ($ActiveClusterNode.StatusInformation -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeStatusInformation]::Normal) {
+				Write-Warning -Message "the '$env:COMPUTERNAME' cluster node should have 'Normal' status; found unexpected status: $($ActiveClusterNode.StatusInformation)"
+				Return
+			}
+
+			# test cluster for storage jobs
+			Try {
+				$StorageJobsFound = Test-ClusterForStorageJobs
+			}
+			Catch {
+				Write-Warning -Message "could not test cluster for storage jobs on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
+				Return $_
+			}
+
+			# if any storage jobs found...
+			If ($StorageJobsFound) {
+				Write-Host "waiting for storage jobs to complete on '$env:COMPUTERNAME' cluster node, exiting!"
+				Return
+			}
 		}
 
 		################################################
@@ -2026,51 +2457,36 @@ Process {
 		################################################
 
 		# if stored state of current node is Resumed...
-		If ($CurrentNode.State -eq 'Resumed') {
-			# if node is not Up...
-			If ($ClusterNode.State -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeState]::Up ) {
-				Write-Warning -Message "the '$env:COMPUTERNAME' cluster node should have 'Up' state; found unexpected state: $($ClusterNode.State)"
-				Return
-			}
+		If ($StoredClusterNode.State -eq 'Resumed') {
+			# define node-specific task name
+			$NodeTaskName = "Restore-ClusterRestart-$env:COMPUTERNAME"
 
-			# if status is not Normal...
-			If ($ClusterNode.StatusInformation -ne [Microsoft.FailoverClusters.PowerShell.ClusterNodeStatusInformation]::Normal) {
-				Write-Warning -Message "the '$env:COMPUTERNAME' cluster node should have 'Normal' status; found unexpected status: $($ClusterNode.StatusInformation)"
-				Return
-			}
-
-			# define boolean
-			$StorageJobsFound = $false
-
-			# retrieve storage jobs for storage pool
+			# retrieve scheduled task
 			Try {
-				$StorageJobs = Get-StorageJob
+				$ScheduledTask = Get-ScheduledTask -ErrorAction 'Stop' | Where-Object { $_.TaskName -eq $NodeTaskName }
 			}
 			Catch {
-				Write-Warning -Message "could not retrieve storage jobs on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
+				Write-Warning -Message "could not retrieve and filter scheduled tasks on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
 				Return $_
 			}
 
-			# loop through storage jobs
-			ForEach ($StorageJob in $StorageJobs) {
-				# udpate boolean
-				$StorageJobsFound = $true
-
-				# report active job
-				Write-Host "found active storage job: $($StorageJob.Name)"
+			# if scheduled task found...
+			If ($ScheduledTask) {
+				# remove scheduled task
+				Try {
+					$null = Unregister-ScheduledTask -InputObject $ScheduledTask -Confirm:$false -ErrorAction 'Stop'
+				}
+				Catch {
+					Write-Warning -Message "could not unregister '$NodeTaskName' scheduled task on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
+					Return $_
+				}
 			}
-
-			# if any storage jobs found...
-			If ($StorageJobsFound) {
-				Write-Host "waiting for storage jobs to complete on '$env:COMPUTERNAME' cluster node before COMPLETING restart cycle"
-				Return
-			}
-
-			# update state of current node
-			$CurrentNode.State = 'Complete'
 
 			# declare state
-			Write-Host "completed restart of '$env:COMPUTERNAME' cluster node"
+			Write-Host "cleaned up after restart of '$env:COMPUTERNAME' cluster node"
+
+			# update state of current node
+			$StoredClusterNode.State = 'Complete'
 
 			# create task description from state object
 			Try {
@@ -2083,15 +2499,47 @@ Process {
 
 			# update description of clustered scheduled task
 			Try {
-				Set-ClusteredScheduledTask -TaskName $TaskName -Description $Description
+				$null = Set-ClusteredScheduledTask -TaskName $TaskName -Description $Description
 			}
 			Catch {
 				Write-Warning -Message "could not update '$TaskName' clustered scheduled task: $($_.Exception.Message)"
 				Return $_
 			}
 
-			# return
+			# report state and return
+			Write-Host "updated state for '$TaskName' clustered scheduled task: '$env:COMPUTERNAME' cluster node is now in '$($StoredClusterNode.State)' state"
 			Return
+		}
+	}
+}
+
+End {
+	# if default parameter set and quiet not requested...
+	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $Quiet) {
+		# if current state found...
+		If ($null -eq $ClusterState) {
+			# report and display state
+			Write-Host 'current state of cluster restart not found'
+		}
+		Else {
+			# report and display state
+			Write-Host 'current state of cluster restart:'
+			# loop through cluster state
+			ForEach ($ClusterNode in $ClusterState) {
+				# report node name and state
+				Write-Host " - Node: $($ClusterNode.Name); State: $($ClusterNode.State)"
+			}
+		}
+	}
+
+	# if default parameter set and skip transcript not requested...
+	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $SkipTranscript) {
+		# stop transcript with default parameters
+		Try {
+			Stop-TranscriptForCommand
+		}
+		Catch {
+			Throw $_
 		}
 	}
 }
