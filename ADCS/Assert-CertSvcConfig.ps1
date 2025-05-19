@@ -1,6 +1,6 @@
 [CmdletBinding(SupportsShouldProcess)]
 Param(
-	[Parameter(Position = 0, Mandatory = $True)]
+	[Parameter(Position = 0)]
 	[string]$Url
 )
 
