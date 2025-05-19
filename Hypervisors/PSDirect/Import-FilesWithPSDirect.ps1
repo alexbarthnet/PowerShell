@@ -174,7 +174,7 @@ If (!$DestinationExists) {
 If ($PathIsDirectory) {
 	# retrieve files from path on VM
 	Try {
-		$Items = Get-ChildItem -Path $Path -ErrorAction 'Stop'
+		$Items = Get-ChildItem -Path $Path -ErrorAction 'Stop' -File -Recurse
 	}
 	Catch {
 		Write-Warning -Message "could not retrieve files in '$Path' on host"

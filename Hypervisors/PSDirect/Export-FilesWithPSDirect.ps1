@@ -174,7 +174,7 @@ If (!$DestinationExists) {
 If ($PathIsDirectory) {
 	# retrieve files from path on VM
 	Try {
-		$Items = Invoke-Command -Session $Session -ScriptBlock { Get-ChildItem -Path $using:Path -ErrorAction 'Stop' }
+		$Items = Invoke-Command -Session $Session -ScriptBlock { Get-ChildItem -Path $using:Path -ErrorAction 'Stop' -File -Recurse }
 	}
 	Catch {
 		Write-Warning -Message "could not retrieve files in '$Path' on VM: '$VMName'"
