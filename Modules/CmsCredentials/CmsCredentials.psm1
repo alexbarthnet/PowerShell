@@ -655,6 +655,21 @@ Function Export-CmsCredentialCertificate {
 			$FilePath = Join-Path -Path $local:Path -ChildPath "$local:ChildPath.cer"
 		}
 
+		# define parent path for FilePath
+		$FileParentPath = Split-Path -Path $FilePath
+
+		# if parent path for FilePath not found...
+		If (![System.IO.Directory]::Exists($FileParentPath)) {
+			# create Path
+			Try {
+				$null = New-Item -ItemType 'Directory' -Path $FileParentPath
+			}
+			Catch {
+				Write-Warning -Message "could not create '$FileParentPath' path for public key for certificate with '$($local:Certificate.Thumbprint)' thumbprint on host: $local:Hostname"
+				Throw $_
+			}
+		}
+
 		# define parameters for Export-PfxCertificate
 		$ExportCertificate = @{
 			Cert        = $local:Certificate
@@ -686,6 +701,21 @@ Function Export-CmsCredentialCertificate {
 
 			# define PfxFilePath as simple name with .pfx extension in default pfx file path
 			$PfxFilePath = Join-Path -Path $local:PfxPath -ChildPath "$local:ChildPath.pfx"
+		}
+
+		# define parent path for PfxFilePath
+		$PFxFileParentPath = Split-Path -Path $PfxFilePath
+
+		# if parent path for PfxFilePath not found...
+		If (![System.IO.Directory]::Exists($PFxFileParentPath)) {
+			# create Path
+			Try {
+				$null = New-Item -ItemType 'Directory' -Path $PFxFileParentPath
+			}
+			Catch {
+				Write-Warning -Message "could not create '$PFxFileParentPath' path for PFX file for certificate with '$($local:Certificate.Thumbprint)' thumbprint on host: $local:Hostname"
+				Throw $_
+			}
 		}
 
 		# define parameters for Export-PfxCertificate
