@@ -2606,30 +2606,34 @@ Process {
 				LogonType = [string]$LogonType
 			}
 
-			# if NoTrigger not set...
-			If (!$script:NoTrigger) {
-				# add TriggerAt if NoTrigger not set
+			# if RunLevel provided...
+			If ($script:RunLevel) {
+				# add RunLevel as 
+				$JsonParameters['RunLevel'] = [string]$RunLevel
+			}
+
+			# if TriggerAt provided and NoTrigger not set...
+			If ($script:TriggerAt -and -not $script:NoTrigger) {
+				# add TriggerAt as datetime in IS0 8601 extended format
 				$JsonParameters['TriggerAt'] = $TriggerAt.ToString('s')
 			}
 
-			# add RandomDelay if provided as datetime value
-			If ($script:RandomDelay) {
+			# if RandomDelay provided and NoTrigger not set...
+			If ($script:RandomDelay -and -not $script:NoTrigger) {
+				# add RandomDelay as timespan in 'constant' format
 				$JsonParameters['RandomDelay'] = $RandomDelay.ToString('c')
 			}
 
-			# add ExecutionTimeLimit if provided as datetime value
-			If ($script:ExecutionTimeLimit) {
-				$JsonParameters['ExecutionTimeLimit'] = $ExecutionTimeLimit.ToString('c')
-			}
-
-			# add RepetitionInterval if provided as datetime value
-			If ($script:RepetitionInterval) {
+			# if RepetitionInterval provided and NoTrigger not set...
+			If ($script:RepetitionInterval -and -not $script:NoTrigger) {
+				# add RepetitionInterval as timespan in 'constant' format
 				$JsonParameters['RepetitionInterval'] = $RepetitionInterval.ToString('c')
 			}
 
-			# add RunLevel if provided
-			If ($script:RunLevel) {
-				$JsonParameters['RunLevel'] = [string]$RunLevel
+			# if ExecutionTimeLimit provided...
+			If ($script:ExecutionTimeLimit) {
+				# add ExecutionTimeLimit as timespan in 'constant' format
+				$JsonParameters['ExecutionTimeLimit'] = $ExecutionTimeLimit.ToString('c')
 			}
 
 			# add Updated as current datetime in IS0 8601 extended format
@@ -2715,24 +2719,12 @@ Process {
 						Write-Warning -Message 'optional value (RandomDelay) found in configuration file but cannot be parsed into a timespan object'
 						Continue NextJsonEntry
 					}
-					($null -ne $JsonEntry.RandomDelayTime -and -not [datetime]::TryParse($JsonEntry.RandomDelayTime, [ref][datetime]::Now)) {
-						Write-Warning -Message 'optional value (RandomDelayTime) found in configuration file but cannot be parsed into a datetime object'
-						Continue NextJsonEntry
-					}
 					($null -ne $JsonEntry.RepetitionInterval -and -not [timespan]::TryParse($JsonEntry.RepetitionInterval, [ref][timespan]::Zero)) {
 						Write-Warning -Message 'optional value (RepetitionInterval) found in configuration file but cannot be parsed into a timespan object'
 						Continue NextJsonEntry
 					}
-					($null -ne $JsonEntry.RepetitionIntervalTime -and -not [datetime]::TryParse($JsonEntry.RepetitionIntervalTime, [ref][datetime]::Now)) {
-						Write-Warning -Message 'optional value (RepetitionIntervalTime) found in configuration file but cannot be parsed into a datetime object'
-						Continue NextJsonEntry
-					}
 					($null -ne $JsonEntry.ExecutionTimeLimit -and -not [timespan]::TryParse($JsonEntry.ExecutionTimeLimit, [ref][timespan]::Zero)) {
 						Write-Warning -Message 'optional value (ExecutionTimeLimit) found in configuration file but cannot be parsed into a timespan object'
-						Continue NextJsonEntry
-					}
-					($null -ne $JsonEntry.ExecutionTimeLimitTime -and -not [datetime]::TryParse($JsonEntry.ExecutionTimeLimitTime, [ref][datetime]::Now)) {
-						Write-Warning -Message 'optional value (ExecutionTimeLimitTime) found in configuration file but cannot be parsed into a datetime object'
 						Continue NextJsonEntry
 					}
 				}
@@ -2786,6 +2778,15 @@ Process {
 					$UpdateScheduledTaskFromJson['RunLevel'] = [string]$RunLevel
 				}
 
+				# if TriggerAt defined in JSON...
+				If ($null -ne $JsonEntry.TriggerAt) {
+					# parse TriggerAt to datetime
+					$TriggerAt = [datetime]::Parse($JsonEntry.TriggerAt)
+
+					# add TriggerAt to hashtable
+					$UpdateScheduledTaskFromJson['TriggerAt'] = $TriggerAt
+				}
+
 				# define timespan values
 				$TimeSpanValues = 'RandomDelay', 'RepetitionInterval', 'ExecutionTimeLimit'
 
@@ -2808,52 +2809,6 @@ Process {
 
 					# add timespan to hashtable
 					$UpdateScheduledTaskFromJson[$TimeSpanValue] = $TimeSpan
-				}
-
-				# if TriggerAt defined in JSON...
-				If ($null -ne $JsonEntry.TriggerAt) {
-					# parse TriggerAt to datetime
-					$TriggerAt = [datetime]::Parse($JsonEntry.TriggerAt)
-
-					# add TriggerAt to hashtable
-					$UpdateScheduledTaskFromJson['TriggerAt'] = $TriggerAt
-
-					# define values contingent on TriggerAt
-					$DependentValues = 'RandomDelayTime', 'RepetitionIntervalTime', 'ExecutionTimeLimitTime'
-
-					# process each dependent datetime value
-					:NextDependentValue ForEach ($DependentValue in $DependentValues) {
-						# if dependent datetime value not defined in JSON...
-						If ($null -eq $JsonEntry.$DependentValue) {
-							# continue to next dependent datetime value
-							Continue NextDependentValue
-						}
-
-						# define name of corresponding independent value
-						$IndependentValue = $DependentValue.TrimEnd('Time')
-
-						# if independent value already defined in JSON...
-						If ($null -ne $JsonEntry.$IndependentValue) {
-							# warn and continue
-							Write-Warning -Message "skipping $DependentValue as $IndependentValue already defined"
-							Continue NextDependentValue
-						}
-
-						# parse dependent datetime value to datetime
-						$DependentDateTime = [datetime]::Parse($JsonEntry.$DependentValue)
-
-						# get timespan by subtracting TriggerAt from parsed datetime
-						$TimeSpan = $DependentDateTime.Subtract($TriggerAt)
-
-						# if computed timespan is a negative timespan...
-						If ($TimeSpan -lt [timespan]::Zero) {
-							# flip timespan with negate method
-							$Timespan = $Timespan.Negate()
-						}
-
-						# add timespan to hashtable for independent value
-						$UpdateScheduledTaskFromJson[$IndependentValue] = $TimeSpan
-					}
 				}
 
 				# update scheduled task
