@@ -252,7 +252,7 @@ If ($Purge -and $Items) {
 
 	# copy item to destination on VM
 	Try {
-		Copy-Item -ToSession $Session -Path $Item.FullName -Destination $Destination -Force -Verbose -ErrorAction 'Stop'
+		Copy-Item -ToSession $Session -Path $Item.FullName -Destination $DestinationPath -Force -Verbose -ErrorAction 'Stop'
 	}
 	Catch {
 		Write-Warning -Message "could not copy '$($Item.FullName)' to '$($DestinationPath)' on '$VMName' VM: $($_.Exception.Message)"
