@@ -139,7 +139,7 @@ Process {
 
 	# define searcher object
 	Try {
-		$Searcher = New-Object -ComObject -TypeName 'Microsoft.Update.Searcher'
+		$Searcher = New-Object -ComObject 'Microsoft.Update.Searcher'
 	}
 	Catch {
 		# if audit mode...
@@ -215,7 +215,7 @@ Process {
 
 	# define update collection object
 	Try {
-		$Updates = New-Object -ComObject -TypeName 'Microsoft.Update.UpdateColl'
+		$Updates = New-Object -ComObject 'Microsoft.Update.UpdateColl'
 	}
 	Catch {
 		# if audit mode...
@@ -259,7 +259,7 @@ Process {
 
 	# define session object
 	Try {
-		$Session = New-Object -ComObject -TypeName 'Microsoft.Update.Session'
+		$Session = New-Object -ComObject 'Microsoft.Update.Session'
 	}
 	Catch {
 		# if audit mode...
@@ -351,7 +351,7 @@ Process {
 
 	# create update installer object
 	Try {
-		$Installer = New-Object -ComObject -TypeName 'Microsoft.Update.Installer'
+		$Installer = New-Object -ComObject 'Microsoft.Update.Installer'
 	}
 	Catch {
 		# if audit mode...
