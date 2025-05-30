@@ -78,6 +78,7 @@ None. The function does not generate any output.
 
 #>
 
+[CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
 	[Parameter(Position = 0, Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToOriginalIsoImage,
