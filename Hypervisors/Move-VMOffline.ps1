@@ -2,12 +2,21 @@
 
 [CmdletBinding()]
 param (
-	# array of VM objects or VM names
-	[Parameter(Mandatory = $true, ValueFromPipeline = $true)]
-	[object]$VM,
+	# string for filtering name of VM switch on target computer
+	[Parameter(DontShow)]
+	[string]$SwitchNameHint = 'compute',
+	# hostname of local computer
+	[Parameter(DontShow)]
+	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
+	# VM object(s)
+	[Parameter(ParameterSetName = 'VM', Mandatory = $true, ValueFromPipeline = $true)]
+	[Microsoft.HyperV.PowerShell.VirtualMachine]$VM,
+	# VM name(s)
+	[Parameter(ParameterSetName = 'Name', Mandatory = $true, ValueFromPipeline = $true)]
+	[string]$Name,
 	# computer name of target computer
 	[Parameter(Mandatory = $true)]
-	[string]$ComputerName,
+	[string]$DestinationHost,
 	# path on target computer
 	[Parameter(Mandatory = $true)]
 	[string]$Path,
@@ -16,7 +25,7 @@ param (
 	[string]$SwitchName,
 	# computer name of source computer
 	[Parameter()]
-	[string]$SourceComputerName,
+	[string]$ComputerName,
 	# force shutdown of running VM
 	[Parameter()]
 	[switch]$Force,
@@ -25,13 +34,7 @@ param (
 	[switch]$Restart,
 	# upgrade VM version after import
 	[Parameter()]
-	[switch]$UpdateVmVersion,
-	# string for filtering name of VM switch on target computer
-	[Parameter(DontShow)]
-	[string]$SwitchNameHint = 'compute',
-	# hostname of local computer
-	[Parameter(DontShow)]
-	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
+	[switch]$UpdateVmVersion
 )
 
 Begin {
@@ -1142,11 +1145,11 @@ Begin {
 	}
 
 	# declare state
-	Write-Host "$ComputerName - checking path on destination..."
+	Write-Host "$DestinationHost - checking path on destination..."
 
 	# get hashtable for InvokeCommand splat
 	Try {
-		$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		$InvokeCommand = Get-PSSessionInvoke -ComputerName $DestinationHost
 	}
 	Catch {
 		Throw $_
@@ -1175,34 +1178,34 @@ Begin {
 	}
 
 	# declare state
-	Write-Host "$ComputerName - ...path found: $Path"
-	Write-Host "$ComputerName - retrieving SMB shares..."
+	Write-Host "$DestinationHost - ...path found: $Path"
+	Write-Host "$DestinationHost - retrieving SMB shares..."
 
 	# get SMB shares on target computer
 	Try {
-		$SmbShares = Get-SmbShare -CimSession $ComputerName -Special $true
+		$SmbShares = Get-SmbShare -CimSession $DestinationHost -Special $true
 	}
 	Catch {
 		Throw $_
 	}
 
 	# declare state
-	Write-Host "$ComputerName - ...shares found"
-	Write-Host "$ComputerName - building UNC path for export..."
+	Write-Host "$DestinationHost - ...shares found"
+	Write-Host "$DestinationHost - building UNC path for export..."
 
 	# get first SMB share where path parameter starts with share path and share path not null or empty
 	$SmbShare = $SmbShares | Where-Object { $Path.StartsWith($_.Path, [System.StringComparison]::InvariantCultureIgnoreCase) -and -not [string]::IsNullOrEmpty($_.Path) } | Select-Object -First 1
 
 	# define share path from path parameter and SMB share
 	Try {
-		$SharePath = $Path.Replace($SmbShare.Path, "\\$ComputerName\$($SmbShare.Name)\")
+		$SharePath = $Path.Replace($SmbShare.Path, "\\$DestinationHost\$($SmbShare.Name)\")
 	}
 	Catch {
 		Throw $_
 	}
 
 	# declare state
-	Write-Host "$ComputerName - ...UNC path built: $SharePath"
+	Write-Host "$DestinationHost - ...UNC path built: $SharePath"
 }
 
 Process {
@@ -1210,20 +1213,17 @@ Process {
 	# check for VM on source computer
 	################################################
 
-	# if input is not a VM object...
-	If ($VM -isnot [Microsoft.HyperV.PowerShell.VirtualMachine]) {
-		# declare state
-		Write-Host "$SourceComputerName - retrieving VM object by name: $VM"
-
+	# if name provided...
+	If ($PSCmdlet.ParameterSetName -eq 'Name') {
 		# define required parameters for Get-VM
 		$GetVM = @{
-			Name        = $VM
+			Name        = $Name
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
 
 		# define optional parameters for Get-VM
-		If ($PSBoundParameters['SourceComputerName']) {
-			$GetVM['ComputerName'] = $SourceComputerName
+		If ($PSBoundParameters['ComputerName']) {
+			$GetVM['ComputerName'] = $ComputerName
 		}
 
 		# get VM object from input
@@ -1233,14 +1233,11 @@ Process {
 		Catch {
 			Throw $_
 		}
-
-		# declare state
-		Write-Host "$SourceComputerName - retrieved VM object"
 	}
 
 	# check for snapshot
 	If ($VM.ParentSnapshotId) {
-		Write-Warning "VM has an active snapshot. Remove or consolidate snapshots before migration"
+		Write-Warning 'VM has an active snapshot. Remove or consolidate snapshots before migration'
 		Return
 	}
 
@@ -1254,21 +1251,64 @@ Process {
 		Throw [System.UnauthorizedAccessException]::new('Users in the Protected Users group must run this script from the source hypervisor')
 	}
 
-	# get VM configuration
+	# get VM configuration for restoration
 	$State = $VM.State
 	$AutomaticStartAction = $VM.AutomaticStartAction
+
+	################################################
+	# check for VM on source cluster
+	################################################
+
+	# get cluster for source computer
+	Try {
+		$ClusterName = Get-ClusterName -ComputerName $ComputerName
+	}
+	Catch {
+		Throw $_
+	}
+
+	# if source computer is clustered...
+	If ($ClusterName) {
+		# declare state
+		Write-Host "$ComputerName,$Name - checking if VM clustered on source computer..."
+
+		# define parameters for Get-ClusterGroup
+		$GetClusterGroup = @{
+			Cluster     = $ClusterName
+			VMId        = $Id
+			ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
+		}
+
+		# get cluster group for VM on source cluster
+		Try {
+			$SourceClusterGroup = Get-ClusterGroup @GetClusterGroup
+		}
+		Catch {
+			Throw $_
+		}
+
+		# if source cluster group found...
+		If ($SourceClusterGroup) {
+			# declare state
+			Write-Host "$ComputerName,$Name - ...VM clustered on source computer; will remove before migration"
+		}
+		Else {
+			# declare state
+			Write-Host "$ComputerName,$Name - ...VM not clustered on source computer"
+		}
+	}
 
 	################################################
 	# check for VM on target computer
 	################################################
 
 	# declare state
-	Write-Host "$ComputerName,$Name - checking target computer for VM..."
+	Write-Host "$DestinationHost,$Name - checking if VM already migrated to target computer..."
 
 	# define parameters for Get-VM on target computer
 	$GetVM = @{
 		Id           = $Id
-		ComputerName = $ComputerName
+		ComputerName = $DestinationHost
 		ErrorAction  = [System.Management.Automation.ActionPreference]::SilentlyContinue
 	}
 
@@ -1294,7 +1334,7 @@ Process {
 
 	# get cluster for target server
 	Try {
-		$ClusterName = Get-ClusterName -ComputerName $ComputerName
+		$ClusterName = Get-ClusterName -ComputerName $DestinationHost
 	}
 	Catch {
 		Throw $_
@@ -1302,6 +1342,9 @@ Process {
 
 	# if target computer is clustered...
 	If ($ClusterName) {
+		# declare state
+		Write-Host "$DestinationHost,$Name - checking if VM already clustered on target computer..."
+
 		# define parameters for Get-ClusterGroup
 		$GetClusterGroup = @{
 			Cluster     = $ClusterName
@@ -1316,17 +1359,17 @@ Process {
 		Catch {
 			Throw $_
 		}
-	}
 
-	# if cluster group for VM found on target cluster...
-	If ($TargetClusterGroup) {
-		# warn and return
-		Write-Warning 'VM has already been migrated to target cluster'
-		Return
-	}
+		# if cluster group for VM found on target cluster...
+		If ($TargetClusterGroup) {
+			# warn and return
+			Write-Warning 'VM has already been migrated to target cluster'
+			Return
+		}
 
-	# declare state
-	Write-Host "$ComputerName,$Name - ...VM not found via target computer"
+		# declare state
+		Write-Host "$DestinationHost,$Name - ...VM not found via target computer"
+	}
 
 	################################################
 	# export VM
@@ -1334,7 +1377,7 @@ Process {
 
 	# export VM to path
 	Try {
-		$ExportedVM = Export-VMToComputer -VM $VM -ComputerName $ComputerName -Path $SharePath
+		$ExportedVM = Export-VMToComputer -VM $VM -ComputerName $DestinationHost -Path $SharePath
 	}
 	Catch {
 		Throw $_
@@ -1347,7 +1390,7 @@ Process {
 	# import VM on target computer
 	If ($ExportedVM) {
 		Try {
-			$ImportedVM = Import-VMOnComputer -VM $VM -ComputerName $ComputerName -Path $Path
+			$ImportedVM = Import-VMOnComputer -VM $VM -ComputerName $DestinationHost -Path $Path
 		}
 		Catch {
 			Throw $_
