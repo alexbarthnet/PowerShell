@@ -843,7 +843,7 @@ Process {
     $ComputerName = $VM.ComputerName.ToLowerInvariant()
 
     # check for Protected Users
-    If ($Hostname -ne $SourceComputerName -and ([Security.Principal.WindowsIdentity]::GetCurrent().Groups | Where-Object { $_.Value -match '-525$' })) {
+    If ($Hostname -ne $ComputerName -and ([Security.Principal.WindowsIdentity]::GetCurrent().Groups | Where-Object { $_.Value -match '-525$' })) {
         Throw [System.UnauthorizedAccessException]::new('Users in the Protected Users group must run this script from the source hypervisor')
     }
 
