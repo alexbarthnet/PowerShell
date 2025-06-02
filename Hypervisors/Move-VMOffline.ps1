@@ -1531,47 +1531,48 @@ Process {
 		Write-Host "$DestinationHost,$Name - ...VM not found via target computer"
 	}
 
-    ################################################
-    # get target CSVs from target cluster
-    ################################################
+	################################################
+	# get target CSVs from target cluster
+	################################################
 
-    # if target computer is clustered...
-    If ($TargetClusterName) {
+	# if target computer is clustered...
+	If ($TargetClusterName) {
 		# eetrieve CSVs from target computer
 		Try {
-            $ClusterSharedVolumePaths = Get-ClusterSharedVolume -Cluster $TargetClusterName | Select-Object -ExpandProperty SharedVolumeInfo | Select-Object -ExpandProperty FriendlyVolumeName
-        }
-        Catch {
-            Return $_
-        }
+			$ClusterSharedVolumePaths = Get-ClusterSharedVolume -Cluster $TargetClusterName | Select-Object -ExpandProperty SharedVolumeInfo | Select-Object -ExpandProperty FriendlyVolumeName
+		}
+		Catch {
+			Return $_
+		}
 
-        # define list for VM paths not on CSVs
-        $VMPathsNotClustered = [System.Collections.Generic.List[string]]::new()
+		# define list for VM paths not on CSVs
+		$VMPathsNotClustered = [System.Collections.Generic.List[string]]::new()
 
 		# define list of VM paths
 		$VMPaths = @($DestinationStoragePath)
 
 		# loop through VM paths...
-        :NextVMPath ForEach ($VMPath in $VMPaths) {
-            # loop through CSV paths
-            ForEach ($ClusterSharedVolumePath in $ClusterSharedVolumePaths) {
-                # if VM path starts with CSV path...
-                If ($VMPath.StartsWith($ClusterSharedVolumePath, [System.StringComparison]::InvariantCultureIgnoreCase)) {
-                    # continue with next VM path
-                    Continue NextVMPath
-                }
-            }
+		:NextVMPath ForEach ($VMPath in $VMPaths) {
+			# loop through CSV paths
+			ForEach ($ClusterSharedVolumePath in $ClusterSharedVolumePaths) {
+				# if VM path starts with CSV path...
+				If ($VMPath.StartsWith($ClusterSharedVolumePath, [System.StringComparison]::InvariantCultureIgnoreCase)) {
+					# continue with next VM path
+					Continue NextVMPath
+				}
+			}
 
-            # add VM path to list
-            Write-Warning -Message "found '$VMPath' path would not be on a Cluster Shared Volume on '$DestinationHost' computer"
-            $VMPathsNotClustered.Add($VMPath)
-        }
+			# add VM path to list
+			Write-Warning -Message "found '$VMPath' path would not be on a Cluster Shared Volume on '$DestinationHost' computer"
+			$VMPathsNotClustered.Add($VMPath)
+		}
 
-        # if any VM paths are not clustered...
-        If ($VMPathsNotClustered.Count -ge 1) {
-            Return
-        }
-    }
+		# if any VM paths are not clustered...
+		If ($VMPathsNotClustered.Count -ge 1) {
+			Return
+		}
+	}
+
 	################################################
 	# assert path on target computer
 	################################################
