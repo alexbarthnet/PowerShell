@@ -283,7 +283,7 @@ Begin {
 				# if path type is container...
 				If ($ArgumentList['PathType'] -eq [Microsoft.PowerShell.Commands.TestPathType]::Container) {
 					# add item type of directory to parameters
-					$RemoveItem['ItemType'] = 'Directory'
+					$NewItem['ItemType'] = 'Directory'
 				}
 
 				# create item
