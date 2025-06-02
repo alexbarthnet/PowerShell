@@ -990,6 +990,14 @@ Process {
 
         # declare state
         Write-Host "$ComputerName,$Name - ...VM removed from '$SourceClusterName' cluster"
+
+        # update VM object after cluster removal
+        Try {
+            $VM = Get-VM -Id $VM.Id -ComputerName $VM.ComputerName
+        }
+        Catch {
+            Return $_
+        }
     }
 
     ################################################
