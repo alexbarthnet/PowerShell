@@ -18,7 +18,7 @@ param (
 	[Parameter(Mandatory = $true)]
 	[string]$DestinationHost,
 	# path on target computer
-	[Parameter(Mandatory = $true)]
+	[Parameter()]
 	[string]$Path,
 	# name of VM switch on target computer
 	[Parameter()]
@@ -1404,6 +1404,16 @@ Process {
 	# get VM configuration for restoration
 	$State = $VM.State
 	$AutomaticStartAction = $VM.AutomaticStartAction
+
+	################################################
+	# retrieve path if not provided
+	################################################
+
+	# if VM path property not provided as parameter...
+	If (!$PSBoundParameters.ContainsKey($Path)) {
+		# get path property on VM object
+		$Path = $VM | Select-Object -ExpandProperty 'Path'
+	}
 
 	################################################
 	# check for VM on source cluster
