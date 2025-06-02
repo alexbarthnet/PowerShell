@@ -1421,20 +1421,20 @@ Process {
 
 	# get cluster for source computer
 	Try {
-		$ClusterName = Get-ClusterName -ComputerName $ComputerName
+		$SourceClusterName = Get-ClusterName -ComputerName $ComputerName
 	}
 	Catch {
 		Throw $_
 	}
 
 	# if source computer is clustered...
-	If ($ClusterName) {
+	If ($SourceClusterName) {
 		# declare state
 		Write-Host "$ComputerName,$Name - checking if VM clustered on source computer..."
 
 		# define parameters for Get-ClusterGroup
 		$GetClusterGroup = @{
-			Cluster     = $ClusterName
+			Cluster     = $SourceClusterName
 			VMId        = $Id
 			ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
 		}
@@ -1494,20 +1494,20 @@ Process {
 
 	# get cluster for target server
 	Try {
-		$ClusterName = Get-ClusterName -ComputerName $DestinationHost
+		$TargetClusterName = Get-ClusterName -ComputerName $DestinationHost
 	}
 	Catch {
 		Throw $_
 	}
 
 	# if target computer is clustered...
-	If ($ClusterName) {
+	If ($TargetClusterName) {
 		# declare state
 		Write-Host "$DestinationHost,$Name - checking if VM already clustered on target computer..."
 
 		# define parameters for Get-ClusterGroup
 		$GetClusterGroup = @{
-			Cluster     = $ClusterName
+			Cluster     = $TargetClusterName
 			VMId        = $Id
 			ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
 		}
