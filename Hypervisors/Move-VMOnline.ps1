@@ -397,11 +397,13 @@ Begin {
     Function Resolve-VMCompatibilityReport {
         Param(
             [Parameter(Mandatory)]
-            [object]$CompatibilityReport
+            [object]$CompatibilityReport,
+            [Parameter(DontShow)]
+            [boolean]$CannotImport = $false
         )
 
         # process each incompatibility
-        ForEach ($Incompatibility in $CompatibilityReport.Incompatibilities) {
+        :NextIncompatibility ForEach ($Incompatibility in $CompatibilityReport.Incompatibilities) {
             switch ($Incompatibility.MessageID) {
                 # target does not have VM switch references in VM configuration
                 33012 {
@@ -410,14 +412,9 @@ Begin {
                         $VMNetworkAdapterName = $Incompatibility.Source.Name
                     }
                     Catch {
-                        Write-Warning -Message 'Could not retrieve VM network adapter name from incompatibility object'
-                        Throw $_
-                    }
-
-                    # if switchname parameter not found in external VM switch names...
-                    If ( $SwitchName -notin $SwitchNames ) {
-                        # ...clear SwitchName
-                        $null = $SwitchName
+                        $CannotImport = $true
+                        $CannotImportMessage = "Could not retrieve VM network adapter name from incompatibility object: '$($_.Exception.Message)'"
+                        Continue NextIncompatibility
                     }
 
                     # if switch name not provided or forced to null...
@@ -426,35 +423,52 @@ Begin {
                         switch ($SwitchNames.Count) {
                             # no external switches found
                             0 {
-                                Write-Warning -Message "No external switches found on target server. VM network adapter '$VMNetworkAdapterName' will not be connected after import." -WarningAction Inquire
+                                # clear switch n ame
                                 $SwitchName = $null
+
+                                # warn and inquire about disconnecting VM
+                                Write-Warning -Message "No external switches found on '$ComputerName' destination. VM network adapter '$VMNetworkAdapterName' on '$Name' VM will not be connected after import." -WarningAction Inquire
                             }
                             # one external switch found
                             1 {
-                                Write-Warning -Message "VM network adapter '$VMNetworkAdapterName' will be connected to VM switch '$SwitchNames'" -WarningAction Continue
+                                # assign switch name
                                 $SwitchName = $SwitchNames
+
+                                # warn about new switch name
+                                Write-Warning -Message "Found '$SwitchName' external switch on '$ComputerName' destination. VM network adapter '$VMNetworkAdapterName' on '$Name' VM will be connected to VM switch '$SwitchNames'" -WarningAction Continue
                             }
                             # multiple external switches found
                             Default {
+                                # warn about switch name hint
+                                Write-Warning -Message "Multiple external switches found on '$ComputerName' destination. Will use '$SwitchNameHint' switch name hint to locate available external switch" -WarningAction Continue
+
                                 # get external "compute" switches by name
-                                $ComputeSwitchNames = $SwitchNames | Where-Object { $_.Contains($SwitchNameHint) }
-                                switch ($ComputeSwitchNames.Count) {
+                                $SwitchNamesMatchingHint = $SwitchNames | Where-Object { $_.Contains($SwitchNameHint) }
+
+                                # check 
+                                switch ($SwitchNamesMatchingHint.Count) {
                                     # no external switches with compute in the name found
                                     0 {
-                                        # sort external switches by name and select first switch
+                                        # select first external switch after sorting by name
                                         $SwitchName = $SwitchNames | Sort-Object | Select-Object -First 1
-                                        Write-Warning -Message "VM network adapter '$VMNetworkAdapterName' will be connected to first available external switch: '$SwitchNames'" -WarningAction Continue
-                                        $SwitchName = $ComputeSwitchNames
+
+                                        # warn about reconnect to new switch
+                                        Write-Warning -Message "Will connect '$VMNetworkAdapterName' VM network adapter on '$Name' VM to first available external switch: '$SwitchName'" -WarningAction Continue
                                     }
                                     # one external switch found
                                     1 {
-                                        $SwitchName = $ComputeSwitchNames
-                                        Write-Warning -Message "VM network adapter '$VMNetworkAdapterName' will be connected to the located external 'compute' switch: '$SwitchNames'" -WarningAction Continue
+                                        # select single external switch matching switch name hint
+                                        $SwitchName = $SwitchNamesMatchingHint
+
+                                        # warn about reconnect to new switch
+                                        Write-Warning -Message "Will connect '$VMNetworkAdapterName' VM network adapter on '$Name' VM to the external switch matching '$SwitchNameHint' switch name hint: $SwitchName" -WarningAction Continue
                                     }
                                     Default {
-                                        # sort external "compute" switches by name and select first switch
-                                        $SwitchName = $ComputeSwitchNames | Sort-Object | Select-Object -First 1
-                                        Write-Warning -Message "VM network adapter '$VMNetworkAdapterName' will be connected to first available external 'compute' switch '$SwitchNames'" -WarningAction Continue
+                                        # select first external switch matching switch name hint after sorting by name
+                                        $SwitchName = $SwitchNamesMatchingHint | Sort-Object | Select-Object -First 1
+
+                                        # warn about reconnect to new switch
+                                        Write-Warning -Message "Will connect '$VMNetworkAdapterName' VM network adapter on '$Name' VM to first available external switch matching '$SwitchNameHint' switch name hint: $SwitchName" -WarningAction Continue
                                     }
                                 }
                             }
@@ -468,8 +482,9 @@ Begin {
                             $Incompatibility.Source | Disconnect-VMNetworkAdapter
                         }
                         Catch {
-                            Write-Warning -Message 'Could not disconnect VM network adapter to address VM switch incompatibility'
-                            Throw $_
+                            $CannotImport = $true
+                            $CannotImportMessage = "Could not disconnect '$VMNetworkAdapterName' VM network adapter on '$Name' VM to address VM switch incompatibility: '$($_.Exception.Message)'"
+                            Continue NextIncompatibility
                         }
                     }
                     # if switch name is not null...
@@ -480,29 +495,30 @@ Begin {
                             # $Incompatibility.Source | Disconnect-VMNetworkAdapter -Passthru | Connect-VMNetworkAdapter -SwitchName $SwitchName
                         }
                         Catch {
-                            Write-Warning -Message "could not connect VM network adapter to '$SwitchName' switch to address VM switch incompatibility"
-                            Throw $_
+                            $CannotImport = $true
+                            $CannotImportMessage = "Could not connect '$VMNetworkAdapterName' VM network adapter on '$Name' VM to '$SwitchName' switch to address VM switch incompatibility: '$($_.Exception.Message)'"
+                            Continue NextIncompatibility
                         }
                     }
                 }
                 # target has an incompatibility with imported VM not addressed above
                 Default {
                     $CannotImport = $true
-                    Write-Warning -Message "Target computer reported an unhandled incompatibility: '$($Incompatibility.Message)'"
+                    $CannotImportMessage = "Found unhandled incompatibility: '$($Incompatibility.Message)'"
+                    Continue NextIncompatibility
                 }
             }
         }
 
-        # return
-        If ($CannotImport) {
-            Return $CompatibilityReport.VM
-        }
-        Else {
-            Return $CompatibilityReport
-        }
-
         # declare state
         Write-Host "$DestinationHost,$Name - ...VM compared to target"
+
+        # return custom compatibility object
+        Return [PSCustomObject]@{
+            CannotImport        = $CannotImport
+            CannotImportMessage = $CannotImportMessage
+            CompatibilityReport = $CompatibilityReport
+        }
     }
 
     Function Move-VMToComputer {
