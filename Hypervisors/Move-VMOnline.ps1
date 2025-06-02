@@ -457,7 +457,7 @@ Begin {
                             }
                         }
                     }
-        
+
                     # if switch name is null...
                     If ([string]::IsNullOrEmpty($SwitchName)) {
                         # ...disconnect VM network adapter
@@ -489,7 +489,7 @@ Begin {
                 }
             }
         }
-        
+
         # return
         If ($CannotImport) {
             Return $CompatibilityReport.VM
@@ -513,7 +513,7 @@ Begin {
         ################################################
         # define script-wide objects
         ################################################
-        
+
         $script:StatusObject = [pscustomobject]@{ Result = $false; Action = [string]::Empty; CompatibilityReport = $null; Error = $null }
         $script:MissingPaths = [System.Collections.Generic.List[string]]::new()
         $script:CurrentPaths = [System.Collections.Generic.List[string]]::new()
@@ -1010,7 +1010,7 @@ Process {
         Write-Host "$ComputerName,$Name - ...move failed"
         Write-Host "$ComputerName,$Name - ...failed action: $($StatusObject.Action)"
         Write-Host "$ComputerName,$Name - ...error message: $($StatusObject.Error.Exception.Message)"
-    }    
+    }
 
     ################################################
     # restore VM to cluster
@@ -1104,14 +1104,13 @@ Process {
             # if path removed...
             If ($PathRemoved) {
                 # report state
-                Write-Host "$ComputerName,$Name - ...removed empty path from original host"    
+                Write-Host "$ComputerName,$Name - ...removed empty path from original host"
             }
             # if path not removed...
             Else {
                 # report state
                 Write-Warning "$ComputerName,$Name - could not remove empty path from original host"
             }
-            
         }
     }
 
@@ -1119,7 +1118,7 @@ Process {
     If ($StatusObject.Result -eq $false) {
         # sort missing paths
         $SortedMissingPaths = $MissingPaths | Select-Object -Unique | Sort-Object -Descending
-        
+
         # loop through missing paths
         :NextMissingPath ForEach ($MissingPath in $SortedMissingPaths) {
             # test if path is empty on destination host
@@ -1164,7 +1163,7 @@ Process {
             # if path removed...
             If ($PathRemoved) {
                 # report state
-                Write-Host "$DestinationHost,$Name - ...removed empty path from destination host"    
+                Write-Host "$DestinationHost,$Name - ...removed empty path from destination host"
             }
             # if path not removed...
             Else {
