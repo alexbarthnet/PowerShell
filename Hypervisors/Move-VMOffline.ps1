@@ -1684,7 +1684,7 @@ Process {
 
 	# if VM was imported to target...
 	If ($ImportedVM -and $ImportedVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
-		# ...restore imported VM
+		# restore imported VM
 		Try {
 			Restore-VMOnComputer -VM $ImportedVM
 		}
@@ -1694,7 +1694,7 @@ Process {
 	}
 	# if VM export or import failed...
 	Else {
-		# ...restore original VM
+		# restore original VM
 		Try {
 			Restore-VMOnComputer -VM $VM
 		}
@@ -1709,7 +1709,7 @@ Process {
 
 	# if VM was imported to target...
 	If ($ImportedVM -and $ImportedVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
-		# ...remove original VM
+		# remove original VM
 		Try {
 			Remove-VMOnComputer -VM $VM
 		}
@@ -1720,7 +1720,7 @@ Process {
 	}
 	# if VM exported but import failed...
 	ElseIf ($ImportedVM -and $ImportedVM.VirtualMachineType -ne 'RealizedVirtualMachine') {
-		# ...remove exported VM from target
+		# remove exported VM from target
 		Try {
 			Remove-VMOnComputer -VM $ImportedVM
 		}
