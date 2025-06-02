@@ -1429,7 +1429,7 @@ Process {
 	# if destination storage path not provided as parameter...
 	If (!$PSBoundParameters.ContainsKey('DestinationStoragePath')) {
 		# assume destination storage path is same as VM path
-		$DestinationStoragePath = $VM | Select-Object -ExpandProperty 'Path'
+		$DestinationStoragePath = $VM | Select-Object -ExpandProperty 'Path' | Split-Path -Parent
 	}
 
 	################################################
