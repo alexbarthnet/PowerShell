@@ -18,7 +18,7 @@ param (
     [Parameter(Mandatory = $true)]
     [string]$DestinationHost,
     # path on target computer
-    [Parameter(ParameterSetName = 'Consolidate')]
+    [Parameter(ParameterSetName = 'DestinationStoragePath')]
     [string]$DestinationStoragePath,
     # path for virtual machine
     [Parameter(ParameterSetName = 'Default')]
@@ -1032,6 +1032,316 @@ Process {
     }
 
     ################################################
+    # check for VM switches on target cluster
+    ################################################
+
+    # define parameters for Get-VMSwitch
+    $GetVMSwitch = @{
+        ComputerName = $DestinationHost
+        SwitchType   = [Microsoft.HyperV.PowerShell.VMSwitchType]::External
+        ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+    }
+
+    # get external VM switches
+    Try {
+        $VMSwitch = Get-VMSwitch @GetVMSwitch
+    }
+    Catch {
+        Throw $_
+    }
+
+    # get external VM switch names
+    $SwitchNames = $VMSwitch | Select-Object -ExpandProperty Name
+
+    # if switchname parameter provided but not found in external VM switch names...
+    If ($PSBoundParameters.ContainsKey('SwitchName') -and $PSBoundParameters['SwitchName'] -notin $SwitchNames ) {
+        # warn and inquire
+        Write-Warning -Message "could not locate '$SwitchName' switch on '$DestinationHost' computer; attempt to connect VM to another available external switch?" -WarningAction Inquire
+
+        # clear SwitchName
+        $null = $SwitchName
+    }
+
+    ################################################
+    # define initial parameters for function
+    ################################################
+
+    # define parameters
+    $MoveVMToComputer = @{
+        VM              = $VM
+        DestinationHost = $DestinationHost
+    }
+
+    # declare state
+    Write-Verbose 'defined MoveVMToComputer'
+
+    ################################################
+    # get VM paths
+    ################################################
+
+    # define VM path list
+    $VMPaths = [System.Collections.Generic.List[string]]::new()
+
+    # if using destination storage path parameter set...
+    If ($PSCmdlet.ParameterSetName -eq 'DestinationStoragePath') {
+        # add destination storage path to list
+        $VMPaths.Add($DestinationStoragePath)
+
+        # declare state
+        Write-Verbose 'added destination storage path to list'
+
+        # add destination storage path to parameters
+        $MoveVMToComputer['DestinationStoragePath'] = $DestinationStoragePath
+
+        # add include storage to parameters - required to move VHDs to destination storage
+        $MoveVMToComputer['IncludeStorage'] = $true
+
+        # declare state
+        Write-Verbose 'added DestinationStoragePath and IncludeStorage to parameters'
+    }
+
+    # if using default parameter set...
+    If ($PSCmdlet.ParameterSetName -eq 'Default') {
+        # define VM path properties
+        $VMPathProperties = @{
+            Path                 = 'VirtualMachinePath'
+            SmartPagingFilePath  = 'SmartPagingFilePath'
+            SnapshotFileLocation = 'SnapshotFilePath'
+        }
+
+        # add VM path properties to VM path list
+        :NextVMPathProperty ForEach ($VMPathProperty in $VMPathProperties.Keys) {
+            # if VM path property not provided as parameter...
+            If (!$PSBoundParameters.ContainsKey($VMPathProperty)) {
+                Continue NextVMPathProperty
+            }
+
+            # get VM path from parameter
+            $VMPath = $PSBoundParameters[$VMPathProperty]
+
+            # trim VM path
+            $VMPath = $VMPath.TrimEnd('\')
+
+            # if VM path property in VM path list or null or empty...
+            If ($VMPath -in $VMPaths -or [string]::IsNullOrEmpty($VMPath)) {
+                Continue NextVMPathProperty
+            }
+
+            # add VM path to list
+            $VMPaths.Add($VMPath)
+
+            # declare state
+            Write-Verbose "added $VMPathProperty to VM paths"
+
+            # retrieve parameter name from hashtable
+            $ParameterName = $VMPathProperties[$VMPathProperty]
+
+            # add VM path to parameters
+            $MoveVMToComputer[$ParameterName] = $VMPath
+
+            # declare state
+            Write-Verbose "added $VMPathProperty to parameters as $ParameterName"
+        }
+    }
+
+    ################################################
+    # get VHD paths
+    ################################################
+
+    # get VM hard disk drive
+    $VHDPaths = Get-VMHardDiskDrive -VM $VM | Select-Object -ExpandProperty Path
+
+    Write-Verbose 'got VHD paths'
+
+    # if using default parameter set and VHDs hashtable array not provided...
+    If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $PSBoundParameters.ContainsKey('VHDs')) {
+        # if destination storage path not provided...
+        If (!$PSBoundParameters.ContainsKey('DestinationStoragePath')) {
+            # set destination storage path to VM path
+            $VHDParentPath = Join-Path -Path $Path -ChildPath 'Virtual Hard Disks'
+        }
+
+        # get VHD paths from array of VHD hashtables
+        ForEach ($VHDPath in $VHDPaths) {
+            # get child path from VHD path
+            $VHDChildPath = Split-Path -Path $VHDPath -Leaf
+
+            # create destination file path
+            $DestinationFilePath = Join-Path $VHDParentPath -ChildPath $VHDChildPath
+
+            # define VHD hashtable
+            $VHD = @{ SourceFilePath = $VHDPath; DestinationFilePath = $DestinationFilePath }
+
+            # add VHD hashtable to array
+            $VHDs += $VHD
+        }
+
+        # declare state
+        Write-Verbose 'created VHDs array'
+    }
+
+    # if using default parameter set...
+    If ($PSCmdlet.ParameterSetName -eq 'Default') {
+        # define list for VHD parent paths
+        $VHDParentPaths = [System.Collections.Generic.List[string]]::new()
+
+        # declare state
+        Write-Verbose 'created list'
+
+        # define booleans
+        $SourceFilePathMissing = $false
+        $InvalidVHDArrayMember = $false
+
+        # loop through VHDs
+        ForEach ($VHD in $VHDs) {
+            # if VHD is not a hashtable...
+            If ($VHD -isnot [hashtable]) {
+                Write-Warning -Message 'invalid entry in VHDs: one or more array members is not a hashtable'
+                Return
+            }
+
+            # if source file path key exists...
+            If ($VHD.ContainsKey('SourceFilePath')) {
+                # retrieve source file path
+                $SourceFilePath = $VHD['SourceFilePath']
+
+                # test source file path
+                $TestPath = Test-Path -Path $SourceFilePath -PathType 'Leaf'
+
+                # if source file path not found...
+                If (!$TestPath) {
+                    # warn and update boolean
+                    Write-Warning -Message "could not locate file for '$SourceFilePath' path in 'SourceFilePath' value"
+                    $SourceFilePathMissing = $true
+                }
+            }
+            # if source file path key missing...
+            Else {
+                # warn and update boolean
+                Write-Warning -Message "invalid VHDs parameter: array contains hashtable missing the 'SourceFilePath' key"
+                $InvalidVHDArrayMember = $true
+            }
+
+            # if destination file path key exists...
+            If ($VHD.ContainsKey('DestinationFilePath')) {
+                # retrieve source file path
+                $DestinationFilePath = $VHD['DestinationFilePath']
+
+                # test source file path
+                $VHDParentPath = Split-Path -Path $DestinationFilePath -Parent
+
+                # add VHD parent path to list
+                $VHDParentPaths.Add($VHDParentPath)
+            }
+            # if destination file path key missing...
+            Else {
+                # warn and update boolean
+                Write-Warning -Message "invalid VHDs parameter: array contains hashtable missing the 'DestinationFilePath' key"
+                $InvalidVHDArrayMember = $true
+            }
+        }
+
+        # if any source file paths are missing or invalid VHD array member found...
+        If ($SourceFilePathMissing -or $InvalidVHDArrayMember) {
+            Return
+        }
+
+        # declare state
+        Write-Verbose 'validated VHDs hashtable array'
+
+        # add destination storage path to parameters
+        $MoveVMToComputer['VHDs'] = $VHDs
+
+        # declare state
+        Write-Verbose 'added VHDs to parameters'
+
+        Return $VHDs
+
+        # loop through VHD parent paths
+        :NextVHDParentPath ForEach ($VHDParentPath in $VHDParentPaths) {
+            # trim VHD parent path
+            $VHDParentPath = $VHDParentPath.TrimEnd('\')
+
+            # if VHD parent path property in VM path list or null or empty...
+            If ($VHDParentPath -in $VMPaths -or [string]::IsNullOrEmpty($VHDParentPath)) {
+                Continue NextVHDParentPath
+            }
+
+            # add VHD parent path to list
+            $VMPaths.Add($VHDParentPath)
+        }
+
+        # declare state
+        Write-Verbose 'added VHD parent paths to list'
+    }
+
+    ################################################
+    # get target CSVs from target cluster
+    ################################################
+
+    # if target computer is clustered...
+    If ($TargetClusterName) {
+        # eetrieve CSVs from target computer
+        Try {
+            $ClusterSharedVolumePaths = Get-ClusterSharedVolume -Cluster $TargetClusterName | Select-Object -ExpandProperty SharedVolumeInfo | Select-Object -ExpandProperty FriendlyVolumeName
+        }
+        Catch {
+            Return $_
+        }
+
+        # define boolean
+        $VMPathsNotClustered = $false
+
+        # loop through VM paths...
+        :NextVMPath ForEach ($VMPath in $VMPaths) {
+            # loop through CSV paths
+            ForEach ($ClusterSharedVolumePath in $ClusterSharedVolumePaths) {
+                # if VM path starts with CSV path...
+                If ($VMPath.StartsWith($ClusterSharedVolumePath, [System.StringComparison]::InvariantCultureIgnoreCase)) {
+                    # continue with next VM path
+                    Continue NextVMPath
+                }
+            }
+
+            # warn and update boolean
+            Write-Warning -Message "found '$VMPath' path would not be on a Cluster Shared Volume on '$DestinationHost' computer"
+            $VMPathsNotClustered = $true
+        }
+
+        # if any VM paths are not clustered...
+        If ($VMPathsNotClustered) {
+            Return
+        }
+    }
+
+    ################################################
+    # assert path on target computer
+    ################################################
+
+    # declare state
+    Write-Host "$DestinationHost - checking path(s) on destination..."
+
+    # loop through paths...
+    ForEach ($VMPath in $VMPaths) {
+        # ensure path is created
+        Try {
+            $PathCreated = Assert-PathCreated -Path $VMPath -ComputerName $DestinationHost
+        }
+        Catch {
+            Throw $_
+        }
+
+        # if path is not created...
+        If (!$PathCreated) {
+            Write-Warning -Message "could not create '$VMPath' path on '$DestinationHost' computer"
+            Return
+        }
+
+        # declare state
+        Write-Host "$DestinationHost - ...path found: $VMPath"
+    }
+
+    ################################################
     # remove VM from source cluster
     ################################################
 
@@ -1061,21 +1371,51 @@ Process {
     }
 
     ################################################
-    # move VM
+    # compare VM
     ################################################
-
-    # define parameters
-    $MoveVMToComputer = @{
-        VM              = $VM
-        DestinationHost = $DestinationHost
-    }
 
     # move VM to target computer
     Try {
-        Move-VMToComputer @MoveVMToComputer
+        $CompatibilityReport = Compare-VM @CompareVM
     }
     Catch {
-        Throw $_
+        Write-Warning -Message "could not compare VM: $($_.Exception.Message)"
+    }
+
+    # declare state
+    Write-Host "$ComputerName,$Name - ...VM compared to destination host: $DestinationHost"
+
+    ################################################
+    # resolve incompatibilities
+    ################################################
+
+    # resolve incompatibilities
+    Try {
+        $CompatibilityObject = Resolve-VMCompatibilityReport -CompatibilityReport $CompatibilityReport
+    }
+    Catch {
+        Write-Warning -Message "could not resolve incompatibilities: $($_.Exception.Message)"
+    }
+
+    # if VM cannot be moved...
+    If ($CompatibilityObject.CannotImport) {
+        # report reason
+        Write-Warning -Message "cannot move VM: $($CompatibilityObject.CannotImportMessageMessage)"
+    }
+
+    ################################################
+    # move VM
+    ################################################
+
+    # if VM can be moved...
+    If ($CompatibilityObject.CannotImport -eq $false) {
+        # move VM to target computer
+        Try {
+            $MovedVM = Move-VM -CompatibilityReport $CompatibilityObject.CompatibilityReport -Passthru
+        }
+        Catch {
+            Write-Warning -Message "could not move VM: $($_.Exception.Message)"
+        }
     }
 
     ################################################
@@ -1083,178 +1423,63 @@ Process {
     ################################################
 
     # if VM move completed...
-    If ($StatusObject.Result -eq $true) {
+    If ($MovedVM) {
         Write-Host "$ComputerName,$Name - ...move completed"
     }
-    # if VM move failed...
     Else {
         Write-Host "$ComputerName,$Name - ...move failed"
-        Write-Host "$ComputerName,$Name - ...failed action: $($StatusObject.Action)"
-        Write-Host "$ComputerName,$Name - ...error message: $($StatusObject.Error.Exception.Message)"
     }
 
-    ################################################
-    # restore VM to cluster
-    ################################################
+	################################################
+	# restore VM
+	################################################
 
-    # if VM move completed and destination host is clustered...
-    If ($StatusObject.Result -eq $true -and $TargetClusterName) {
-        # report state
-        Write-Host "$DestinationHost,$Name - adding VM to destination cluster..."
+	# if VM moved to target...
+	If ($MovedVM -and $MovedVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
+		# restore moved VM
+		Try {
+			Restore-VMOnComputer -VM $MovedVM
+		}
+		Catch {
+			Throw $_
+		}
+	}
+	# if VM move failed...
+	Else {
+		# restore original VM
+		Try {
+			Restore-VMOnComputer -VM $VM
+		}
+		Catch {
+			Throw $_
+		}
+	}
 
-        # add VM to cluster on destination host
-        Try {
-            Add-ClusterVirtualMachineRole -Name $Name -Cluster $TargetClusterName
-            # Add-VMIdToClusterByComputerName -VMId $VM.Id -ComputerName $DestinationHost
-        }
-        Catch {
-            Return $_
-        }
+	################################################
+	# remove VM
+	################################################
 
-        # report state
-        Write-Host "$DestinationHost,$Name - ...added VM to destination cluster"
-    }
+	# if VM moved to target...
+	If ($MovedVM -and $MovedVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
+		# remove remnants of original VM
+		Try {
+			Remove-VMOnComputer -VM $VM
+		}
+		Catch {
+			Throw $_
+		}
 
-    # if VM move failed and VM was clustered on source computer...
-    If ($StatusObject.Result -eq $false -and $SourceClusterGroup) {
-        # report state
-        Write-Host "$ComputerName,$Name - adding VM back to original cluster..."
-
-        # restore VM to cluster on source computer
-        Try {
-            Add-ClusterVirtualMachineRole -Name $Name -Cluster $SourceClusterName
-            #Add-VMIdToClusterByComputerName -VMId $VM.Id -ComputerName $ComputerName
-        }
-        Catch {
-            Return $_
-        }
-
-        # report state
-        Write-Host "$ComputerName,$Name - ...added VM back to original cluster"
-    }
-
-    ################################################
-    # cleanup after VM move
-    ################################################
-
-    # if VM move completed...
-    If ($StatusObject.Result -eq $true) {
-        # sort current paths
-        $SortedCurrentPaths = $CurrentPaths | Select-Object -Unique | Sort-Object -Descending
-
-        # loop through current paths
-        :NextCurrentPath ForEach ($CurrentPath in $SortedCurrentPaths) {
-            # test if path is empty on original host
-            Try {
-                $TestPathIsEmpty = Test-PathOnDestinationHost -Path $CurrentPath -DestinationHost $ComputerName -IsEmpty
-            }
-            Catch {
-                Return $_
-            }
-
-            # if path is not empty...
-            If (!$TestPathIsEmpty) {
-                # warn and continue to next current path
-                Write-Warning -Message "$ComputerName,$Name - expected empty path; found files in path: $CurrentPath"
-                Continue NextCurrentPath
-            }
-
-            # test if path is found on original host
-            Try {
-                $TestPath = Test-PathOnDestinationHost -Path $CurrentPath -DestinationHost $ComputerName
-            }
-            Catch {
-                Return $_
-            }
-
-            # if path not found...
-            If (!$TestPath) {
-                # continue to next current path
-                Continue NextCurrentPath
-            }
-
-            # report state
-            Write-Host "$ComputerName,$Name - removing empty path from original host: $CurrentPath"
-
-            # remove current path after moving VM
-            Try {
-                $PathRemoved = Assert-PathRemoved -Path $CurrentPath -ComputerName $ComputerName
-            }
-            Catch {
-                Return $_
-            }
-
-            # if path removed...
-            If ($PathRemoved) {
-                # report state
-                Write-Host "$ComputerName,$Name - ...removed empty path from original host"
-            }
-            # if path not removed...
-            Else {
-                # report state
-                Write-Warning "$ComputerName,$Name - could not remove empty path from original host"
-            }
-        }
-    }
-
-    # if VM move failed...
-    If ($StatusObject.Result -eq $false) {
-        # sort missing paths
-        $SortedMissingPaths = $MissingPaths | Select-Object -Unique | Sort-Object -Descending
-
-        # loop through missing paths
-        :NextMissingPath ForEach ($MissingPath in $SortedMissingPaths) {
-            # test if path is empty on destination host
-            Try {
-                $TestPathIsEmpty = Test-PathOnDestinationHost -Path $MissingPath -DestinationHost $DestinationHost -IsEmpty
-            }
-            Catch {
-                Return $_
-            }
-
-            # if path is not empty...
-            If (!$TestPathIsEmpty) {
-                # warn and continue to next missing path
-                Write-Warning -Message "expected empty path; found files in path: $MissingPath"
-                Continue NextMissingPath
-            }
-
-            # test if path is found on destination host
-            Try {
-                $TestPath = Test-PathOnDestinationHost -Path $MissingPath -DestinationHost $DestinationHost
-            }
-            Catch {
-                Return $_
-            }
-
-            # if path not found...
-            If (!$TestPath) {
-                Continue NextMissingPath
-            }
-
-            # report state
-            Write-Host "$DestinationHost,$Name - removing empty path from destination host: $MissingPath"
-
-            # remove missing path created while trying to move VM
-            Try {
-                $PathRemoved = Assert-PathRemoved -Path $MissingPath -ComputerName $DestinationHost
-            }
-            Catch {
-                Return $_
-            }
-
-            # if path removed...
-            If ($PathRemoved) {
-                # report state
-                Write-Host "$DestinationHost,$Name - ...removed empty path from destination host"
-            }
-            # if path not removed...
-            Else {
-                # report state
-                Write-Warning "$DestinationHost,$Name - could not remove empty path from destination host"
-            }
-        }
-    }
+	}
+	# if VM move failed...
+	Else {
+		# remove remnants of failed VM move
+		Try {
+			Remove-VMOnComputer -VM $CompatibilityObject.CompatibilityReport.VM
+		}
+		Catch {
+			Throw $_
+		}
+	}
 }
 
 End {
