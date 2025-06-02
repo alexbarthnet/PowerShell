@@ -1297,6 +1297,25 @@ Begin {
 
 			# declare state
 			Write-Host "$ComputerName,$ClusterName - ...VM clustered"
+
+			# retrieve cluster group
+			Try {
+				$ClusterGroup = Get-ClusterGroup -VMId $VM.Id
+			}
+			Catch {
+				Throw $_
+			}
+
+			# update cluster group
+			Try {
+				$ClusterGroup.Priority = $script:Priority
+			}
+			Catch {
+				Throw $_
+			}
+
+			# declare state
+			Write-Host "$ComputerName,$ClusterName - ...VM cluster group updated"
 		}
 
 		################################################
@@ -1447,8 +1466,11 @@ Process {
 
 		# if source cluster group found...
 		If ($SourceClusterGroup) {
-			# declare state
-			Write-Host "$ComputerName,$Name - ...VM clustered on source computer; will remove before migration"
+            # retrieve cluster priority
+            $Priority = $SourceClusterGroup.Priority
+
+            # declare state
+            Write-Host "$ComputerName,$Name - ...VM found on '$SourceClusterName' cluster with '$Priority' priority; will remove from cluster before migration"
 		}
 		Else {
 			# declare state
