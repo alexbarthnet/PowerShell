@@ -1,6 +1,6 @@
 #Requires -Modules "Hyper-V","FailoverClusters"
 
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = 'Default')]
 param (
     # string for filtering name of VM switch on target computer
     [Parameter(DontShow)]
@@ -18,23 +18,26 @@ param (
     [Parameter(Mandatory = $true)]
     [string]$DestinationHost,
     # path on target computer
-    [Parameter()]
+    [Parameter(ParameterSetName = 'Consolidate')]
     [string]$DestinationStoragePath,
+    # path for virtual machine
+    [Parameter(ParameterSetName = 'Default')]
+    [string]$VirtualMachinePath,
+    # array of hashtables for VHDs
+    [Parameter(ParameterSetName = 'Default')]
+    [hashtable[]]$VHDs = @(),
     # name of VM switch on target computer
     [Parameter()]
     [string]$SwitchName,
-    # computer name of source computer
-    [Parameter()]
-    [string]$ComputerName = $Hostname,
     # force shutdown of running VM
     [Parameter()]
     [switch]$Force,
     # start stopped VM after migration
     [Parameter()]
     [switch]$Restart,
-    # upgrade VM version after import
+    # computer name of source computer
     [Parameter()]
-    [switch]$UpdateVmVersion
+    [string]$ComputerName = $Hostname
 )
 
 Begin {
@@ -410,13 +413,13 @@ Begin {
                         Write-Warning -Message 'Could not retrieve VM network adapter name from incompatibility object'
                         Throw $_
                     }
-        
+
                     # if switchname parameter not found in external VM switch names...
                     If ( $SwitchName -notin $SwitchNames ) {
                         # ...clear SwitchName
                         $null = $SwitchName
                     }
-        
+
                     # if switch name not provided or forced to null...
                     If ([string]::IsNullOrEmpty($SwitchName)) {
                         # switch on count of switchnames
@@ -851,11 +854,11 @@ Process {
     # retrieve path if not provided
     ################################################
 
-	# if destination storage path not provided as parameter...
-	If (!$PSBoundParameters.ContainsKey('DestinationStoragePath')) {
-		# assume destination storage path is same as VM path
-		$DestinationStoragePath = $VM | Select-Object -ExpandProperty 'Path'
-	}
+    # if destination storage path not provided as parameter...
+    If (!$PSBoundParameters.ContainsKey('DestinationStoragePath')) {
+        # assume destination storage path is same as VM path
+        $DestinationStoragePath = $VM | Select-Object -ExpandProperty 'Path'
+    }
 
     ################################################
     # check for VM on source cluster
