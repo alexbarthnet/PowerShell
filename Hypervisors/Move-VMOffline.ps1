@@ -1531,6 +1531,17 @@ Process {
 		Write-Host "$DestinationHost,$Name - ...VM not found via target computer"
 	}
 
+
+    ################################################
+    # get VM paths
+    ################################################
+
+    # define VM path list
+    $VMPaths = [System.Collections.Generic.List[string]]::new()
+
+	# add destination storage path to list
+	$VMPaths.Add($DestinationStoragePath)
+
 	################################################
 	# get target CSVs from target cluster
 	################################################
@@ -1547,9 +1558,6 @@ Process {
 
 		# define boolean
 		$VMPathsNotClustered = $false
-
-		# define list of VM paths
-		$VMPaths = @($DestinationStoragePath)
 
 		# loop through VM paths...
 		:NextVMPath ForEach ($VMPath in $VMPaths) {
