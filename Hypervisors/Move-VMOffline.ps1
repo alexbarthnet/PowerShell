@@ -177,6 +177,219 @@ Begin {
 		}
 	}
 
+	Function Get-SmbShareForPath {
+		Param(
+			[Parameter(Mandatory = $true)]
+			[string]$Path,
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName
+		)
+
+		# get SMB shares on target computer
+		Try {
+			$SmbShares = Get-SmbShare -CimSession $ComputerName -Special $true
+		}
+		Catch {
+			Throw $_
+		}
+
+		# get first SMB share where path parameter starts with share path and share path not null or empty
+		$SmbShare = $SmbShares | Sort-Object -Property 'Path' | Where-Object { $Path.StartsWith($_.Path, [System.StringComparison]::InvariantCultureIgnoreCase) -and -not [string]::IsNullOrEmpty($_.Path) } | Select-Object -First 1
+
+		# define share path from path parameter and SMB share
+		Try {
+			$SharePath = $Path.Replace($SmbShare.Path, "\\$ComputerName\$($SmbShare.Name)\")
+		}
+		Catch {
+			Throw $_
+		}
+
+		# return share path
+		Return $SharePath
+	}
+
+	Function Test-PathOnDestinationHost {
+		[CmdletBinding()]
+		Param(
+			[Parameter(Mandatory = $true)]
+			[string]$Path,
+			[Parameter(Mandatory = $true)]
+			[string]$DestinationHost,
+			[switch]$IsEmpty
+		)
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $DestinationHost
+		}
+		Catch {
+			Throw $_
+		}
+
+		# update argument list
+		$InvokeCommand['ArgumentList']['Path'] = $Path
+
+		# test path before attempting to create path
+		Try {
+			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				Test-Path -Path $ArgumentList['Path'] -PathType Container
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# if IsEmtpy requested...
+		If ($TestPath -and $IsEmpty) {
+			# retrieve file items in path
+			Try {
+				$Items = Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
+					Get-ChildItem -Path $ArgumentList['Path'] -File -Force -Recurse
+				}
+			}
+			Catch {
+				Throw $_
+			}
+
+			# if file items found...
+			If ($Items) {
+				Return $false
+			}
+		}
+
+		# return test path result
+		Return $TestPath
+	}
+
+	Function Assert-PathCreated {
+		[CmdletBinding()]
+		Param(
+			[Parameter(Mandatory = $true)]
+			[string]$Path,
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName
+		)
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# update argument list
+		$InvokeCommand['ArgumentList']['Path'] = $Path
+
+		# test path before attempting to create path
+		Try {
+			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				Test-Path -Path $ArgumentList['Path'] -PathType Container
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# if path found before attempting to create path...
+		If ($TestPath) {
+			Return $true
+		}
+
+		# create path
+		Try {
+			Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				$null = New-Item -Path $ArgumentList['Path'] -ItemType Directory -Force
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# test path before attempting to create path
+		Try {
+			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				Test-Path -Path $ArgumentList['Path'] -PathType Container
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# return test path result
+		Return $TestPath
+	}
+
+	Function Assert-PathRemoved {
+		[CmdletBinding()]
+		Param(
+			[Parameter(Mandatory = $true)]
+			[string]$Path,
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName
+		)
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# update argument list
+		$InvokeCommand['ArgumentList']['Path'] = $Path
+
+		# test path before attempting to remove path
+		Try {
+			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				Test-Path -Path $ArgumentList['Path'] -PathType Container
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# if path not found before attempting to remove path...
+		If (!$TestPath) {
+			Return $true
+		}
+
+		# if path found before attempting to remove path...
+		If ($TestPath) {
+			# remove path
+			Try {
+				Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
+					$null = Remove-Item -Path $ArgumentList['Path'] -Recurse -Force -ErrorAction SilentlyContinue
+				}
+			}
+			Catch {
+				Throw $_
+			}
+		}
+
+		# test path before attempting to remove path
+		Try {
+			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				Test-Path -Path $ArgumentList['Path'] -PathType Container
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# return test path result (inverted for remove)
+		Return !$TestPath
+	}
+
 	Function Export-VMToComputer {
 		Param(
 			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] })]
