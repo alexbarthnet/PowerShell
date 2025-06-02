@@ -1249,9 +1249,7 @@ Begin {
 	Function Restore-VMOnComputer {
 		Param(
 			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] })]
-			[object]$VM,
-			[Parameter()][ValidateScript({ $_ -in [Microsoft.HyperV.PowerShell.StartAction].GetEnumValues() })]
-			[string]$AutomaticStartAction = [Microsoft.HyperV.PowerShell.StartAction]::StartIfRunning
+			[object]$VM
 		)
 
 		################################################
@@ -1313,7 +1311,7 @@ Begin {
 			# define parameters for Set-VM
 			$SetVM = @{
 				VM                   = $VM
-				AutomaticStartAction = $AutomaticStartAction
+				AutomaticStartAction = $script:AutomaticStartAction
 				ErrorAction          = [System.Management.Automation.ActionPreference]::Stop
 			}
 
