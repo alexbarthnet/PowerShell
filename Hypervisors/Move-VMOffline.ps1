@@ -1298,9 +1298,16 @@ Begin {
 			# declare state
 			Write-Host "$ComputerName,$ClusterName - ...VM clustered"
 
+			# define parameters for Get-ClusterGroup
+			$GetClusterGroup = @{
+				Cluster     = $ClusterName
+				VMId        = $VM.Id
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
 			# retrieve cluster group
 			Try {
-				$ClusterGroup = Get-ClusterGroup -VMId $VM.Id
+				$ClusterGroup = Get-ClusterGroup @GetClusterGroup
 			}
 			Catch {
 				Throw $_
