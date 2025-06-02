@@ -25,7 +25,7 @@ param (
 	[string]$SwitchName,
 	# computer name of source computer
 	[Parameter()]
-	[string]$ComputerName,
+	[string]$ComputerName = $Hostname,
 	# force shutdown of running VM
 	[Parameter()]
 	[switch]$Force,
