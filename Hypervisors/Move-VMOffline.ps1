@@ -675,7 +675,7 @@ Begin {
 		}
 
 		################################################
-		# remove source to Administrators group on target
+		# remove source from Administrators group on target
 		################################################
 
 		# declare state
@@ -1466,11 +1466,11 @@ Process {
 
 		# if source cluster group found...
 		If ($SourceClusterGroup) {
-            # retrieve cluster priority
-            $Priority = $SourceClusterGroup.Priority
+			# retrieve cluster priority
+			$Priority = $SourceClusterGroup.Priority
 
-            # declare state
-            Write-Host "$ComputerName,$Name - ...VM found on '$SourceClusterName' cluster with '$Priority' priority; will remove from cluster before migration"
+			# declare state
+			Write-Host "$ComputerName,$Name - ...VM found on '$SourceClusterName' cluster with '$Priority' priority; will remove from cluster before migration"
 		}
 		Else {
 			# declare state
