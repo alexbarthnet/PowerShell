@@ -521,307 +521,344 @@ Begin {
         }
     }
 
-    Function Move-VMToComputer {
-        Param(
-            [Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] })]
-            [object]$VM,
-            [Parameter(Mandatory = $true)]
-            [string]$DestinationHost
-        )
+    Function Remove-VMOnComputer {
+		Param(
+			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] })]
+			[object]$VM
+		)
 
-        ################################################
-        # define script-wide objects
-        ################################################
+		################################################
+		# define strings
+		################################################
 
-        $script:StatusObject = [pscustomobject]@{ Result = $false; Action = [string]::Empty; CompatibilityReport = $null; Error = $null }
-        $script:MissingPaths = [System.Collections.Generic.List[string]]::new()
-        $script:CurrentPaths = [System.Collections.Generic.List[string]]::new()
+		$Id = $VM.Id.Guid
+		$Name = $VM.Name.ToLowerInvariant()
+		$ComputerName = $VM.ComputerName.ToLowerInvariant()
 
-        ################################################
-        # define parameters for VM compatibility report
-        ################################################
+		################################################
+		# prepare session
+		################################################
 
-        # define parameters
-        $CompareVM = @{
-            VM              = $VM
-            DestinationHost = $DestinationHost
-            ErrorAction     = [System.Management.Automation.ActionPreference]::Stop
-        }
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
 
-        ################################################
-        # retrieve VM path - primary
-        ################################################
+		################################################
+		# get VM paths
+		################################################
 
-        # add path to current paths list
-        $CurrentPaths.Add($VM.Path)
+		# get VM hard disk drive
+		$VHDPaths = Get-VMHardDiskDrive -VM $VM | Select-Object -ExpandProperty Path
 
-        # if path not provided...
-        If (!$PSBoundParameters.ContainsKey('VirtualMachinePath')) {
-            # retrieve path from VM
-            $VirtualMachinePath = $VM.Path
-        }
+		# define VM path list
+		$VMPaths = [System.Collections.Generic.List[string]]::new()
 
-        # define path on destination
-        $PathOnDestinationHost = $VirtualMachinePath
-            
-        # test parent path on destination
-        Try {
-            $TestPath = Test-PathOnDestinationHost -Path $PathOnDestinationHost -DestinationHost $DestinationHost
-        }
-        Catch {
-            $StatusObject.Action = 'Test-PathOnDestinationHost for VirtualMachinePath'
-            $StatusObject.Result = $false
-            $StatusObject.Error = $_
-            Return
-        }
-            
-        # if path not found not found on destination and parent path not in missing paths...
-        If (!$TestPath -and $PathOnDestinationHost -notin $MissingPaths) {
-            # add parent path to list
-            $MissingPaths.Add($PathOnDestinationHost)
-        }
+		# define VM path properties
+		$VMPathProperties = 'Path', 'ConfigurationLocation', 'CheckpointFileLocation', 'SmartPagingFilePath', 'SnapshotFileLocation'
 
-        # add path to compare parameters
-        $CompareVM['VirtualMachinePath'] = $VirtualMachinePath
+		# add VM path properties to VM path list
+		ForEach ($VMPathProperty in $VMPathProperties) {
+			# get value of VM path property
+			$VMPath = $VM | Select-Object -ExpandProperty $VMPathProperty
+			# if VM path property not in VM path list and not null or empty...
+			If ($VMPath -notin $VMPaths -and -not [string]::IsNullOrEmpty($VMPath)) {
+				# ...add to list
+				$VMPaths.Add($VMPath)
+			}
+		}
 
-        ################################################
-        # retrieve VM path - secondary
-        ################################################
+		################################################
+		# remove VM object
+		################################################
 
-        # if path not in current path list...
-        If ($VM.SmartPagingFilePath -notin $CurrentPaths) {
-            # add path to current paths list
-            $CurrentPaths.Add($VM.SmartPagingFilePath)
-        }
+		# declare state
+		Write-Host "$ComputerName,$Name - removing VM..."
 
-        # add VM path to current paths list
-        $CurrentPaths.Add($VM.Path)
+		# define parameters for Remove-VM
+		$RemoveVM = @{
+			VM          = $VM
+			Force       = $true
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
 
-        # if path not provided...
-        If (!$PSBoundParameters.ContainsKey('SmartPagingFilePath')) {
-            # retrieve path from VM
-            $SmartPagingFilePath = $VM.SmartPagingFilePath
-        }
+		# remove VM on computer
+		Try {
+			Remove-VM @RemoveVM
+		}
+		Catch {
+			Throw $_
+		}
 
-        # define smart paging path
-        If ($CompareVM['VirtualMachinePath'] -ne $SmartPagingFilePath) {
-            # define path on destination
-            $PathOnDestinationHost = $SmartPagingFilePath
-            
-            # test parent path on destination
-            Try {
-                $TestPath = Test-PathOnDestinationHost -Path $PathOnDestinationHost -DestinationHost $DestinationHost
-            }
-            Catch {
-                $StatusObject.Action = 'Test-PathOnDestinationHost for SmartPagingFilePath'
-                $StatusObject.Result = $false
-                $StatusObject.Error = $_
-                Return
-            }
+		# declare state
+		Write-Host "$ComputerName,$Name - ...VM removed"
 
-            # if path not found not found on destination and parent path not in missing paths...
-            If (!$TestPath -and $PathOnDestinationHost -notin $MissingPaths) {
-                # add parent path to list
-                $MissingPaths.Add($PathOnDestinationHost)
-            }
+		################################################
+		# remove VM files
+		################################################
 
-            # add path to compare parameters
-            $CompareVM['SmartPagingFilePath'] = $SmartPagingFilePath
-        }
+		# declare state
+		Write-Host "$ComputerName,$Name - removing VHDs..."
 
-        # if path not in current path list...
-        If ($VM.SnapshotFileLocation -notin $CurrentPaths) {
-            # add path to current paths list
-            $CurrentPaths.Add($VM.SnapshotFileLocation)
-        }
+		# remove VM hard disk drive files
+		ForEach ($VHDPath in $VHDPaths) {
+			# declare state
+			Write-Host "$ComputerName,$Name - ...removing VHD: $VHDPath"
 
-        # if path not provided...
-        If (!$PSBoundParameters.ContainsKey('SnapshotFileLocation')) {
-            # retrieve path from VM
-            $SnapshotFileLocation = $VM.SnapshotFileLocation
-        }
+			# update argument list with parameters for Remove-Item
+			$InvokeCommand['ArgumentList']['RemoveItem'] = @{
+				Path        = $VHDPath
+				Force       = $true
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
 
-        # define snapshot path
-        If ($CompareVM['VirtualMachinePath'] -ne $SnapshotFileLocation) {
-            # define path on destination
-            $PathOnDestinationHost = $SnapshotFileLocation
-            
-            # test parent path on destination
-            Try {
-                $TestPath = Test-PathOnDestinationHost -Path $PathOnDestinationHost -DestinationHost $DestinationHost
-            }
-            Catch {
-                $StatusObject.Action = 'Test-PathOnDestinationHost for SnapshotFileLocation'
-                $StatusObject.Result = $false
-                $StatusObject.Error = $_
-                Return
-            }
-            
-            # if path not found not found on destination and parent path not in missing paths...
-            If (!$TestPath -and $PathOnDestinationHost -notin $MissingPaths) {
-                # add parent path to list
-                $MissingPaths.Add($PathOnDestinationHost)
-            }
-            
-            # add path to compare parameters
-            $CompareVM['SnapshotFilePath'] = $SnapshotFileLocation
-        }
+			# remove VHD on source computer
+			Try {
+				Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
 
-        ################################################
-        # retrieve VHD path
-        ################################################
+					# define parameters for Remove-Item
+					$RemoveItem = $ArgumentList['RemoveItem']
 
-        # define VHD array
-        $CompareVM['Vhds'] = @()
+					# remove VHD
+					Remove-Item @RemoveItem
 
-        # process each VHD
-        ForEach ($VMHardDrive in $VM.HardDrives) {
-            # retrieve parent path for VHD
-            Try {
-                $ParentPath = Split-Path -Path $VMHardDrive.Path -Parent
-            }
-            Catch {
-                $StatusObject.Action = 'Split-Path for VMHardDrive.Path'
-                $StatusObject.Result = $false
-                $StatusObject.Error = $_
-                Return
-            }
+					# test VHD
+					$TestPath = Test-Path -Path $RemoveItem['Path'] -PathType Leaf
 
-            # if path not in current path list...
-            If ($ParentPath -notin $CurrentPaths) {
-                # add path to current paths list
-                $CurrentPaths.Add($ParentPath)
-            }
+					# if VHD still exists...
+					If ($TestPath) {
+						# declare state
+						Write-Warning 'VHD queued for removal but still present; waiting for up to 30 seconds'
 
-            # test parent path on destination
-            Try {
-                $TestPath = Test-PathOnDestinationHost -Path $ParentPath -DestinationHost $DestinationHost
-            }
-            Catch {
-                $StatusObject.Action = 'Test-PathOnDestinationHost for VMHardDrive.Path'
-                $StatusObject.Result = $false
-                $StatusObject.Error = $_
-                Return
-            }
+						# initialize counter
+						$Counter = [int32]1
+					}
 
-            # if path not found not found on destination and parent path not in missing paths...
-            If (!$TestPath -and $ParentPath -notin $MissingPaths) {
-                # add parent path to list
-                $MissingPaths.Add($ParentPath)
-            }
+					# while VHD still exist and counter lesss than 7...
+					While ($TestPath -and $Counter -lt 7) {
+						# increment counter
+						$Counter++
+						# sleep
+						Start-Sleep -Seconds 5
+						# test VHD
+						$TestPath = Test-Path -Path $RemoveItem['Path'] -PathType Leaf
+					}
 
-            # retrieve VHD source path
-            $SourceFilePath = $VMHardDrive.Path
+					# if VHD still exists...
+					If ($TestPath) {
+						# declare state
+						Write-Warning 'VHD not removed after 30 seconds'
+					}
+				}
+			}
+			Catch {
+				Throw $_
+			}
 
-            # define VHD destination path
-            $DestinationFilePath = $SourceFilePath
+			# declare state
+			Write-Host "$ComputerName,$Name - ...removed VHD"
+		}
 
-            # add VHD source-to-destination mapping to array
-            $CompareVM['Vhds'] += @{ SourceFilePath = $SourceFilePath; DestinationFilePath = $DestinationFilePath }
-        }
+		################################################
+		# remove VM folders
+		################################################
 
-        ################################################
-        # process list for missing paths
-        ################################################
+		# declare state
+		Write-Host "$ComputerName,$Name - removing VM files..."
 
-        # define boolean
-        $MissingPathNotCreated = $false
+		# remove VM path folders
+		ForEach ($VMPath in $VMPaths) {
+			# update argument list
+			$InvokeCommand['ArgumentList']['Path'] = $VMPath
 
-        # loop through missing paths
-        ForEach ($MissingPath in $MissingPaths) {
-            # assert missing path on destination host
-            Try {
-                $PathCreated = Assert-PathCreated -Path $MissingPath -ComputerName $DestinationHost
-            }
-            Catch {
-                $StatusObject.Action = 'Assert-PathCreated for MissingPath'
-                $StatusObject.Result = $false
-                $StatusObject.Error = $_
-                Return
-            }
+		}
 
-            # if path created...
-            If ($PathCreated) {
-                # report path
-                Write-Host "$DestinationHost,$Name - created path on destination host: $MissingPath"
-            }
-            # if path not created...
-            Else {
-                # warn and update boolean
-                Write-Warning "$DestinationHost,$Name - could not create path on destination host: $MissingPath"
-                $MissingPathNotCreated = $true
-            }
-        }
+		################################################
+		# remove VM folders
+		################################################
 
-        # if missing path not created...
-        If ($MissingPathNotCreated) {
-            $StatusObject.Result = $false
-            Return
-        }
+		# declare state
+		Write-Host "$ComputerName,$Name - removing VM folders..."
 
-        ################################################
-        # compare VM
-        ################################################
+		# remove VM path folders
+		ForEach ($VMPath in $VMPaths) {
+			# update argument list with parameters for Get-ChildItem
+			$InvokeCommand['ArgumentList']['GetChildItem'] = @{
+				Path        = $VMPath
+				File        = $true
+				Force       = $true
+				Recurse     = $true
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
 
-        # move VM to target computer
-        Try {
-            $CompatibilityReport = Compare-VM @CompareVM
-        }
-        Catch {
-            $StatusObject.Action = 'Compare-VM'
-            $StatusObject.Result = $false
-            $StatusObject.Error = $_
-            Return
-        }
+			# get any files in VM path
+			Try {
+				$ChildItems = Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
 
-        # declare state
-        Write-Host "$ComputerName,$Name - ...VM compared to destination host: $DestinationHost"
+					# define parameters for Get-ChildItem
+					$GetChildItem = $ArgumentList['GetChildItem']
 
-        ################################################
-        # resolve VM compatibility with target
-        ################################################
+					# get child items
+					Get-ChildItem @GetChildItem
+				}
+			}
+			Catch {
+				Throw $_
+			}
 
-        # compare VM with target computer
-        Try {
-            $CompatibilityReport = Resolve-VMCompatibilityReport -CompatibilityReport $CompatibilityReport
-        }
-        Catch {
-            $StatusObject.Action = 'Resolve-VMCompatibilityReport'
-            $StatusObject.CompatibilityReport = $CompatibilityReport
-            $StatusObject.Result = $false
-            $StatusObject.Error = $_
-            Return
-        }
+			# if child items found...
+			If ($ChildItems | Where-Object { $_.BaseName -ne $Id }) {
+				# ...warn and return
+				Write-Warning -Message "Path is not empty: '$VMpath' on '$ComputerName'"
+				Return
+			}
 
-        ################################################
-        # move VM
-        ################################################
+			# update argument list with parameters for Get-ChildItem
+			$InvokeCommand['ArgumentList']['RemoveItem'] = @{
+				Path        = $VMPath
+				Force       = $true
+				Recurse     = $true
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
 
-        # declare state
-        Write-Host "$ComputerName,$Name - moving VM..."
+			# remove VHD on source computer
+			Try {
+				Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
 
-        # define required parameters for Import-VM
-        $MoveVM = @{
-            CompatibilityReport = $CompatibilityReport
-            ErrorAction         = [System.Management.Automation.ActionPreference]::Stop
-        }
+					# define parameters for Remove-Item
+					$RemoveItem = $ArgumentList['RemoveItem']
 
-        # move VM to target computer
-        Try {
-            Move-VM @MoveVM
-        }
-        Catch {
-            $StatusObject.Action = 'Move-VM'
-            $StatusObject.Result = $false
-            $StatusObject.Error = $_
-            Return
-        }
+					# remove item
+					Remove-Item @RemoveItem
+				}
+			}
+			Catch {
+				Throw $_
+			}
 
-        # update state
-        $StatusObject.Action = 'Move-VM'
-        $StatusObject.Result = $true
-        Return
-    }
+			# declare state
+			Write-Host "$ComputerName,$Name - ...removed: $VMPath"
+		}
+	}
+
+	Function Restore-VMOnComputer {
+		Param(
+			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] })]
+			[object]$VM,
+			[Parameter()][ValidateScript({ $_ -in [Microsoft.HyperV.PowerShell.StartAction].GetEnumValues() })]
+			[string]$AutomaticStartAction = [Microsoft.HyperV.PowerShell.StartAction]::StartIfRunning
+		)
+
+		################################################
+		# define strings
+		################################################
+
+		$Name = $VM.Name.ToLowerInvariant()
+		$ComputerName = $VM.ComputerName.ToLowerInvariant()
+
+		################################################
+		# get cluster name from computer name
+		################################################
+
+		# get cluster for target server
+		Try {
+			$ClusterName = Get-ClusterName -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		################################################
+		# add VM to cluster
+		################################################
+
+		# if computer is clustered...
+		If ($ClusterName) {
+			# declare state
+			Write-Host "$ComputerName,$ClusterName - adding VM to cluster..."
+
+			# define parameters for Add-ClusterVirtualMachineRole
+			$AddClusterVirtualMachineRole = @{
+				Cluster        = $ClusterName
+				VirtualMachine = $Name
+				ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# add VM to cluster by ID
+			Try {
+				$null = Add-ClusterVirtualMachineRole @AddClusterVirtualMachineRole
+			}
+			Catch {
+				Throw $_
+			}
+
+
+
+            # declare state
+			Write-Host "$ComputerName,$ClusterName - ...VM clustered"
+		}
+
+		################################################
+		# restore VM start action on computer
+		################################################
+
+		# if computer is not clustered...
+		If ([string]::IsNullOrEmpty($ClusterName)) {
+			# declare state
+			Write-Host "$ComputerName,$Name - restoring VM start action configuration..."
+
+			# define parameters for Set-VM
+			$SetVM = @{
+				VM                   = $VM
+				AutomaticStartAction = $AutomaticStartAction
+				ErrorAction          = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# restore automatic start action
+			Try {
+				Set-VM @SetVM
+			}
+			Catch {
+				Throw $_
+			}
+
+			# declare state
+			Write-Host "$ComputerName,$Name - ...VM configuration restored"
+		}
+
+		################################################
+		# start VM on computer
+		################################################
+
+		# if VM was running before export...
+		If ($State -eq 'Running' -or $Restart) {
+			# declare state
+			Write-Host "$ComputerName,$Name - starting VM..."
+
+			# define parameters for Start-VM
+			$StartVM = @{
+				VM          = $VM
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# start VM on computer
+			Try {
+				Start-VM @StartVM
+			}
+			Catch {
+				Throw $_
+			}
+
+			# declare state
+			Write-Host "$ComputerName,$Name - ...VM started"
+		}
+	}
 }
 
 Process {
