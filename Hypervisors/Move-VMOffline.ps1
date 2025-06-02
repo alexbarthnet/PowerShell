@@ -1537,7 +1537,8 @@ Process {
 
     # if target computer is clustered...
     If ($TargetClusterName) {
-        Try {
+		# eetrieve CSVs from target computer
+		Try {
             $ClusterSharedVolumePaths = Get-ClusterSharedVolume -Cluster $TargetClusterName | Select-Object -ExpandProperty SharedVolumeInfo | Select-Object -ExpandProperty FriendlyVolumeName
         }
         Catch {
@@ -1547,7 +1548,10 @@ Process {
         # define list for VM paths not on CSVs
         $VMPathsNotClustered = [System.Collections.Generic.List[string]]::new()
 
-        # loop through VM paths...
+		# define list of VM paths
+		$VMPaths = @($DestinationStoragePath)
+
+		# loop through VM paths...
         :NextVMPath ForEach ($VMPath in $VMPaths) {
             # loop through CSV paths
             ForEach ($ClusterSharedVolumePath in $ClusterSharedVolumePaths) {
