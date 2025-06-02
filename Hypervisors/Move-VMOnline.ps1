@@ -866,6 +866,10 @@ Process {
         Throw [System.UnauthorizedAccessException]::new('Users in the Protected Users group must run this script from the source hypervisor')
     }
 
+	# get VM configuration for restoration
+	$State = $VM.State
+	$AutomaticStartAction = $VM.AutomaticStartAction
+
     ################################################
     # retrieve path if not provided
     ################################################
@@ -908,8 +912,11 @@ Process {
 
         # if source cluster group found...
         If ($SourceClusterGroup) {
+            # retrieve cluster priority
+            $Priority = $SourceClusterGroup.Priority
+
             # declare state
-            Write-Host "$ComputerName,$Name - ...VM found on '$SourceClusterName' cluster; will remove from cluster before migration"
+            Write-Host "$ComputerName,$Name - ...VM found on '$SourceClusterName' cluster with '$Priority' priority; will remove from cluster before migration"
         }
         Else {
             # declare state
