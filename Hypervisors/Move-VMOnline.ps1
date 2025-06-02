@@ -29,6 +29,8 @@ param (
 	[switch]$Force,
 	# start stopped VM after migration
 	[switch]$Restart,
+	# test compatibility without move
+	[switch]$TestCompatibility,
 	# computer name of source computer
 	[string]$ComputerName = $Hostname
 )
@@ -528,14 +530,11 @@ Begin {
 				# target has an incompatibility with imported VM not addressed above
 				Default {
 					$CannotImport = $true
-					$CannotImportMessage = "Found unhandled incompatibility: '$($Incompatibility.Message)'"
+					$CannotImportMessage = "found unhandled incompatibility of '$($Incompatibility.MessageID) with message: '$($Incompatibility.Message)'"
 					Continue NextIncompatibility
 				}
 			}
 		}
-
-		# declare state
-		Write-Host "$DestinationHost,$Name - ...VM compared to target"
 
 		# return custom compatibility object
 		Return [PSCustomObject]@{
@@ -1415,9 +1414,6 @@ Process {
 	# compare VM
 	################################################
 
-	# export parameters
-	New-Variable -Name 'CompareVMParameters' -Value $CompareVM -Scope Global -Force
-
 	# move VM to target computer
 	Try {
 		$CompatibilityReport = Compare-VM @CompareVM
@@ -1446,37 +1442,39 @@ Process {
 		# if VM cannot be moved...
 		If ($CompatibilityObject.CannotImport) {
 			# report reason
-			Write-Warning -Message "cannot move VM: $($CompatibilityObject.CannotImportMessage)"
+			Write-Warning -Message "will not move VM: $($CompatibilityObject.CannotImportMessage)"
+			
+			# export parameters
+			New-Variable -Name 'CompatibilityObject' -Value $CompatibilityObject -Scope Global -Force
+
+			# declare state
+			Write-Verbose -Message 'exported $CompatibilityReport to global object'
 		}
 	}
 	################################################
 	# move VM
 	################################################
 
-	# force skip VM move
-	$null = $CompatibilityObject
-
-	# if compatibility object created and VM can be moved...
-	If ($CompatibilityObject -and $CompatibilityObject.CannotImport -eq $false) {
-		# move VM to target computer
-		Try {
-			$MovedVM = Move-VM -CompatibilityReport $CompatibilityObject.CompatibilityReport -Passthru
+	# if test compatibility not requested...
+	If (!$TestCompatibility) {
+		# if compatibility object created and VM can be moved...
+		If ($CompatibilityObject -and $CompatibilityObject.CannotImport -eq $false) {
+			# move VM to target computer
+			Try {
+				$MovedVM = Move-VM -CompatibilityReport $CompatibilityObject.CompatibilityReport -Passthru
+			}
+			Catch {
+				Write-Warning -Message "could not move VM: $($_.Exception.Message)"
+			}
 		}
-		Catch {
-			Write-Warning -Message "could not move VM: $($_.Exception.Message)"
+
+		# if VM move completed...
+		If ($MovedVM) {
+			Write-Host "$ComputerName,$Name - ...move completed"
 		}
-	}
-
-	################################################
-	# report state
-	################################################
-
-	# if VM move completed...
-	If ($MovedVM) {
-		Write-Host "$ComputerName,$Name - ...move completed"
-	}
-	Else {
-		Write-Host "$ComputerName,$Name - ...move failed"
+		Else {
+			Write-Host "$ComputerName,$Name - ...move failed"
+		}
 	}
 
 	################################################
