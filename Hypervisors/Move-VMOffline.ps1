@@ -1356,69 +1356,6 @@ Begin {
 			Write-Host "$ComputerName,$Name - ...VM started"
 		}
 	}
-
-	# declare state
-	Write-Host "$DestinationHost - checking path on destination..."
-
-	# get hashtable for InvokeCommand splat
-	Try {
-		$InvokeCommand = Get-PSSessionInvoke -ComputerName $DestinationHost
-	}
-	Catch {
-		Throw $_
-	}
-
-	# update argument list
-	$InvokeCommand['ArgumentList']['GetItem'] = @{
-		Path        = $Path
-		ErrorAction	= [System.Management.Automation.ActionPreference]::Stop
-	}
-
-	# test path on destination
-	Try {
-		$null = Invoke-Command @InvokeCommand -ScriptBlock {
-			Param($ArgumentList)
-
-			# define parameters for Get-Item
-			$GetItem = $ArgumentList['GetItem']
-
-			# get path
-			Get-Item @GetItem
-		}
-	}
-	Catch {
-		Throw $_
-	}
-
-	# declare state
-	Write-Host "$DestinationHost - ...path found: $Path"
-	Write-Host "$DestinationHost - retrieving SMB shares..."
-
-	# get SMB shares on target computer
-	Try {
-		$SmbShares = Get-SmbShare -CimSession $DestinationHost -Special $true
-	}
-	Catch {
-		Throw $_
-	}
-
-	# declare state
-	Write-Host "$DestinationHost - ...shares found"
-	Write-Host "$DestinationHost - building UNC path for export..."
-
-	# get first SMB share where path parameter starts with share path and share path not null or empty
-	$SmbShare = $SmbShares | Where-Object { $Path.StartsWith($_.Path, [System.StringComparison]::InvariantCultureIgnoreCase) -and -not [string]::IsNullOrEmpty($_.Path) } | Select-Object -First 1
-
-	# define share path from path parameter and SMB share
-	Try {
-		$SharePath = $Path.Replace($SmbShare.Path, "\\$DestinationHost\$($SmbShare.Name)\")
-	}
-	Catch {
-		Throw $_
-	}
-
-	# declare state
-	Write-Host "$DestinationHost - ...UNC path built: $SharePath"
 }
 
 Process {
