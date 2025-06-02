@@ -1531,6 +1531,91 @@ Process {
 		Write-Host "$DestinationHost,$Name - ...VM not found via target computer"
 	}
 
+    ################################################
+    # get target CSVs from target cluster
+    ################################################
+
+    # if target computer is clustered...
+    If ($TargetClusterName) {
+        Try {
+            $ClusterSharedVolumePaths = Get-ClusterSharedVolume -Cluster $TargetClusterName | Select-Object -ExpandProperty SharedVolumeInfo | Select-Object -ExpandProperty FriendlyVolumeName
+        }
+        Catch {
+            Return $_
+        }
+
+        # define list for VM paths not on CSVs
+        $VMPathsNotClustered = [System.Collections.Generic.List[string]]::new()
+
+        # loop through VM paths...
+        :NextVMPath ForEach ($VMPath in $VMPaths) {
+            # loop through CSV paths
+            ForEach ($ClusterSharedVolumePath in $ClusterSharedVolumePaths) {
+                # if VM path starts with CSV path...
+                If ($VMPath.StartsWith($ClusterSharedVolumePath, [System.StringComparison]::InvariantCultureIgnoreCase)) {
+                    # continue with next VM path
+                    Continue NextVMPath
+                }
+            }
+
+            # add VM path to list
+            Write-Warning -Message "found '$VMPath' path would not be on a Cluster Shared Volume on '$DestinationHost' computer"
+            $VMPathsNotClustered.Add($VMPath)
+        }
+
+        # if any VM paths are not clustered...
+        If ($VMPathsNotClustered.Count -ge 1) {
+            Return
+        }
+    }
+	################################################
+	# assert path on target computer
+	################################################
+
+	# declare state
+	Write-Host "$DestinationHost - checking path on destination..."
+
+	# ensure path is created
+	Try {
+		$PathCreated = Assert-PathCreated -Path $Path -ComputerName $DestinationHost
+	}
+	Catch {
+		Throw $_
+	}
+
+	# if path is not created...
+	If (!$PathCreated) {
+		Write-Warning -Message "could not create '$Path' path on '$DestinationHost' computer"
+		Return
+	}
+
+	# declare state
+	Write-Host "$DestinationHost - ...path found: $Path"
+
+	################################################
+	# build UNC path from source computer
+	################################################
+
+	# declare state
+	Write-Host "$ComputerName - building UNC path..."
+
+	# ensure path is created
+	Try {
+		$SharePath = Get-SmbShareForPath -Path $Path -ComputerName $DestinationHost
+	}
+	Catch {
+		Throw $_
+	}
+
+	# if share path is not created...
+	If ([string]::IsNullOrEmpty($SharePath)) {
+		Write-Warning -Message "could not create UNC path on '$ComputerName' computer to '$Path' path on '$DestinationHost' computer"
+		Return
+	}
+
+	# declare state
+	Write-Host "$ComputerName - ...UNC path built: $SharePath"
+
 	################################################
 	# export VM
 	################################################
