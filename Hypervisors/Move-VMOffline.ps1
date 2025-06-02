@@ -1450,5 +1450,14 @@ Process {
 }
 
 End {
-
+	# loop through sessions
+	ForEach ($SessionName in $script:PSSessions.Keys) {
+		# remove sessions created by this script
+		Try {
+			Remove-PSSession -Session $script:PSSessions[$SessionName]
+		}
+		Catch {
+			Return $_
+		}
+	}
 }
