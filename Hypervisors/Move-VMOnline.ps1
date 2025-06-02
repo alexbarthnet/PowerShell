@@ -984,8 +984,7 @@ Process {
     # if VM found on target server...
     If ($TargetVM -and $TargetVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
         # warn and return
-        Write-Warning "VM has already been migrated to '$DestinationHost' computer"
-        $TargetVM | Format-List *
+        Write-Warning -Message "found VM on '$DestinationHost' destination host with matching Id: $Id"
         Return
     }
 
