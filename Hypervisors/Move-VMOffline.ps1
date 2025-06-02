@@ -1272,7 +1272,7 @@ Begin {
 		# if computer is clustered...
 		If ($ClusterName) {
 			# declare state
-			Write-Host "$ComputerName,$ClusterName - adding VM to cluster..."
+			Write-Host "$ComputerName,$Name - adding VM to '$ClusterName' cluster..."
 
 			# define parameters for Add-ClusterVirtualMachineRole
 			$AddClusterVirtualMachineRole = @{
@@ -1290,7 +1290,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$ComputerName,$ClusterName - ...VM clustered"
+			Write-Host "$ComputerName,$Name - ...VM clustered"
 
 			# define parameters for Get-ClusterGroup
 			$GetClusterGroup = @{
@@ -1316,7 +1316,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$ComputerName,$ClusterName - ...VM cluster group updated"
+			Write-Host "$ComputerName,$Name - ...VM cluster group updated"
 		}
 
 		################################################
