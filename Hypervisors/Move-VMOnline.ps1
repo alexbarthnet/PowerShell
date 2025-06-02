@@ -1036,7 +1036,8 @@ Process {
 
         # add VM to cluster on destination host
         Try {
-            Add-VMIdToClusterByComputerName -VMId $VM.Id -ComputerName $DestinationHost
+            Add-ClusterVirtualMachineRole -Name $Name -Cluster $TargetClusterName
+            # Add-VMIdToClusterByComputerName -VMId $VM.Id -ComputerName $DestinationHost
         }
         Catch {
             Return $_
@@ -1053,7 +1054,8 @@ Process {
 
         # restore VM to cluster on source computer
         Try {
-            Add-VMIdToClusterByComputerName -VMId $VM.Id -ComputerName $ComputerName        
+            Add-ClusterVirtualMachineRole -Name $Name -Cluster $SourceClusterName
+            #Add-VMIdToClusterByComputerName -VMId $VM.Id -ComputerName $ComputerName
         }
         Catch {
             Return $_
