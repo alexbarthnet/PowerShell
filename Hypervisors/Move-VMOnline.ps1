@@ -19,7 +19,7 @@ param (
     [string]$DestinationHost,
     # path on target computer
     [Parameter()]
-    [string]$Path,
+    [string]$DestinationStoragePath,
     # name of VM switch on target computer
     [Parameter()]
     [string]$SwitchName,
@@ -846,6 +846,16 @@ Process {
     If ($Hostname -ne $ComputerName -and ([Security.Principal.WindowsIdentity]::GetCurrent().Groups | Where-Object { $_.Value -match '-525$' })) {
         Throw [System.UnauthorizedAccessException]::new('Users in the Protected Users group must run this script from the source hypervisor')
     }
+
+    ################################################
+    # retrieve path if not provided
+    ################################################
+
+	# if destination storage path not provided as parameter...
+	If (!$PSBoundParameters.ContainsKey('DestinationStoragePath')) {
+		# assume destination storage path is same as VM path
+		$DestinationStoragePath = $VM | Select-Object -ExpandProperty 'Path'
+	}
 
     ################################################
     # check for VM on source cluster
