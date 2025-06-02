@@ -1532,12 +1532,12 @@ Process {
 	}
 
 
-    ################################################
-    # get VM paths
-    ################################################
+	################################################
+	# get VM paths
+	################################################
 
-    # define VM path list
-    $VMPaths = [System.Collections.Generic.List[string]]::new()
+	# define VM path list
+	$VMPaths = [System.Collections.Generic.List[string]]::new()
 
 	# add destination storage path to list
 	$VMPaths.Add($DestinationStoragePath)
@@ -1588,22 +1588,25 @@ Process {
 	# declare state
 	Write-Host "$DestinationHost - checking path on destination..."
 
-	# ensure path is created
-	Try {
-		$PathCreated = Assert-PathCreated -Path $DestinationStoragePath -ComputerName $DestinationHost
-	}
-	Catch {
-		Throw $_
-	}
+	# loop through paths...
+	ForEach ($VMPath in $VMPaths) {
+		# ensure path is created
+		Try {
+			$PathCreated = Assert-PathCreated -Path $VMPath -ComputerName $DestinationHost
+		}
+		Catch {
+			Throw $_
+		}
 
-	# if path is not created...
-	If (!$PathCreated) {
-		Write-Warning -Message "could not create '$DestinationStoragePath' path on '$DestinationHost' computer"
-		Return
-	}
+		# if path is not created...
+		If (!$PathCreated) {
+			Write-Warning -Message "could not create '$VMPath' path on '$DestinationHost' computer"
+			Return
+		}
 
-	# declare state
-	Write-Host "$DestinationHost - ...path found: $DestinationStoragePath"
+		# declare state
+		Write-Host "$DestinationHost - ...path found: $VMPath"
+	}
 
 	################################################
 	# build UNC path from source computer
