@@ -1545,8 +1545,8 @@ Process {
 			Return $_
 		}
 
-		# define list for VM paths not on CSVs
-		$VMPathsNotClustered = [System.Collections.Generic.List[string]]::new()
+		# define boolean
+		$VMPathsNotClustered = $false
 
 		# define list of VM paths
 		$VMPaths = @($DestinationStoragePath)
@@ -1562,13 +1562,13 @@ Process {
 				}
 			}
 
-			# add VM path to list
+			# warn and update boolean
 			Write-Warning -Message "found '$VMPath' path would not be on a Cluster Shared Volume on '$DestinationHost' computer"
-			$VMPathsNotClustered.Add($VMPath)
+			$VMPathsNotClustered = $true
 		}
 
 		# if any VM paths are not clustered...
-		If ($VMPathsNotClustered.Count -ge 1) {
+		If ($VMPathsNotClustered) {
 			Return
 		}
 	}
