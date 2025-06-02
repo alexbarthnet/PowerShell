@@ -8,32 +8,26 @@ param (
 	# hostname of local computer
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
-	# VM object(s)
-	[Parameter(ParameterSetName = 'VM', Mandatory = $true, ValueFromPipeline = $true)]
-	[Microsoft.HyperV.PowerShell.VirtualMachine]$VM,
 	# VM name(s)
 	[Parameter(ParameterSetName = 'Name', Mandatory = $true, ValueFromPipeline = $true)]
 	[string]$Name,
+	# VM object(s)
+	[Parameter(ParameterSetName = 'VM', Mandatory = $true, ValueFromPipeline = $true)]
+	[Microsoft.HyperV.PowerShell.VirtualMachine]$VM,
 	# computer name of target computer
 	[Parameter(Mandatory = $true)]
 	[string]$DestinationHost,
 	# path on target computer
-	[Parameter()]
 	[string]$DestinationStoragePath,
 	# name of VM switch on target computer
-	[Parameter()]
 	[string]$SwitchName,
 	# force shutdown of running VM
-	[Parameter()]
 	[switch]$Force,
 	# start stopped VM after migration
-	[Parameter()]
 	[switch]$Restart,
 	# upgrade VM version after import
-	[Parameter()]
 	[switch]$UpdateVmVersion,
 	# computer name of source computer
-	[Parameter()]
 	[string]$ComputerName = $Hostname
 )
 
