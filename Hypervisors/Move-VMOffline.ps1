@@ -23,9 +23,6 @@ param (
 	# name of VM switch on target computer
 	[Parameter()]
 	[string]$SwitchName,
-	# computer name of source computer
-	[Parameter()]
-	[string]$ComputerName = $Hostname,
 	# force shutdown of running VM
 	[Parameter()]
 	[switch]$Force,
@@ -34,7 +31,10 @@ param (
 	[switch]$Restart,
 	# upgrade VM version after import
 	[Parameter()]
-	[switch]$UpdateVmVersion
+	[switch]$UpdateVmVersion,
+	# computer name of source computer
+	[Parameter()]
+	[string]$ComputerName = $Hostname
 )
 
 Begin {
