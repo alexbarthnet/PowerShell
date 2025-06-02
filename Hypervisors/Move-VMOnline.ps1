@@ -782,14 +782,14 @@ Begin {
         Write-Host "$ComputerName,$Name - moving VM..."
 
         # define required parameters for Import-VM
-        $ImportVM = @{
+        $MoveVM = @{
             CompatibilityReport = $CompatibilityReport
             ErrorAction         = [System.Management.Automation.ActionPreference]::Stop
         }
 
         # move VM to target computer
         Try {
-            Move-VM @ImportVM
+            Move-VM @MoveVM
         }
         Catch {
             $StatusObject.Action = 'Move-VM'
