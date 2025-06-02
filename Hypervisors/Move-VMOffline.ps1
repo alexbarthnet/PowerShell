@@ -19,7 +19,7 @@ param (
 	[string]$DestinationHost,
 	# path on target computer
 	[Parameter()]
-	[string]$Path,
+	[string]$DestinationStoragePath,
 	# name of VM switch on target computer
 	[Parameter()]
 	[string]$SwitchName,
@@ -1409,10 +1409,10 @@ Process {
 	# retrieve path if not provided
 	################################################
 
-	# if VM path property not provided as parameter...
-	If (!$PSBoundParameters.ContainsKey($Path)) {
-		# get path property on VM object
-		$Path = $VM | Select-Object -ExpandProperty 'Path'
+	# if destination storage path not provided as parameter...
+	If (!$PSBoundParameters.ContainsKey('DestinationStoragePath')) {
+		# assume destination storage path is same as VM path
+		$DestinationStoragePath = $VM | Select-Object -ExpandProperty 'Path'
 	}
 
 	################################################
@@ -1577,7 +1577,7 @@ Process {
 
 	# ensure path is created
 	Try {
-		$PathCreated = Assert-PathCreated -Path $Path -ComputerName $DestinationHost
+		$PathCreated = Assert-PathCreated -Path $DestinationStoragePath -ComputerName $DestinationHost
 	}
 	Catch {
 		Throw $_
@@ -1585,12 +1585,12 @@ Process {
 
 	# if path is not created...
 	If (!$PathCreated) {
-		Write-Warning -Message "could not create '$Path' path on '$DestinationHost' computer"
+		Write-Warning -Message "could not create '$DestinationStoragePath' path on '$DestinationHost' computer"
 		Return
 	}
 
 	# declare state
-	Write-Host "$DestinationHost - ...path found: $Path"
+	Write-Host "$DestinationHost - ...path found: $DestinationStoragePath"
 
 	################################################
 	# build UNC path from source computer
@@ -1601,7 +1601,7 @@ Process {
 
 	# ensure path is created
 	Try {
-		$SharePath = Get-SmbShareForPath -Path $Path -ComputerName $DestinationHost
+		$SharePath = Get-SmbShareForPath -Path $DestinationStoragePath -ComputerName $DestinationHost
 	}
 	Catch {
 		Throw $_
@@ -1609,7 +1609,7 @@ Process {
 
 	# if share path is not created...
 	If ([string]::IsNullOrEmpty($SharePath)) {
-		Write-Warning -Message "could not create UNC path on '$ComputerName' computer to '$Path' path on '$DestinationHost' computer"
+		Write-Warning -Message "could not create UNC path on '$ComputerName' computer to '$DestinationStoragePath' path on '$DestinationHost' computer"
 		Return
 	}
 
@@ -1635,7 +1635,7 @@ Process {
 	# import VM on target computer
 	If ($ExportedVM) {
 		Try {
-			$ImportedVM = Import-VMOnComputer -VM $VM -ComputerName $DestinationHost -Path $Path
+			$ImportedVM = Import-VMOnComputer -VM $VM -ComputerName $DestinationHost -Path $DestinationStoragePath
 		}
 		Catch {
 			Throw $_
