@@ -945,7 +945,6 @@ Process {
 
 	# get VM properties
 	$Id = $VM.Id
-	$Name = $VM.Name.ToLowerInvariant()
 	$ComputerName = $VM.ComputerName.ToLowerInvariant()
 
 	# check for Protected Users
