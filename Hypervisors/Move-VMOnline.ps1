@@ -1380,7 +1380,7 @@ Process {
 	################################################
 
 	# declare state
-	Write-Host "$DestinationHost - checking path(s) on destination..."
+	Write-Host "$DestinationHost,$Name - checking path(s) on destination..."
 
 	# loop through paths...
 	ForEach ($VMPath in $VMPaths) {
@@ -1399,7 +1399,7 @@ Process {
 		}
 
 		# declare state
-		Write-Host "$DestinationHost - ...path found: $VMPath"
+		Write-Host "$DestinationHost,$Name - ...path found: $VMPath"
 	}
 
 	################################################
