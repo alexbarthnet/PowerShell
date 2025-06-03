@@ -1388,6 +1388,15 @@ Process {
 	# check for VM on source computer
 	################################################
 
+	# if VM provided...
+	If ($PSBoundParameters.ContainsKey('VM')) {
+		# retrieve name from VM
+		$Name = $VM.Name.ToLowerInvariant()
+	}
+
+	# declare state
+	Write-Host "$ComputerName,$Name - checking source computer for VM..."
+
 	# if name provided...
 	If ($PSCmdlet.ParameterSetName -eq 'Name') {
 		# define required parameters for Get-VM
@@ -1418,7 +1427,6 @@ Process {
 
 	# get VM properties
 	$Id = $VM.Id
-	$Name = $VM.Name.ToLowerInvariant()
 	$SourceComputerName = $VM.ComputerName.ToLowerInvariant()
 
 	# check for Protected Users

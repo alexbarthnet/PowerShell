@@ -916,6 +916,12 @@ Process {
 	# check for VM on source computer
 	################################################
 
+	# if VM provided...
+	If ($PSBoundParameters.ContainsKey('VM')) {
+		# retrieve name from VM
+		$Name = $VM.Name.ToLowerInvariant()
+	}
+
 	# declare state
 	Write-Host "$ComputerName,$Name - checking source computer for VM..."
 
