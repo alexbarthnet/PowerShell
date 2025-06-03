@@ -1031,6 +1031,7 @@ Process {
 	$CompareVM = @{
 		VM              = $VM
 		DestinationHost = $DestinationHost
+		ErrorAction     = [System.Management.Automation.ActionPreference]::Stop
 	}
 
 	# declare state
