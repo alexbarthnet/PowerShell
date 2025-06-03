@@ -1216,7 +1216,9 @@ Process {
 
 	# define parameters
 	$Parameters = @{
-		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		VM              = $VM
+		DestinationHost = $DestinationHost 
+		ErrorAction     = [System.Management.Automation.ActionPreference]::Stop
 	}
 
 	# declare state
@@ -1239,10 +1241,10 @@ Process {
 		Write-Verbose 'added destination storage path to list'
 
 		# add destination storage path to parameters
-		$CompareVM['DestinationStoragePath'] = $DestinationStoragePath
+		$Parameters['DestinationStoragePath'] = $DestinationStoragePath
 
 		# add include storage to parameters - required to move VHDs to destination storage
-		$CompareVM['IncludeStorage'] = $true
+		$Parameters['IncludeStorage'] = $true
 
 		# declare state
 		Write-Verbose 'added DestinationStoragePath and IncludeStorage to parameters'
@@ -1263,7 +1265,7 @@ Process {
 		Write-Verbose 'added VirtualMachinePath to VM paths'
 
 		# add virtual machine path to parameters
-		$CompareVM['VirtualMachinePath'] = $VirtualMachinePath
+		$Parameters['VirtualMachinePath'] = $VirtualMachinePath
 
 		# declare state
 		Write-Verbose 'added VirtualMachinePath to parameters'
@@ -1302,7 +1304,7 @@ Process {
 			$ParameterName = $VMPathProperties[$VMPathProperty]
 
 			# add VM path to parameters
-			$CompareVM[$ParameterName] = $VMPath
+			$Parameters[$ParameterName] = $VMPath
 
 			# declare state
 			Write-Verbose "added $VMPathProperty to parameters as $ParameterName"
@@ -1418,7 +1420,7 @@ Process {
 		Write-Verbose 'validated VHDs hashtable array'
 
 		# add destination storage path to parameters
-		$CompareVM['VHDs'] = $VHDs
+		$Parameters['VHDs'] = $VHDs
 
 		# declare state
 		Write-Verbose 'added VHDs to parameters'
@@ -1439,8 +1441,6 @@ Process {
 
 		# declare state
 		Write-Verbose 'added VHD parent paths to list'
-
-		# Return $VHDs
 	}
 
 	################################################
@@ -1554,7 +1554,7 @@ Process {
 
 	# move VM to target computer
 	Try {
-		$MovedVM = Move-VMToComputer -DestinationHost $DestinationHost -Parameters $Parameters
+		$MovedVM = Move-VMToComputer -Parameters $Parameters
 	}
 	Catch {
 		Write-Warning -Message "could not move VM: $($_.Exception.Message)"
