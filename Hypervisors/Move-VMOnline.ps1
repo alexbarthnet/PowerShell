@@ -550,29 +550,107 @@ Begin {
 		}
 
 		################################################
-		# remove VM object
+		# retrieve planned VM objects
 		################################################
 
-		# declare state
-		Write-Host "$ComputerName,$Name - removing VM..."
-
-		# define parameters for Remove-VM
-		$RemoveVM = @{
-			VM          = $VM
-			Force       = $true
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# remove VM on computer
+		# retrieve planned VM by Id via CIM
 		Try {
-			Remove-VM @RemoveVM
+			$PlannedVM = Get-CimInstance -ComputerName $ComputerName -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_PlannedComputerSystem' | Where-Object { $_.Name -eq $VM.Id }
 		}
 		Catch {
 			Throw $_
 		}
 
-		# declare state
-		Write-Host "$ComputerName,$Name - ...VM removed"
+		# if planned VM found...
+		If ($PlannedVM) {
+			# declare state
+			Write-Host "$ComputerName,$Name - planned VM found; waiting for automatic removal..."
+
+			# initialize counter
+			$Counter = [int32]1
+		
+			# while counter less than 7 and planned VM found...
+			While ($Counter -lt 7 -and $PlannedVM) {
+				# increment counter
+				$Counter++
+
+				# sleep
+				Start-Sleep -Seconds 5
+
+				# retrieve planned VM by Id via CIM
+				Try {
+					$PlannedVM = Get-CimInstance -ComputerName $ComputerName -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_PlannedComputerSystem' | Where-Object { $_.Name -eq $VM.Id }
+				}
+				Catch {
+					Throw $_
+				}
+			}
+
+			# if path removed...
+			If ($PathRemoved) {
+				# declare state
+				Write-Host "$ComputerName,$Name - ...planned VM automatically removed"
+			}
+			Else {
+				# declare state
+				Write-Warning 'VHD not removed after 30 seconds'
+			}
+		}
+
+		################################################
+		# remove realized VM objects
+		################################################
+
+		# retrieve realized VM by Id via CIM
+		Try {
+			$RealizedVM = Get-CimInstance -ComputerName $ComputerName -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_ComputerSystem' | Where-Object { $_.Name -eq $VM.Id }
+		}
+		Catch {
+			Throw $_
+		}
+
+		# if planned or realized VM found via CIM...
+		If ($RealizedVM) {
+			# declare state
+			Write-Host "$ComputerName,$Name - realized VM found; removing..."
+
+			# define parameters for Get-VM
+			$GetVM = @{
+				Id           = $VM.Id
+				ComputerName = $ComputerName
+				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# retrieve VM by Id
+			Try {
+				$VMOnComputerName = Get-VM @GetVM
+			}
+			Catch {
+				Throw $_
+			}
+
+			# define parameters for Remove-VM
+			$RemoveVM = @{
+				VM          = $VMOnComputerName
+				Force       = $true
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# remove VM on computer
+			Try {
+				Remove-VM @RemoveVM
+			}
+			Catch {
+				Throw $_
+			}
+
+			# declare state
+			Write-Host "$ComputerName,$Name - ...VM removed"
+		}
+		# if planned VM not found...
+		Else {
+			Write-Host "$ComputerName,$Name - ...VM not found"
+		}
 
 		################################################
 		# remove VM files
