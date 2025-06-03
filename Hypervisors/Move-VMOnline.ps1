@@ -1391,34 +1391,35 @@ Process {
 		Catch {
 			Write-Warning -Message "could not resolve incompatibilities: $($_.Exception.Message)"
 		}
-
-		# if VM cannot be moved...
-		If ($CompatibilityObject.CannotImport) {
-			# report reason
-			Write-Warning -Message "will not move VM: $($CompatibilityObject.CannotImportMessage)"
-			
-			# export parameters
-			New-Variable -Name 'CompatibilityObject' -Value $CompatibilityObject -Scope Global -Force
-
-			# declare state
-			Write-Verbose -Message 'exported $CompatibilityReport to global object'
-		}
 	}
+
+	# if VM cannot be moved...
+	If ($CompatibilityObject.CannotImport) {
+		# report reason
+		Write-Warning -Message "will not move VM: $($CompatibilityObject.CannotImportMessage)"
+			
+		# export parameters
+		New-Variable -Name 'CompatibilityReport' -Value $CompatibilityObject.CompatibilityReport -Scope Global -Force
+
+		# declare state
+		Write-Verbose -Message 'exported $CompatibilityReport to global object'
+
+		# destroy compatibility object
+		$null = $CompatibilityObject
+	}
+
 	################################################
 	# move VM
 	################################################
 
-	# if test compatibility not requested...
-	If (!$TestCompatibility) {
-		# if compatibility object created and VM can be moved...
-		If ($CompatibilityObject -and $CompatibilityObject.CannotImport -eq $false) {
-			# move VM to target computer
-			Try {
-				$MovedVM = Move-VM -CompatibilityReport $CompatibilityObject.CompatibilityReport -Passthru
-			}
-			Catch {
-				Write-Warning -Message "could not move VM: $($_.Exception.Message)"
-			}
+	# if compat report exists in compat object...
+	If ($script:CompatibilityObject.CompatibilityReport -and -not $TestCompatibility) {
+		# move VM to target computer
+		Try {
+			$MovedVM = Move-VM -CompatibilityReport $script:CompatibilityObject.CompatibilityReport -Passthru
+		}
+		Catch {
+			Write-Warning -Message "could not move VM: $($_.Exception.Message)"
 		}
 
 		# if VM move completed...
