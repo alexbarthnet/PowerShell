@@ -391,10 +391,12 @@ Begin {
 	Function Resolve-VMCompatibilityReport {
 		Param(
 			[Parameter(Mandatory)]
-			[object]$CompatibilityReport,
-			[Parameter(DontShow)]
-			[boolean]$CannotImport = $false
+			[Microsoft.HyperV.PowerShell.VMCompatibilityReport]$CompatibilityReport
 		)
+
+		# add note properties to compatibility report
+		Add-Member -InputObject $CompatibilityReport -MemberType NoteProperty -Name 'CannotResolve' -Value $false
+		Add-Member -InputObject $CompatibilityReport -MemberType NoteProperty -Name 'CannotResolveMessages' -Value ([System.Collections.Generic.List[string]]::new())
 
 		# process each incompatibility
 		:NextIncompatibility ForEach ($Incompatibility in $CompatibilityReport.Incompatibilities) {
@@ -406,8 +408,8 @@ Begin {
 						$VMNetworkAdapterName = $Incompatibility.Source.Name
 					}
 					Catch {
-						$CannotImport = $true
-						$CannotImportMessage = "Could not retrieve VM network adapter name from incompatibility object: '$($_.Exception.Message)'"
+						$CompatibilityReport.CannotResolve = $true
+						$CompatibilityReport.CannotResolveMessages.Add("Could not retrieve VM network adapter name from incompatibility object: '$($_.Exception.Message)'")
 						Continue NextIncompatibility
 					}
 
@@ -476,8 +478,8 @@ Begin {
 							$Incompatibility.Source | Disconnect-VMNetworkAdapter
 						}
 						Catch {
-							$CannotImport = $true
-							$CannotImportMessage = "Could not disconnect '$VMNetworkAdapterName' VM network adapter on '$Name' VM to address VM switch incompatibility: '$($_.Exception.Message)'"
+							$CompatibilityReport.CannotResolve = $true
+							$CompatibilityReport.CannotResolveMessages.Add("Could not disconnect '$VMNetworkAdapterName' VM network adapter on '$Name' VM to address VM switch incompatibility: '$($_.Exception.Message)'")
 							Continue NextIncompatibility
 						}
 					}
@@ -489,27 +491,129 @@ Begin {
 							# $Incompatibility.Source | Disconnect-VMNetworkAdapter -Passthru | Connect-VMNetworkAdapter -SwitchName $SwitchName
 						}
 						Catch {
-							$CannotImport = $true
-							$CannotImportMessage = "Could not connect '$VMNetworkAdapterName' VM network adapter on '$Name' VM to '$SwitchName' switch to address VM switch incompatibility: '$($_.Exception.Message)'"
+							$CompatibilityReport.CannotResolve = $true
+							$CompatibilityReport.CannotResolveMessages.Add("Could not connect '$VMNetworkAdapterName' VM network adapter on '$Name' VM to '$SwitchName' switch to address VM switch incompatibility: '$($_.Exception.Message)'")
 							Continue NextIncompatibility
 						}
 					}
 				}
 				# target has an incompatibility with imported VM not addressed above
 				Default {
-					$CannotImport = $true
-					$CannotImportMessage = "found unhandled incompatibility of '$($Incompatibility.MessageID) with message: '$($Incompatibility.Message)'"
+					$CompatibilityReport.CannotResolve = $true
+					$CompatibilityReport.CannotResolveMessages.Add("found unhandled incompatibility of '$($Incompatibility.MessageID) with message: '$($Incompatibility.Message)'")
 					Continue NextIncompatibility
 				}
 			}
 		}
 
-		# return custom compatibility object
-		Return [PSCustomObject]@{
-			CannotImport        = $CannotImport
-			CannotImportMessage = $CannotImportMessage
-			CompatibilityReport = $CompatibilityReport
+		# return updated compatibility object
+		Return $CompatibilityReport
+	}
+
+	Function Move-VMToComputer {
+		Param(
+			[Parameter(Mandatory)]
+			[object]$VM,
+			[Parameter(Mandatory)]
+			[string]$DestinationHost,
+			[Parameter(Mandatory)]
+			[hashtable]$Parameters
+		)
+
+		################################################
+		# define strings
+		################################################
+
+		$Name = $VM.Name.ToLowerInvariant()
+		$ComputerName = $VM.ComputerName.ToLowerInvariant()
+
+		################################################
+		# compare VM
+		################################################
+
+		# declare state
+		Write-Host "$ComputerName,$Name - comparing VM with destination host: $DestinationHost"
+
+		# move VM to target computer
+		Try {
+			$CompatibilityReport = Compare-VM -VM $VM -DestinationHost $DestinationHost @Parameters
 		}
+		Catch {
+			Write-Warning -Message "could not compare VM: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# declare state
+		Write-Host "$ComputerName,$Name - ...VM compared"
+
+		# export original compatibility report to global scope
+		New-Variable -Name 'OriginalCompatibilityReport' -Value $CompatibilityReport -Scope Global -Force
+
+		################################################
+		# resolve incompatibilities
+		################################################
+
+		# if incompatibilities found...
+		If ($CompatibilityReport.Incompatibilities.Count) {
+			# declare state
+			Write-Host "$ComputerName,$Name - resolving compatibility report for VM..."
+
+			# resolve incompatibilities
+			Try {
+				$CompatibilityReport = Resolve-VMCompatibilityReport -CompatibilityReport $CompatibilityReport
+			}
+			Catch {
+				Write-Warning -Message "could not resolve incompatibilities: $($_.Exception.Message)"
+				Return $_
+			}
+
+			# export resolved compatibility report to global scope
+			# export  compatibility report to global scope
+			New-Variable -Name 'ResolvedCompatibilityReport' -Value $CompatibilityReport -Scope Global -Force
+
+			# if incompatibilities could not be resolved...
+			If ($CompatibilityReport.CannotResolve) {
+				# loop through cannot resolve messages
+				ForEach ($CannotResolveMessage in $CompatibilityReport.CannotResolveMessages) {
+					# report message
+					Write-Warning -Message "found cannot resolve message: $CannotResolveMessage"
+				}
+
+				# return empty response
+				Return $null
+			}
+
+			# declare state
+			Write-Host "$ComputerName,$Name - ...resolved compatibility report for VM"
+		}
+
+		################################################
+		# move VM
+		################################################
+
+		# declare state
+		Write-Host "$ComputerName,$Name - moving VM..."
+
+		# move VM to target computer
+		Try {
+			$MovedVM = Move-VM -CompatibilityReport $CompatibilityReport -Passthru
+		}
+		Catch {
+			Write-Warning -Message "could not move VM: $($_.Exception.Message)"
+		}
+
+		# if VM move completed...
+		If ($MovedVM) {
+			# report and return moved VM
+			Write-Host "$ComputerName,$Name - ...move completed"
+			Return $MovedVM
+		}
+		Else {
+			# report and return empty response
+			Write-Host "$ComputerName,$Name - ...move failed"
+			Return $null
+		}
+
 	}
 
 	Function Remove-VMOnComputer {
@@ -1111,14 +1215,12 @@ Process {
 	################################################
 
 	# define parameters
-	$CompareVM = @{
-		VM              = $VM
-		DestinationHost = $DestinationHost
-		ErrorAction     = [System.Management.Automation.ActionPreference]::Stop
+	$Parameters = @{
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 	}
 
 	# declare state
-	Write-Verbose 'defined CompareVM'
+	Write-Verbose 'defined Parameters'
 	Write-Verbose "parameter set name: $($PSCmdlet.ParameterSetName)"
 
 	################################################
@@ -1440,78 +1542,22 @@ Process {
 		}
 
 		# update parameters with refreshed VM
-		$CompareVM['VM'] = $VM
+		$Parameters['VM'] = $VM
 
 		# declare state
 		Write-Host "$ComputerName,$Name - ...VM refreshed after cluster removal"
 	}
 
 	################################################
-	# compare VM
+	# move VM
 	################################################
 
 	# move VM to target computer
 	Try {
-		$CompatibilityReport = Compare-VM @CompareVM
+		$MovedVM = Move-VMToComputer -DestinationHost $DestinationHost -Parameters $Parameters
 	}
 	Catch {
-		Write-Warning -Message "could not compare VM: $($_.Exception.Message)"
-	}
-
-	# declare state
-	Write-Host "$ComputerName,$Name - ...VM compared to destination host: $DestinationHost"
-
-	################################################
-	# resolve incompatibilities
-	################################################
-
-	# if compatibility report created...
-	If ($CompatibilityReport) {
-		# resolve incompatibilities
-		Try {
-			$CompatibilityObject = Resolve-VMCompatibilityReport -CompatibilityReport $CompatibilityReport
-		}
-		Catch {
-			Write-Warning -Message "could not resolve incompatibilities: $($_.Exception.Message)"
-		}
-	}
-
-	# if VM cannot be moved...
-	If ($CompatibilityObject.CannotImport) {
-		# report reason
-		Write-Warning -Message "will not move VM: $($CompatibilityObject.CannotImportMessage)"
-			
-		# export parameters
-		New-Variable -Name 'CompatibilityReport' -Value $CompatibilityObject.CompatibilityReport -Scope Global -Force
-
-		# declare state
-		Write-Verbose -Message 'exported $CompatibilityReport to global object'
-
-		# destroy compatibility object
-		$null = $CompatibilityObject
-	}
-
-	################################################
-	# move VM
-	################################################
-
-	# if compat report exists in compat object...
-	If ($script:CompatibilityObject.CompatibilityReport -and -not $TestCompatibility) {
-		# move VM to target computer
-		Try {
-			$MovedVM = Move-VM -CompatibilityReport $script:CompatibilityObject.CompatibilityReport -Passthru
-		}
-		Catch {
-			Write-Warning -Message "could not move VM: $($_.Exception.Message)"
-		}
-
-		# if VM move completed...
-		If ($MovedVM) {
-			Write-Host "$ComputerName,$Name - ...move completed"
-		}
-		Else {
-			Write-Host "$ComputerName,$Name - ...move failed"
-		}
+		Write-Warning -Message "could not move VM: $($_.Exception.Message)"
 	}
 
 	################################################
