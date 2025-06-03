@@ -388,38 +388,6 @@ Begin {
 		Return !$TestPath
 	}
 
-	Function Add-VMIdToClusterByComputerName {
-		[CmdletBinding()]
-		Param(
-			[Parameter(Mandatory = $true)]
-			[guid]$VMId,
-			[Parameter(Mandatory = $true)]
-			[string]$ComputerName
-		)
-
-		# get hashtable for InvokeCommand splat
-		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
-		}
-		Catch {
-			Throw $_
-		}
-
-		# update argument list
-		$InvokeCommand['ArgumentList']['VMId'] = $VMId
-
-		# test for cluster
-		Try {
-			Invoke-Command @InvokeCommand -ScriptBlock {
-				Param($ArgumentList)
-				$null = Add-ClusterVirtualMachineRole -VMId $ArgumentList['VMId']
-			}
-		}
-		Catch {
-			Throw $_
-		}
-	}
-
 	Function Resolve-VMCompatibilityReport {
 		Param(
 			[Parameter(Mandatory)]
@@ -558,18 +526,6 @@ Begin {
 		$ComputerName = $VM.ComputerName.ToLowerInvariant()
 
 		################################################
-		# prepare session
-		################################################
-
-		# get hashtable for InvokeCommand splat
-		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
-		}
-		Catch {
-			Throw $_
-		}
-
-		################################################
 		# get VM paths
 		################################################
 
@@ -668,20 +624,6 @@ Begin {
 				# declare state
 				Write-Warning 'VHD not removed after 30 seconds'
 			}
-		}
-
-		################################################
-		# remove VM folders
-		################################################
-
-		# declare state
-		Write-Host "$ComputerName,$Name - removing VM files..."
-
-		# remove VM path folders
-		ForEach ($VMPath in $VMPaths) {
-			# update argument list
-			$InvokeCommand['ArgumentList']['Path'] = $VMPath
-
 		}
 
 		################################################
