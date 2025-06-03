@@ -1216,9 +1216,7 @@ Process {
 
 	# define parameters
 	$Parameters = @{
-		VM              = $VM
-		DestinationHost = $DestinationHost 
-		ErrorAction     = [System.Management.Automation.ActionPreference]::Stop
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 	}
 
 	# declare state
@@ -1554,7 +1552,7 @@ Process {
 
 	# move VM to target computer
 	Try {
-		$MovedVM = Move-VMToComputer -Parameters $Parameters
+		$MovedVM = Move-VMToComputer -VM $VM -DestinationHost $DestinationHost -Parameters $Parameters
 	}
 	Catch {
 		Write-Warning -Message "could not move VM: $($_.Exception.Message)"
