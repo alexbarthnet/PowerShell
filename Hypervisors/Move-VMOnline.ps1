@@ -1539,9 +1539,6 @@ Process {
 			}
 		}
 
-		# update parameters with refreshed VM
-		$Parameters['VM'] = $VM
-
 		# declare state
 		Write-Host "$ComputerName,$Name - ...VM refreshed after cluster removal"
 	}
