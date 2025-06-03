@@ -1343,14 +1343,24 @@ Process {
 
 		# declare state
 		Write-Host "$ComputerName,$Name - ...VM removed from '$SourceClusterName' cluster"
+		Write-Host "$ComputerName,$Name - waiting for VM to refresh after cluster removal..."
 
-		# update VM object after cluster removal
-		Try {
-			$VM = Get-VM -Id $VM.Id -ComputerName $VM.ComputerName
+		# while VM reports as clustered...
+		While ($VM.IsClustered) {
+			# update VM object after cluster removal
+			Try {
+				$VM = Get-VM -Id $VM.Id -ComputerName $VM.ComputerName
+			}
+			Catch {
+				Return $_
+			}
 		}
-		Catch {
-			Return $_
-		}
+
+		# update parameters with refreshed VM
+		$CompareVM['VM'] = $VM
+
+		# declare state
+		Write-Host "$ComputerName,$Name - ...VM refreshed after cluster removal"
 	}
 
 	################################################
