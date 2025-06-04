@@ -919,6 +919,39 @@ Begin {
 						Continue NextIncompatibility
 					}
 
+					# if switch names not found...
+					If (!$SwitchNames) {
+						# extract computer name from compatibility report
+						$ComputerName = $CompatibilityReport.VM.ComputerName
+
+						# define parameters for Get-VMSwitch
+						$GetVMSwitch = @{
+							ComputerName = $ComputerName
+							# SwitchType   = [Microsoft.HyperV.PowerShell.VMSwitchType]::External
+							ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+						}
+
+						# get external VM switches
+						Try {
+							$VMSwitch = Get-VMSwitch @GetVMSwitch
+						}
+						Catch {
+							Throw $_
+						}
+
+						# get external VM switch names
+						$SwitchNames = $VMSwitch | Select-Object -ExpandProperty Name
+
+						# if switchname parameter provided but not found in external VM switch names...
+						If ($script:PSBoundParameters.ContainsKey('SwitchName') -and $script:PSBoundParameters['SwitchName'] -notin $SwitchNames ) {
+							# warn and inquire
+							Write-Warning -Message "could not locate '$script:SwitchName' switch on '$ComputerName' computer; attempt to connect VM to another available external switch?" -WarningAction Inquire
+
+							# clear SwitchName
+							$null = $SwitchName
+						}
+					}
+
 					# if switch name not provided or forced to null...
 					If ([string]::IsNullOrEmpty($SwitchName)) {
 						# switch on count of switchnames
