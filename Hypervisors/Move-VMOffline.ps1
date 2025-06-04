@@ -1660,21 +1660,8 @@ Begin {
 		# define strings
 		################################################
 
-		$Id = $VM.Id.Guid
 		$Name = $VM.Name.ToLowerInvariant()
 		$ComputerName = $VM.ComputerName.ToLowerInvariant()
-
-		################################################
-		# prepare session
-		################################################
-
-		# get hashtable for InvokeCommand splat
-		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
-		}
-		Catch {
-			Throw $_
-		}
 
 		################################################
 		# get VM paths
