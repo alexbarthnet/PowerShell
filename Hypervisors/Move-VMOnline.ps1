@@ -26,7 +26,9 @@ param (
 	# path for virtual machine
 	[string]$VirtualMachinePath,
 	# array of hashtables for VHDs
-	[object[]]$VHDs = @()
+	[object[]]$VHDs = @(),
+	# switch to skip CSV storage check
+	[switch]$SkipClusteredStorageCheck
 )
 
 Begin {
@@ -1743,8 +1745,8 @@ Process {
 	# get target CSVs from target cluster
 	################################################
 
-	# if target computer is clustered...
-	If ($TargetClusterName) {
+	# if target computer is clustered and skip of clustered storage check not requested...
+	If ($TargetClusterName -and -not $SkipClusteredStorageCheck) {
 		# retrieve CSV paths from target computer
 		Try {
 			$ClusterSharedVolumePaths = Get-ClusterSharedVolumePaths -ComputerName $DestinationHost
