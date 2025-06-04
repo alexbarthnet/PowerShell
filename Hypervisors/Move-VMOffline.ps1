@@ -548,7 +548,7 @@ Begin {
 			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] })]
 			[object]$VM,
 			[Parameter(Mandatory = $true)]
-			[string]$ComputerName,
+			[string]$DestinationHost,
 			[Parameter(Mandatory = $true)]
 			[string]$Path
 		)
@@ -559,19 +559,18 @@ Begin {
 
 		$Id = $VM.Id
 		$Name = $VM.Name.ToLowerInvariant()
-		$SourceComputerName = $VM.ComputerName.ToLowerInvariant()
-		$TargetComputerName = $ComputerName.ToLowerInvariant()
+		$ComputerName = $VM.ComputerName.ToLowerInvariant()
 
 		################################################
 		# get source computer identity
 		################################################
 
 		# declare state
-		Write-Host "$SourceComputerName - retrieving computer identity..."
+		Write-Host "$ComputerName - retrieving computer identity..."
 
 		# define parameters for Get-CimInstance
 		$GetCimInstance = @{
-			ComputerName = $SourceComputerName
+			ComputerName = $ComputerName
 			ClassName    = 'Win32_ComputerSystem'
 			Property     = 'Name', 'Domain'
 		}
@@ -593,18 +592,18 @@ Begin {
 		}
 
 		# declare state
-		Write-Host "$SourceComputerName - ...retrieved NTAccount for computer"
+		Write-Host "$ComputerName - ...retrieved NTAccount for computer"
 
 		################################################
 		# add source to Administrators group on target
 		################################################
 
 		# declare state
-		Write-Host "$TargetComputerName - adding '$NTAccount' to Administrators group..."
+		Write-Host "$DestinationHost - adding '$NTAccount' to Administrators group..."
 
 		# get hashtable for InvokeCommand splat
 		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $TargetComputerName
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $DestinationHost
 		}
 		Catch {
 			Throw $_
@@ -646,18 +645,18 @@ Begin {
 		}
 
 		# declare state
-		Write-Host "$TargetComputerName - ...added '$NTAccount' to Administrators group"
+		Write-Host "$DestinationHost - ...added '$NTAccount' to Administrators group"
 
 		################################################
 		# test path from source
 		################################################
 
 		# declare state
-		Write-Host "$SourceComputerName - verifying access to UNC path..."
+		Write-Host "$ComputerName - verifying access to UNC path..."
 
 		# get hashtable for InvokeCommand splat
 		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $SourceComputerName
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
 		}
 		Catch {
 			Throw $_
@@ -687,18 +686,18 @@ Begin {
 		}
 
 		# declare state
-		Write-Host "$SourceComputerName - ...verified access to UNC path"
+		Write-Host "$ComputerName - ...verified access to UNC path"
 
 		################################################
 		# remove VM from source cluster
 		################################################
 
 		# declare state
-		Write-Host "$SourceComputerName,$Name - preparing VM for offline migration..."
+		Write-Host "$ComputerName,$Name - preparing VM for offline migration..."
 
 		# get source computer cluster name
 		Try {
-			$SourceClusterName = Get-ClusterName -ComputerName $SourceComputerName
+			$SourceClusterName = Get-ClusterName -ComputerName $ComputerName
 		}
 		Catch {
 			Throw $_
@@ -742,7 +741,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$SourceComputerName,$Name - ...removed VM from source cluster"
+			Write-Host "$ComputerName,$Name - ...removed VM from source cluster"
 		}
 
 		################################################
@@ -778,7 +777,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$SourceComputerName,$Name - ...shut down VM"
+			Write-Host "$ComputerName,$Name - ...shut down VM"
 		}
 
 		# define parameters for Set-VM
@@ -797,14 +796,14 @@ Begin {
 		}
 
 		# declare state
-		Write-Host "$SourceComputerName,$Name - ...VM ready for offline migration"
+		Write-Host "$ComputerName,$Name - ...VM ready for offline migration"
 
 		################################################
 		# export VM
 		################################################
 
 		# declare state
-		Write-Host "$SourceComputerName,$Name - exporting VM..."
+		Write-Host "$ComputerName,$Name - exporting VM..."
 
 		# define parameters for Export-VM
 		$ExportVM = @{
@@ -824,7 +823,7 @@ Begin {
 
 		# declare state
 		If ($ExportedVM) {
-			Write-Host "$SourceComputerName,$Name - ...exported VM"
+			Write-Host "$ComputerName,$Name - ...exported VM"
 		}
 
 		################################################
@@ -832,11 +831,11 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$TargetComputerName - removing '$NTAccount' from Administrators group..."
+		Write-Host "$DestinationHost - removing '$NTAccount' from Administrators group..."
 
 		# get hashtable for InvokeCommand splat
 		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $TargetComputerName
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $DestinationHost
 		}
 		Catch {
 			Throw $_
@@ -866,7 +865,7 @@ Begin {
 		}
 
 		# declare state
-		Write-Host "$TargetComputerName - ...removed '$NTAccount' from Administrators group"
+		Write-Host "$DestinationHost - ...removed '$NTAccount' from Administrators group"
 
 		# return objects
 		If ($ExportedVM) {
@@ -1586,10 +1585,10 @@ Process {
 
 	# get VM properties
 	$Id = $VM.Id
-	$SourceComputerName = $VM.ComputerName.ToLowerInvariant()
+	$ComputerName = $VM.ComputerName.ToLowerInvariant()
 
 	# check for Protected Users
-	If ($Hostname -ne $SourceComputerName -and ([Security.Principal.WindowsIdentity]::GetCurrent().Groups | Where-Object { $_.Value -match '-525$' })) {
+	If ($Hostname -ne $ComputerName -and ([Security.Principal.WindowsIdentity]::GetCurrent().Groups | Where-Object { $_.Value -match '-525$' })) {
 		Throw [System.UnauthorizedAccessException]::new('Users in the Protected Users group must run this script from the source hypervisor')
 	}
 
@@ -1832,7 +1831,7 @@ Process {
 
 	# export VM to path
 	Try {
-		$ExportedVM = Export-VMToComputer -VM $VM -ComputerName $DestinationHost -Path $SharePath
+		$ExportedVM = Export-VMToComputer -VM $VM -DestinationHost $DestinationHost -Path $SharePath
 	}
 	Catch {
 		Throw $_
