@@ -863,8 +863,8 @@ Begin {
 				}
 			}
 
-			# if planned VM not found...
-			If (!$PlannedVM) {
+			# if realized VM not found...
+			If (!$RealizedVM) {
 				# declare state
 				Write-Host "$ComputerName,$Name - ...VM removed"
 			}
