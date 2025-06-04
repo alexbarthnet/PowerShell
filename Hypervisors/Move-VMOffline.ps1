@@ -171,6 +171,43 @@ Begin {
 		}
 	}
 
+	Function Get-ClusterSharedVolumePaths {
+		[CmdletBinding()]
+		Param(
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName
+		)
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# test for cluster
+		Try {
+			$ClusterSharedVolumePaths = Invoke-Command @InvokeCommand -ScriptBlock {
+				# retrieve cluster shared volumes
+				$ClusterSharedVolumes = Get-ClusterSharedVolume 
+				# retrieve cluster shared volume paths
+				$ClusterSharedVolumes.SharedVolumeInfo.FriendlyVolumeName
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# return the cluster shared volume paths
+		If ($ClusterSharedVolumePaths) {
+			Return $ClusterSharedVolumePaths
+		}
+		Else {
+			Return $null
+		}
+	}
+
 	Function Get-SmbShareForPath {
 		Param(
 			[Parameter(Mandatory = $true)]
@@ -200,61 +237,6 @@ Begin {
 
 		# return share path
 		Return $SharePath
-	}
-
-	Function Test-PathOnDestinationHost {
-		[CmdletBinding()]
-		Param(
-			[Parameter(Mandatory = $true)]
-			[string]$Path,
-			[Parameter(Mandatory = $true)]
-			[string]$DestinationHost,
-			[switch]$IsEmpty
-		)
-
-		# get hashtable for InvokeCommand splat
-		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $DestinationHost
-		}
-		Catch {
-			Throw $_
-		}
-
-		# update argument list
-		$InvokeCommand['ArgumentList']['Path'] = $Path
-
-		# test path before attempting to create path
-		Try {
-			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
-				Param($ArgumentList)
-				Test-Path -Path $ArgumentList['Path'] -PathType Container
-			}
-		}
-		Catch {
-			Throw $_
-		}
-
-		# if IsEmtpy requested...
-		If ($TestPath -and $IsEmpty) {
-			# retrieve file items in path
-			Try {
-				$Items = Invoke-Command @InvokeCommand -ScriptBlock {
-					Param($ArgumentList)
-					Get-ChildItem -Path $ArgumentList['Path'] -File -Force -Recurse
-				}
-			}
-			Catch {
-				Throw $_
-			}
-
-			# if file items found...
-			If ($Items) {
-				Return $false
-			}
-		}
-
-		# return test path result
-		Return $TestPath
 	}
 
 	Function Assert-PathCreated {
@@ -541,6 +523,176 @@ Begin {
 
 		# return false after attempts did not succeed
 		Return $false
+	}
+
+	Function Assert-VMNotFound {
+		[CmdletBinding()]
+		Param(
+			[Parameter(Mandatory = $true)]
+			[object]$VM,
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName,
+			# number of attempts to assert path action; default is 6 attempts 
+			[uint16]$Attempts = 6
+		)
+
+		################################################
+		# define objects from VM properties
+		################################################
+
+		$Name = $VM.Name.ToLowerInvariant()
+		$VMId = $VM.Id.ToString()
+
+		################################################
+		# prepare session
+		################################################
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# update argument list
+		$InvokeCommand['ArgumentList']['VMId'] = $VMId
+
+		################################################
+		# locate planned VM
+		################################################
+
+		# retrieve name of planned VM if found by Id
+		Try {
+			$PlannedVM = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+
+				# retrieve planned VM by Id
+				$CimInstance = Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_PlannedComputerSystem' -Filter "Name = '$($ArgumentList['VMId'])'"
+
+				# if planned VM found by Id...
+				If ($CimInstance) {
+					# return VM name
+					Return $CimInstance.ElementName
+				}
+				# if planned VM not found by Id...
+				Else {
+					# return empty string
+					Return [string]::Empty
+				}
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# if planned VM found...
+		If (![string]::IsNullOrEmpty($PlannedVM)) {
+			# declare state and return false
+			Write-Warning -Message "found planned VM by Id with '$PlannedVM' name on '$ComputerName' computer"
+			Return $false
+		}
+
+		################################################
+		# locate realized VM
+		################################################
+
+		# retrieve name of realized VM if found by Id
+		Try {
+			$RealizedVM = Invoke-Command @InvokeCommand -ScriptBlock {
+				# import argument list hashtable
+				Param($ArgumentList)
+
+				# retrieve realized VM by Id
+				$CimInstance = Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_ComputerSystem' -Filter "Name = '$($ArgumentList['VMId'])'"
+
+				# if realized VM found by Id...
+				If ($CimInstance) {
+					# return VM name
+					Return $CimInstance.ElementName
+				}
+				# if realized VM not found by Id...
+				Else {
+					# return empty string
+					Return [string]::Empty
+				}
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# if realized VM found...
+		If (![string]::IsNullOrEmpty($RealizedVM)) {
+			# declare state and return false
+			Write-Warning -Message "found VM by Id with '$RealizedVM' name on '$ComputerName' computer"
+			Return $false
+		}
+
+		################################################
+		# check for VM on target cluster
+		################################################
+
+		# get cluster for target computer
+		Try {
+			$ClusterName = Get-ClusterName -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# if target computer is clustered...
+		If ($ClusterName) {
+			# declare state
+			Write-Host "$ComputerName,$Name - checking for VM by Id in '$ClusterName' cluster..."
+
+			# retrieve CIM instance for realized VM by Id
+			Try {
+				$ClusterGroupOwnerNodeName = Invoke-Command @InvokeCommand -ScriptBlock {
+					# import argument list hashtable
+					Param($ArgumentList)
+
+					# define parameters for Get-ClusterGroup
+					$GetClusterGroup = @{
+						VMId        = $ArgumentList['VMId']
+						ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
+					}
+
+					# get cluster group for VM on target cluster
+					$ClusterGroup = Get-ClusterGroup @GetClusterGroup
+
+					# if cluster group found...
+					If ($ClusterGroup) {
+						# return owner node name
+						Return $ClusterGroup.OwnerNode.Name
+					}
+					Else {
+						# return empty string
+						Return [string]::Empty
+					}
+				}
+			}
+			Catch {
+				Throw $_
+			}
+
+			# if cluster group for VM found on target cluster...
+			If (![string]::IsNullOrEmpty($ClusterGroupOwnerNodeName)) {
+				# warn and return
+				Write-Warning -Message "VM found by Id on '$ClusterGroupOwnerNodeName' node in '$ClusterName' cluster"
+				Return $false
+			}
+
+			# declare state
+			Write-Host "$ComputerName,$Name - ...VM not found by Id in '$ClusterName' cluster"
+		}
+
+		################################################
+		# return success
+		################################################
+
+		# return true after not finding VM by Id
+		Return $true
 	}
 
 	Function Export-VMToComputer {
@@ -1560,12 +1712,8 @@ Process {
 		# define required parameters for Get-VM
 		$GetVM = @{
 			Name        = $Name
+			ComputerName = $ComputerName
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# define optional parameters for Get-VM
-		If ($PSBoundParameters['ComputerName']) {
-			$GetVM['ComputerName'] = $ComputerName
 		}
 
 		# get VM object from input
@@ -1631,12 +1779,10 @@ Process {
 		}
 
 		# get cluster group for VM on source cluster
-		Try {
-			$SourceClusterGroup = Get-ClusterGroup @GetClusterGroup
-		}
-		Catch {
-			Throw $_
-		}
+		$SourceClusterGroup = Get-ClusterGroup @GetClusterGroup
+
+		# clear errors due to the nature of looking up VMs by Id
+		$Error.Clear()
 
 		# if source cluster group found...
 		If ($SourceClusterGroup) {
@@ -1648,7 +1794,7 @@ Process {
 		}
 		Else {
 			# declare state
-			Write-Host "$ComputerName,$Name - ...VM not clustered on source computer"
+			Write-Host "$ComputerName,$Name - ...VM not found on '$SourceClusterName' cluster"
 		}
 	}
 
@@ -1657,73 +1803,27 @@ Process {
 	################################################
 
 	# declare state
-	Write-Host "$DestinationHost,$Name - checking if VM already migrated to target computer..."
+	Write-Host "$DestinationHost,$Name - checking destination host for VM..."
 
-	# define parameters for Get-VM on target computer
-	$GetVM = @{
-		Id           = $Id
+	# define required parameters
+	$AssertVMNotFound = @{
+		VM           = $VM
 		ComputerName = $DestinationHost
-		ErrorAction  = [System.Management.Automation.ActionPreference]::SilentlyContinue
 	}
 
-	# get VM from target server
+	# ensure VM not found on destination host
 	Try {
-		$TargetVM = Get-VM @GetVM
+		$VMNotFound = Assert-VMNotFound @AssertVMNotFound
 	}
 	Catch {
 		Throw $_
 	}
 
-	# if VM found on target server...
-	If ($TargetVM -and $TargetVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
-		# warn and return
-		Write-Warning -Message "found VM on '$DestinationHost' destination host with matching Id: $Id"
+	# if VM found on destination host
+	If (!$VMNotFound) {
+		# return immediately; warnings were issued by function
 		Return
 	}
-
-	################################################
-	# check for VM on target cluster
-	################################################
-
-	# get cluster for target server
-	Try {
-		$TargetClusterName = Get-ClusterName -ComputerName $DestinationHost
-	}
-	Catch {
-		Throw $_
-	}
-
-	# if target computer is clustered...
-	If ($TargetClusterName) {
-		# declare state
-		Write-Host "$DestinationHost,$Name - checking if VM already clustered on target computer..."
-
-		# define parameters for Get-ClusterGroup
-		$GetClusterGroup = @{
-			Cluster     = $TargetClusterName
-			VMId        = $Id
-			ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
-		}
-
-		# get cluster group for VM on target cluster
-		Try {
-			$TargetClusterGroup = Get-ClusterGroup @GetClusterGroup
-		}
-		Catch {
-			Throw $_
-		}
-
-		# if cluster group for VM found on target cluster...
-		If ($TargetClusterGroup) {
-			# warn and return
-			Write-Warning 'VM has already been migrated to target cluster'
-			Return
-		}
-
-		# declare state
-		Write-Host "$DestinationHost,$Name - ...VM not found via target computer"
-	}
-
 
 	################################################
 	# get VM paths
@@ -1736,17 +1836,29 @@ Process {
 	$VMPaths.Add($DestinationStoragePath)
 
 	################################################
+	# check if target computer is clustered
+	################################################
+
+	# get cluster for target computer
+	Try {
+		$TargetClusterName = Get-ClusterName -ComputerName $DestinationHost
+	}
+	Catch {
+		Throw $_
+	}
+
+	################################################
 	# get target CSVs from target cluster
 	################################################
 
 	# if target computer is clustered...
 	If ($TargetClusterName) {
-		# eetrieve CSVs from target computer
+		# retrieve CSV paths from target computer
 		Try {
-			$ClusterSharedVolumePaths = Get-ClusterSharedVolume -Cluster $TargetClusterName | Select-Object -ExpandProperty SharedVolumeInfo | Select-Object -ExpandProperty FriendlyVolumeName
+			$ClusterSharedVolumePaths = Get-ClusterSharedVolumePaths -ComputerName $DestinationHost
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# define boolean
