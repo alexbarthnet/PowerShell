@@ -1716,7 +1716,7 @@ Process {
 	Write-Verbose 'got VHD paths'
 
 	# if destination storage path parameter not provided...
-	If (!$PSBoundParameters.ContainsKey('DestinationStoragePath') -and -not $PSBoundParameters.ContainsKey('VHDs')) {
+	If (!$PSBoundParameters.ContainsKey('DestinationStoragePath')) {
 		# if VHDs hashtable array not provided...
 		If (!$PSBoundParameters.ContainsKey('VHDs')) {
 			# create list for VHD strings
