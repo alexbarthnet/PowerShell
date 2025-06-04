@@ -190,7 +190,7 @@ Begin {
 		Try {
 			$ClusterSharedVolumePaths = Invoke-Command @InvokeCommand -ScriptBlock {
 				# retrieve cluster shared volumes
-				$ClusterSharedVolumes = Get-ClusterSharedVolume 
+				$ClusterSharedVolumes = Get-ClusterSharedVolume
 				# retrieve cluster shared volume paths
 				$ClusterSharedVolumes.SharedVolumeInfo.FriendlyVolumeName
 			}
@@ -215,7 +215,7 @@ Begin {
 			[string]$Path,
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName,
-			# number of attempts to assert path action; default is 6 attempts 
+			# number of attempts to assert path action; default is 6 attempts
 			[uint16]$Attempts = 6,
 			# path type to test; default is container
 			[Microsoft.PowerShell.Commands.TestPathType]$PathType = [Microsoft.PowerShell.Commands.TestPathType]::Container
@@ -335,7 +335,7 @@ Begin {
 			[switch]$SkipWhenFilesPresent,
 			# filter for files to exclude when searching for files present in path
 			[string]$ExcludedFileFilter,
-			# number of attempts to assert path action; default is 6 attempts 
+			# number of attempts to assert path action; default is 6 attempts
 			[uint16]$Attempts = 6,
 			# path type to test; default is container
 			[Microsoft.PowerShell.Commands.TestPathType]$PathType = [Microsoft.PowerShell.Commands.TestPathType]::Container
@@ -391,7 +391,7 @@ Begin {
 
 					# define required parameters
 					$GetChildItems = @{
-						Path        = $ArgumentList['Path'] 
+						Path        = $ArgumentList['Path']
 						File        = $true
 						Force       = $true
 						Recurse     = $true
@@ -411,7 +411,7 @@ Begin {
 						Return $true
 					}
 					# if file items not found...
-					Else { 
+					Else {
 						Return $false
 					}
 				}
@@ -501,7 +501,7 @@ Begin {
 			[object]$VM,
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName,
-			# number of attempts to assert path action; default is 6 attempts 
+			# number of attempts to assert path action; default is 6 attempts
 			[uint16]$Attempts = 6
 		)
 
@@ -671,7 +671,7 @@ Begin {
 			[object]$VM,
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName,
-			# number of attempts to assert path action; default is 6 attempts 
+			# number of attempts to assert path action; default is 6 attempts
 			[uint16]$Attempts = 6
 		)
 
@@ -734,7 +734,7 @@ Begin {
 
 			# initialize counter
 			$Counter = [int32]1
-		
+
 			# while counter less than attempts and planned VM found...
 			While ($Counter -lt $Attempts -and $PlannedVM) {
 				# increment counter
@@ -777,7 +777,7 @@ Begin {
 
 			# initialize counter
 			$Counter = [int32]1
-		
+
 			# while counter less than attempts and realized VM found...
 			While ($Counter -lt $Attempts -and $RealizedVM) {
 				# remove realized VM by Id
@@ -921,7 +921,7 @@ Begin {
 								# get external "compute" switches by name
 								$SwitchNamesMatchingHint = $SwitchNames | Where-Object { $_.Contains($SwitchNameHint) }
 
-								# check 
+								# check
 								switch ($SwitchNamesMatchingHint.Count) {
 									# no external switches with compute in the name found
 									0 {
