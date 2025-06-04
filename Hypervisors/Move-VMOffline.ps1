@@ -208,37 +208,6 @@ Begin {
 		}
 	}
 
-	Function Get-SmbShareForPath {
-		Param(
-			[Parameter(Mandatory = $true)]
-			[string]$Path,
-			[Parameter(Mandatory = $true)]
-			[string]$ComputerName
-		)
-
-		# get SMB shares on target computer
-		Try {
-			$SmbShares = Get-SmbShare -CimSession $ComputerName -Special $true
-		}
-		Catch {
-			Throw $_
-		}
-
-		# get first SMB share where path parameter starts with share path and share path not null or empty
-		$SmbShare = $SmbShares | Sort-Object -Property 'Path' | Where-Object { $Path.StartsWith($_.Path, [System.StringComparison]::InvariantCultureIgnoreCase) -and -not [string]::IsNullOrEmpty($_.Path) } | Select-Object -First 1
-
-		# define share path from path parameter and SMB share
-		Try {
-			$SharePath = $Path.Replace($SmbShare.Path, "\\$ComputerName\$($SmbShare.Name)\")
-		}
-		Catch {
-			Throw $_
-		}
-
-		# return share path
-		Return $SharePath
-	}
-
 	Function Assert-PathCreated {
 		[CmdletBinding()]
 		Param(
@@ -693,6 +662,363 @@ Begin {
 
 		# return true after not finding VM by Id
 		Return $true
+	}
+
+	Function Assert-VMRemoved {
+		[CmdletBinding()]
+		Param(
+			[Parameter(Mandatory = $true)]
+			[object]$VM,
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName,
+			# number of attempts to assert path action; default is 6 attempts 
+			[uint16]$Attempts = 6
+		)
+
+		################################################
+		# prepare session
+		################################################
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# update argument list
+		$InvokeCommand['ArgumentList']['Id'] = $VM.Id
+
+		################################################
+		# locate VMs before removal
+		################################################
+
+		# retrieve CIM instance for planned VM by Id
+		Try {
+			$PlannedVM = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_PlannedComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# retrieve CIM instance for realized VM by Id
+		Try {
+			$RealizedVM = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_ComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# if planned VM and realized VM not found before first attempt to remove VM...
+		If (!$PlannedVM -and !$RealizedVM) {
+			# declare state and return
+			Write-Host "$ComputerName,$Name - ...VM not found"
+			Return $true
+		}
+
+		################################################
+		# remove planned VM
+		################################################
+
+		# if planned VM found...
+		If ($PlannedVM) {
+			# declare state
+			Write-Host "$ComputerName,$Name - found planned VM, waiting for automatic removal..."
+
+			# initialize counter
+			$Counter = [int32]1
+		
+			# while counter less than attempts and planned VM found...
+			While ($Counter -lt $Attempts -and $PlannedVM) {
+				# increment counter
+				$Counter++
+
+				# sleep
+				Start-Sleep -Seconds 5
+
+				# retrieve CIM instance for planned VM by Id
+				Try {
+					$PlannedVM = Invoke-Command @InvokeCommand -ScriptBlock {
+						Param($ArgumentList)
+						Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_PlannedComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
+					}
+				}
+				Catch {
+					Throw $_
+				}
+			}
+
+			# if planned VM not found...
+			If (!$PlannedVM) {
+				# declare state
+				Write-Host "$ComputerName,$Name - ...planned VM automatically removed"
+			}
+			Else {
+				# declare state
+				Write-Warning -Message 'found planned VM not automatically removed after 30 seconds'
+			}
+		}
+
+		################################################
+		# remove realized VM
+		################################################
+
+		# if realized VM found...
+		If ($RealizedVM) {
+			# declare state
+			Write-Host "$ComputerName,$Name - found VM, removing..."
+
+			# initialize counter
+			$Counter = [int32]1
+		
+			# while counter less than attempts and realized VM found...
+			While ($Counter -lt $Attempts -and $RealizedVM) {
+				# remove realized VM by Id
+				Try {
+					$null = Invoke-Command @InvokeCommand -ScriptBlock {
+						Param($ArgumentList)
+						$VM = Get-VM -Id $ArgumentList['Id']
+						$VM | Remove-VM -Force
+					}
+				}
+				Catch {
+					Throw $_
+				}
+
+				# increment counter
+				$Counter++
+
+				# sleep
+				Start-Sleep -Seconds 5
+
+				# retrieve CIM instance for realized VM by Id
+				Try {
+					$RealizedVM = Invoke-Command @InvokeCommand -ScriptBlock {
+						Param($ArgumentList)
+						Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_ComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
+					}
+				}
+				Catch {
+					Throw $_
+				}
+			}
+
+			# if realized VM not found...
+			If (!$RealizedVM) {
+				# declare state
+				Write-Host "$ComputerName,$Name - ...VM removed"
+			}
+			Else {
+				# declare state
+				Write-Warning -Message 'could not remove VM after 30 seconds'
+			}
+		}
+
+		################################################
+		# return state
+		################################################
+
+		# if planned VM and realized VM not found after attempts to remove...
+		If (!$PlannedVM -and !$RealizedVM) {
+			Return $true
+		}
+		# if planned VM and realized VM not found after attempts to remove...
+		Else {
+			Return $false
+		}
+	}
+
+	Function Resolve-VMCompatibilityReport {
+		Param(
+			[Parameter(Mandatory)]
+			[Microsoft.HyperV.PowerShell.VMCompatibilityReport]$CompatibilityReport
+		)
+
+		# add note properties to compatibility report
+		Add-Member -InputObject $CompatibilityReport -MemberType 'NoteProperty' -Name 'CannotResolve' -Value $false
+		Add-Member -InputObject $CompatibilityReport -MemberType 'NoteProperty' -Name 'CannotResolveMessages' -Value ([System.Collections.Generic.List[string]]::new())
+
+		# process each incompatibility
+		:NextIncompatibility ForEach ($Incompatibility in $CompatibilityReport.Incompatibilities) {
+			switch ($Incompatibility.MessageID) {
+				# target does not have VM switch references in VM configuration
+				33012 {
+					# get VM network adapter from report
+					Try {
+						$VMNetworkAdapterName = $Incompatibility.Source.Name
+					}
+					Catch {
+						$CompatibilityReport.CannotResolve = $true
+						$CompatibilityReport.CannotResolveMessages.Add("Could not retrieve VM network adapter name from incompatibility object: '$($_.Exception.Message)'")
+						Continue NextIncompatibility
+					}
+
+					# if switch names not found...
+					If (!$SwitchNames) {
+						# extract computer name from compatibility report
+						$ComputerName = $CompatibilityReport.VM.ComputerName
+
+						# define parameters for Get-VMSwitch
+						$GetVMSwitch = @{
+							ComputerName = $ComputerName
+							# SwitchType   = [Microsoft.HyperV.PowerShell.VMSwitchType]::External
+							ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+						}
+
+						# get external VM switches
+						Try {
+							$VMSwitch = Get-VMSwitch @GetVMSwitch
+						}
+						Catch {
+							Throw $_
+						}
+
+						# get external VM switch names
+						$SwitchNames = $VMSwitch | Select-Object -ExpandProperty Name
+
+						# if switchname parameter provided but not found in external VM switch names...
+						If ($script:PSBoundParameters.ContainsKey('SwitchName') -and $script:PSBoundParameters['SwitchName'] -notin $SwitchNames ) {
+							# warn and inquire
+							Write-Warning -Message "could not locate '$script:SwitchName' switch on '$ComputerName' computer; attempt to connect VM to another available external switch?" -WarningAction Inquire
+
+							# clear SwitchName
+							$null = $SwitchName
+						}
+					}
+
+					# if switch name not provided or forced to null...
+					If ([string]::IsNullOrEmpty($SwitchName)) {
+						# switch on count of switchnames
+						switch ($SwitchNames.Count) {
+							# no external switches found
+							0 {
+								# clear switch n ame
+								$SwitchName = $null
+
+								# warn and inquire about disconnecting VM
+								Write-Warning -Message "No external switches found on '$ComputerName' destination. VM network adapter '$VMNetworkAdapterName' on '$Name' VM will not be connected after import." -WarningAction Inquire
+							}
+							# one external switch found
+							1 {
+								# assign switch name
+								$SwitchName = $SwitchNames
+
+								# warn about new switch name
+								Write-Warning -Message "Found '$SwitchName' external switch on '$ComputerName' destination. VM network adapter '$VMNetworkAdapterName' on '$Name' VM will be connected to VM switch '$SwitchNames'" -WarningAction Continue
+							}
+							# multiple external switches found
+							Default {
+								# warn about switch name hint
+								Write-Warning -Message "Multiple external switches found on '$ComputerName' destination. Will use '$SwitchNameHint' switch name hint to locate available external switch" -WarningAction Continue
+
+								# get external "compute" switches by name
+								$SwitchNamesMatchingHint = $SwitchNames | Where-Object { $_.Contains($SwitchNameHint) }
+
+								# check 
+								switch ($SwitchNamesMatchingHint.Count) {
+									# no external switches with compute in the name found
+									0 {
+										# select first external switch after sorting by name
+										$SwitchName = $SwitchNames | Sort-Object | Select-Object -First 1
+
+										# warn about reconnect to new switch
+										Write-Warning -Message "Will connect '$VMNetworkAdapterName' VM network adapter on '$Name' VM to first available external switch: '$SwitchName'" -WarningAction Continue
+									}
+									# one external switch found
+									1 {
+										# select single external switch matching switch name hint
+										$SwitchName = $SwitchNamesMatchingHint
+
+										# warn about reconnect to new switch
+										Write-Warning -Message "Will connect '$VMNetworkAdapterName' VM network adapter on '$Name' VM to the external switch matching '$SwitchNameHint' switch name hint: $SwitchName" -WarningAction Continue
+									}
+									Default {
+										# select first external switch matching switch name hint after sorting by name
+										$SwitchName = $SwitchNamesMatchingHint | Sort-Object | Select-Object -First 1
+
+										# warn about reconnect to new switch
+										Write-Warning -Message "Will connect '$VMNetworkAdapterName' VM network adapter on '$Name' VM to first available external switch matching '$SwitchNameHint' switch name hint: $SwitchName" -WarningAction Continue
+									}
+								}
+							}
+						}
+					}
+
+					# if switch name is null...
+					If ([string]::IsNullOrEmpty($SwitchName)) {
+						# ...disconnect VM network adapter
+						Try {
+							$Incompatibility.Source | Disconnect-VMNetworkAdapter
+						}
+						Catch {
+							$CompatibilityReport.CannotResolve = $true
+							$CompatibilityReport.CannotResolveMessages.Add("Could not disconnect '$VMNetworkAdapterName' VM network adapter on '$Name' VM to address VM switch incompatibility: '$($_.Exception.Message)'")
+							Continue NextIncompatibility
+						}
+					}
+					# if switch name is not null...
+					Else {
+						# ...reconnect VM network adapter to new switch
+						Try {
+							$Incompatibility.Source | Connect-VMNetworkAdapter -SwitchName $SwitchName
+							# $Incompatibility.Source | Disconnect-VMNetworkAdapter -Passthru | Connect-VMNetworkAdapter -SwitchName $SwitchName
+						}
+						Catch {
+							$CompatibilityReport.CannotResolve = $true
+							$CompatibilityReport.CannotResolveMessages.Add("Could not connect '$VMNetworkAdapterName' VM network adapter on '$Name' VM to '$SwitchName' switch to address VM switch incompatibility: '$($_.Exception.Message)'")
+							Continue NextIncompatibility
+						}
+					}
+				}
+				# target has an incompatibility with imported VM not addressed above
+				Default {
+					$CompatibilityReport.CannotResolve = $true
+					$CompatibilityReport.CannotResolveMessages.Add("found unhandled incompatibility with '$($Incompatibility.MessageID) and message: '$($Incompatibility.Message)'")
+					Continue NextIncompatibility
+				}
+			}
+		}
+
+		# return updated compatibility object
+		Return $CompatibilityReport
+	}
+
+	Function Get-SmbShareForPath {
+		Param(
+			[Parameter(Mandatory = $true)]
+			[string]$Path,
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName
+		)
+
+		# get SMB shares on target computer
+		Try {
+			$SmbShares = Get-SmbShare -CimSession $ComputerName -Special $true
+		}
+		Catch {
+			Throw $_
+		}
+
+		# get first SMB share where path parameter starts with share path and share path not null or empty
+		$SmbShare = $SmbShares | Sort-Object -Property 'Path' | Where-Object { $Path.StartsWith($_.Path, [System.StringComparison]::InvariantCultureIgnoreCase) -and -not [string]::IsNullOrEmpty($_.Path) } | Select-Object -First 1
+
+		# define share path from path parameter and SMB share
+		Try {
+			$SharePath = $Path.Replace($SmbShare.Path, "\\$ComputerName\$($SmbShare.Name)\")
+		}
+		Catch {
+			Throw $_
+		}
+
+		# return share path
+		Return $SharePath
 	}
 
 	Function Export-VMToComputer {
