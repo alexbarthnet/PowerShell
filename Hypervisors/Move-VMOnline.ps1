@@ -353,8 +353,19 @@ Begin {
 			[string]$Path,
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName,
+			# switch to skip remove when files present in path
+			[switch]$SkipWhenFilesPresent,
+			# filter for files to exclude when searching for files present in path
+			[string]$ExcludedFileFilter,
+			# number of attempts to assert path action; default is 6 attempts 
+			[uint16]$Attempts = 6,
+			# path type to test; default is container
 			[Microsoft.PowerShell.Commands.TestPathType]$PathType = [Microsoft.PowerShell.Commands.TestPathType]::Container
 		)
+
+		################################################
+		# prepare session
+		################################################
 
 		# get hashtable for InvokeCommand splat
 		Try {
@@ -367,6 +378,11 @@ Begin {
 		# update argument list
 		$InvokeCommand['ArgumentList']['Path'] = $Path
 		$InvokeCommand['ArgumentList']['PathType'] = $PathType
+		$InvokeCommand['ArgumentList']['ExcludeFiles'] = $ExcludeFiles
+
+		################################################
+		# test path itself
+		################################################
 
 		# test path before attempting to remove path
 		Try {
@@ -379,50 +395,343 @@ Begin {
 			Throw $_
 		}
 
-		# if path not found before attempting to remove path...
+		# if path not found before first attempt to remove path...
 		If (!$TestPath) {
 			Return $true
 		}
 
-		# remove path
+		################################################
+		# test path for files if requested
+		################################################
+
+		# if skip when files present requested and path type is a container...
+		If ($SkipWhenFilesPresent -and $PathType -eq [Microsoft.PowerShell.Commands.TestPathType]::Container) {
+			# test if files exist in path
+			Try {
+				$FilesInPath = Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
+
+					# define required parameters
+					$GetChildItems = @{
+						Path        = $ArgumentList['Path'] 
+						File        = $true
+						Force       = $true
+						Recurse     = $true
+						ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+					}
+
+					# define optional parameters
+					If (![string]::IsNullOrEmpty($ArgumentList['ExcludedFileFilter'])) {
+						$GetChildItems['Exclude'] = $ArgumentList['ExcludedFileFilter']
+					}
+
+					# retrieve file items in path
+					$FileItems = Get-ChildItem @GetChildItems
+
+					# if file items found...
+					If ($FileItems) {
+						Return $true
+					}
+					# if file items not found...
+					Else { 
+						Return $false
+					}
+				}
+			}
+			Catch {
+				Throw $_
+			}
+
+			# if files exist in path...
+			If ($FilesInPath) {
+				Write-Warning -Message "found files in '$Path' path on '$ComputerName' computer"
+				Return $false
+			}
+		}
+
+		################################################
+		# remove item
+		################################################
+
+		# initialize counter for attempts
+		[uint16]$Counter = 0
+
+		# while counter less than attempts and path still found...
+		While ($Counter -le $Attempts -and $TestPath) {
+			# attempt to remove path
+			Try {
+				Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
+
+					# define parameters
+					$RemoveItem = @{
+						Path        = $ArgumentList['Path']
+						Force       = $true
+						ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
+					}
+
+					# if path type is container...
+					If ($ArgumentList['PathType'] -eq [Microsoft.PowerShell.Commands.TestPathType]::Container) {
+						# add recurse to parameters
+						$RemoveItem['Recurse'] = $true
+					}
+
+					# remove item
+					$null = Remove-Item @RemoveItem
+				}
+			}
+			Catch {
+				Throw $_
+			}
+
+			# test path after attempting to remove path
+			Try {
+				$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
+					Test-Path -Path $ArgumentList['Path'] -PathType $ArgumentList['PathType']
+				}
+			}
+			Catch {
+				Throw $_
+			}
+
+			# if path not found after attempt to remove path...
+			If (!$TestPath) {
+				# return true
+				Return $true
+			}
+
+			# increment counter
+			$Counter++
+
+			# sleep
+			Start-Sleep -Seconds 5
+		}
+
+		################################################
+		# return failure
+		################################################
+
+		# return false after attempts did not succeed
+		Return $false
+	}
+
+	Function Assert-VMRemoved {
+		[CmdletBinding()]
+		Param(
+			[Parameter(Mandatory = $true)]
+			[object]$VM,
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName,
+			# number of attempts to assert path action; default is 6 attempts 
+			[uint16]$Attempts = 6
+		)
+
+		################################################
+		# prepare session
+		################################################
+
+		# get hashtable for InvokeCommand splat
 		Try {
-			Invoke-Command @InvokeCommand -ScriptBlock {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# update argument list
+		$InvokeCommand['ArgumentList']['Id'] = $VM.Id
+
+		################################################
+		# locate planned VM
+		################################################
+
+		# retrieve CIM instance for planned VM by Id
+		Try {
+			$PlannedVM = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
-
-				# define parameters
-				$RemoveItem = @{
-					Path        = $ArgumentList['PathType']
-					Force       = $true
-					ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
-				}
-
-				# if path type is container...
-				If ($ArgumentList['PathType'] -eq [Microsoft.PowerShell.Commands.TestPathType]::Container) {
-					# add recurse to parameters
-					$RemoveItem['Recurse'] = $true
-				}
-
-				# remove item
-				$null = Remove-Item @RemoveItem
+				Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_PlannedComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
 			}
 		}
 		Catch {
 			Throw $_
 		}
 
-		# test path after attempting to remove path
+		# retrieve CIM instance for realized VM by Id
 		Try {
-			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
+			$RealizedVM = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
-				Test-Path -Path $ArgumentList['Path'] -PathType $ArgumentList['PathType']
+				Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_ComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
 			}
 		}
 		Catch {
 			Throw $_
 		}
 
-		# return test path result (inverted for remove)
-		Return !$TestPath
+		# if planned VM and realized VM not found before first attempt to remove VM...
+		If (!$PlannedVM -and !$RealizedVM) {
+			# declare state and return
+			Write-Host "$ComputerName,$Name - ...VM not found"
+			Return $true
+		}
+
+		################################################
+		# remove planned VM
+		################################################
+
+		# if planned VM found...
+		If ($PlannedVM) {
+			# initialize counter
+			$Counter = [int32]1
+		
+			# while counter less than attempts and planned VM found...
+			While ($Counter -lt $Attempts -and $PlannedVM) {
+				# increment counter
+				$Counter++
+
+				# sleep
+				Start-Sleep -Seconds 5
+
+				# retrieve CIM instance for planned VM by Id
+				Try {
+					$PlannedVM = Invoke-Command @InvokeCommand -ScriptBlock {
+						Param($ArgumentList)
+						Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_PlannedComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
+					}
+				}
+				Catch {
+					Throw $_
+				}
+			}
+
+			# if planned VM not found...
+			If (!$PlannedVM) {
+				# declare state
+				Write-Host "$ComputerName,$Name - ...planned VM automatically removed"
+			}
+			Else {
+				# declare state
+				Write-Warning -Message 'found planned VM not automatically removed after 30 seconds'
+			}
+		}
+
+		################################################
+		# remove realized VM
+		################################################
+
+		# if planned VM found...
+		If ($RealizedVM) {
+			# initialize counter
+			$Counter = [int32]1
+		
+			# while counter less than attempts and planned VM found...
+			While ($Counter -lt $Attempts -and $RealizedVM) {
+				# retrieve CIM instance for planned VM by Id
+				Try {
+					$null = Invoke-Command @InvokeCommand -ScriptBlock {
+						Param($ArgumentList)
+						$VM = Get-VM -Id $ArgumentList['Id']
+						$VM | Remove-VM -Force
+					}
+				}
+				Catch {
+					Throw $_
+				}
+
+				# increment counter
+				$Counter++
+
+				# sleep
+				Start-Sleep -Seconds 5
+
+				# retrieve CIM instance for realized VM by Id
+				Try {
+					$RealizedVM = Invoke-Command @InvokeCommand -ScriptBlock {
+						Param($ArgumentList)
+						Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_ComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
+					}
+				}
+				Catch {
+					Throw $_
+				}
+			}
+
+			# if planned VM not found...
+			If (!$PlannedVM) {
+				# declare state
+				Write-Host "$ComputerName,$Name - ...VM removed"
+			}
+			Else {
+				# declare state
+				Write-Warning -Message 'could not remove VM after 30 seconds'
+			}
+		}
+
+		################################################
+		# remove item
+		################################################
+
+		# initialize counter for attempts
+		[uint16]$Counter = 0
+
+		# while counter less than attempts and path still found...
+		While ($Counter -le $Attempts -and $TestPath) {
+			# attempt to remove path
+			Try {
+				Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
+
+					# define parameters
+					$RemoveItem = @{
+						Path        = $ArgumentList['Path']
+						Force       = $true
+						ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
+					}
+
+					# if path type is container...
+					If ($ArgumentList['PathType'] -eq [Microsoft.PowerShell.Commands.TestPathType]::Container) {
+						# add recurse to parameters
+						$RemoveItem['Recurse'] = $true
+					}
+
+					# remove item
+					$null = Remove-Item @RemoveItem
+				}
+			}
+			Catch {
+				Throw $_
+			}
+
+			# test path after attempting to remove path
+			Try {
+				$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
+					Test-Path -Path $ArgumentList['Path'] -PathType $ArgumentList['PathType']
+				}
+			}
+			Catch {
+				Throw $_
+			}
+
+			# if path not found after attempt to remove path...
+			If (!$TestPath) {
+				# return true
+				Return $true
+			}
+
+			# increment counter
+			$Counter++
+
+			# sleep
+			Start-Sleep -Seconds 5
+		}
+
+		################################################
+		# return failure
+		################################################
+
+		# return false after attempts did not succeed
+		Return $false
 	}
 
 	Function Resolve-VMCompatibilityReport {
