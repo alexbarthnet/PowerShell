@@ -845,6 +845,39 @@ Begin {
 		Add-Member -InputObject $CompatibilityReport -MemberType 'NoteProperty' -Name 'CannotResolve' -Value $false
 		Add-Member -InputObject $CompatibilityReport -MemberType 'NoteProperty' -Name 'CannotResolveMessages' -Value ([System.Collections.Generic.List[string]]::new())
 
+		# extract computer name from compatibility report
+		$ComputerName = $CompatibilityReport.VM.ComputerName
+
+		# if one or more VM switch references incompatibilites reported...
+		If (33012 -in $CompatibilityReport.Incompatibilities.MessageID) {
+			# define parameters for Get-VMSwitch
+			$GetVMSwitch = @{
+				ComputerName = $ComputerName
+				# SwitchType   = [Microsoft.HyperV.PowerShell.VMSwitchType]::External
+				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# get external VM switches
+			Try {
+				$VMSwitch = Get-VMSwitch @GetVMSwitch
+			}
+			Catch {
+				Throw $_
+			}
+
+			# get external VM switch names
+			$SwitchNames = $VMSwitch | Select-Object -ExpandProperty Name
+
+			# if switchname parameter provided but not found in external VM switch names...
+			If ($script:PSBoundParameters.ContainsKey('SwitchName') -and $script:PSBoundParameters['SwitchName'] -notin $SwitchNames ) {
+				# warn and inquire
+				Write-Warning -Message "could not locate '$script:SwitchName' switch on '$ComputerName' computer; attempt to connect VM to another available external switch?" -WarningAction Inquire
+
+				# clear SwitchName
+				$null = $SwitchName
+			}
+		}
+
 		# process each incompatibility
 		:NextIncompatibility ForEach ($Incompatibility in $CompatibilityReport.Incompatibilities) {
 			switch ($Incompatibility.MessageID) {
@@ -858,39 +891,6 @@ Begin {
 						$CompatibilityReport.CannotResolve = $true
 						$CompatibilityReport.CannotResolveMessages.Add("Could not retrieve VM network adapter name from incompatibility object: '$($_.Exception.Message)'")
 						Continue NextIncompatibility
-					}
-
-					# if switch names not found...
-					If (!$SwitchNames) {
-						# extract computer name from compatibility report
-						$ComputerName = $CompatibilityReport.VM.ComputerName
-
-						# define parameters for Get-VMSwitch
-						$GetVMSwitch = @{
-							ComputerName = $ComputerName
-							# SwitchType   = [Microsoft.HyperV.PowerShell.VMSwitchType]::External
-							ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
-						}
-
-						# get external VM switches
-						Try {
-							$VMSwitch = Get-VMSwitch @GetVMSwitch
-						}
-						Catch {
-							Throw $_
-						}
-
-						# get external VM switch names
-						$SwitchNames = $VMSwitch | Select-Object -ExpandProperty Name
-
-						# if switchname parameter provided but not found in external VM switch names...
-						If ($script:PSBoundParameters.ContainsKey('SwitchName') -and $script:PSBoundParameters['SwitchName'] -notin $SwitchNames ) {
-							# warn and inquire
-							Write-Warning -Message "could not locate '$script:SwitchName' switch on '$ComputerName' computer; attempt to connect VM to another available external switch?" -WarningAction Inquire
-
-							# clear SwitchName
-							$null = $SwitchName
-						}
 					}
 
 					# if switch name not provided or forced to null...
@@ -1959,9 +1959,9 @@ Process {
 	If ($PSCmdlet.ParameterSetName -eq 'Name') {
 		# define required parameters for Get-VM
 		$GetVM = @{
-			Name        = $Name
+			Name         = $Name
 			ComputerName = $ComputerName
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 		}
 
 		# get VM object from input
