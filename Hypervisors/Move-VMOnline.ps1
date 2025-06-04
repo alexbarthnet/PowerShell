@@ -175,6 +175,43 @@ Begin {
 		}
 	}
 
+	Function Get-ClusterSharedVolumePaths {
+		[CmdletBinding()]
+		Param(
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName
+		)
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# test for cluster
+		Try {
+			$ClusterSharedVolumePaths = Invoke-Command @InvokeCommand -ScriptBlock {
+				# retrieve cluster shared volumes
+				$ClusterSharedVolumes = Get-ClusterSharedVolume 
+				# retrieve cluster shared volume paths
+				$ClusterSharedVolumes.SharedVolumeInfo.FriendlyVolumeName
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# return the cluster shared volume paths
+		If ($ClusterSharedVolumePaths) {
+			Return $ClusterSharedVolumePaths
+		}
+		Else {
+			Return $null
+		}
+	}
+
 	Function Test-PathOnDestinationHost {
 		[CmdletBinding()]
 		Param(
