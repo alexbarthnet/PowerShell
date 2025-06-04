@@ -553,6 +553,176 @@ Begin {
 		Return $false
 	}
 
+	Function Assert-VMNotFound {
+		[CmdletBinding()]
+		Param(
+			[Parameter(Mandatory = $true)]
+			[object]$VM,
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName,
+			# number of attempts to assert path action; default is 6 attempts 
+			[uint16]$Attempts = 6
+		)
+
+		################################################
+		# define objects from VM properties
+		################################################
+
+		$Name = $VM.Name.ToLowerInvariant()
+		$VMId = $VM.Id.ToString()
+
+		################################################
+		# prepare session
+		################################################
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# update argument list
+		$InvokeCommand['ArgumentList']['VMId'] = $VMId
+
+		################################################
+		# locate planned VM
+		################################################
+
+		# retrieve name of planned VM if found by Id
+		Try {
+			$PlannedVM = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+
+				# retrieve planned VM by Id
+				$CimInstance = Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_PlannedComputerSystem' -Filter "Name = '$($ArgumentList['VMId'])'"
+
+				# if planned VM found by Id...
+				If ($CimInstance) {
+					# return VM name
+					Return $CimInstance.ElementName
+				}
+				# if planned VM not found by Id...
+				Else {
+					# return empty string
+					Return [string]::Empty
+				}
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# if planned VM found...
+		If (![string]::IsNullOrEmpty($PlannedVM)) {
+			# declare state and return false
+			Write-Warning -Message "found planned VM by Id with '$PlannedVM' name on '$ComputerName' computer"
+			Return $false
+		}
+
+		################################################
+		# locate realized VM
+		################################################
+
+		# retrieve name of realized VM if found by Id
+		Try {
+			$RealizedVM = Invoke-Command @InvokeCommand -ScriptBlock {
+				# import argument list hashtable
+				Param($ArgumentList)
+
+				# retrieve realized VM by Id
+				$CimInstance = Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_ComputerSystem' -Filter "Name = '$($ArgumentList['VMId'])'"
+
+				# if realized VM found by Id...
+				If ($CimInstance) {
+					# return VM name
+					Return $CimInstance.ElementName
+				}
+				# if realized VM not found by Id...
+				Else {
+					# return empty string
+					Return [string]::Empty
+				}
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# if realized VM found...
+		If (![string]::IsNullOrEmpty($RealizedVM)) {
+			# declare state and return false
+			Write-Warning -Message "found VM by Id with '$RealizedVM' name on '$ComputerName' computer"
+			Return $false
+		}
+
+		################################################
+		# check for VM on target cluster
+		################################################
+
+		# get cluster for target computer
+		Try {
+			$ClusterName = Get-ClusterName -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# if target computer is clustered...
+		If ($ClusterName) {
+			# declare state
+			Write-Host "$ComputerName,$Name - checking for VM by Id in '$ClusterName' cluster..."
+
+			# retrieve CIM instance for realized VM by Id
+			Try {
+				$ClusterGroupOwnerNodeName = Invoke-Command @InvokeCommand -ScriptBlock {
+					# import argument list hashtable
+					Param($ArgumentList)
+
+					# define parameters for Get-ClusterGroup
+					$GetClusterGroup = @{
+						VMId        = $ArgumentList['VMId']
+						ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
+					}
+
+					# get cluster group for VM on target cluster
+					$ClusterGroup = Get-ClusterGroup @GetClusterGroup
+
+					# if cluster group found...
+					If ($ClusterGroup) {
+						# return owner node name
+						Return $ClusterGroup.OwnerNode.Name
+					}
+					Else {
+						# return empty string
+						Return [string]::Empty
+					}
+				}
+			}
+			Catch {
+				Throw $_
+			}
+
+			# if cluster group for VM found on target cluster...
+			If (![string]::IsNullOrEmpty($ClusterGroupOwnerNodeName)) {
+				# warn and return
+				Write-Warning -Message "VM found by Id on '$ClusterGroupOwnerNodeName' node in '$ClusterName' cluster"
+				Return $false
+			}
+
+			# declare state
+			Write-Host "$ComputerName,$Name - ...VM not found by Id in '$ClusterName' cluster"
+		}
+
+		################################################
+		# return success
+		################################################
+
+		# return true after not finding VM by Id
+		Return $true
+	}
+
 	Function Assert-VMRemoved {
 		[CmdletBinding()]
 		Param(
