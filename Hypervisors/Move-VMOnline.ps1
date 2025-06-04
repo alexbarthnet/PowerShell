@@ -1680,48 +1680,50 @@ Process {
 		ForEach ($VHD in $VHDs) {
 			# if VHD is not a hashtable...
 			If ($VHD -isnot [hashtable]) {
-				Write-Warning -Message 'invalid entry in VHDs: one or more array members is not a hashtable'
-				Return
+				Write-Warning -Message 'invalid VHDs parameter: found array member that is not a hashtable'
+				$InvalidVHDArrayMember = $true
 			}
+			# if VHD is a hashtable...
+			Else {
+				# if source file path key exists...
+				If ($VHD.ContainsKey('SourceFilePath')) {
+					# retrieve source file path
+					$SourceFilePath = $VHD['SourceFilePath']
 
-			# if source file path key exists...
-			If ($VHD.ContainsKey('SourceFilePath')) {
-				# retrieve source file path
-				$SourceFilePath = $VHD['SourceFilePath']
+					# assert source file path exists
+					$TestPath = Assert-PathCreated -Path $SourceFilePath -ComputerName $ComputerName -PathType 'Leaf'
 
-				# assert source file path exists
-				$TestPath = Assert-PathCreated -Path $SourceFilePath -ComputerName $ComputerName -PathType 'Leaf'
-
-				# if source file path not found...
-				If (!$TestPath) {
-					# warn and update boolean
-					Write-Warning -Message "could not locate file for '$SourceFilePath' path in 'SourceFilePath' value"
-					$SourceFilePathMissing = $true
+					# if source file path not found...
+					If (!$TestPath) {
+						# warn and update boolean
+						Write-Warning -Message "could not locate file for '$SourceFilePath' path in 'SourceFilePath' value"
+						$SourceFilePathMissing = $true
+					}
 				}
-			}
-			# if source file path key missing...
-			Else {
-				# warn and update boolean
-				Write-Warning -Message "invalid VHDs parameter: array contains hashtable missing the 'SourceFilePath' key"
-				$InvalidVHDArrayMember = $true
-			}
+				# if source file path key missing...
+				Else {
+					# warn and update boolean
+					Write-Warning -Message "invalid VHDs parameter: found hashtable in array missing required 'SourceFilePath' key"
+					$InvalidVHDArrayMember = $true
+				}
 
-			# if destination file path key exists...
-			If ($VHD.ContainsKey('DestinationFilePath')) {
-				# retrieve source file path
-				$DestinationFilePath = $VHD['DestinationFilePath']
+				# if destination file path key exists...
+				If ($VHD.ContainsKey('DestinationFilePath')) {
+					# retrieve source file path
+					$DestinationFilePath = $VHD['DestinationFilePath']
 
-				# test source file path
-				$VHDParentPath = Split-Path -Path $DestinationFilePath -Parent
+					# test source file path
+					$VHDParentPath = Split-Path -Path $DestinationFilePath -Parent
 
-				# add VHD parent path to list
-				$VHDParentPaths.Add($VHDParentPath)
-			}
-			# if destination file path key missing...
-			Else {
-				# warn and update boolean
-				Write-Warning -Message "invalid VHDs parameter: array contains hashtable missing the 'DestinationFilePath' key"
-				$InvalidVHDArrayMember = $true
+					# add VHD parent path to list
+					$VHDParentPaths.Add($VHDParentPath)
+				}
+				# if destination file path key missing...
+				Else {
+					# warn and update boolean
+					Write-Warning -Message "invalid VHDs parameter: found hashtable in array missing required 'DestinationFilePath' key"
+					$InvalidVHDArrayMember = $true
+				}
 			}
 		}
 
