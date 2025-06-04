@@ -919,7 +919,7 @@ Begin {
 								# get external "compute" switches by name
 								$SwitchNamesMatchingHint = $SwitchNames | Where-Object { $_.Contains($SwitchNameHint) }
 
-								# check 
+								# check count of switches matching hint
 								switch ($SwitchNamesMatchingHint.Count) {
 									# no external switches with compute in the name found
 									0 {
