@@ -1535,10 +1535,6 @@ Process {
 		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 	}
 
-	# declare state
-	Write-Verbose 'defined Parameters'
-	Write-Verbose "parameter set name: $($PSCmdlet.ParameterSetName)"
-
 	################################################
 	# get VM paths
 	################################################
@@ -1551,17 +1547,11 @@ Process {
 		# add destination storage path to list
 		$VMPaths.Add($DestinationStoragePath)
 
-		# declare state
-		Write-Verbose 'added destination storage path to list'
-
 		# add destination storage path to parameters
 		$Parameters['DestinationStoragePath'] = $DestinationStoragePath
 
 		# add include storage to parameters - required to move VHDs to destination storage
 		$Parameters['IncludeStorage'] = $true
-
-		# declare state
-		Write-Verbose 'added DestinationStoragePath and IncludeStorage to parameters'
 	}
 
 	# if destination storage path not provided...
@@ -1575,14 +1565,8 @@ Process {
 		# add virtual machine path to list
 		$VMPaths.Add($VirtualMachinePath)
 
-		# declare state
-		Write-Verbose 'added VirtualMachinePath to VM paths'
-
 		# add virtual machine path to parameters
 		$Parameters['VirtualMachinePath'] = $VirtualMachinePath
-
-		# declare state
-		Write-Verbose 'added VirtualMachinePath to parameters'
 
 		# define optional VM path properties
 		$VMPathProperties = @{
