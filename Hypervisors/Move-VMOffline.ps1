@@ -263,8 +263,16 @@ Begin {
 			[Parameter(Mandatory = $true)]
 			[string]$Path,
 			[Parameter(Mandatory = $true)]
-			[string]$ComputerName
+			[string]$ComputerName,
+			# number of attempts to assert path action; default is 6 attempts 
+			[uint16]$Attempts = 6,
+			# path type to test; default is container
+			[Microsoft.PowerShell.Commands.TestPathType]$PathType = [Microsoft.PowerShell.Commands.TestPathType]::Container
 		)
+
+		################################################
+		# prepare session
+		################################################
 
 		# get hashtable for InvokeCommand splat
 		Try {
@@ -276,12 +284,17 @@ Begin {
 
 		# update argument list
 		$InvokeCommand['ArgumentList']['Path'] = $Path
+		$InvokeCommand['ArgumentList']['PathType'] = $PathType
+
+		################################################
+		# test path
+		################################################
 
 		# test path before attempting to create path
 		Try {
 			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
-				Test-Path -Path $ArgumentList['Path'] -PathType Container
+				Test-Path -Path $ArgumentList['Path'] -PathType $ArgumentList['PathType']
 			}
 		}
 		Catch {
@@ -293,30 +306,71 @@ Begin {
 			Return $true
 		}
 
-		# create path
-		Try {
-			Invoke-Command @InvokeCommand -ScriptBlock {
-				Param($ArgumentList)
-				$null = New-Item -Path $ArgumentList['Path'] -ItemType Directory -Force
+		################################################
+		# create item
+		################################################
+
+		# initialize counter for attempts
+		[uint16]$Counter = 0
+
+		# while counter less than attempts and path not found...
+		While ($Counter -le $Attempts -and -not $TestPath) {
+			# attempt to create path
+			Try {
+				Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
+
+					# define parameters
+					$NewItem = @{
+						Path        = $ArgumentList['Path']
+						Force       = $true
+						ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
+					}
+
+					# if path type is container...
+					If ($ArgumentList['PathType'] -eq [Microsoft.PowerShell.Commands.TestPathType]::Container) {
+						# add item type of directory to parameters
+						$NewItem['ItemType'] = 'Directory'
+					}
+
+					# create item
+					$null = New-Item @NewItem
+				}
 			}
-		}
-		Catch {
-			Throw $_
+			Catch {
+				Throw $_
+			}
+
+			# test path after attempting to create path
+			Try {
+				$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
+					Test-Path -Path $ArgumentList['Path'] -PathType $ArgumentList['PathType']
+				}
+			}
+			Catch {
+				Throw $_
+			}
+
+			# if path found after attempt to create path...
+			If ($TestPath) {
+				# return true
+				Return $true
+			}
+
+			# increment counter
+			$Counter++
+
+			# sleep
+			Start-Sleep -Seconds 5
 		}
 
-		# test path before attempting to create path
-		Try {
-			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
-				Param($ArgumentList)
-				Test-Path -Path $ArgumentList['Path'] -PathType Container
-			}
-		}
-		Catch {
-			Throw $_
-		}
+		################################################
+		# return failure
+		################################################
 
-		# return test path result
-		Return $TestPath
+		# return false after attempts did not succeed
+		Return $false
 	}
 
 	Function Assert-PathRemoved {
