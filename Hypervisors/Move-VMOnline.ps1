@@ -878,67 +878,14 @@ Begin {
 		# remove item
 		################################################
 
-		# initialize counter for attempts
-		[uint16]$Counter = 0
-
-		# while counter less than attempts and path still found...
-		While ($Counter -le $Attempts -and $TestPath) {
-			# attempt to remove path
-			Try {
-				Invoke-Command @InvokeCommand -ScriptBlock {
-					Param($ArgumentList)
-
-					# define parameters
-					$RemoveItem = @{
-						Path        = $ArgumentList['Path']
-						Force       = $true
-						ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
-					}
-
-					# if path type is container...
-					If ($ArgumentList['PathType'] -eq [Microsoft.PowerShell.Commands.TestPathType]::Container) {
-						# add recurse to parameters
-						$RemoveItem['Recurse'] = $true
-					}
-
-					# remove item
-					$null = Remove-Item @RemoveItem
-				}
-			}
-			Catch {
-				Throw $_
-			}
-
-			# test path after attempting to remove path
-			Try {
-				$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
-					Param($ArgumentList)
-					Test-Path -Path $ArgumentList['Path'] -PathType $ArgumentList['PathType']
-				}
-			}
-			Catch {
-				Throw $_
-			}
-
-			# if path not found after attempt to remove path...
-			If (!$TestPath) {
-				# return true
-				Return $true
-			}
-
-			# increment counter
-			$Counter++
-
-			# sleep
-			Start-Sleep -Seconds 5
+		# if planned VM and realized VM not found after attempts to remove...
+		If (!$PlannedVM -and !$RealizedVM) {
+			Return $true
 		}
-
-		################################################
-		# return failure
-		################################################
-
-		# return false after attempts did not succeed
-		Return $false
+		# if planned VM and realized VM not found after attempts to remove...
+		Else {
+			Return $false
+		}
 	}
 
 	Function Resolve-VMCompatibilityReport {
