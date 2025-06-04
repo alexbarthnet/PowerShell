@@ -1775,82 +1775,39 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName,$Name - removing VM files..."
-
-		# remove VM path folders
-		ForEach ($VMPath in $VMPaths) {
-			# update argument list
-			$InvokeCommand['ArgumentList']['Path'] = $VMPath
-
-		}
-
-		################################################
-		# remove VM folders
-		################################################
-
-		# declare state
 		Write-Host "$ComputerName,$Name - removing VM folders..."
 
 		# remove VM path folders
 		ForEach ($VMPath in $VMPaths) {
-			# update argument list with parameters for Get-ChildItem
-			$InvokeCommand['ArgumentList']['GetChildItem'] = @{
-				Path        = $VMPath
-				File        = $true
-				Force       = $true
-				Recurse     = $true
-				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-			}
-
-			# get any files in VM path
-			Try {
-				$ChildItems = Invoke-Command @InvokeCommand -ScriptBlock {
-					Param($ArgumentList)
-
-					# define parameters for Get-ChildItem
-					$GetChildItem = $ArgumentList['GetChildItem']
-
-					# get child items
-					Get-ChildItem @GetChildItem
-				}
-			}
-			Catch {
-				Throw $_
-			}
-
-			# if child items found...
-			If ($ChildItems | Where-Object { $_.BaseName -ne $Id }) {
-				# ...warn and return
-				Write-Warning -Message "Path is not empty: '$VMpath' on '$ComputerName'"
-				Return
-			}
-
-			# update argument list with parameters for Get-ChildItem
-			$InvokeCommand['ArgumentList']['RemoveItem'] = @{
-				Path        = $VMPath
-				Force       = $true
-				Recurse     = $true
-				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-			}
-
-			# remove VHD on source computer
-			Try {
-				Invoke-Command @InvokeCommand -ScriptBlock {
-					Param($ArgumentList)
-
-					# define parameters for Remove-Item
-					$RemoveItem = $ArgumentList['RemoveItem']
-
-					# remove item
-					Remove-Item @RemoveItem
-				}
-			}
-			Catch {
-				Throw $_
-			}
-
 			# declare state
-			Write-Host "$ComputerName,$Name - ...removed: $VMPath"
+			Write-Host "$ComputerName,$Name - ...removing VM folder: $VMPath"
+
+			# define parameters
+			$AssertPathRemoved = @{
+				Path                 = $VMPath
+				ComputerName         = $ComputerName
+				SkipWhenFilesPresent = $true
+				ExcludedFileFilter   = '{0}.*' -f $VM.Id
+				PathType             = [Microsoft.PowerShell.Commands.TestPathType]::Container
+			}
+
+			# remove path
+			Try {
+				$PathRemoved = Assert-PathRemoved @AssertPathRemoved
+			}
+			Catch {
+				Throw $_
+			}
+
+			# if path removed...
+			If ($PathRemoved) {
+				# declare state
+				Write-Host "$ComputerName,$Name - ...removed VM folder"
+			}
+			Else {
+				# declare state
+				Write-Warning -Message 'could not remove VM folder'
+			}
 		}
 	}
 
