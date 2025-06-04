@@ -1373,8 +1373,8 @@ Process {
 				# retrieve source file path
 				$SourceFilePath = $VHD['SourceFilePath']
 
-				# test source file path
-				$TestPath = Test-Path -Path $SourceFilePath -PathType 'Leaf'
+				# assert source file path exists
+				$TestPath = Assert-PathCreated -Path $SourceFilePath -ComputerName $ComputerName -PathType 'Leaf'
 
 				# if source file path not found...
 				If (!$TestPath) {
@@ -1518,7 +1518,7 @@ Process {
 
 		# remove cluster group and resources
 		Try {
-			Remove-ClusterGroup -VMId $VM.Id -RemoveResources -Force
+			Remove-ClusterGroup -Cluster $SourceClusterName -VMId $VM.Id -RemoveResources -Force
 		}
 		Catch {
 			Return $_
