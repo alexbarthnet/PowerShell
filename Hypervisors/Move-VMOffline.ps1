@@ -1701,29 +1701,36 @@ Begin {
 		}
 
 		################################################
-		# remove VM object
+		# remove VM
 		################################################
 
 		# declare state
 		Write-Host "$ComputerName,$Name - removing VM..."
 
-		# define parameters for Remove-VM
-		$RemoveVM = @{
-			VM          = $VM
-			Force       = $true
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		# define parameters
+		$AssertVMRemoved = @{
+			VM           = $VM
+			ComputerName = $ComputerName
 		}
 
-		# remove VM on computer
+		# remove VM
 		Try {
-			Remove-VM @RemoveVM
+			$VMRemoved = Assert-VMRemoved @AssertVMRemoved
 		}
 		Catch {
 			Throw $_
 		}
 
-		# declare state
-		Write-Host "$ComputerName,$Name - ...VM removed"
+		# if VM removed...
+		If ($VMRemoved) {
+			# declare state
+			Write-Host "$ComputerName,$Name - ...removed VM"
+		}
+		Else {
+			# declare state
+			Write-Warning -Message 'could not remove VM'
+			Return
+		}
 
 		################################################
 		# remove VM files
