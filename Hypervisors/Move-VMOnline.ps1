@@ -1130,7 +1130,7 @@ Begin {
 		}
 
 		################################################
-		# remove VM planned VM objects
+		# remove VM
 		################################################
 
 		# declare state
@@ -1158,6 +1158,7 @@ Begin {
 		Else {
 			# declare state
 			Write-Warning -Message 'could not remove VM'
+			Return
 		}
 
 		################################################
