@@ -998,106 +998,34 @@ Begin {
 		}
 
 		################################################
-		# retrieve planned VM objects
+		# remove VM planned VM objects
 		################################################
 
-		# retrieve planned VM by Id via CIM
+		# declare state
+		Write-Host "$ComputerName,$Name - removing VM..."
+
+		# define parameters
+		$AssertVMRemoved = @{
+			VM           = $VM
+			ComputerName = $ComputerName
+		}
+
+		# remove VM
 		Try {
-			$PlannedVM = Get-CimInstance -ComputerName $ComputerName -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_PlannedComputerSystem' | Where-Object { $_.Name -eq $VM.Id }
+			$VMRemoved = Assert-VMRemoved @AssertVMRemoved
 		}
 		Catch {
 			Throw $_
 		}
 
-		# if planned VM found...
-		If ($PlannedVM) {
+		# if VM removed...
+		If ($VMRemoved) {
 			# declare state
-			Write-Host "$ComputerName,$Name - planned VM found; waiting for automatic removal..."
-
-			# initialize counter
-			$Counter = [int32]1
-		
-			# while counter less than 7 and planned VM found...
-			While ($Counter -lt 7 -and $PlannedVM) {
-				# increment counter
-				$Counter++
-
-				# sleep
-				Start-Sleep -Seconds 5
-
-				# retrieve planned VM by Id via CIM
-				Try {
-					$PlannedVM = Get-CimInstance -ComputerName $ComputerName -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_PlannedComputerSystem' | Where-Object { $_.Name -eq $VM.Id }
-				}
-				Catch {
-					Throw $_
-				}
-			}
-
-			# if path removed...
-			If ($PathRemoved) {
-				# declare state
-				Write-Host "$ComputerName,$Name - ...planned VM automatically removed"
-			}
-			Else {
-				# declare state
-				Write-Warning 'VHD not removed after 30 seconds'
-			}
+			Write-Host "$ComputerName,$Name - ...removed VM"
 		}
-
-		################################################
-		# remove realized VM objects
-		################################################
-
-		# retrieve realized VM by Id via CIM
-		Try {
-			$RealizedVM = Get-CimInstance -ComputerName $ComputerName -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_ComputerSystem' | Where-Object { $_.Name -eq $VM.Id }
-		}
-		Catch {
-			Throw $_
-		}
-
-		# if planned or realized VM found via CIM...
-		If ($RealizedVM) {
-			# declare state
-			Write-Host "$ComputerName,$Name - realized VM found; removing..."
-
-			# define parameters for Get-VM
-			$GetVM = @{
-				Id           = $VM.Id
-				ComputerName = $ComputerName
-				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
-			}
-
-			# retrieve VM by Id
-			Try {
-				$VMOnComputerName = Get-VM @GetVM
-			}
-			Catch {
-				Throw $_
-			}
-
-			# define parameters for Remove-VM
-			$RemoveVM = @{
-				VM          = $VMOnComputerName
-				Force       = $true
-				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-			}
-
-			# remove VM on computer
-			Try {
-				Remove-VM @RemoveVM
-			}
-			Catch {
-				Throw $_
-			}
-
-			# declare state
-			Write-Host "$ComputerName,$Name - ...VM removed"
-		}
-		# if planned VM not found...
 		Else {
-			Write-Host "$ComputerName,$Name - ...VM not found"
+			# declare state
+			Write-Warning -Message 'could not remove VM'
 		}
 
 		################################################
@@ -1112,33 +1040,19 @@ Begin {
 			# declare state
 			Write-Host "$ComputerName,$Name - ...removing VHD: $VHDPath"
 
+			# define parameters
+			$AssertPathRemoved = @{
+				Path         = $VMPath
+				ComputerName = $ComputerName
+				PathType     = [Microsoft.PowerShell.Commands.TestPathType]::Leaf
+			}
+
 			# remove path
 			Try {
-				$PathRemoved = Assert-PathRemoved -Path $VHDPath -ComputerName $ComputerName -PathType Leaf
+				$PathRemoved = Assert-PathRemoved @AssertPathRemoved
 			}
 			Catch {
 				Throw $_
-			}
-
-			# if path is not removed...
-			If (!$PathRemoved) {
-				# declare state
-				Write-Warning 'VHD queued for removal but still present; waiting for up to 30 seconds'
-
-				# initialize counter
-				$Counter = [int32]1
-			}
-
-			# while counter less than 7 and path not removed...
-			While ($Counter -lt 7 -and -not $PathRemoved) {
-				# increment counter
-				$Counter++
-
-				# sleep
-				Start-Sleep -Seconds 5
-
-				# remove path
-				$PathRemoved = Assert-PathRemoved -Path $VHDPath -ComputerName $ComputerName -PathType Leaf
 			}
 
 			# if path removed...
@@ -1148,7 +1062,7 @@ Begin {
 			}
 			Else {
 				# declare state
-				Write-Warning 'VHD not removed after 30 seconds'
+				Write-Warning -Message 'could not remove VHD'
 			}
 		}
 
@@ -1160,46 +1074,25 @@ Begin {
 		Write-Host "$ComputerName,$Name - removing VM folders..."
 
 		# remove VM path folders
-		:NextVMPath ForEach ($VMPath in $VMPaths) {
+		ForEach ($VMPath in $VMPaths) {
 			# declare state
 			Write-Host "$ComputerName,$Name - ...removing VM folder: $VMPath"
 
-			# test if path is empty
-			$TestPathIsEmpty = Test-PathOnDestinationHost -Path $VMPath -DestinationHost $ComputerName -IsEmpty
-
-			# if path is not empty...
-			If (!$TestPathIsEmpty) {
-				Write-Warning -Message "found files in '$VMpath' VM folder on '$ComputerName' computer"
-				Continue :NextVMPath
+			# define parameters
+			$AssertPathRemoved = @{
+				Path                 = $VMPath
+				ComputerName         = $ComputerName
+				SkipWhenFilesPresent = $true
+				ExcludedFileFilter   = '{0}.*' -f $VM.Id
+				PathType             = [Microsoft.PowerShell.Commands.TestPathType]::Container
 			}
 
 			# remove path
 			Try {
-				$PathRemoved = Assert-PathRemoved -Path $VMPath -ComputerName $ComputerName -PathType Container
+				$PathRemoved = Assert-PathRemoved @AssertPathRemoved
 			}
 			Catch {
 				Throw $_
-			}
-
-			# if path is not removed...
-			If (!$PathRemoved) {
-				# declare state
-				Write-Warning 'VM folder queued for removal but still present; waiting for up to 30 seconds'
-
-				# initialize counter
-				$Counter = [int32]1
-			}
-
-			# while counter less than 7 and path not removed...
-			While ($Counter -lt 7 -and -not $PathRemoved) {
-				# increment counter
-				$Counter++
-
-				# sleep
-				Start-Sleep -Seconds 5
-
-				# remove path
-				$PathRemoved = Assert-PathRemoved -Path $VHDPath -ComputerName $ComputerName -PathType Container
 			}
 
 			# if path removed...
@@ -1209,7 +1102,7 @@ Begin {
 			}
 			Else {
 				# declare state
-				Write-Warning 'VM folder not removed after 30 seconds'
+				Write-Warning -Message 'could not remove VM folder'
 			}
 		}
 	}
