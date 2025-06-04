@@ -1595,17 +1595,11 @@ Process {
 			# add VM path to list
 			$VMPaths.Add($VMPath)
 
-			# declare state
-			Write-Verbose "added $VMPathProperty to VM paths"
-
 			# retrieve parameter name from hashtable
 			$ParameterName = $VMPathProperties[$VMPathProperty]
 
 			# add VM path to parameters
 			$Parameters[$ParameterName] = $VMPath
-
-			# declare state
-			Write-Verbose "added $VMPathProperty to parameters as $ParameterName"
 		}
 	}
 
