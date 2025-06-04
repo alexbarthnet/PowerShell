@@ -14,25 +14,19 @@ param (
 	# VM object(s)
 	[Parameter(ParameterSetName = 'VM', Mandatory = $true, ValueFromPipeline = $true)]
 	[Microsoft.HyperV.PowerShell.VirtualMachine]$VM,
+	# computer name of source computer
+	[string]$ComputerName = $Hostname,
 	# computer name of target computer
 	[Parameter(Mandatory = $true)]
 	[string]$DestinationHost,
+	# name of VM switch on target computer
+	[string]$SwitchName,
 	# path on target computer
 	[string]$DestinationStoragePath,
 	# path for virtual machine
 	[string]$VirtualMachinePath,
 	# array of hashtables for VHDs
-	[object[]]$VHDs = @(),
-	# name of VM switch on target computer
-	[string]$SwitchName,
-	# force shutdown of running VM
-	[switch]$Force,
-	# start stopped VM after migration
-	[switch]$Restart,
-	# test compatibility without move
-	[switch]$TestCompatibility,
-	# computer name of source computer
-	[string]$ComputerName = $Hostname
+	[object[]]$VHDs = @()
 )
 
 Begin {
@@ -210,61 +204,6 @@ Begin {
 		Else {
 			Return $null
 		}
-	}
-
-	Function Test-PathOnDestinationHost {
-		[CmdletBinding()]
-		Param(
-			[Parameter(Mandatory = $true)]
-			[string]$Path,
-			[Parameter(Mandatory = $true)]
-			[string]$DestinationHost,
-			[switch]$IsEmpty
-		)
-
-		# get hashtable for InvokeCommand splat
-		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $DestinationHost
-		}
-		Catch {
-			Throw $_
-		}
-
-		# update argument list
-		$InvokeCommand['ArgumentList']['Path'] = $Path
-
-		# test path before attempting to create path
-		Try {
-			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
-				Param($ArgumentList)
-				Test-Path -Path $ArgumentList['Path'] -PathType Container
-			}
-		}
-		Catch {
-			Throw $_
-		}
-
-		# if IsEmtpy requested...
-		If ($TestPath -and $IsEmpty) {
-			# retrieve file items in path
-			Try {
-				$Items = Invoke-Command @InvokeCommand -ScriptBlock {
-					Param($ArgumentList)
-					Get-ChildItem -Path $ArgumentList['Path'] -File -Force -Recurse
-				}
-			}
-			Catch {
-				Throw $_
-			}
-
-			# if file items found...
-			If ($Items) {
-				Return $false
-			}
-		}
-
-		# return test path result
-		Return $TestPath
 	}
 
 	Function Assert-PathCreated {
@@ -1414,7 +1353,7 @@ Begin {
 		################################################
 
 		# if VM was running before export...
-		If ($State -eq 'Running' -or $Restart) {
+		If ($State -eq 'Running') {
 			# declare state
 			Write-Host "$ComputerName,$Name - starting VM..."
 
