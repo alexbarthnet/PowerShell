@@ -750,7 +750,7 @@ Begin {
 		$InvokeCommand['ArgumentList']['Id'] = $VM.Id
 
 		################################################
-		# locate planned VM
+		# locate VMs before removal
 		################################################
 
 		# retrieve CIM instance for planned VM by Id
@@ -788,6 +788,9 @@ Begin {
 
 		# if planned VM found...
 		If ($PlannedVM) {
+			# declare state
+			Write-Host "$ComputerName,$Name - found planned VM, waiting for automatic removal..."
+
 			# initialize counter
 			$Counter = [int32]1
 		
@@ -826,14 +829,17 @@ Begin {
 		# remove realized VM
 		################################################
 
-		# if planned VM found...
+		# if realized VM found...
 		If ($RealizedVM) {
+			# declare state
+			Write-Host "$ComputerName,$Name - found VM, removing..."
+
 			# initialize counter
 			$Counter = [int32]1
 		
-			# while counter less than attempts and planned VM found...
+			# while counter less than attempts and realized VM found...
 			While ($Counter -lt $Attempts -and $RealizedVM) {
-				# retrieve CIM instance for planned VM by Id
+				# remove realized VM by Id
 				Try {
 					$null = Invoke-Command @InvokeCommand -ScriptBlock {
 						Param($ArgumentList)
@@ -875,7 +881,7 @@ Begin {
 		}
 
 		################################################
-		# remove item
+		# return state
 		################################################
 
 		# if planned VM and realized VM not found after attempts to remove...
@@ -1838,7 +1844,7 @@ Process {
 
 	# if target computer is clustered...
 	If ($TargetClusterName) {
-		# eetrieve CSVs from target computer
+		# retrieve CSV paths from target computer
 		Try {
 			$ClusterSharedVolumePaths = Get-ClusterSharedVolume -Cluster $TargetClusterName | Select-Object -ExpandProperty SharedVolumeInfo | Select-Object -ExpandProperty FriendlyVolumeName
 		}
@@ -1905,7 +1911,7 @@ Process {
 	# if VM clustered on source computer...
 	If ($SourceClusterGroup) {
 		# declare state
-		Write-Host "$ComputerName,$Name - removed VM from '$SourceClusterName' cluster..."
+		Write-Host "$ComputerName,$Name - removing VM from '$SourceClusterName' cluster..."
 
 		# remove cluster group and resources
 		Try {
