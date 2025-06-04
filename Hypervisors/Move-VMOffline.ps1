@@ -379,8 +379,20 @@ Begin {
 			[Parameter(Mandatory = $true)]
 			[string]$Path,
 			[Parameter(Mandatory = $true)]
-			[string]$ComputerName
+			[string]$ComputerName,
+			# switch to skip remove when files present in path
+			[switch]$SkipWhenFilesPresent,
+			# filter for files to exclude when searching for files present in path
+			[string]$ExcludedFileFilter,
+			# number of attempts to assert path action; default is 6 attempts 
+			[uint16]$Attempts = 6,
+			# path type to test; default is container
+			[Microsoft.PowerShell.Commands.TestPathType]$PathType = [Microsoft.PowerShell.Commands.TestPathType]::Container
 		)
+
+		################################################
+		# prepare session
+		################################################
 
 		# get hashtable for InvokeCommand splat
 		Try {
@@ -392,50 +404,143 @@ Begin {
 
 		# update argument list
 		$InvokeCommand['ArgumentList']['Path'] = $Path
+		$InvokeCommand['ArgumentList']['PathType'] = $PathType
+		$InvokeCommand['ArgumentList']['ExcludeFiles'] = $ExcludeFiles
+
+		################################################
+		# test path itself
+		################################################
 
 		# test path before attempting to remove path
 		Try {
 			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
-				Test-Path -Path $ArgumentList['Path'] -PathType Container
+				Test-Path -Path $ArgumentList['Path'] -PathType $ArgumentList['PathType']
 			}
 		}
 		Catch {
 			Throw $_
 		}
 
-		# if path not found before attempting to remove path...
+		# if path not found before first attempt to remove path...
 		If (!$TestPath) {
 			Return $true
 		}
 
-		# if path found before attempting to remove path...
-		If ($TestPath) {
-			# remove path
+		################################################
+		# test path for files if requested
+		################################################
+
+		# if skip when files present requested and path type is a container...
+		If ($SkipWhenFilesPresent -and $PathType -eq [Microsoft.PowerShell.Commands.TestPathType]::Container) {
+			# test if files exist in path
 			Try {
-				Invoke-Command @InvokeCommand -ScriptBlock {
+				$FilesInPath = Invoke-Command @InvokeCommand -ScriptBlock {
 					Param($ArgumentList)
-					$null = Remove-Item -Path $ArgumentList['Path'] -Recurse -Force -ErrorAction SilentlyContinue
+
+					# define required parameters
+					$GetChildItems = @{
+						Path        = $ArgumentList['Path'] 
+						File        = $true
+						Force       = $true
+						Recurse     = $true
+						ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+					}
+
+					# define optional parameters
+					If (![string]::IsNullOrEmpty($ArgumentList['ExcludedFileFilter'])) {
+						$GetChildItems['Exclude'] = $ArgumentList['ExcludedFileFilter']
+					}
+
+					# retrieve file items in path
+					$FileItems = Get-ChildItem @GetChildItems
+
+					# if file items found...
+					If ($FileItems) {
+						Return $true
+					}
+					# if file items not found...
+					Else { 
+						Return $false
+					}
 				}
 			}
 			Catch {
 				Throw $_
 			}
-		}
 
-		# test path before attempting to remove path
-		Try {
-			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
-				Param($ArgumentList)
-				Test-Path -Path $ArgumentList['Path'] -PathType Container
+			# if files exist in path...
+			If ($FilesInPath) {
+				Write-Warning -Message "found files in '$Path' path on '$ComputerName' computer"
+				Return $false
 			}
 		}
-		Catch {
-			Throw $_
+
+		################################################
+		# remove item
+		################################################
+
+		# initialize counter for attempts
+		[uint16]$Counter = 0
+
+		# while counter less than attempts and path still found...
+		While ($Counter -le $Attempts -and $TestPath) {
+			# attempt to remove path
+			Try {
+				Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
+
+					# define parameters
+					$RemoveItem = @{
+						Path        = $ArgumentList['Path']
+						Force       = $true
+						ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
+					}
+
+					# if path type is container...
+					If ($ArgumentList['PathType'] -eq [Microsoft.PowerShell.Commands.TestPathType]::Container) {
+						# add recurse to parameters
+						$RemoveItem['Recurse'] = $true
+					}
+
+					# remove item
+					$null = Remove-Item @RemoveItem
+				}
+			}
+			Catch {
+				Throw $_
+			}
+
+			# test path after attempting to remove path
+			Try {
+				$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
+					Test-Path -Path $ArgumentList['Path'] -PathType $ArgumentList['PathType']
+				}
+			}
+			Catch {
+				Throw $_
+			}
+
+			# if path not found after attempt to remove path...
+			If (!$TestPath) {
+				# return true
+				Return $true
+			}
+
+			# increment counter
+			$Counter++
+
+			# sleep
+			Start-Sleep -Seconds 5
 		}
 
-		# return test path result (inverted for remove)
-		Return !$TestPath
+		################################################
+		# return failure
+		################################################
+
+		# return false after attempts did not succeed
+		Return $false
 	}
 
 	Function Export-VMToComputer {
