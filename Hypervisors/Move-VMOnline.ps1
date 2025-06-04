@@ -1742,7 +1742,7 @@ Process {
 	}
 
 	################################################
-	# test VM paths against CSVs on target 
+	# test VM paths against CSVs on target
 	################################################
 
 	# if target computer is clustered and skip of clustered storage check not requested...
