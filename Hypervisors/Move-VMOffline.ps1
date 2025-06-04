@@ -1744,59 +1744,30 @@ Begin {
 			# declare state
 			Write-Host "$ComputerName,$Name - ...removing VHD: $VHDPath"
 
-			# update argument list with parameters for Remove-Item
-			$InvokeCommand['ArgumentList']['RemoveItem'] = @{
-				Path        = $VHDPath
-				Force       = $true
-				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			# define parameters
+			$AssertPathRemoved = @{
+				Path         = $VMPath
+				ComputerName = $ComputerName
+				PathType     = [Microsoft.PowerShell.Commands.TestPathType]::Leaf
 			}
 
-			# remove VHD on source computer
+			# remove path
 			Try {
-				Invoke-Command @InvokeCommand -ScriptBlock {
-					Param($ArgumentList)
-
-					# define parameters for Remove-Item
-					$RemoveItem = $ArgumentList['RemoveItem']
-
-					# remove VHD
-					Remove-Item @RemoveItem
-
-					# test VHD
-					$TestPath = Test-Path -Path $RemoveItem['Path'] -PathType Leaf
-
-					# if VHD still exists...
-					If ($TestPath) {
-						# declare state
-						Write-Warning 'VHD queued for removal but still present; waiting for up to 30 seconds'
-
-						# initialize counter
-						$Counter = [int32]1
-					}
-
-					# while VHD still exist and counter lesss than 7...
-					While ($TestPath -and $Counter -lt 7) {
-						# increment counter
-						$Counter++
-						# sleep
-						Start-Sleep -Seconds 5
-						# test VHD
-						$TestPath = Test-Path -Path $RemoveItem['Path'] -PathType Leaf
-					}
-
-					# if VHD still exists...
-					If ($TestPath) {
-						# declare state
-						Write-Warning 'VHD not removed after 30 seconds'
-					}
-				}
+				$PathRemoved = Assert-PathRemoved @AssertPathRemoved
 			}
 			Catch {
 				Throw $_
 			}
 
-			# declare state
-			Write-Host "$ComputerName,$Name - ...removed VHD"
+			# if path removed...
+			If ($PathRemoved) {
+				# declare state
+				Write-Host "$ComputerName,$Name - ...removed VHD"
+			}
+			Else {
+				# declare state
+				Write-Warning -Message 'could not remove VHD'
+			}
 		}
 
 		################################################
