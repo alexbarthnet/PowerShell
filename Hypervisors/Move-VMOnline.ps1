@@ -1545,99 +1545,26 @@ Process {
 	################################################
 
 	# declare state
-	Write-Host "$DestinationHost,$Name - checking if VM already migrated to target computer..."
+	Write-Host "$DestinationHost,$Name - checking destination host for VM..."
 
-	# define parameters for Get-VM on target computer
-	$GetVM = @{
-		Id           = $Id
+	# define required parameters
+	$AssertVMNotFound = @{
+		VM           = $VM
 		ComputerName = $DestinationHost
-		ErrorAction  = [System.Management.Automation.ActionPreference]::SilentlyContinue
 	}
 
-	# get VM from target server
-	$TargetVM = Get-VM @GetVM
+	# ensure VM not found on destination host
+	Try {
+		$VMNotFound = Assert-VMNotFound @AssertVMNotFound
+	}
+	Catch {
+		Throw $_
+	}
 
-	# clear errors due to the nature of looking up VMs by Id
-	$Error.Clear()
-
-	# if VM found on target server...
-	If ($TargetVM -and $TargetVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
-		# warn and return
-		Write-Warning -Message "found VM on '$DestinationHost' destination host with matching Id: $Id"
+	# if VM found on destination host
+	If (!$VMNotFound) {
+		# return immediately; warnings were issued by function
 		Return
-	}
-
-	################################################
-	# check for VM on target cluster
-	################################################
-
-	# get cluster for target computer
-	Try {
-		$TargetClusterName = Get-ClusterName -ComputerName $DestinationHost
-	}
-	Catch {
-		Throw $_
-	}
-
-	# if target computer is clustered...
-	If ($TargetClusterName) {
-		# declare state
-		Write-Host "$DestinationHost,$Name - checking if VM already clustered on '$TargetClusterName' cluster..."
-
-		# define parameters for Get-ClusterGroup
-		$GetClusterGroup = @{
-			Cluster     = $TargetClusterName
-			VMId        = $Id
-			ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
-		}
-
-		# get cluster group for VM on target cluster
-		$TargetClusterGroup = Get-ClusterGroup @GetClusterGroup
-
-		# clear errors due to the nature of looking up VMs by Id
-		$Error.Clear()
-
-		# if cluster group for VM found on target cluster...
-		If ($TargetClusterGroup) {
-			# warn and return
-			Write-Warning 'VM has already been migrated to '$TargetClusterName' cluster'
-			$TargetClusterGroup | Format-List *
-			Return
-		}
-
-		# declare state
-		Write-Host "$DestinationHost,$Name - ...VM not found on '$TargetClusterName' cluster"
-	}
-
-	################################################
-	# check for VM switches on target cluster
-	################################################
-
-	# define parameters for Get-VMSwitch
-	$GetVMSwitch = @{
-		ComputerName = $DestinationHost
-		SwitchType   = [Microsoft.HyperV.PowerShell.VMSwitchType]::External
-		ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
-	}
-
-	# get external VM switches
-	Try {
-		$VMSwitch = Get-VMSwitch @GetVMSwitch
-	}
-	Catch {
-		Throw $_
-	}
-
-	# get external VM switch names
-	$SwitchNames = $VMSwitch | Select-Object -ExpandProperty Name
-
-	# if switchname parameter provided but not found in external VM switch names...
-	If ($PSBoundParameters.ContainsKey('SwitchName') -and $PSBoundParameters['SwitchName'] -notin $SwitchNames ) {
-		# warn and inquire
-		Write-Warning -Message "could not locate '$SwitchName' switch on '$DestinationHost' computer; attempt to connect VM to another available external switch?" -WarningAction Inquire
-
-		# clear SwitchName
-		$null = $SwitchName
 	}
 
 	################################################
@@ -1872,6 +1799,18 @@ Process {
 	}
 
 	################################################
+	# check if target computer is clustered
+	################################################
+
+	# get cluster for target computer
+	Try {
+		$TargetClusterName = Get-ClusterName -ComputerName $DestinationHost
+	}
+	Catch {
+		Throw $_
+	}
+
+	################################################
 	# get target CSVs from target cluster
 	################################################
 
@@ -1879,10 +1818,10 @@ Process {
 	If ($TargetClusterName) {
 		# retrieve CSV paths from target computer
 		Try {
-			$ClusterSharedVolumePaths = Get-ClusterSharedVolume -Cluster $TargetClusterName | Select-Object -ExpandProperty SharedVolumeInfo | Select-Object -ExpandProperty FriendlyVolumeName
+			$ClusterSharedVolumePaths = Get-ClusterSharedVolumePaths -ComputerName $DestinationHost
 		}
 		Catch {
-			Return $_
+			Throw $_
 		}
 
 		# define boolean
