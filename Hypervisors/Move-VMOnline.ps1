@@ -1629,13 +1629,11 @@ Process {
 	# get VHD paths
 	################################################
 
-	# get VM hard disk drive
-	$VHDPaths = Get-VMHardDiskDrive -VM $VM | Select-Object -ExpandProperty Path
-
-	Write-Verbose 'got VHD paths'
-
 	# if destination storage path parameter not provided...
 	If (!$PSBoundParameters.ContainsKey('DestinationStoragePath')) {
+		# get VM hard disk drive
+		$VHDPaths = Get-VMHardDiskDrive -VM $VM | Select-Object -ExpandProperty Path
+
 		# if VHDs hashtable array not provided...
 		If (!$PSBoundParameters.ContainsKey('VHDs')) {
 			# create list for VHD strings
