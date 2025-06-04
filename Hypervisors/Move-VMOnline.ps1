@@ -1666,8 +1666,8 @@ Process {
 			Write-Verbose 'populated VHDs array'
 		}
 
-		# define list for VHD parent paths
-		$VHDParentPaths = [System.Collections.Generic.List[string]]::new()
+		# define list for destination file paths
+		$DestinationFilePaths = [System.Collections.Generic.List[string]]::new()
 
 		# declare state
 		Write-Verbose 'created list'
@@ -1709,14 +1709,11 @@ Process {
 
 				# if destination file path key exists...
 				If ($VHD.ContainsKey('DestinationFilePath')) {
-					# retrieve source file path
+					# retrieve destination file path
 					$DestinationFilePath = $VHD['DestinationFilePath']
 
-					# test source file path
-					$VHDParentPath = Split-Path -Path $DestinationFilePath -Parent
-
-					# add VHD parent path to list
-					$VHDParentPaths.Add($VHDParentPath)
+					# add destination file path to list
+					$DestinationFilePaths.Add($DestinationFilePath)
 				}
 				# if destination file path key missing...
 				Else {
@@ -1732,31 +1729,23 @@ Process {
 			Return
 		}
 
-		# declare state
-		Write-Verbose 'validated VHDs hashtable array'
-
 		# add destination storage path to parameters
 		$Parameters['VHDs'] = $VHDs
 
-		# declare state
-		Write-Verbose 'added VHDs to parameters'
+		# loop through destination file paths
+		ForEach ($VHDPath in $DestinationFilePaths) {
+			# get VHD parent path from VHD path
+			$VHDParentPath = Split-Path -Path $VHDPath -Parent
 
-		# loop through VHD parent paths
-		:NextVHDParentPath ForEach ($VHDParentPath in $VHDParentPaths) {
 			# trim VHD parent path
 			$VHDParentPath = $VHDParentPath.TrimEnd('\')
 
-			# if VHD parent path property in VM path list or null or empty...
-			If ($VHDParentPath -in $VMPaths -or [string]::IsNullOrEmpty($VHDParentPath)) {
-				Continue NextVHDParentPath
+			# if VHD parent path property not in VM path list and not null or empty...
+			If ($VHDParentPath -notin $VMPaths -and -not [string]::IsNullOrEmpty($VHDParentPath)) {
+				# add VHD parent path to VM path list
+				$VMPaths.Add($VHDParentPath)
 			}
-
-			# add VHD parent path to list
-			$VMPaths.Add($VHDParentPath)
 		}
-
-		# declare state
-		Write-Verbose 'added VHD parent paths to list'
 	}
 
 	################################################
