@@ -395,8 +395,8 @@ Begin {
 		)
 
 		# add note properties to compatibility report
-		Add-Member -InputObject $CompatibilityReport -MemberType NoteProperty -Name 'CannotResolve' -Value $false
-		Add-Member -InputObject $CompatibilityReport -MemberType NoteProperty -Name 'CannotResolveMessages' -Value ([System.Collections.Generic.List[string]]::new())
+		Add-Member -InputObject $CompatibilityReport -MemberType 'NoteProperty' -Name 'CannotResolve' -Value $false
+		Add-Member -InputObject $CompatibilityReport -MemberType 'NoteProperty' -Name 'CannotResolveMessages' -Value ([System.Collections.Generic.List[string]]::new())
 
 		# process each incompatibility
 		:NextIncompatibility ForEach ($Incompatibility in $CompatibilityReport.Incompatibilities) {
@@ -500,7 +500,7 @@ Begin {
 				# target has an incompatibility with imported VM not addressed above
 				Default {
 					$CompatibilityReport.CannotResolve = $true
-					$CompatibilityReport.CannotResolveMessages.Add("found unhandled incompatibility of '$($Incompatibility.MessageID) with message: '$($Incompatibility.Message)'")
+					$CompatibilityReport.CannotResolveMessages.Add("found unhandled incompatibility with '$($Incompatibility.MessageID) and message: '$($Incompatibility.Message)'")
 					Continue NextIncompatibility
 				}
 			}
@@ -568,7 +568,6 @@ Begin {
 			}
 
 			# export resolved compatibility report to global scope
-			# export  compatibility report to global scope
 			New-Variable -Name 'ResolvedCompatibilityReport' -Value $CompatibilityReport -Scope Global -Force
 
 			# if incompatibilities could not be resolved...
@@ -613,7 +612,6 @@ Begin {
 			Write-Host "$ComputerName,$Name - ...move failed"
 			Return $null
 		}
-
 	}
 
 	Function Remove-VMOnComputer {
