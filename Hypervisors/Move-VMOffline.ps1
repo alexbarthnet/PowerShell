@@ -1514,12 +1514,12 @@ Begin {
 			# declare state
 			Write-Host "$ComputerName,$Name - starting VM..."
 
-            # if VM already running...
-            If ($VM.State -eq 'Running') {
-                # declare state and return
-                Write-Host "$ComputerName,$Name - ...VM already started"
-                Return
-            }
+			# if VM already running...
+			If ($VM.State -eq 'Running') {
+				# declare state and return
+				Write-Host "$ComputerName,$Name - ...VM already started"
+				Return
+			}
 
 			# define parameters for Start-VM
 			$StartVM = @{
