@@ -1667,22 +1667,41 @@ Begin {
 		# get VM paths
 		################################################
 
+		# define VM path list
+		$VMPaths = [System.Collections.Generic.List[string]]::new()
+
 		# get VM hard disk drive
 		$VHDPaths = Get-VMHardDiskDrive -VM $VM | Select-Object -ExpandProperty Path
 
-		# define VM path list
-		$VMPaths = [System.Collections.Generic.List[string]]::new()
+		# loop through VHD parent paths
+		ForEach ($VHDPath in $VHDPaths) {
+			# get VHD parent path from VHD path
+			$VHDParentPath = Split-Path -Path $VHDPath -Parent
+
+			# trim VHD parent path
+			$VHDParentPath = $VHDParentPath.TrimEnd('\')
+
+			# if VHD parent path property not in VM path list and not null or empty...
+			If ($VHDParentPath -notin $VMPaths -and -not [string]::IsNullOrEmpty($VHDParentPath)) {
+				# add VHD parent path to VM path list
+				$VMPaths.Add($VHDParentPath)
+			}
+		}
 
 		# define VM path properties
 		$VMPathProperties = 'Path', 'ConfigurationLocation', 'CheckpointFileLocation', 'SmartPagingFilePath', 'SnapshotFileLocation'
 
 		# add VM path properties to VM path list
 		ForEach ($VMPathProperty in $VMPathProperties) {
-			# get value of VM path property
+			# get VM path from VM property
 			$VMPath = $VM | Select-Object -ExpandProperty $VMPathProperty
+
+			# trim VM path
+			$VMPath = $VMPath.TrimEnd('\')
+
 			# if VM path property not in VM path list and not null or empty...
 			If ($VMPath -notin $VMPaths -and -not [string]::IsNullOrEmpty($VMPath)) {
-				# ...add to list
+				# add VM path property to VM path list
 				$VMPaths.Add($VMPath)
 			}
 		}
