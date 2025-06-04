@@ -14,21 +14,21 @@ param (
 	# VM object(s)
 	[Parameter(ParameterSetName = 'VM', Mandatory = $true, ValueFromPipeline = $true)]
 	[Microsoft.HyperV.PowerShell.VirtualMachine]$VM,
+	# computer name of source computer
+	[string]$ComputerName = $Hostname,
 	# computer name of target computer
 	[Parameter(Mandatory = $true)]
 	[string]$DestinationHost,
-	# path on target computer
-	[string]$DestinationStoragePath,
 	# name of VM switch on target computer
 	[string]$SwitchName,
+	# path on target computer
+	[string]$DestinationStoragePath,
 	# force shutdown of running VM
 	[switch]$Force,
 	# start stopped VM after migration
 	[switch]$Restart,
 	# upgrade VM version after import
-	[switch]$UpdateVmVersion,
-	# computer name of source computer
-	[string]$ComputerName = $Hostname
+	[switch]$UpdateVmVersion
 )
 
 Begin {
