@@ -1656,21 +1656,12 @@ Process {
 			# define expression compatible string
 			$VHDsString = "@($($VHDsStringList -join ', '))"
 
-			# declare state
-			Write-Verbose "created VHDs string: $VHDsString"
-
 			# convert string into array of hashtables
 			$VHDs = Invoke-Expression -Command $VHDsString
-
-			# declare state
-			Write-Verbose 'populated VHDs array'
 		}
 
 		# define list for destination file paths
 		$DestinationFilePaths = [System.Collections.Generic.List[string]]::new()
-
-		# declare state
-		Write-Verbose 'created list'
 
 		# define booleans
 		$SourceFilePathMissing = $false
