@@ -1569,13 +1569,13 @@ Process {
 		$Parameters['VirtualMachinePath'] = $VirtualMachinePath
 
 		# define optional VM path properties
-		$VMPathProperties = @{
+		$VMPathPropertyMap = @{
 			SmartPagingFilePath  = 'SmartPagingFilePath'
 			SnapshotFileLocation = 'SnapshotFilePath'
 		}
 
 		# add VM path properties to VM path list
-		:NextVMPathProperty ForEach ($VMPathProperty in $VMPathProperties.Keys) {
+		:NextVMPathProperty ForEach ($VMPathProperty in $VMPathPropertyMap.Keys) {
 			# if VM path property not provided as parameter...
 			If (!$PSBoundParameters.ContainsKey($VMPathProperty)) {
 				Continue NextVMPathProperty
@@ -1596,7 +1596,7 @@ Process {
 			$VMPaths.Add($VMPath)
 
 			# retrieve parameter name from hashtable
-			$ParameterName = $VMPathProperties[$VMPathProperty]
+			$ParameterName = $VMPathPropertyMap[$VMPathProperty]
 
 			# add VM path to parameters
 			$Parameters[$ParameterName] = $VMPath
