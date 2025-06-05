@@ -1026,7 +1026,7 @@ Begin {
 		# declare state
 		Write-Host "$ComputerName,$Name - ...VM compared"
 
-		# export original compatibility report to global scope
+		# save original compatibility report to global scope
 		New-Variable -Name 'OriginalCompatibilityReport' -Value $CompatibilityReport -Scope Global -Force
 
 		################################################
@@ -1047,7 +1047,7 @@ Begin {
 				Return $_
 			}
 
-			# export resolved compatibility report to global scope
+			# save resolved compatibility report to global scope
 			New-Variable -Name 'ResolvedCompatibilityReport' -Value $CompatibilityReport -Scope Global -Force
 
 			# if incompatibilities could not be resolved...
