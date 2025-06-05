@@ -89,39 +89,136 @@ Param(
 )
 
 Begin {
+	Function Copy-DnsServerSoaRecord {
+		Param(
+			[string]$SourceZone,
+			[string]$TargetZone
+		)
+
+		# declare state
+		Write-Host "`nRetrieving SOA records..."
+
+		# retrieve souce SOA record
+		Try {
+			$SourceZoneSoaRecord = Get-DnsServerResourceRecord -ComputerName $ComputerName -ZoneName $SourceZone -Name '@' -RRType Soa
+		}
+		Catch {
+			Write-Warning "could not retrieve SOA record for zone: $SourceZone"
+			Return $_
+		}
+		
+		# retreive target zone SOA record
+		Try {
+			$TargetZoneSoaRecord = Get-DnsServerResourceRecord -ComputerName $ComputerName -ZoneName $TargetZone -Name '@' -RRType Soa
+		}
+		Catch {
+			Write-Warning "could not retrieve SOA record for zone: $TargetZone"
+			Return $_
+		}
+		
+		# declare state
+		Write-Host "`n...retrieved SOA records"
+		
+		# clone SOA record
+		Try {
+			$TargetZoneSoaRecordCloned = $TargetZoneSoaRecord.Clone()
+		}
+		Catch {
+			Write-Warning 'could not clone SOA record'
+			Return $_
+		}
+		
+		# update SOA record
+		Try {
+			$TargetZoneSoaRecordCloned.TimeToLive = $SourceZoneSoaRecord.TimeToLive
+			$TargetZoneSoaRecordCloned.RecordData.ExpireLimit = $SourceZoneSoaRecord.RecordData.ExpireLimit
+			$TargetZoneSoaRecordCloned.RecordData.MinimumTimeToLive = $SourceZoneSoaRecord.RecordData.MinimumTimeToLive
+			$TargetZoneSoaRecordCloned.RecordData.RefreshInterval = $SourceZoneSoaRecord.RecordData.RefreshInterval
+			$TargetZoneSoaRecordCloned.RecordData.ResponsiblePerson = $SourceZoneSoaRecord.RecordData.ResponsiblePerson
+			$TargetZoneSoaRecordCloned.RecordData.RetryDelay = $SourceZoneSoaRecord.RecordData.RetryDelay
+		}
+		Catch {
+			Write-Warning 'could not set properties on cloned SOA record'
+			Return $_
+		}
+		
+		# define parameters
+		$SetDnsServerResourceRecord = @{
+			ComputerName   = $ComputerName
+			ZoneName       = $ZoneName
+			OldInputObject = $TargetZoneSoaRecord
+			NewInputObject = $TargetZoneSoaRecordCloned
+			ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
+		}
+		
+		# declare state
+		Write-Host "`nUpdating SOA record..."
+		
+		# update destination zone SOA record
+		Try {
+			Set-DnsServerResourceRecord @SetDnsServerResourceRecord
+		}
+		Catch {
+			Write-Warning 'could not update SOA record'
+			Return $_
+		}
+		
+		# declare state
+		Write-Host "`n...updated SOA record"
+	}
+
 	# retrieve all zones
 	Write-Output "`nRetrieveing DNS zones..."
 	Try {
-		$DnsZones = Get-DnsServerZone -ComputerName $ComputerName -ErrorAction 'Stop' | Where-Object { $_.ZoneName.Contains('.') -and $_.ZoneType -eq 'Primary' -and -not $_.IsAutoCreated } | Select-Object -ExpandProperty 'ZoneName'
+		$DnsServerZones = Get-DnsServerZone -ComputerName $ComputerName -ErrorAction 'Stop' | Where-Object { $_.ZoneName.Contains('.') -and $_.ZoneType -eq 'Primary' -and -not $_.IsAutoCreated } | Select-Object -ExpandProperty 'ZoneName'
 	}
 	Catch {
-		Write-Error "Could not retrieve DNS zones from server: '$ComputerName'"
+		Write-Warning -Message "could not retrieve DNS zones from server: $ComputerName"
 		Throw $_
 	}
 
-	# check foward zone
-	Write-Output "`nChecking forward zone..."
-	Try {
-		$ForwardZone = Get-DnsServerZone -ComputerName $ComputerName -ZoneName "$SubDomain.$Domain" -ErrorAction 'Stop' | Where-Object { $_.ZoneName.Contains('.') -and $_.ZoneType -eq 'Primary' -and -not $_.IsAutoCreated } | Select-Object -ExpandProperty 'ZoneName'
-		Write-Output "...found forward zone for subdomain: '$ForwardZone'"
+	# check domain
+	Write-Output "`nChecking domain zone..."
+	If ($DnsServerZones.ZoneName -contains $Domain) {
+		Write-Output "...found forward zone for domain: $Domain"
 	}
-	Catch {
-		Try {
-			$ForwardZone = Get-DnsServerZone -ComputerName $ComputerName -ZoneName "$Domain" -ErrorAction 'Stop' | Where-Object { $_.ZoneName.Contains('.') -and $_.ZoneType -eq 'Primary' -and -not $_.IsAutoCreated } | Select-Object -ExpandProperty 'ZoneName'
-			Write-Output "...found forward zone for domain: '$ForwardZone'"
-		}
-		Catch {
-			Write-Error "Could not locate forward zone: '$Domain'"
-			Throw $_
-		}
+	Else {
+		Throw "could not locate forward zone for domain: $Domain"
 	}
+
+	# check subdomain
+	Write-Output "`nChecking subdomain zone..."
+	If ($DnsServerZones.ZoneName -contains "$SubDomain.$Domain") {
+		$ForwardZone = "$SubDomain.$Domain"
+	}
+	Else {
+		$ForwardZone = $Domain
+	}
+
+	# declare state
+	Write-Output "...will create matching A records in forward zone: $ForwardZone"
 }
 
 Process {
+	# validate zone name parameter
+	switch ($ZoneName) {
+		# if the DNS root provided...
+		'.' {
+			# warn and return
+			Write-Warning "ZoneName parameter cannot be '.'"
+			Return
+		}
+		# if zone name is a fully qualified DNS domain...
+		{ $_.EndsWith('.') } {
+			# redefine zone name without the trailing dot
+			$ZoneName = $ZoneName.TrimEnd('.')
+		}
+	}
+
 	# create and reverse array from zone input
 	Try {
 		# create array of octets in zone name
-		$Array = $Zone.Replace('.in-addr.arpa', $null).Split('.', [System.StringSplitOptions]::RemoveEmptyEntries)
+		$Array = $ZoneName.Replace('.in-addr.arpa', $null).Split('.', [System.StringSplitOptions]::RemoveEmptyEntries)
 		# get count of octets
 		$Count = $Array.Count
 		# reverse array
@@ -162,23 +259,34 @@ Process {
 	# check for reverse zone
 	Write-Output "`nChecking reverse zone..."
 	Try {
-		$ReverseZone = Get-DnsServerZone -ComputerName $ComputerName -Name $Zone -ErrorAction 'Stop' | Where-Object { $_.ZoneName.Contains('.') -and $_.ZoneType -eq 'Primary' -and -not $_.IsAutoCreated } | Select-Object -ExpandProperty 'ZoneName'
+		$ReverseZone = Get-DnsServerZone -ComputerName $ComputerName -Name $ZoneName -ErrorAction 'Stop' | Where-Object { $_.ZoneName.Contains('.') -and $_.ZoneType -eq 'Primary' -and -not $_.IsAutoCreated } | Select-Object -ExpandProperty 'ZoneName'
 		Write-Output "...found reverse zone: '$ReverseZone'"
 	}
 	Catch {
 		Write-Output '...creating zone...'
 		Try {
-			$ReverseZone = Add-DnsServerPrimaryZone -ComputerName $ComputerName -Name $Zone -DynamicUpdate 'Secure' -ReplicationScope $ReplicationScope -PassThru | Select-Object -ExpandProperty 'ZoneName'
+			$ReverseZone = Add-DnsServerPrimaryZone -ComputerName $ComputerName -Name $ZoneName -DynamicUpdate 'Secure' -ReplicationScope $ReplicationScope -PassThru | Select-Object -ExpandProperty 'ZoneName'
 			Write-Output "...created reverse zone: '$ReverseZone'"
 		}
 		Catch {
-			Write-Error "could not create reverse zone: '$Zone'"
+			Write-Error "could not create reverse zone: '$ZoneName'"
 			Throw $_
 		}
 	}
 
-	# configure reverse zone
-	If ($UseNameServersFromDomain) {
+	# copy SOA record from domain
+	If (!$SkipSoaRecordCopy) {
+		Try {
+			Copy-DnsServerSoaRecord -SourceZone $Domain -TargetZone $ReverseZone
+		}
+		Catch {
+			Write-Warning "could not copy SOA record values from '$Domain' zone to '$ReverseZone' zone"
+			Return $_
+		}
+	}
+
+	# copy NS records from domain
+	If (!$SkipNameServerCopy) {
 		Write-Output "`nChecking NS records..."
 
 		# define counters
@@ -187,7 +295,7 @@ Process {
 
 		# retrieve forward zone NS records
 		Try {
-			$ForwardNSRecords = (Get-DnsServerResourceRecord -ComputerName $ComputerName -ZoneName $ForwardZone -Name '@' -RRType NS).RecordData.NameServer
+			$ForwardZoneNSRecords = (Get-DnsServerResourceRecord -ComputerName $ComputerName -ZoneName $ForwardZone -Name '@' -RRType NS).RecordData.NameServer
 		}
 		Catch {
 			Write-Error "could not retrieve NS records from '$ForwardZone'"
@@ -196,7 +304,7 @@ Process {
 
 		# retrieve reverse zone NS records
 		Try {
-			$ReverseNSRecords = (Get-DnsServerResourceRecord -ComputerName $ComputerName -ZoneName $ReverseZone -Name '@' -RRType NS).RecordData.NameServer
+			$ReverseZoneNSRecords = (Get-DnsServerResourceRecord -ComputerName $ComputerName -ZoneName $ReverseZone -Name '@' -RRType NS).RecordData.NameServer
 		}
 		Catch {
 			Write-Error "could not retrieve NS records from '$ReverseZone'"
@@ -208,8 +316,8 @@ Process {
 		$ReverseNameServers = [System.Collections.Generic.List[string]]::New()
 
 		# populate lists
-		ForEach ($NameServer in $ForwardNSRecords) { $ForwardNameServers.Add($NameServer) }
-		ForEach ($NameServer in $ReverseNSRecords) { $ReverseNameServers.Add($NameServer) }
+		ForEach ($NameServer in $ForwardZoneNSRecords) { $ForwardNameServers.Add($NameServer) }
+		ForEach ($NameServer in $ReverseZoneNSRecords) { $ReverseNameServers.Add($NameServer) }
 
 		# retrieve NS records that are missing
 		$MissingNameServers = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except($ForwardNameServers, $ReverseNameServers))
@@ -271,8 +379,8 @@ Process {
 		$IPAddress = $Octets -join '.'
 
 		# check reserved hosts hashtable
-		If ($ReservedHosts -and $ReservedHosts.ContainsKey($IPAddress)) {
-			$PtrDomainName = "$($ReservedHosts[$IPAddress])"
+		If ($ReservedHosts.ContainsKey($IPAddress)) {
+			$PtrDomainName = $ReservedHosts[$IPAddress]
 		}
 		Else {
 			$IPAddressWithDashes = $Octets -join '-'
@@ -282,15 +390,15 @@ Process {
 		# check PTR record
 		Try {
 			# throw exception if PTR record not found
-			$Record = Get-DnsServerResourceRecord -ComputerName $ComputerName -ZoneName $Zone -Name $Name -ErrorAction 'Stop'
+			$Record = Get-DnsServerResourceRecord -ComputerName $ComputerName -ZoneName $ZoneName -Name $Name -ErrorAction 'Stop'
 			# report expected PTR record
 			If ($Record.RecordData.PtrDomainName -eq $PtrDomainName) {
-				Write-Verbose "found '$Name' in '$Zone' on '$ComputerName' with expected value: $PtrDomainName"
+				Write-Verbose "found '$Name' in '$ZoneName' on '$ComputerName' with expected value: $PtrDomainName"
 				$DnsLocated++
 			}
 			# report existing PTR record when Reset not set
 			ElseIf ($Record.RecordData.PtrDomainName -ne $PtrDomainName -and -not $Reset) {
-				Write-Verbose "found '$Name' in '$Zone' on '$ComputerName' with existing value: $PtrDomainName"
+				Write-Verbose "found '$Name' in '$ZoneName' on '$ComputerName' with existing value: $PtrDomainName"
 				$DnsLocated++
 			}
 			# update existing PTR record
@@ -301,8 +409,8 @@ Process {
 				$NewRecord.RecordData.PtrDomainName = $PtrDomainName
 				# set new PTR record
 				Try {
-					Set-DnsServerResourceRecord -ComputerName $ComputerName -ZoneName $Zone -OldInputObject $Record -NewInputObject $NewRecord -ErrorAction 'Stop'
-					Write-Verbose "updated '$Name' in '$Zone' on '$ComputerName' with expected value: $PtrDomainName"
+					Set-DnsServerResourceRecord -ComputerName $ComputerName -ZoneName $ZoneName -OldInputObject $Record -NewInputObject $NewRecord -ErrorAction 'Stop'
+					Write-Verbose "updated '$Name' in '$ZoneName' on '$ComputerName' with expected value: $PtrDomainName"
 					$DnsUpdated++
 				}
 				Catch {
@@ -313,8 +421,8 @@ Process {
 		Catch {
 			# create PTR record
 			Try {
-				Add-DnsServerResourceRecordPtr -ComputerName $ComputerName -ZoneName $Zone -Name $Name -PtrDomainName $PtrDomainName
-				Write-Verbose "created '$Name' in '$Zone' on '$ComputerName' with value: $PtrDomainName"
+				Add-DnsServerResourceRecordPtr -ComputerName $ComputerName -ZoneName $ZoneName -Name $Name -PtrDomainName $PtrDomainName
+				Write-Verbose "created '$Name' in '$ZoneName' on '$ComputerName' with value: $PtrDomainName"
 				$DnsCreated++
 			}
 			Catch {
@@ -355,11 +463,10 @@ Process {
 		}
 
 		# retrieve record name from PTR domain name
-		$RecordName = $PtrDomainName.Split('.', 2)[0]
-		$DomainName = $PtrDomainName.Split('.', 2)[1]
+		$RecordName, $DomainName = $PtrDomainName.Split('.', 2)
 
 		# verify zone
-		If ($DnsZones -notcontains $DomainName) {
+		If ($DnsServerZones.ZoneName -notcontains $DomainName) {
 			Write-Warning "DNS record '$PtrDomainName' has a domain name of '$DomainName' which was not found on server: '$ComputerName'"
 			Continue
 		}
