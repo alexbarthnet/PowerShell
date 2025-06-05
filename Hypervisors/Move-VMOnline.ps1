@@ -1372,7 +1372,7 @@ Begin {
 		# start VM on computer
 		################################################
 
-		# if VM was running before export...
+		# if VM was running before move...
 		If ($State -eq 'Running') {
 			# declare state
 			Write-Host "$ComputerName,$Name - starting VM..."
