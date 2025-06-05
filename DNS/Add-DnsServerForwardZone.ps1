@@ -22,6 +22,12 @@ Specifics the replication scope for the forward lookup zone and defaults to the 
 .PARAMETER ComputerName
 The name of the DNS server where the new forward zone will be created. The default value is the domain controller with the PDC Emulator FSMO role.
 
+.PARAMETER SkipSoaRecordCopy
+Instructs the script to skip copying the values from the SOA record of the domain.
+
+.PARAMETER SkipNameServerCopy
+Instructs the script to skip copying the name server records of the domain.
+
 .INPUTS
 None.
 
@@ -46,7 +52,13 @@ Param(
 	[string]$ReplicationScope = 'Domain',
 	# computer name of the DNS server; default value is current PDC role owner
 	[Parameter(DontShow)]
-	[string]$ComputerName = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
+	[string]$ComputerName = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
+	# switch to skip copying the SOA records from the domain
+	[Parameter(Position = 9)]
+	[switch]$SkipSoaRecordCopy,
+	# switch to skip copying the NS records from the domain
+	[Parameter(Position = 10)]
+	[switch]$SkipNameServerCopy
 )
 
 Begin {
