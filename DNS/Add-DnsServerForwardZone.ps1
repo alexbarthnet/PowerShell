@@ -2,19 +2,19 @@
 
 <#
 .SYNOPSIS
-Adds a new forward zone to a DNS server.
+Create a forward lookup zone on a Microsoft Windows DNS server and copies any matching records from the existing domain zone to the new forward lookup zone.
 
 .DESCRIPTION
-Adds a new forward zone to a DNS server. The name of source zone can be provided to copy configuration details such as NS records and values from an SOA record to the new zone.
+Create a forward lookup zone on a Microsoft Windows DNS server and copies any matching records from the existing domain zone to the new forward lookup zone.
 
 .PARAMETER ZoneName
-The name of the new forward zone. Required.
+The name of the new forward lookup zone. Required.
 
-.PARAMETER SourceZoneName
-The name of an existing forward zone on the DNS server. If provided, the NS records and the values in the SOA record (less the serial number) of the existing zone will be copied to the new forward zone.
+.PARAMETER Domain
+The name of an existing forward zone on the DNS server. The NS records and SOA (less the serial number) of this zone will be copied to the new forward lookup zone.
 
-.PARAMETER NameServers
-The list of name servers for new forward zone. This parameter is ignored if the SourceZoneName parameter is provided.
+.PARAMETER DynamicUpdate
+The setting for Dynamic DNS Updates on the zones. The default value is 'None'. The permitted values are 'None', 'NonsecureAndSecure', and 'Secure'.
 
 .PARAMETER ComputerName
 The name of the DNS server where the new forward zone will be created. The default value is the domain controller with the PDC Emulator FSMO role.
@@ -32,9 +32,9 @@ Param(
 	# zone name for new forward zone
 	[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 	[string]$ZoneName,
-	# zone name for existing forward zone
-	[Parameter(Position = 1)]
-	[string]$SourceZoneName,
+	# dynamic update value
+	[Parameter(Position = 2)][ValidateSet('None', 'NonsecureAndSecure', 'Secure')]
+	[string]$DynamicUpdate = 'None',
 	# domain name; default value is current domain name
 	[Parameter(Position = 2)]
 	[string]$Domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().Name,
