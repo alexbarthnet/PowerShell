@@ -7,17 +7,14 @@ Create a reverse lookup zone on a Microsoft Windows DNS server, populate the zon
 .DESCRIPTION
 Create a reverse lookup zone on a Microsoft Windows DNS server, populate the zone with placeholder PTR records, and create matching A records for the placeholder PTR records. Includes options to create custom PTR records using the ReservedHosts parameter, reset the PTR records in an existing zone to placeholder records, and create the matching A records in custom subdomains,
 
-.PARAMETER Zone
-Specifies the reverse lookup zone that will be added and populated
-
-.PARAMETER UseNameServersFromDomain
-Specifies the reverse lookup zone will use the name server (NS) records of the domain zone
+.PARAMETER ZoneName
+The name of the new reverse lookup zone. Required.
 
 .PARAMETER ReservedHosts
 A hashtable of custom PTR records to be created instead of the default PTR records. Each key must be an IP address in the reverse lookup zone. The value must be a DNS record that can be created in the domain zone.
 
 .PARAMETER PtrPrefix
-Specifies the prefix to apply to PTR records created in the reverse lookup zone.
+Specifies the prefix to apply to PTR records created in the reverse lookup zone. The default value is 'ip'.
 
 .PARAMETER DynamicUpdate
 Specifies the Dynamic Update configuration of the reverse lookup zone created by the script. As the script is focused on created reverse lookup zones for CIDR subnets, the default is 'None'.
@@ -26,22 +23,28 @@ Specifies the Dynamic Update configuration of the reverse lookup zone created by
 Specifics the replication scope for the reverse lookup zone and defualts to the 'Domain' replication scope. Custom replication scopes are not supported by this script.
 
 .PARAMETER SubDomain
-Specifies the subdomain of the Domain paramater to create matching A records.
+Specifies the subdomain of the Domain paramater for creating matching A records.
 
 .PARAMETER Domain
-Specifies the forward lookup zone to create matching A records.
+Specifies the source zone for SOA and NS records and the zone name for creating matching A records. The default value is the current domain.
 
 .PARAMETER ComputerName
-Specifies the computer where the zones and records will be created.
+Specifies the computer where the zones and records will be created. The default value is the primary domain controller of the current domain.
 
 .PARAMETER Reset
 Instructs the script to remove and recreate any existing PTR records found in an existing reverse lookup zone.
+
+.PARAMETER SkipSoaRecordCopy
+Instructs the script to skip copying the values from the SOA record of the domain.
+
+.PARAMETER SkipNameServerCopy
+Instructs the script to skip copying the name server records of the domain.
 
 .INPUTS
 System.String. One or more reverse lookup zones can be submitted to Add-DnsServerReverseLookupZone as an array or list via the pipeline.
 
 .OUTPUTS
-None. The script merely reports on actions taken and does not provide any actionable output.
+None. The script reports on actions taken and does not provide any actionable output.
 
 .EXAMPLE
 .\Add-DnsServerReverseLookupZone.ps1 -Zone '128-25.0.0.10.in-addr.arpa' -ReservedHosts @{ '10.0.0.129' = 'gateway.example.com'; '10.0.0.130' = 'firewall-a.example.com'; '10.0.0.131' = 'firewall-b.example.com' }
@@ -50,34 +53,39 @@ None. The script merely reports on actions taken and does not provide any action
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
+	# string containing name of reverse lookup zone
 	[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidatePattern('.in-addr.arpa[.]{0,1}$')]
-	[string]$Zone,
-	[Parameter(Position = 1)]
-	[switch]$UseNameServersFromDomain,
+	[string]$ZoneName,
 	# hashtable containing PTR records to add to zone
-	[Parameter(Position = 2)]
-	[hashtable]$ReservedHosts,
+	[Parameter(Position = 1)]
+	[hashtable]$ReservedHosts = @{},
 	# dynamic update value
-	[Parameter(Position = 3)][ValidateSet('None', 'NonsecureAndSecure', 'Secure')]
+	[Parameter(Position = 2)][ValidateSet('None', 'NonsecureAndSecure', 'Secure')]
 	[string]$DynamicUpdate = 'None',
 	# replication scope for new zone
-	[Parameter(Position = 4)][ValidateSet('Domain', 'Forest', 'Legacy')]
+	[Parameter(Position = 3)][ValidateSet('Domain', 'Forest', 'Legacy')]
 	[string]$ReplicationScope = 'Domain',
 	# record prefix in matching A records for placeholder PTR records
-	[Parameter(Position = 5)]
+	[Parameter(Position = 4)]
 	[string]$PtrPrefix = 'ip',
 	# sub domain in matching A records for placeholder PTR records
-	[Parameter(Position = 6)]
+	[Parameter(Position = 5)]
 	[string]$SubDomain = 'reverse',
 	# domain name; default value is current domain name
-	[Parameter(Position = 7)]
+	[Parameter(Position = 6)]
 	[string]$Domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().Name,
 	# computer name of the DNS server; default value is current PDC role owner
-	[Parameter(Position = 8)]
+	[Parameter(Position = 7)]
 	[string]$ComputerName = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
 	# switch to reset reverse zone to use placeholder PTR records
+	[Parameter(Position = 8)]
+	[switch]$Reset,
+	# switch to skip copying the SOA records from the domain
 	[Parameter(Position = 9)]
-	[switch]$Reset
+	[switch]$SkipSoaRecordCopy,
+	# switch to skip copying the NS records from the domain
+	[Parameter(Position = 10)]
+	[switch]$SkipNameServerCopy
 )
 
 Begin {

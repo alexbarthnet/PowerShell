@@ -14,7 +14,10 @@ The name of the new forward lookup zone. Required.
 The name of an existing forward zone on the DNS server. The NS records and SOA (less the serial number) of this zone will be copied to the new forward lookup zone.
 
 .PARAMETER DynamicUpdate
-The setting for Dynamic DNS Updates on the zones. The default value is 'None'. The permitted values are 'None', 'NonsecureAndSecure', and 'Secure'.
+Specifies the Dynamic Update configuration of the forward lookup zone created by the script and defaults to the 'None' configuration.
+
+.PARAMETER ReplicationScope
+Specifics the replication scope for the forward lookup zone and defaults to the 'Domain' replication scope. Custom replication scopes are not supported by this script.
 
 .PARAMETER ComputerName
 The name of the DNS server where the new forward zone will be created. The default value is the domain controller with the PDC Emulator FSMO role.
@@ -32,12 +35,15 @@ Param(
 	# zone name for new forward zone
 	[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 	[string]$ZoneName,
+	# domain name; default value is current domain name
+	[Parameter(Position = 1)]
+	[string]$Domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().Name,
 	# dynamic update value
 	[Parameter(Position = 2)][ValidateSet('None', 'NonsecureAndSecure', 'Secure')]
 	[string]$DynamicUpdate = 'None',
-	# domain name; default value is current domain name
-	[Parameter(Position = 2)]
-	[string]$Domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().Name,
+	# replication scope for new zone
+	[Parameter(Position = 3)][ValidateSet('Domain', 'Forest', 'Legacy')]
+	[string]$ReplicationScope = 'Domain',
 	# computer name of the DNS server; default value is current PDC role owner
 	[Parameter(DontShow)]
 	[string]$ComputerName = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
