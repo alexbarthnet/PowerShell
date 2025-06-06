@@ -113,6 +113,8 @@ Param(
 	[Parameter(Position = 15)]
 	[pscredential]$AdministratorPassword,
 	[Parameter(Position = 16)]
+	[pscredential]$UnattendedJoinCredential,
+	[Parameter(Position = 17)]
 	[hashtable]$UnattendExpandStrings = @{
 		DiskID     = 0
 		Index      = 4
@@ -180,6 +182,15 @@ Begin {
 
 		# add encoded plaintext password to expand strings hashtable
 		$UnattendExpandStrings['AdministratorPassword'] = $EncodedAdministratorPassword
+	}
+
+	# if administrator password provided...
+	If ($PSBoundParameters.ContainsKey('UnattendedJoinCredential')) {
+		# add plaintext unattended join password to expand strings hashtable
+		$UnattendExpandStrings['Username'] = $UnattendedJoinCredential.GetNetworkCredential().Username
+
+		# add plaintext unattended join password to expand strings hashtable
+		$UnattendExpandStrings['Password'] = $UnattendedJoinCredential.GetNetworkCredential().Password
 	}
 
 	# if staging path defined...
