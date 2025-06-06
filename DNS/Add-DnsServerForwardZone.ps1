@@ -10,6 +10,9 @@ Create a forward lookup zone on a Microsoft Windows DNS server and copies any ma
 .PARAMETER ZoneName
 The name of the new forward lookup zone. Required.
 
+.PARAMETER ComputerName
+The name of the DNS server where the new forward zone will be created. The default value is the domain controller with the PDC Emulator FSMO role.
+
 .PARAMETER Domain
 The name of an existing forward zone on the DNS server. The NS records and SOA (less the serial number) of this zone will be copied to the new forward lookup zone.
 
@@ -18,9 +21,6 @@ Specifies the Dynamic Update configuration of the forward lookup zone created by
 
 .PARAMETER ReplicationScope
 Specifics the replication scope for the forward lookup zone and defaults to the 'Domain' replication scope. Custom replication scopes are not supported by this script.
-
-.PARAMETER ComputerName
-The name of the DNS server where the new forward zone will be created. The default value is the domain controller with the PDC Emulator FSMO role.
 
 .PARAMETER SkipSoaRecordCopy
 Instructs the script to skip copying the values from the SOA record of the domain.
@@ -38,26 +38,26 @@ None.
 
 [CmdletBinding()]
 Param(
-	# zone name for new forward zone
-	[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
+	# string containing name of reverse lookup zone
+	[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidatePattern('.in-addr.arpa[.]{0,1}$')]
 	[string]$ZoneName,
-	# domain name; default value is current domain name
+	# computer name of the DNS server; default value is current PDC role owner
 	[Parameter(Position = 1)]
+	[string]$ComputerName = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
+	# domain name; default value is current domain name
+	[Parameter(Position = 2)]
 	[string]$Domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().Name,
 	# dynamic update value
-	[Parameter(Position = 2)][ValidateSet('None', 'NonsecureAndSecure', 'Secure')]
+	[Parameter(Position = 3)][ValidateSet('None', 'NonsecureAndSecure', 'Secure')]
 	[string]$DynamicUpdate = 'None',
 	# replication scope for new zone
-	[Parameter(Position = 3)][ValidateSet('Domain', 'Forest', 'Legacy')]
+	[Parameter(Position = 4)][ValidateSet('Domain', 'Forest', 'Legacy')]
 	[string]$ReplicationScope = 'Domain',
-	# computer name of the DNS server; default value is current PDC role owner
-	[Parameter(DontShow)]
-	[string]$ComputerName = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
 	# switch to skip copying the SOA records from the domain
-	[Parameter(Position = 9)]
+	[Parameter(Position = 5)]
 	[switch]$SkipSoaRecordCopy,
 	# switch to skip copying the NS records from the domain
-	[Parameter(Position = 10)]
+	[Parameter(Position = 6)]
 	[switch]$SkipNameServerCopy
 )
 
@@ -205,21 +205,27 @@ Begin {
 		Throw $_
 	}
 
-	# filter all zones to forward zones
-	$DnsServerZones = $DnsServerZones | Where-Object { -not $_.IsReverseLookupZone }
-	Write-Host "...found '$($DnsServerZones.Count)' forward zone(s)"
-
 	# check domain
 	Write-Output "`nChecking domain zone..."
 	If ($DnsServerZones.ZoneName.Contains($Domain)) {
-		Write-Output "...found forward zone for domain: $Domain"
+		Write-Output "...found zone for domain: $Domain"
 	}
 	Else {
-		Throw "could not locate forward zone for domain: $Domain"
+		Throw "could not locate zone for domain: $Domain"
 	}
+
+	# filter all zones to forward zones
+	$DnsServerZones = $DnsServerZones | Where-Object { -not $_.IsReverseLookupZone }
+	Write-Host "...found '$($DnsServerZones.Count)' forward zone(s)"
 }
 
 Process {
+	# if zone name already exists...
+	If ($ZoneName -in $DnsServerZones.ZoneName) {
+		Write-Warning "found existing DNS zone with zone name '$ZoneName' on server: $ComputerName"
+		Return
+	}
+
 	# validate zone name parameter
 	switch ($ZoneName) {
 		# if ZoneName is the DNS root...
@@ -239,12 +245,6 @@ Process {
 			# redefine zone name without the trailing dot
 			$ZoneName = $ZoneName.TrimEnd('.')
 		}
-	}
-
-	# if zone name already exists...
-	If ($ZoneName -in $DnsServerZones.ZoneName) {
-		Write-Warning "found existing DNS zone with zone name '$ZoneName' on server: $ComputerName"
-		Return
 	}
 
 	# split zone name into zone label and parent zone name
@@ -295,29 +295,23 @@ Process {
 		}
 	}
 
-	# define parameters
-	$AddDnsServerPrimaryZone = @{
-		ComputerName     = $ComputerName
-		ZoneName         = $ZoneName
-		DynamicUpdate    = $DynamicUpdate
-		ReplicationScope = $ReplicationScope
-		ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
-	}
-
-	# declare state
-	Write-Host "`nCreating DNS zone..."
-
-	# create destination zone
+	# check for reverse zone
+	Write-Output "`nChecking forward zone..."
 	Try {
-		Add-DnsServerPrimaryZone @AddDnsServerPrimaryZone
+		$ZoneName = Get-DnsServerZone -ComputerName $ComputerName -Name $ZoneName -ErrorAction 'Stop' | Where-Object { $_.ZoneName.Contains('.') -and $_.ZoneType -eq 'Primary' -and -not $_.IsAutoCreated } | Select-Object -ExpandProperty 'ZoneName'
+		Write-Output "...found forward zone: '$ZoneName'"
 	}
 	Catch {
-		Write-Warning "could not create zone: $ZoneName"
-		Return $_
+		Write-Output '...creating zone...'
+		Try {
+			$ZoneName = Add-DnsServerPrimaryZone -ComputerName $ComputerName -Name $ZoneName -DynamicUpdate $DynamicUpdate -ReplicationScope $ReplicationScope -PassThru | Select-Object -ExpandProperty 'ZoneName'
+			Write-Output "...created forward zone: '$ZoneName'"
+		}
+		Catch {
+			Write-Error "could not create forward zone: '$ZoneName'"
+			Throw $_
+		}
 	}
-
-	# declare state
-	Write-Host "`n...created DNS zone"
 
 	# copy SOA record from domain
 	If (!$SkipSoaRecordCopy) {
@@ -328,6 +322,78 @@ Process {
 			Write-Warning "could not copy SOA record values from '$Domain' zone to '$ZoneName' zone"
 			Return $_
 		}
+	}
+
+	# copy NS records from domain
+	If (!$SkipNameServerCopy) {
+		Write-Output "`nChecking NS records..."
+
+		# define counters
+		$DnsCreated = 0
+		$DnsRemoved = 0
+
+		# retrieve reverse zone NS records
+		Try {
+			$CurrentNSRecords = (Get-DnsServerResourceRecord -ComputerName $ComputerName -ZoneName $ZoneName -Name '@' -RRType NS).RecordData.NameServer
+		}
+		Catch {
+			Write-Error "could not retrieve current NS records from '$ZoneName'"
+			Throw $_
+		}
+
+		# retrieve desired NS records from domain
+		Try {
+			$DesiredNSRecords = (Get-DnsServerResourceRecord -ComputerName $ComputerName -ZoneName $Domain -Name '@' -RRType NS).RecordData.NameServer
+		}
+		Catch {
+			Write-Error "could not retrieve desired NS records from '$Domain'"
+			Throw $_
+		}
+
+		# create emtpy lists
+		$CurrentNameServers = [System.Collections.Generic.List[string]]::New()
+		$DesiredNameServers = [System.Collections.Generic.List[string]]::New()
+
+		# populate lists
+		ForEach ($NameServer in $CurrentNSRecords) { $CurrentNameServers.Add($NameServer) }
+		ForEach ($NameServer in $DesiredNSRecords) { $DesiredNameServers.Add($NameServer) }
+
+		# retrieve NS records that are missing
+		$MissingNameServers = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except($DesiredNameServers, $CurrentNameServers))
+
+		# retrieve NS records that are invalid
+		$InvalidNameServers = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except($CurrentNameServers, $DesiredNameServers))
+
+		# create any missing NS records
+		ForEach ($NameServer in $MissingNameServers) {
+			Try {
+				Add-DnsServerResourceRecord -ComputerName $ComputerName -ZoneName $ZoneName -NS -Name '@' -NameServer $NameServer
+				Write-Verbose "created NS record '$NameServer' in '$ZoneName' on '$ComputerName'"
+				$DnsCreated++
+			}
+			Catch {
+				Write-Output "could not create NS record '$NameServer'"
+				Throw $_
+			}
+		}
+
+		# remove any invalid NS records
+		ForEach ($NameServer in $InvalidNameServers) {
+			Try {
+				Remove-DnsServerResourceRecord -ComputerName $ComputerName -ZoneName $ZoneName -RRType 'NS' -Name '@' -RecordData $NameServer -Confirm:$false
+				Write-Verbose "removed NS record '$NameServer' from '$ZoneName' on '$ComputerName'"
+				$DnsRemoved++
+			}
+			Catch {
+				Write-Output "could not remove NS record '$NameServer'"
+				Throw $_
+			}
+		}
+
+		# report NS record changes
+		If ($DnsCreated -eq 0 -and $DnsRemoved -eq 0) { Write-Output "...checked '$($CurrentNameServers.Count)' NS record(s)" }
+		If ($DnsCreated) { Write-Output "...created '$DnsCreated' NS record(s)" }
+		If ($DnsRemoved) { Write-Output "...removed '$DnsRemoved' NS record(s)" }
 	}
 
 	# declare state
