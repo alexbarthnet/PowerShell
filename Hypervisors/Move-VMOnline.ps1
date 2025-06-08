@@ -1701,9 +1701,6 @@ Process {
 			Return
 		}
 
-		# add destination storage path to parameters
-		$Parameters['VHDs'] = $VHDs
-
 		# loop through destination file paths
 		ForEach ($VHDPath in $DestinationFilePaths) {
 			# get VHD parent path from VHD path
@@ -1718,6 +1715,9 @@ Process {
 				$VMPaths.Add($VHDParentPath)
 			}
 		}
+
+		# add destination storage path to parameters
+		$Parameters['VHDs'] = $VHDs
 	}
 
 	################################################
