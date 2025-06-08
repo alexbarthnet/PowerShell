@@ -1373,16 +1373,9 @@ Begin {
 		################################################
 
 		# if VM was running before move...
-		If ($State -eq 'Running') {
+		If ($State -eq 'Running' -and $VM.State -ne 'Running') {
 			# declare state
 			Write-Host "$ComputerName,$Name - starting VM..."
-
-			# if VM already running...
-			If ($VM.State -eq 'Running') {
-				# declare state and return
-				Write-Host "$ComputerName,$Name - ...VM already started"
-				Return
-			}
 
 			# define parameters for Start-VM
 			$StartVM = @{
