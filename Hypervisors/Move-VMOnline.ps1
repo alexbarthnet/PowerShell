@@ -1629,20 +1629,20 @@ Process {
 			$VHDs = Invoke-Expression -Command $VHDsString
 		}
 
-		# define list for destination file paths
+		# define lists for file paths
+		$SourceFilePaths = [System.Collections.Generic.List[string]]::new()
 		$DestinationFilePaths = [System.Collections.Generic.List[string]]::new()
 
-		# define booleans
-		$SourceFilePathMissing = $false
+		# define booleans for invalid VHD array members
 		$InvalidVHDArrayMember = $false
 
 		# loop through VHDs
-		:NextVHD ForEach ($VHD in $VHDs) {
+		ForEach ($VHD in $VHDs) {
 			# if VHD is not a hashtable...
 			If ($VHD -isnot [hashtable]) {
 				Write-Warning -Message 'invalid VHDs parameter: found array member that is not a hashtable'
 				$InvalidVHDArrayMember = $true
-				Continue NextVHD
+				Continue
 			}
 
 			# if source file path key missing...
@@ -1650,7 +1650,10 @@ Process {
 				# warn and update boolean
 				Write-Warning -Message "invalid VHDs parameter: found hashtable in array missing required 'SourceFilePath' key"
 				$InvalidVHDArrayMember = $true
-				Continue NextVHD
+				Continue
+			}
+			Else {
+				$SourceFilePath = $VHD['SourceFilePath']
 			}
 
 			# if destination file path key missing...
@@ -1658,25 +1661,46 @@ Process {
 				# warn and update boolean
 				Write-Warning -Message "invalid VHDs parameter: found hashtable in array missing required 'DestinationFilePath' key"
 				$InvalidVHDArrayMember = $true
-				Continue NextVHD
+				Continue
+			}
+			Else {
+				$DestinationFilePath = $VHD['DestinationFilePath']
 			}
 
 			# if source file path value null or empty...
-			If ([string]::IsNullOrEmpty($VHD['SourceFilePath'])) {
+			If ([string]::IsNullOrEmpty($SourceFilePath)) {
 				# warn and update boolean
 				Write-Warning -Message "invalid VHDs parameter: found hashtable where 'SourceFilePath' value is null or empty"
 				$InvalidVHDArrayMember = $true
-				Continue NextVHD
+				Continue
+			}
+			Else {
+				$SourceFilePaths.Add($SourceFilePath)
 			}
 
 			# if destination file path value null or empty...
-			If ([string]::IsNullOrEmpty($VHD['DestinationFilePath'])) {
+			If ([string]::IsNullOrEmpty($DestinationFilePath)) {
 				# warn and update boolean
 				Write-Warning -Message "invalid VHDs parameter: found hashtable where 'DestinationFilePath' value is null or empty"
 				$InvalidVHDArrayMember = $true
 				Continue NextVHD
 			}
+			Else {
+				# add destination file path to list
+				$DestinationFilePaths.Add($DestinationFilePath)
+			}
+		}
 
+		# if any invalid VHD array members found...
+		If ($InvalidVHDArrayMember) {
+			Return
+		}
+
+		# define boolean for missing source file paths
+		$SourceFilePathMissing = $false
+
+		# loop through source file paths
+		ForEach ($VHDPath in $SourceFilePaths) {
 			# assert source file path exists
 			Try {
 				$TestPath = Assert-PathCreated -Path $VHD['SourceFilePath'] -ComputerName $ComputerName -PathType 'Leaf'
@@ -1691,13 +1715,10 @@ Process {
 				Write-Warning -Message "could not locate file for '$($VHD['SourceFilePath'])' path in 'SourceFilePath' value"
 				$SourceFilePathMissing = $true
 			}
-
-			# add destination file path to list
-			$DestinationFilePaths.Add($DestinationFilePath)
 		}
 
-		# if any invalid VHD array members not found or any source file paths are missing...
-		If ($InvalidVHDArrayMember -or $SourceFilePathMissing) {
+		# if any source file paths are missing...
+		If ($SourceFilePathMissing) {
 			Return
 		}
 
