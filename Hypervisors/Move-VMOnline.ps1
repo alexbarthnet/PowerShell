@@ -1044,7 +1044,7 @@ Begin {
 			}
 			Catch {
 				Write-Warning -Message "could not resolve incompatibilities: $($_.Exception.Message)"
-				Return $_
+				Return $CompatibilityReport.VM
 			}
 
 			# save resolved compatibility report to global scope
@@ -1058,8 +1058,8 @@ Begin {
 					Write-Warning -Message "found cannot resolve message: $CannotResolveMessage"
 				}
 
-				# return empty response
-				Return $null
+				# return VM from compatibility report
+				Return $CompatibilityReport.VM
 			}
 
 			# declare state
@@ -1083,14 +1083,14 @@ Begin {
 
 		# if VM move completed...
 		If ($MovedVM) {
-			# report and return moved VM
+			# report and return VM returned by move function
 			Write-Host "$ComputerName,$Name - ...move completed"
 			Return $MovedVM
 		}
 		Else {
-			# report and return empty response
+			# report and return VM from compatibility report
 			Write-Host "$ComputerName,$Name - ...move failed"
-			Return $null
+			Return $CompatibilityReport.VM
 		}
 	}
 
@@ -1907,11 +1907,11 @@ Process {
 		}
 
 	}
-	# if VM move failed and compatibility report exists...
-	ElseIf ($null -ne $CompatibilityObject.CompatibilityReport) {
+	# if VM move failed and reference to planned VM exists...
+	ElseIf ($MovedVM -and $MovedVM.VirtualMachineType -eq 'PlannedVirtualMachine') {
 		# remove remnants of failed VM move
 		Try {
-			Remove-VMOnComputer -VM $CompatibilityObject.CompatibilityReport.VM
+			Remove-VMOnComputer -VM $MovedVM
 		}
 		Catch {
 			Throw $_
