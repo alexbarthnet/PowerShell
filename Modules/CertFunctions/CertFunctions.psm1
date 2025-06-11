@@ -1634,7 +1634,7 @@ Function Register-ServiceCertificate {
 	# if service path not found...
 	If (!$ServicePathFound) {
 		Try {
-			New-Item -ItemType 'Key' -Path $ServicePath
+			New-Item -ItemType 'Key' -Path $ServicePath -Force -ErrorAction 'Stop'
 		}
 		Catch {
 			Write-Warning -Message "could not create certificate registry key for certificate store for '$Name' service: $($_.Exception.Message)"
@@ -1644,7 +1644,7 @@ Function Register-ServiceCertificate {
 
 	# copy system certificate registry key to service certificate registry key
 	Try {
-		Copy-Item -Path $SystemPath -Destination $ServicePath -Recurse -ErrorAction 'Stop'
+		Copy-Item -Path $SystemPath -Destination $ServicePath -Force -ErrorAction 'Stop'
 	}
 	Catch {
 		Write-Warning -Message "could not copy certificate registry key from local machine store to certificate store for '$Name' service: $($_.Exception.Message)"
