@@ -1626,7 +1626,7 @@ Function Register-ServiceCertificate {
 	}
 
 	# define registry path for service certificate store
-	$ServicePath = 'HKLM:\SOFTWARE\Microsoft\Cryptography\{0}\SystemCertificates\My\Certificates\{1}' -f $Service.ServiceName, $Certificate.Thumbprint
+	$ServicePath = 'HKLM:\SOFTWARE\Microsoft\Cryptography\Services\{0}\SystemCertificates\My\Certificates' -f $Service.ServiceName, $Certificate.Thumbprint
 	
 	# test registry path for service certificate store
 	$ServicePathFound = Test-Path -Path $ServicePath -PathType 'Container'
