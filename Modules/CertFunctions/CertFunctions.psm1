@@ -1564,6 +1564,165 @@ Function Revoke-CertificatePermissions {
 	}
 }
 
+Function Register-ServiceCertificate {
+	[CmdletBinding(DefaultParameterSetName = 'Certificate')]
+	Param(
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'Certificate', ValueFromPipeline = $true)]
+		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'Thumbprint')]
+		[string]$Thumbprint,
+		[Parameter(Position = 1, Mandatory = $true)]
+		[string]$Name,
+		[Parameter(Position = 2, DontShow)]
+		[string]$CertStoreLocation = 'Cert:\LocalMachine\My'
+	)
+
+	# retrieve certificate with thumbprint
+	If ($PSCmdlet.ParameterSetName -eq 'Thumbprint') {
+		Try {
+			$Certificate = Get-Item -Path (Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint)
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve certificate with thumbprint '$Thumbprint' from the local machine key store"
+			Return $null
+		}
+	}
+
+	# retrieve service by name
+	Try {
+		$Service = Get-Service -Name $Name -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning -Message "could not retrieve service with name '$Name' on the local machine"
+		Return $null
+	}
+
+	# define parameters
+	$GrantCertificatePermissions = @{
+		Certificate = $Certificate
+		Principals  = 'NT SERVICE\{0}' -f $Service.ServiceName
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+	}
+
+	# update permissions on private key
+	Try {
+		Grant-CertificatePermissions @GrantCertificatePermissions
+	}
+	Catch {
+		Write-Warning -Message "could not grant permissions on private key to '$Name' service: $($_.Exception.Message)"
+		Return $null
+	}
+
+	# retrieve registry path for certificate
+	$SystemPath = 'HKLM:\SOFTWARE\Microsoft\SystemCertificates\My\Certificates\{0}' -f $Certificate.Thumbprint
+
+	# test registry path for certificate
+	$SystemPathFound = Test-Path -Path $SystemPath -PathType 'Container'
+
+	# if certificate registry path not found...
+	If (!$SystemPathFound) {
+		Write-Warning -Message 'could not locate certificate registry key for certificate in local machine key store'
+		Return $null
+	}
+
+	# define registry path for service certificate store
+	$ServicePath = 'HKLM:\SOFTWARE\Microsoft\Cryptography\Services\{0}\SystemCertificates\My\Certificates' -f $Service.ServiceName, $Certificate.Thumbprint
+	
+	# test registry path for service certificate store
+	$ServicePathFound = Test-Path -Path $ServicePath -PathType 'Container'
+
+	# if service path not found...
+	If (!$ServicePathFound) {
+		Try {
+			New-Item -ItemType 'Key' -Path $ServicePath -Force -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not create certificate registry key for certificate store for '$Name' service: $($_.Exception.Message)"
+			Return $null
+		}
+	}
+
+	# copy system certificate registry key to service certificate registry key
+	Try {
+		Copy-Item -Path $SystemPath -Destination $ServicePath -Force -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning -Message "could not copy certificate registry key from local machine store to certificate store for '$Name' service: $($_.Exception.Message)"
+		Return $null
+	}
+}
+
+Function Unregister-ServiceCertificate {
+	[CmdletBinding(DefaultParameterSetName = 'Certificate')]
+	Param(
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'Certificate', ValueFromPipeline = $true)]
+		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'Thumbprint')]
+		[string]$Thumbprint,
+		[Parameter(Position = 1, Mandatory = $true)]
+		[string]$Name,
+		[Parameter(Position = 2, DontShow)]
+		[string]$CertStoreLocation = 'Cert:\LocalMachine\My'
+	)
+
+	# retrieve certificate with thumbprint
+	If ($PSCmdlet.ParameterSetName -eq 'Thumbprint') {
+		Try {
+			$Certificate = Get-Item -Path (Join-Path -Path $CertStoreLocation -ChildPath $Thumbprint)
+		}
+		Catch {
+			Write-Warning -Message "could not retrieve certificate with thumbprint '$Thumbprint' from the local machine key store"
+			Return $null
+		}
+	}
+
+	# retrieve service by name
+	Try {
+		$Service = Get-Service -Name $Name -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning -Message "could not retrieve service with name '$Name' on the local machine"
+		Return $null
+	}
+
+	# define parameters
+	$RevokeCertificatePermissions = @{
+		Certificate = $Certificate
+		Principals  = 'NT SERVICE\{0}' -f $Service.ServiceName
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+	}
+
+	# update permissions on private key
+	Try {
+		Revoke-CertificatePermissions @RevokeCertificatePermissions
+	}
+	Catch {
+		Write-Warning -Message "could not revoke permissions on private key from '$Name' service: $($_.Exception.Message)"
+		Return $_
+	}
+
+	# define registry path for service certificate store
+	$ServicePath = 'HKLM:\SOFTWARE\Microsoft\Cryptography\{0}\SystemCertificates\My\Certificates\{1}' -f $Service.ServiceName, $Certificate.Thumbprint
+	
+	# test registry path for service certificate store
+	$ServicePathFound = Test-Path -Path $ServicePath -PathType 'Container'
+
+	# if service path not found...
+	If (!$ServicePathFound) {
+		Write-Warning -Message "could not locate certificate registry key in certificate store for '$Name' service"
+		Return $null
+	}
+
+	# copy system certificate registry key to service certificate registry key
+	Try {
+		Remove-Item -Path $ServicePath -Recurse -ErrorAction 'Stop'
+	}
+	Catch {
+		Write-Warning -Message "could not remove certificate registry key from certificate store for '$Name' service: $($_.Exception.Message)"
+		Return $_
+	}
+}
+
 Function Test-Thumbprint {
 	<#
 	.SYNOPSIS
@@ -1616,6 +1775,8 @@ $FunctionsToExport = @(
 	'Get-PfxPublicKey'
 	'Grant-CertificatePermissions'
 	'Revoke-CertificatePermissions'
+	'Register-ServiceCertificate'
+	'Unregister-ServiceCertificate'
 	'Test-Thumbprint'
 )
 
