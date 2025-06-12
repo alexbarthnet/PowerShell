@@ -729,14 +729,66 @@ Begin {
 
 		# if planned VM found...
 		If ($PlannedVM) {
-			# declare state
-			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - found planned VM, waiting for automatic removal..."
+			# if planned VM found still in migrating state...
+			If ($PlannedVM.OperationalStatus -contains '32774') {
+				# declare state
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - found planned VM in migrating state, waiting for planned VM to exit state..."
+
+				# initialize counter
+				$Counter = [int32]1
+
+				# while counter less than attempts and planned VM found still in migrating state...
+				While ($Counter -lt $Attempts -and $PlannedVM.OperationalStatus -contains '32774') {
+					# increment counter
+					$Counter++
+
+					# sleep
+					Start-Sleep -Seconds 5
+
+					# retrieve CIM instance for planned VM by Id
+					Try {
+						$PlannedVM = Invoke-Command @InvokeCommand -ScriptBlock {
+							Param($ArgumentList)
+							Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_PlannedComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
+						}
+					}
+					Catch {
+						Throw $_
+					}
+				}
+
+				# if planned VM not found in migrating state...
+				If ($PlannedVM.OperationalStatus -contains '32774') {
+					# declare state
+					Write-Warning -Message 'found planned VM still in migrating state after 30 seconds'
+				}
+				Else {
+					# declare state
+					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...planned VM exited migrating state, removing planned VM..."
+				}
+			}
+			Else {
+				# declare state
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - found planned VM, removing..."
+			}
 
 			# initialize counter
 			$Counter = [int32]1
 
 			# while counter less than attempts and planned VM found...
 			While ($Counter -lt $Attempts -and $PlannedVM) {
+				# remove planned VM by Id
+				Try {
+					$null = Invoke-Command @InvokeCommand -ScriptBlock {
+						Param($ArgumentList)
+						$VM = Get-VM -Id $ArgumentList['Id']
+						$VM | Remove-VM -Force
+					}
+				}
+				Catch {
+					Throw $_
+				}
+
 				# increment counter
 				$Counter++
 
@@ -755,14 +807,14 @@ Begin {
 				}
 			}
 
-			# if planned VM not found...
-			If (!$PlannedVM) {
+			# if planned VM still found...
+			If ($PlannedVM) {
 				# declare state
-				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...planned VM automatically removed"
+				Write-Warning -Message 'could not remove planned VM after 30 seconds'
 			}
 			Else {
 				# declare state
-				Write-Warning -Message 'found planned VM not automatically removed after 30 seconds'
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...planned VM removed"
 			}
 		}
 
@@ -810,14 +862,14 @@ Begin {
 				}
 			}
 
-			# if realized VM not found...
-			If (!$RealizedVM) {
+			# if realized VM still found...
+			If ($RealizedVM) {
 				# declare state
-				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM removed"
+				Write-Warning -Message 'could not remove VM after 30 seconds'
 			}
 			Else {
 				# declare state
-				Write-Warning -Message 'could not remove VM after 30 seconds'
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM removed"
 			}
 		}
 
