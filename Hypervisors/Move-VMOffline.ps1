@@ -613,7 +613,7 @@ Begin {
 		# if target computer is clustered...
 		If ($ClusterName) {
 			# declare state
-			Write-Host "$ComputerName,$Name - checking for VM by Id in '$ClusterName' cluster..."
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking for VM by Id in '$ClusterName' cluster..."
 
 			# retrieve CIM instance for realized VM by Id
 			Try {
@@ -653,7 +653,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$ComputerName,$Name - ...VM not found by Id in '$ClusterName' cluster"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM not found by Id in '$ClusterName' cluster"
 		}
 
 		################################################
@@ -719,7 +719,7 @@ Begin {
 		# if planned VM and realized VM not found before first attempt to remove VM...
 		If (!$PlannedVM -and !$RealizedVM) {
 			# declare state and return
-			Write-Host "$ComputerName,$Name - ...VM not found"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM not found"
 			Return $true
 		}
 
@@ -730,7 +730,7 @@ Begin {
 		# if planned VM found...
 		If ($PlannedVM) {
 			# declare state
-			Write-Host "$ComputerName,$Name - found planned VM, waiting for automatic removal..."
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - found planned VM, waiting for automatic removal..."
 
 			# initialize counter
 			$Counter = [int32]1
@@ -758,7 +758,7 @@ Begin {
 			# if planned VM not found...
 			If (!$PlannedVM) {
 				# declare state
-				Write-Host "$ComputerName,$Name - ...planned VM automatically removed"
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...planned VM automatically removed"
 			}
 			Else {
 				# declare state
@@ -773,7 +773,7 @@ Begin {
 		# if realized VM found...
 		If ($RealizedVM) {
 			# declare state
-			Write-Host "$ComputerName,$Name - found VM, removing..."
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - found VM, removing..."
 
 			# initialize counter
 			$Counter = [int32]1
@@ -813,7 +813,7 @@ Begin {
 			# if realized VM not found...
 			If (!$RealizedVM) {
 				# declare state
-				Write-Host "$ComputerName,$Name - ...VM removed"
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM removed"
 			}
 			Else {
 				# declare state
@@ -1044,7 +1044,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName - retrieving computer identity..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName - retrieving computer identity..."
 
 		# define parameters for Get-CimInstance
 		$GetCimInstance = @{
@@ -1070,14 +1070,14 @@ Begin {
 		}
 
 		# declare state
-		Write-Host "$ComputerName - ...retrieved NTAccount for computer"
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName - ...retrieved NTAccount for computer"
 
 		################################################
 		# add source to Administrators group on target
 		################################################
 
 		# declare state
-		Write-Host "$DestinationHost - adding '$NTAccount' to Administrators group..."
+		Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost - adding '$NTAccount' to Administrators group..."
 
 		# get hashtable for InvokeCommand splat
 		Try {
@@ -1123,14 +1123,14 @@ Begin {
 		}
 
 		# declare state
-		Write-Host "$DestinationHost - ...added '$NTAccount' to Administrators group"
+		Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost - ...added '$NTAccount' to Administrators group"
 
 		################################################
 		# test path from source
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName - verifying access to UNC path..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName - verifying access to UNC path..."
 
 		# get hashtable for InvokeCommand splat
 		Try {
@@ -1164,14 +1164,14 @@ Begin {
 		}
 
 		# declare state
-		Write-Host "$ComputerName - ...verified access to UNC path"
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName - ...verified access to UNC path"
 
 		################################################
 		# remove VM from source cluster
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName,$Name - preparing VM for offline migration..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - preparing VM for offline migration..."
 
 		# get source computer cluster name
 		Try {
@@ -1219,7 +1219,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$ComputerName,$Name - ...removed VM from source cluster"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VM from source cluster"
 		}
 
 		################################################
@@ -1255,7 +1255,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$ComputerName,$Name - ...shut down VM"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...shut down VM"
 		}
 
 		# define parameters for Set-VM
@@ -1274,14 +1274,14 @@ Begin {
 		}
 
 		# declare state
-		Write-Host "$ComputerName,$Name - ...VM ready for offline migration"
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM ready for offline migration"
 
 		################################################
 		# export VM
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName,$Name - exporting VM..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - exporting VM..."
 
 		# define parameters for Export-VM
 		$ExportVM = @{
@@ -1301,7 +1301,7 @@ Begin {
 
 		# declare state
 		If ($ExportedVM) {
-			Write-Host "$ComputerName,$Name - ...exported VM"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...exported VM"
 		}
 
 		################################################
@@ -1309,7 +1309,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$DestinationHost - removing '$NTAccount' from Administrators group..."
+		Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost - removing '$NTAccount' from Administrators group..."
 
 		# get hashtable for InvokeCommand splat
 		Try {
@@ -1343,7 +1343,7 @@ Begin {
 		}
 
 		# declare state
-		Write-Host "$DestinationHost - ...removed '$NTAccount' from Administrators group"
+		Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost - ...removed '$NTAccount' from Administrators group"
 
 		# return objects
 		If ($ExportedVM) {
@@ -1440,7 +1440,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName,$Name - comparing VM with target..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - comparing VM with target..."
 
 		# define parameters for Compare-VM
 		$CompareVM = @{
@@ -1560,14 +1560,14 @@ Begin {
 		}
 
 		# declare state
-		Write-Host "$ComputerName,$Name - ...VM compared to target"
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM compared to target"
 
 		################################################
 		# import VM
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName,$Name - importing VM..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - importing VM..."
 
 		# define required parameters for Import-VM
 		$ImportVM = @{
@@ -1585,7 +1585,7 @@ Begin {
 
 		# declare state
 		If ($ImportedVM) {
-			Write-Host "$ComputerName,$Name - ...imported VM"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...imported VM"
 		}
 
 		################################################
@@ -1623,7 +1623,7 @@ Begin {
 		# if VM version is less than highest supported VM version...
 		If ($ImportedVM.Version -lt $HighestSupportedVmVersion) {
 			# declare state
-			Write-Host "$ComputerName,$Name - updating VM version from: $($ImportedVM.Version)"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - updating VM version from: $($ImportedVM.Version)"
 
 			# define required parameters for Update-VMVersion
 			$UpdateVMVersion = @{
@@ -1642,7 +1642,7 @@ Begin {
 
 			# declare state
 			If ($ImportedVM.Version -eq $HighestSupportedVmVersion) {
-				Write-Host "$ComputerName,$Name - ...updated VM version: $($ImportedVM.Version)"
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...updated VM version: $($ImportedVM.Version)"
 			}
 		}
 
@@ -1711,7 +1711,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName,$Name - removing VM..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM..."
 
 		# define parameters
 		$AssertVMRemoved = @{
@@ -1730,7 +1730,7 @@ Begin {
 		# if VM removed...
 		If ($VMRemoved) {
 			# declare state
-			Write-Host "$ComputerName,$Name - ...removed VM"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VM"
 		}
 		Else {
 			# declare state
@@ -1743,12 +1743,12 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName,$Name - removing VHDs..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VHDs..."
 
 		# remove VM hard disk drive files
 		ForEach ($VHDPath in $VHDPaths) {
 			# declare state
-			Write-Host "$ComputerName,$Name - ...removing VHD: $VHDPath"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removing VHD: $VHDPath"
 
 			# define parameters
 			$AssertPathRemoved = @{
@@ -1768,7 +1768,7 @@ Begin {
 			# if path removed...
 			If ($PathRemoved) {
 				# declare state
-				Write-Host "$ComputerName,$Name - ...removed VHD"
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VHD"
 			}
 			Else {
 				# declare state
@@ -1781,12 +1781,12 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName,$Name - removing VM folders..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM folders..."
 
 		# remove VM path folders
 		ForEach ($VMPath in $VMPaths) {
 			# declare state
-			Write-Host "$ComputerName,$Name - ...removing VM folder: $VMPath"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removing VM folder: $VMPath"
 
 			# define parameters
 			$AssertPathRemoved = @{
@@ -1808,7 +1808,7 @@ Begin {
 			# if path removed...
 			If ($PathRemoved) {
 				# declare state
-				Write-Host "$ComputerName,$Name - ...removed VM folder"
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VM folder"
 			}
 			Else {
 				# declare state
@@ -1849,7 +1849,7 @@ Begin {
 		# if computer is clustered...
 		If ($ClusterName) {
 			# declare state
-			Write-Host "$ComputerName,$Name - adding VM to '$ClusterName' cluster..."
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - adding VM to '$ClusterName' cluster..."
 
 			# define parameters for Add-ClusterVirtualMachineRole
 			$AddClusterVirtualMachineRole = @{
@@ -1867,7 +1867,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$ComputerName,$Name - ...VM clustered"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM clustered"
 
 			# if cluster group priority does not match original priority...
 			If ($ClusterGroup.Priority -ne $script:Priority) {
@@ -1891,7 +1891,7 @@ Begin {
 		# if computer is not clustered...
 		If ([string]::IsNullOrEmpty($ClusterName)) {
 			# declare state
-			Write-Host "$ComputerName,$Name - restoring VM start action configuration..."
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - restoring VM start action configuration..."
 
 			# define parameters for Set-VM
 			$SetVM = @{
@@ -1909,7 +1909,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$ComputerName,$Name - ...VM configuration restored"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...updated VM start restored"
 		}
 
 		################################################
@@ -1919,12 +1919,12 @@ Begin {
 		# if VM was running before export...
 		If ($State -eq 'Running' -or $Restart) {
 			# declare state
-			Write-Host "$ComputerName,$Name - starting VM..."
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - starting VM..."
 
 			# if VM already running...
 			If ($VM.State -eq 'Running') {
 				# declare state and return
-				Write-Host "$ComputerName,$Name - ...VM already started"
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM already started"
 				Return
 			}
 
@@ -1943,7 +1943,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$ComputerName,$Name - ...VM started"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM started"
 		}
 	}
 }
@@ -1960,7 +1960,7 @@ Process {
 	}
 
 	# declare state
-	Write-Host "$ComputerName,$Name - checking source computer for VM..."
+	Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking source computer for VM..."
 
 	# if name provided...
 	If ($PSCmdlet.ParameterSetName -eq 'Name') {
@@ -2024,7 +2024,7 @@ Process {
 	# if source computer is clustered...
 	If ($SourceClusterName) {
 		# declare state
-		Write-Host "$ComputerName,$Name - checking if VM clustered on source computer..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking if VM clustered on source computer..."
 
 		# define parameters for Get-ClusterGroup
 		$GetClusterGroup = @{
@@ -2045,11 +2045,11 @@ Process {
 			$Priority = $SourceClusterGroup.Priority
 
 			# declare state
-			Write-Host "$ComputerName,$Name - ...VM found on '$SourceClusterName' cluster with '$Priority' priority; will remove from cluster before migration"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM found on '$SourceClusterName' cluster with '$Priority' priority; will remove from cluster before migration"
 		}
 		Else {
 			# declare state
-			Write-Host "$ComputerName,$Name - ...VM not found on '$SourceClusterName' cluster"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM not found on '$SourceClusterName' cluster"
 		}
 	}
 
@@ -2058,7 +2058,7 @@ Process {
 	################################################
 
 	# declare state
-	Write-Host "$DestinationHost,$Name - checking destination host for VM..."
+	Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost,$Name - checking destination host for VM..."
 
 	# define required parameters
 	$AssertVMNotFound = @{
@@ -2146,7 +2146,7 @@ Process {
 	################################################
 
 	# declare state
-	Write-Host "$DestinationHost - checking path on destination..."
+	Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost - checking path on destination..."
 
 	# loop through paths...
 	ForEach ($VMPath in $VMPaths) {
@@ -2165,7 +2165,7 @@ Process {
 		}
 
 		# declare state
-		Write-Host "$DestinationHost - ...path found: $VMPath"
+		Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost - ...path found: $VMPath"
 	}
 
 	################################################
@@ -2173,7 +2173,7 @@ Process {
 	################################################
 
 	# declare state
-	Write-Host "$ComputerName - building UNC path..."
+	Write-Host "$([datetime]::Now.ToString('s')),$ComputerName - building UNC path..."
 
 	# ensure path is created
 	Try {
@@ -2190,7 +2190,7 @@ Process {
 	}
 
 	# declare state
-	Write-Host "$ComputerName - ...UNC path built: $SharePath"
+	Write-Host "$([datetime]::Now.ToString('s')),$ComputerName - ...UNC path built: $SharePath"
 
 	################################################
 	# export VM

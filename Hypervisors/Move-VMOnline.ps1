@@ -613,7 +613,7 @@ Begin {
 		# if target computer is clustered...
 		If ($ClusterName) {
 			# declare state
-			Write-Host "$ComputerName,$Name - checking for VM by Id in '$ClusterName' cluster..."
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking for VM by Id in '$ClusterName' cluster..."
 
 			# retrieve CIM instance for realized VM by Id
 			Try {
@@ -653,7 +653,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$ComputerName,$Name - ...VM not found by Id in '$ClusterName' cluster"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM not found by Id in '$ClusterName' cluster"
 		}
 
 		################################################
@@ -719,7 +719,7 @@ Begin {
 		# if planned VM and realized VM not found before first attempt to remove VM...
 		If (!$PlannedVM -and !$RealizedVM) {
 			# declare state and return
-			Write-Host "$ComputerName,$Name - ...VM not found"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM not found"
 			Return $true
 		}
 
@@ -730,7 +730,7 @@ Begin {
 		# if planned VM found...
 		If ($PlannedVM) {
 			# declare state
-			Write-Host "$ComputerName,$Name - found planned VM, waiting for automatic removal..."
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - found planned VM, waiting for automatic removal..."
 
 			# initialize counter
 			$Counter = [int32]1
@@ -758,7 +758,7 @@ Begin {
 			# if planned VM not found...
 			If (!$PlannedVM) {
 				# declare state
-				Write-Host "$ComputerName,$Name - ...planned VM automatically removed"
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...planned VM automatically removed"
 			}
 			Else {
 				# declare state
@@ -773,7 +773,7 @@ Begin {
 		# if realized VM found...
 		If ($RealizedVM) {
 			# declare state
-			Write-Host "$ComputerName,$Name - found VM, removing..."
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - found VM, removing..."
 
 			# initialize counter
 			$Counter = [int32]1
@@ -813,7 +813,7 @@ Begin {
 			# if realized VM not found...
 			If (!$RealizedVM) {
 				# declare state
-				Write-Host "$ComputerName,$Name - ...VM removed"
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM removed"
 			}
 			Else {
 				# declare state
@@ -1012,7 +1012,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName,$Name - comparing VM with destination host: $DestinationHost"
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - comparing VM with destination host: $DestinationHost"
 
 		# move VM to target computer
 		Try {
@@ -1024,7 +1024,7 @@ Begin {
 		}
 
 		# declare state
-		Write-Host "$ComputerName,$Name - ...VM compared"
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM compared"
 
 		# save original compatibility report to global scope
 		New-Variable -Name 'OriginalCompatibilityReport' -Value $CompatibilityReport -Scope Global -Force
@@ -1036,7 +1036,7 @@ Begin {
 		# if incompatibilities found...
 		If ($CompatibilityReport.Incompatibilities.Count) {
 			# declare state
-			Write-Host "$ComputerName,$Name - resolving compatibility report for VM..."
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - resolving compatibility report for VM..."
 
 			# resolve incompatibilities
 			Try {
@@ -1063,7 +1063,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$ComputerName,$Name - ...resolved compatibility report for VM"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...resolved compatibility report for VM"
 		}
 
 		################################################
@@ -1071,7 +1071,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName,$Name - moving VM..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - moving VM..."
 
 		# move VM to target computer
 		Try {
@@ -1084,12 +1084,12 @@ Begin {
 		# if VM move completed...
 		If ($MovedVM) {
 			# report and return VM returned by move function
-			Write-Host "$ComputerName,$Name - ...move completed"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...move completed"
 			Return $MovedVM
 		}
 		Else {
 			# report and return VM from compatibility report
-			Write-Host "$ComputerName,$Name - ...move failed"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...move failed"
 			Return $CompatibilityReport.VM
 		}
 	}
@@ -1155,7 +1155,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName,$Name - removing VM..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM..."
 
 		# define parameters
 		$AssertVMRemoved = @{
@@ -1174,7 +1174,7 @@ Begin {
 		# if VM removed...
 		If ($VMRemoved) {
 			# declare state
-			Write-Host "$ComputerName,$Name - ...removed VM"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VM"
 		}
 		Else {
 			# declare state
@@ -1187,12 +1187,12 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName,$Name - removing VHDs..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VHDs..."
 
 		# remove VM hard disk drive files
 		ForEach ($VHDPath in $VHDPaths) {
 			# declare state
-			Write-Host "$ComputerName,$Name - ...removing VHD: $VHDPath"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removing VHD: $VHDPath"
 
 			# define parameters
 			$AssertPathRemoved = @{
@@ -1212,7 +1212,7 @@ Begin {
 			# if path removed...
 			If ($PathRemoved) {
 				# declare state
-				Write-Host "$ComputerName,$Name - ...removed VHD"
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VHD"
 			}
 			Else {
 				# declare state
@@ -1225,12 +1225,12 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$ComputerName,$Name - removing VM folders..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM folders..."
 
 		# remove VM path folders
 		ForEach ($VMPath in $VMPaths) {
 			# declare state
-			Write-Host "$ComputerName,$Name - ...removing VM folder: $VMPath"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removing VM folder: $VMPath"
 
 			# define parameters
 			$AssertPathRemoved = @{
@@ -1252,7 +1252,7 @@ Begin {
 			# if path removed...
 			If ($PathRemoved) {
 				# declare state
-				Write-Host "$ComputerName,$Name - ...removed VM folder"
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VM folder"
 			}
 			Else {
 				# declare state
@@ -1293,7 +1293,7 @@ Begin {
 		# if computer is clustered...
 		If ($ClusterName) {
 			# declare state
-			Write-Host "$ComputerName,$Name - adding VM to '$ClusterName' cluster..."
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - adding VM to '$ClusterName' cluster..."
 
 			# define parameters for Add-ClusterVirtualMachineRole
 			$AddClusterVirtualMachineRole = @{
@@ -1311,7 +1311,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$ComputerName,$Name - ...VM clustered"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM clustered"
 
 			# if cluster group priority does not match original priority...
 			If ($ClusterGroup.Priority -ne $script:Priority) {
@@ -1335,7 +1335,7 @@ Begin {
 		# if computer is not clustered...
 		If ([string]::IsNullOrEmpty($ClusterName)) {
 			# declare state
-			Write-Host "$ComputerName,$Name - restoring VM start action configuration..."
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - restoring VM start action configuration..."
 
 			# define parameters for Set-VM
 			$SetVM = @{
@@ -1353,7 +1353,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$ComputerName,$Name - ...VM configuration restored"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM configuration restored"
 		}
 
 		################################################
@@ -1363,7 +1363,7 @@ Begin {
 		# if VM was running before move...
 		If ($State -eq 'Running' -and $VM.State -ne 'Running') {
 			# declare state
-			Write-Host "$ComputerName,$Name - starting VM..."
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - starting VM..."
 
 			# define parameters for Start-VM
 			$StartVM = @{
@@ -1380,7 +1380,7 @@ Begin {
 			}
 
 			# declare state
-			Write-Host "$ComputerName,$Name - ...VM started"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM started"
 		}
 	}
 }
@@ -1397,7 +1397,7 @@ Process {
 	}
 
 	# declare state
-	Write-Host "$ComputerName,$Name - checking source computer for VM..."
+	Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking source computer for VM..."
 
 	# if name provided...
 	If ($PSCmdlet.ParameterSetName.StartsWith('Name')) {
@@ -1451,7 +1451,7 @@ Process {
 	# if source computer is clustered...
 	If ($SourceClusterName) {
 		# declare state
-		Write-Host "$ComputerName,$Name - checking if VM clustered on source computer..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking if VM clustered on source computer..."
 
 		# define parameters for Get-ClusterGroup
 		$GetClusterGroup = @{
@@ -1472,11 +1472,11 @@ Process {
 			$Priority = $SourceClusterGroup.Priority
 
 			# declare state
-			Write-Host "$ComputerName,$Name - ...VM found on '$SourceClusterName' cluster with '$Priority' priority; will remove from cluster before migration"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM found on '$SourceClusterName' cluster with '$Priority' priority; will remove from cluster before migration"
 		}
 		Else {
 			# declare state
-			Write-Host "$ComputerName,$Name - ...VM not found on '$SourceClusterName' cluster"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM not found on '$SourceClusterName' cluster"
 		}
 	}
 
@@ -1485,7 +1485,7 @@ Process {
 	################################################
 
 	# declare state
-	Write-Host "$DestinationHost,$Name - checking destination host for VM..."
+	Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost,$Name - checking destination host for VM..."
 
 	# define required parameters
 	$AssertVMNotFound = @{
@@ -1785,7 +1785,7 @@ Process {
 	################################################
 
 	# declare state
-	Write-Host "$DestinationHost,$Name - checking path(s) on destination..."
+	Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost,$Name - checking path(s) on destination..."
 
 	# loop through paths...
 	ForEach ($VMPath in $VMPaths) {
@@ -1804,7 +1804,7 @@ Process {
 		}
 
 		# declare state
-		Write-Host "$DestinationHost,$Name - ...path found: $VMPath"
+		Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost,$Name - ...path found: $VMPath"
 	}
 
 	################################################
@@ -1814,7 +1814,7 @@ Process {
 	# if VM clustered on source computer...
 	If ($SourceClusterGroup) {
 		# declare state
-		Write-Host "$ComputerName,$Name - removing VM from '$SourceClusterName' cluster..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM from '$SourceClusterName' cluster..."
 
 		# remove cluster group and resources
 		Try {
@@ -1825,8 +1825,8 @@ Process {
 		}
 
 		# declare state
-		Write-Host "$ComputerName,$Name - ...VM removed from '$SourceClusterName' cluster"
-		Write-Host "$ComputerName,$Name - waiting for VM to refresh after cluster removal..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM removed from '$SourceClusterName' cluster"
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - waiting for VM to refresh after cluster removal..."
 
 		# while VM reports as clustered...
 		While ($VM.IsClustered) {
@@ -1840,7 +1840,7 @@ Process {
 		}
 
 		# declare state
-		Write-Host "$ComputerName,$Name - ...VM refreshed after cluster removal"
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM refreshed after cluster removal"
 	}
 
 	################################################
