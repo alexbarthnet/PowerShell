@@ -1304,7 +1304,7 @@ Begin {
 
 			# add VM to cluster by ID
 			Try {
-				$null = Add-ClusterVirtualMachineRole @AddClusterVirtualMachineRole
+				$ClusterGroup = Add-ClusterVirtualMachineRole @AddClusterVirtualMachineRole
 			}
 			Catch {
 				Throw $_
@@ -1313,31 +1313,19 @@ Begin {
 			# declare state
 			Write-Host "$ComputerName,$Name - ...VM clustered"
 
-			# define parameters for Get-ClusterGroup
-			$GetClusterGroup = @{
-				Cluster     = $ClusterName
-				VMId        = $VM.Id
-				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-			}
+			# if cluster group priority does not match original priority...
+			If ($ClusterGroup.Priority -ne $script:Priority) {
+				# update cluster group
+				Try {
+					$ClusterGroup.Priority = $script:Priority
+				}
+				Catch {
+					Throw $_
+				}
 
-			# retrieve cluster group
-			Try {
-				$ClusterGroup = Get-ClusterGroup @GetClusterGroup
+				# declare state
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...updated cluster group priority to original value: $($script:Priority)"
 			}
-			Catch {
-				Throw $_
-			}
-
-			# update cluster group
-			Try {
-				$ClusterGroup.Priority = $script:Priority
-			}
-			Catch {
-				Throw $_
-			}
-
-			# declare state
-			Write-Host "$ComputerName,$Name - ...VM cluster group updated"
 		}
 
 		################################################
