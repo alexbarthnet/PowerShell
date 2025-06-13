@@ -1719,7 +1719,7 @@ Begin {
 
 			# define parameters
 			$AssertPathRemoved = @{
-				Path         = $VMPath
+				Path         = $VHDPath
 				ComputerName = $ComputerName
 				PathType     = [Microsoft.PowerShell.Commands.TestPathType]::Leaf
 			}
