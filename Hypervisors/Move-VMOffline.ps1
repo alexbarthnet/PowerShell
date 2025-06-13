@@ -1447,7 +1447,7 @@ Begin {
 				Param($ArgumentList)
 
 				# define child path for VMCX file
-				$ChildPath = '{0}\Virtual Machines\{1}.vmcx' -f $ArgumentList['Name'], $ArgumentList['Id`']
+				$ChildPath = '{0}\Virtual Machines\{1}.vmcx' -f $ArgumentList['Name'], $ArgumentList['Id']
 
 				# define complete path to VMCX file
 				Join-Path -Path $ArgumentList['Path'] -ChildPath $ChildPath
