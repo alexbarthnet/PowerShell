@@ -1829,8 +1829,8 @@ Begin {
 			# declare state
 			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM clustered"
 
-			# if cluster group priority does not match original priority...
-			If ($ClusterGroup.Priority -ne $script:Priority) {
+			# if original priority retrieved and cluster group priority does not match original priority...
+			If ($script:Priority -and $ClusterGroup.Priority -ne $script:Priority) {
 				# update cluster group
 				Try {
 					$ClusterGroup.Priority = $script:Priority
