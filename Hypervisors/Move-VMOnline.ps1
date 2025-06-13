@@ -1918,7 +1918,7 @@ Process {
 			Restore-VMOnComputer -VM $MovedVM
 		}
 		Catch {
-			Throw $_
+			Write-Warning -Message "could not restore migrated VM: $($_.Exception.Message)"
 		}
 	}
 	# if VM move failed...
@@ -1928,7 +1928,7 @@ Process {
 			Restore-VMOnComputer -VM $VM
 		}
 		Catch {
-			Throw $_
+			Write-Warning -Message "could not restore original VM: $($_.Exception.Message)"
 		}
 	}
 
@@ -1943,7 +1943,7 @@ Process {
 			Remove-VMOnComputer -VM $VM
 		}
 		Catch {
-			Throw $_
+			Write-Warning -Message "could not remove remnants of original VM: $($_.Exception.Message)"
 		}
 
 	}
@@ -1954,7 +1954,7 @@ Process {
 			Remove-VMOnComputer -VM $MovedVM
 		}
 		Catch {
-			Throw $_
+			Write-Warning -Message "could not remove remnants of planned VM: $($_.Exception.Message)"
 		}
 	}
 }

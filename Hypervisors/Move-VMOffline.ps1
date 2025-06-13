@@ -2171,7 +2171,7 @@ Process {
 		$ExportedVM = Export-VMToComputer -VM $VM -DestinationHost $DestinationHost -Path $SharePath
 	}
 	Catch {
-		Throw $_
+		Write-Warning -Message "could not export VM: $($_.Exception.Message)"
 	}
 
 	################################################
@@ -2184,7 +2184,7 @@ Process {
 			$ImportedVM = Import-VMOnComputer -VM $VM -ComputerName $DestinationHost -Path $DestinationStoragePath
 		}
 		Catch {
-			Throw $_
+			Write-Warning -Message "could not import VM: $($_.Exception.Message)"
 		}
 	}
 
@@ -2199,7 +2199,7 @@ Process {
 			Restore-VMOnComputer -VM $ImportedVM
 		}
 		Catch {
-			Throw $_
+			Write-Warning -Message "could not restore migrated VM: $($_.Exception.Message)"
 		}
 	}
 	# if VM export or import failed...
@@ -2209,7 +2209,7 @@ Process {
 			Restore-VMOnComputer -VM $VM
 		}
 		Catch {
-			Throw $_
+			Write-Warning -Message "could not restore original VM: $($_.Exception.Message)"
 		}
 	}
 
@@ -2224,7 +2224,7 @@ Process {
 			Remove-VMOnComputer -VM $VM
 		}
 		Catch {
-			Throw $_
+			Write-Warning -Message "could not remove remnants of original VM: $($_.Exception.Message)"
 		}
 
 	}
@@ -2235,7 +2235,7 @@ Process {
 			Remove-VMOnComputer -VM $ImportedVM
 		}
 		Catch {
-			Throw $_
+			Write-Warning -Message "could not remove remnants of planned VM: $($_.Exception.Message)"
 		}
 	}
 }
