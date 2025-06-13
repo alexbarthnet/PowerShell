@@ -1468,7 +1468,6 @@ Begin {
 		$CompareVM = @{
 			Path         = $PathForImport
 			ComputerName = $ComputerName
-			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 		}
 
 		# compare VM with target computer
