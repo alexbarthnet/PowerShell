@@ -356,7 +356,7 @@ Begin {
 		# update argument list
 		$InvokeCommand['ArgumentList']['Path'] = $Path
 		$InvokeCommand['ArgumentList']['PathType'] = $PathType
-		$InvokeCommand['ArgumentList']['ExcludeFiles'] = $ExcludeFiles
+		$InvokeCommand['ArgumentList']['ExcludedFileFilter'] = $ExcludedFileFilter
 
 		################################################
 		# test path itself
