@@ -2052,16 +2052,6 @@ Process {
 	$AutomaticStartAction = $VM.AutomaticStartAction
 
 	################################################
-	# retrieve path if not provided
-	################################################
-
-	# if destination storage path not provided as parameter...
-	If (!$PSBoundParameters.ContainsKey('DestinationStoragePath')) {
-		# assume destination storage path is same as VM path
-		$DestinationStoragePath = $VM | Select-Object -ExpandProperty 'Path' | Split-Path -Parent
-	}
-
-	################################################
 	# check for VM on source cluster
 	################################################
 
@@ -2133,8 +2123,28 @@ Process {
 	}
 
 	################################################
-	# get VM paths
+	# sanitize and retrieve VM paths
 	################################################
+
+	# if destination storage path not provided as parameter...
+	If (!$PSBoundParameters.ContainsKey('DestinationStoragePath')) {
+		# assume destination storage path is same as VM path
+		$DestinationStoragePath = $VM.Path
+	}
+
+	# if destination storage path ends with trailing backslash...
+	If ($DestinationStoragePath.EndsWith('\')) {
+		# trim trailing backslash
+		$DestinationStoragePath = $DestinationStoragePath.TrimEnd('\')
+	}
+
+	# if destination storage path ends with a dedicated directory for the VM...
+	If ($DestinationStoragePath.EndsWith($Name, [System.StringComparison]::InvariantCultureIgnoreCase)) {
+		# remove VM folder from end of path
+		$DestinationStoragePath = Split-Path -Path $DestinationStoragePath -Parent
+		# warn about change
+		Write-Warning -Message "updated DestinationStoragePath to prevent twice-nested VM directory; Export-VM will create dedicated VM directory under DestinationStoragePath"
+	}
 
 	# define VM path list
 	$VMPaths = [System.Collections.Generic.List[string]]::new()
