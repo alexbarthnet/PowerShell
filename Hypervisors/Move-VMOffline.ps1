@@ -1567,30 +1567,23 @@ Begin {
 			Return $ImportedVM
 		}
 
-		# define parameters for Get-VMHost
-		$GetVMHost = @{
+		# define parameters for Get-VMHostSupportedVersion
+		$GetVMHostSupportedVersion = @{
 			ComputerName = $ComputerName
+			Default      = $true
 			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 		}
 
-		# get VM host
+		# get default (latest) supported version from hypervisor
 		Try {
-			$VMHost = Get-VMHost @GetVMHost
-		}
-		Catch {
-			Throw $_
-		}
-
-		# get VM host highest supported VM version
-		Try {
-			$HighestSupportedVmVersion = $VMHost.SupportedVmVersions | ForEach-Object { [decimal]$_ } | Sort-Object | Select-Object -Last 1
+			$VMHostSupportedVersion = Get-VMHostSupportedVersion @GetVMHostSupportedVersion
 		}
 		Catch {
 			Throw $_
 		}
 
 		# if VM version is less than highest supported VM version...
-		If ($ImportedVM.Version -lt $HighestSupportedVmVersion) {
+		If ([decimal]$ImportedVM.Version -lt [decimal]$VMHostSupportedVersion.Version) {
 			# declare state
 			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - updating VM version from: $($ImportedVM.Version)"
 
@@ -1599,6 +1592,11 @@ Begin {
 				VM          = $ImportedVM
 				Passthru    = $true
 				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# define optional parameters for Update-VMVersion
+			If ($script:PSBoundParameters.ContainsKey('Force')) {
+				$UpdateVMVersion['Force'] = $script:Force
 			}
 
 			# update VM version
@@ -1611,7 +1609,7 @@ Begin {
 
 			# declare state
 			If ($ImportedVM.Version -eq $HighestSupportedVmVersion) {
-				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...updated VM version: $($ImportedVM.Version)"
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...updated VM version to: $($ImportedVM.Version)"
 			}
 		}
 
