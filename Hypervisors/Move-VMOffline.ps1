@@ -1583,7 +1583,7 @@ Begin {
 		}
 
 		# if VM version is less than highest supported VM version...
-		If ([decimal]$ImportedVM.Version -lt [decimal]$VMHostSupportedVersion.Version) {
+		If ([decimal]$ImportedVM.Version -lt [decimal]$VMHostSupportedVersion.Version.ToString()) {
 			# declare state
 			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - updating VM version from: $($ImportedVM.Version)"
 
