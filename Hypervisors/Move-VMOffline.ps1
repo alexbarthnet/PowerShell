@@ -324,6 +324,52 @@ Begin {
 		Return $false
 	}
 
+	Function Assert-PathNotFound {
+		[CmdletBinding()]
+		Param(
+			[Parameter(Mandatory = $true)]
+			[string]$Path,
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName,
+			# path type to test; default is container
+			[Microsoft.PowerShell.Commands.TestPathType]$PathType = [Microsoft.PowerShell.Commands.TestPathType]::Container
+		)
+
+		################################################
+		# prepare session
+		################################################
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# update argument list
+		$InvokeCommand['ArgumentList']['Path'] = $Path
+		$InvokeCommand['ArgumentList']['PathType'] = $PathType
+
+		################################################
+		# test path itself
+		################################################
+
+		# test path before attempting to remove path
+		Try {
+			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				Test-Path -Path $ArgumentList['Path'] -PathType $ArgumentList['PathType']
+			}
+		}
+		Catch {
+			Throw $_
+		}
+
+		# return inverted results from Test-Path
+		Return !$TestPath
+	}
+
 	Function Assert-PathRemoved {
 		[CmdletBinding()]
 		Param(
@@ -1709,7 +1755,7 @@ Begin {
 		# remove VM files
 		################################################
 
-		# declare state
+		# declare statef
 		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VHDs..."
 
 		# remove VM hard disk drive files
@@ -2058,7 +2104,7 @@ Process {
 		# remove VM folder from end of path
 		$DestinationStoragePath = Split-Path -Path $DestinationStoragePath -Parent
 		# warn about change
-		Write-Warning -Message 'updated DestinationStoragePath to prevent twice-nested VM directory; Export-VM will create dedicated VM directory under DestinationStoragePath'
+		Write-Warning -Message "updated DestinationStoragePath to prevent twice-nested VM directory; Export-VM will create dedicated VM directory under DestinationStoragePath"
 	}
 
 	# define VM path list
