@@ -1066,7 +1066,7 @@ Begin {
 		# declare state
 		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - comparing VM with destination host: $DestinationHost"
 
-		# move VM to target computer
+		# compare VM with target computer
 		Try {
 			$CompatibilityReport = Compare-VM -VM $VM -DestinationHost $DestinationHost @Parameters
 		}
