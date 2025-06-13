@@ -1420,13 +1420,11 @@ Begin {
 		# define strings
 		################################################
 
-		$Id = $VM.Id
 		$Name = $VM.Name.ToLowerInvariant()
-		$Vmcx = "$Name\Virtual Machines\$Id.vmcx"
 		$ComputerName = $ComputerName.ToLowerInvariant()
 
 		################################################
-		# check paths on target computer
+		# build VMCX path for VM import
 		################################################
 
 		# get hashtable for InvokeCommand splat
@@ -1438,50 +1436,22 @@ Begin {
 		}
 
 		# update argument list
+		$InvokeCommand['ArgumentList']['Id'] = $VM.Id
+		$InvokeCommand['ArgumentList']['Name'] = $Name
 		$InvokeCommand['ArgumentList']['Path'] = $Path
-		$InvokeCommand['ArgumentList']['Vmcx'] = $Vmcx
 
 		# create target path
 		Try {
 			$PathForImport = Invoke-Command @InvokeCommand -ScriptBlock {
+				# import arguments
 				Param($ArgumentList)
 
-				# define parameters for Join-Path
-				$JoinPath = @{
-					Path      = $ArgumentList['Path']
-					ChildPath = $ArgumentList['Vmcx']
-				}
+				# define child path for VMCX file
+				$ChildPath = '{0}\Virtual Machines\{1}.vmcx' -f $ArgumentList['Name'], $ArgumentList['Id`']
 
-				# get full path to VMCX file
-				Join-Path @JoinPath
+				# define complete path to VMCX file
+				Join-Path -Path $ArgumentList['Path'] -ChildPath $ChildPath
 			}
-		}
-		Catch {
-			Throw $_
-		}
-
-		################################################
-		# get target computer objects
-		################################################
-
-		# define parameters for Get-VMSwitch
-		$GetVMSwitch = @{
-			ComputerName = $ComputerName
-			SwitchType   = [Microsoft.HyperV.PowerShell.VMSwitchType]::External
-			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# get external VM switches
-		Try {
-			$VMSwitch = Get-VMSwitch @GetVMSwitch
-		}
-		Catch {
-			Throw $_
-		}
-
-		# get external VM switch names
-		Try {
-			$SwitchNames = $VMSwitch | Select-Object -ExpandProperty Name
 		}
 		Catch {
 			Throw $_
@@ -1509,110 +1479,48 @@ Begin {
 			Throw $_
 		}
 
-		################################################
-		# address VM incompatibility with target
-		################################################
-
-		# process each incompatibility
-		ForEach ($Incompatibility in $CompatibilityReport.Incompatibilities) {
-			switch ($Incompatibility.MessageID) {
-				# target does not have VM switch references in VM configuration
-				33012 {
-					# get VM network adapter from report
-					Try {
-						$VMNetworkAdapterName = $Incompatibility.Source.Name
-					}
-					Catch {
-						Write-Warning -Message 'Could not retrieve VM network adapter name from incompatibility object'
-						Throw $_
-					}
-
-					# if switchname parameter not found in external VM switch names...
-					If ( $SwitchName -notin $SwitchNames ) {
-						# ...clear SwitchName
-						$null = $SwitchName
-					}
-
-					# if switch name not provided or forced to null...
-					If ([string]::IsNullOrEmpty($SwitchName)) {
-						# switch on count of switchnames
-						switch ($SwitchNames.Count) {
-							# no external switches found
-							0 {
-								Write-Warning -Message "No external switches found on target server. VM network adapter '$VMNetworkAdapterName' will not be connected after import." -WarningAction Inquire
-								$SwitchName = $null
-							}
-							# one external switch found
-							1 {
-								Write-Warning -Message "VM network adapter '$VMNetworkAdapterName' will be connected to VM switch '$SwitchNames'" -WarningAction Continue
-								$SwitchName = $SwitchNames
-							}
-							# multiple external switches found
-							Default {
-								# get external "compute" switches by name
-								$ComputeSwitchNames = $SwitchNames | Where-Object { $_.Contains($SwitchNameHint) }
-								switch ($ComputeSwitchNames.Count) {
-									# no external switches with compute in the name found
-									0 {
-										# sort external switches by name and select first switch
-										$SwitchName = $SwitchNames | Sort-Object | Select-Object -First 1
-										Write-Warning -Message "VM network adapter '$VMNetworkAdapterName' will be connected to first available external switch: '$SwitchNames'" -WarningAction Continue
-										$SwitchName = $ComputeSwitchNames
-									}
-									# one external switch found
-									1 {
-										$SwitchName = $ComputeSwitchNames
-										Write-Warning -Message "VM network adapter '$VMNetworkAdapterName' will be connected to the located external 'compute' switch: '$SwitchNames'" -WarningAction Continue
-									}
-									Default {
-										# sort external "compute" switches by name and select first switch
-										$SwitchName = $ComputeSwitchNames | Sort-Object | Select-Object -First 1
-										Write-Warning -Message "VM network adapter '$VMNetworkAdapterName' will be connected to first available external 'compute' switch '$SwitchNames'" -WarningAction Continue
-									}
-								}
-							}
-						}
-					}
-
-					# if switch name is null...
-					If ([string]::IsNullOrEmpty($SwitchName)) {
-						# ...disconnect VM network adapter
-						Try {
-							$Incompatibility.Source | Disconnect-VMNetworkAdapter
-						}
-						Catch {
-							Write-Warning -Message 'Could not disconnect VM network adapter to address VM switch incompatibility'
-							Throw $_
-						}
-					}
-					# if switch name is not null...
-					Else {
-						# ...reconnect VM network adapter to new switch
-						Try {
-							$Incompatibility.Source | Connect-VMNetworkAdapter -SwitchName $SwitchName
-							# $Incompatibility.Source | Disconnect-VMNetworkAdapter -Passthru | Connect-VMNetworkAdapter -SwitchName $SwitchName
-						}
-						Catch {
-							Write-Warning -Message 'Could not reconnect VM network adapter to address VM switch incompatibility'
-							Throw $_
-						}
-					}
-				}
-				# target has an incompatibility with imported VM not addressed above
-				Default {
-					$CannotImport = $true
-					Write-Warning -Message "Target computer reported an unhandled incompatibility: '$($Incompatibility.Message)'"
-				}
-			}
-		}
-
-		# return
-		If ($CannotImport) {
-			Return $CompatibilityReport.VM
-		}
-
 		# declare state
-		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM compared to target"
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM compared"
+
+		# save original compatibility report to global scope
+		New-Variable -Name 'OriginalCompatibilityReport' -Value $CompatibilityReport -Scope Global -Force
+
+		################################################
+		# resolve incompatibilities
+		################################################
+
+		# if incompatibilities found...
+		If ($CompatibilityReport.Incompatibilities.Count) {
+			# declare state
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - resolving compatibility report for VM..."
+
+			# resolve incompatibilities
+			Try {
+				$CompatibilityReport = Resolve-VMCompatibilityReport -CompatibilityReport $CompatibilityReport
+			}
+			Catch {
+				Write-Warning -Message "could not resolve incompatibilities: $($_.Exception.Message)"
+				Return $CompatibilityReport.VM
+			}
+
+			# save resolved compatibility report to global scope
+			New-Variable -Name 'ResolvedCompatibilityReport' -Value $CompatibilityReport -Scope Global -Force
+
+			# if incompatibilities could not be resolved...
+			If ($CompatibilityReport.CannotResolve) {
+				# loop through cannot resolve messages
+				ForEach ($CannotResolveMessage in $CompatibilityReport.CannotResolveMessages) {
+					# report message
+					Write-Warning -Message "found cannot resolve message: $CannotResolveMessage"
+				}
+
+				# return VM from compatibility report
+				Return $CompatibilityReport.VM
+			}
+
+			# declare state
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...resolved compatibility report for VM"
+		}
 
 		################################################
 		# import VM
