@@ -1521,10 +1521,10 @@ Process {
 		# if source cluster group found...
 		If ($SourceClusterGroup) {
 			# retrieve cluster priority
-			$Priority = $SourceClusterGroup.Priority
+			$script:Priority = $SourceClusterGroup.Priority
 
 			# declare state
-			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM found on '$SourceClusterName' cluster with '$Priority' priority; will remove from cluster before migration"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM found on '$SourceClusterName' cluster with '$script:Priority' priority; will remove from cluster before migration"
 		}
 		Else {
 			# declare state
