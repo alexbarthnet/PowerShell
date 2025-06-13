@@ -1253,31 +1253,55 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking VM..."
 
 		# define parameters
-		$AssertVMRemoved = @{
+		$AssertVMNotFound = @{
 			VM           = $VM
 			ComputerName = $ComputerName
 		}
 
-		# remove VM
+		# check VM
 		Try {
-			$VMRemoved = Assert-VMRemoved @AssertVMRemoved
+			$VMNotFound = Assert-VMNotFound @AssertVMNotFound
 		}
 		Catch {
 			Throw $_
 		}
 
-		# if VM removed...
-		If ($VMRemoved) {
+		# if VM not found...
+		If ($VMNotFound) {
 			# declare state
-			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VM"
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM not found"
 		}
 		Else {
 			# declare state
-			Write-Warning -Message 'could not remove VM'
-			Return
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM..."
+
+			# define parameters
+			$AssertVMRemoved = @{
+				VM           = $VM
+				ComputerName = $ComputerName
+			}
+
+			# remove VM
+			Try {
+				$VMRemoved = Assert-VMRemoved @AssertVMRemoved
+			}
+			Catch {
+				Throw $_
+			}
+
+			# if VM removed...
+			If ($VMRemoved) {
+				# declare state
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VM"
+			}
+			Else {
+				# declare state
+				Write-Warning -Message 'could not remove VM'
+				Return
+			}
 		}
 
 		################################################
@@ -1285,36 +1309,58 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VHDs..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking VHDs..."
 
 		# remove VM hard disk drive files
 		ForEach ($VHDPath in $VHDPaths) {
-			# declare state
-			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removing VHD: $VHDPath"
-
 			# define parameters
-			$AssertPathRemoved = @{
+			$AssertPathNotFound = @{
 				Path         = $VHDPath
 				ComputerName = $ComputerName
 				PathType     = [Microsoft.PowerShell.Commands.TestPathType]::Leaf
 			}
 
-			# remove path
+			# test path
 			Try {
-				$PathRemoved = Assert-PathRemoved @AssertPathRemoved
+				$PathNotFound = Assert-PathNotFound @AssertPathNotFound
 			}
 			Catch {
 				Throw $_
 			}
 
-			# if path removed...
-			If ($PathRemoved) {
+			# if path not found...
+			If ($PathNotFound) {
 				# declare state
-				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VHD"
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VHD not found: $VHDPath"
 			}
 			Else {
 				# declare state
-				Write-Warning -Message 'could not remove VHD'
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removing VHD: $VHDPath"
+
+				# define parameters
+				$AssertPathRemoved = @{
+					Path         = $VHDPath
+					ComputerName = $ComputerName
+					PathType     = [Microsoft.PowerShell.Commands.TestPathType]::Leaf
+				}
+
+				# remove path
+				Try {
+					$PathRemoved = Assert-PathRemoved @AssertPathRemoved
+				}
+				Catch {
+					Throw $_
+				}
+
+				# if path removed...
+				If ($PathRemoved) {
+					# declare state
+					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VHD"
+				}
+				Else {
+					# declare state
+					Write-Warning -Message 'could not remove VHD'
+				}
 			}
 		}
 
@@ -1323,38 +1369,60 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM folders..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking VM folders..."
 
 		# remove VM path folders
 		ForEach ($VMPath in $VMPaths) {
-			# declare state
-			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removing VM folder: $VMPath"
-
 			# define parameters
-			$AssertPathRemoved = @{
-				Path                 = $VMPath
-				ComputerName         = $ComputerName
-				SkipWhenFilesPresent = $true
-				ExcludedFileFilter   = '{0}.*' -f $VM.Id
-				PathType             = [Microsoft.PowerShell.Commands.TestPathType]::Container
+			$AssertPathNotFound = @{
+				Path         = $VMPath
+				ComputerName = $ComputerName
+				PathType     = [Microsoft.PowerShell.Commands.TestPathType]::Leaf
 			}
 
-			# remove path
+			# test path
 			Try {
-				$PathRemoved = Assert-PathRemoved @AssertPathRemoved
+				$PathNotFound = Assert-PathNotFound @AssertPathNotFound
 			}
 			Catch {
 				Throw $_
 			}
 
-			# if path removed...
-			If ($PathRemoved) {
+			# if path not found...
+			If ($PathNotFound) {
 				# declare state
-				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VM folder"
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM folder not found: $VMPath"
 			}
 			Else {
 				# declare state
-				Write-Warning -Message 'could not remove VM folder'
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removing VM folder: $VMPath"
+
+				# define parameters
+				$AssertPathRemoved = @{
+					Path                 = $VMPath
+					ComputerName         = $ComputerName
+					SkipWhenFilesPresent = $true
+					ExcludedFileFilter   = '{0}.*' -f $VM.Id
+					PathType             = [Microsoft.PowerShell.Commands.TestPathType]::Container
+				}
+
+				# remove path
+				Try {
+					$PathRemoved = Assert-PathRemoved @AssertPathRemoved
+				}
+				Catch {
+					Throw $_
+				}
+
+				# if path removed...
+				If ($PathRemoved) {
+					# declare state
+					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VM folder"
+				}
+				Else {
+					# declare state
+					Write-Warning -Message 'could not remove VM folder'
+				}
 			}
 		}
 	}
