@@ -1850,7 +1850,7 @@ Begin {
 			$AssertPathNotFound = @{
 				Path         = $VMPath
 				ComputerName = $ComputerName
-				PathType     = [Microsoft.PowerShell.Commands.TestPathType]::Leaf
+				PathType     = [Microsoft.PowerShell.Commands.TestPathType]::Container
 			}
 
 			# test path
