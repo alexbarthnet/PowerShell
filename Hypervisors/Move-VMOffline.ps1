@@ -1523,7 +1523,7 @@ Begin {
 
 		# compare VM with target computer
 		Try {
-			$CompatibilityReport = Compare-VM @CompareVM -ErrorAction 'Stop' 
+			$CompatibilityReport = Compare-VM @CompareVM -ErrorAction 'Stop'
 		}
 		Catch [Microsoft.HyperV.PowerShell.VirtualizationException] {
 			# if inner exception reports an invalid parameter (32773) during the 'Delete' operation of the compare...
@@ -1729,7 +1729,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking VM..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM..."
 
 		# define parameters
 		$AssertVMNotFound = @{
@@ -1751,9 +1751,6 @@ Begin {
 			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM not found"
 		}
 		Else {
-			# declare state
-			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM..."
-
 			# define parameters
 			$AssertVMRemoved = @{
 				VM           = $VM
@@ -2177,7 +2174,7 @@ Process {
 		# remove VM folder from end of path
 		$DestinationStoragePath = Split-Path -Path $DestinationStoragePath -Parent
 		# warn about change
-		Write-Warning -Message "updated DestinationStoragePath to prevent twice-nested VM directory; Export-VM will create dedicated VM directory under DestinationStoragePath"
+		Write-Warning -Message 'updated DestinationStoragePath to prevent twice-nested VM directory; Export-VM will create dedicated VM directory under DestinationStoragePath'
 	}
 
 	# define VM path list
