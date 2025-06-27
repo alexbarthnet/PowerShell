@@ -2136,34 +2136,116 @@ Process {
 	}
 
 	################################################
-	# check for VM on target computer
+	# check if target computer is clustered
 	################################################
 
-	# declare state
-	Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost,$Name - checking destination host for VM..."
-
-	# define required parameters
-	$AssertVMNotFound = @{
-		VM           = $VM
-		ComputerName = $DestinationHost
-	}
-
-	# ensure VM not found on destination host
+	# get cluster for target computer
 	Try {
-		$VMNotFound = Assert-VMNotFound @AssertVMNotFound
+		$TargetClusterName = Get-ClusterName -ComputerName $DestinationHost
 	}
 	Catch {
 		Throw $_
 	}
 
-	# if VM found on destination host
-	If (!$VMNotFound) {
-		# return immediately; warnings were issued by function
-		Return
+	# if target computer is clustered...
+	If ($TargetClusterName) {
+		# declare state
+		Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost,$Name - checking if VM clustered on target computer..."
+
+		# retrieve target cluster nodes
+		Try {
+			$TargetClusterNodes = Get-ClusterNode -Cluster $TargetClusterName -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not retrieves nodes from '$TargetClusterName' cluster: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# define parameters for Get-ClusterGroup
+		$GetClusterGroup = @{
+			Cluster     = $TargetClusterName
+			VMId        = $Id
+			ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
+		}
+
+		# get cluster group for VM on source cluster
+		$TargetClusterGroup = Get-ClusterGroup @GetClusterGroup
+
+		# clear errors due to the nature of looking up VMs by Id
+		$Error.Clear()
+
+		# if target cluster group found...
+		If ($TargetClusterGroup) {
+			# declare state
+			Write-Warning -Message "found VM on '$($TargetClusterGroup.OwnerNode.Name)' node in '$TargetClusterName' cluster"
+			Return
+		}
+		Else {
+			# declare state
+			Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost,$Name - ...VM not found on '$TargetClusterName' cluster"
+		}
 	}
 
 	################################################
-	# sanitize and retrieve VM paths
+	# check for VM on target computer
+	################################################
+
+	# define sorted set for target computer names
+	$TargetComputerNames = [System.Collections.Generic.SortedSet[System.String]]::new()
+
+	# if target computer is clustered...
+	If ($TargetClusterName) {
+		# define host type
+		$HostType = 'target cluster node'
+
+		# loop through nodes in target cluster
+		ForEach ($TargetClusterNode in $TargetClusterNodes) {
+			# add node name to sorted set
+			$null = $TargetComputerNames.Add($TargetClusterNode.Name)
+		}
+	}
+	# if target computer is not clustered...
+	Else {
+		# define host type
+		$HostType = 'destination host'
+
+		# add destination host to sorted set
+		$TargetClusterNames.Add($DestinationHost)
+	}
+
+	# loop through target computer names
+	ForEach ($TargetComputerName in $TargetComputerNames) {
+		# declare state
+		Write-Host "$([datetime]::Now.ToString('s')),$TargetComputerName,$Name - checking $HostType for VM..."
+
+		# define required parameters
+		$AssertVMNotFound = @{
+			VM           = $VM
+			ComputerName = $DestinationHost
+		}
+
+		# ensure VM not found on destination host
+		Try {
+			$VMNotFound = Assert-VMNotFound @AssertVMNotFound
+		}
+		Catch {
+			Throw $_
+		}
+
+		# if VM not found on target computer...
+		If ($VMNotFound) {
+			# declare state
+			Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost,$Name - ...VM not found on $HostType"
+		}
+		# if VM found on destination host
+		Else {
+			# return immediately; warnings were issued by function
+			Return
+		}
+	}
+
+	################################################
+	# get VM paths on source computer (sanitized)
 	################################################
 
 	# if destination storage path not provided as parameter...
@@ -2193,19 +2275,7 @@ Process {
 	$VMPaths.Add($DestinationStoragePath)
 
 	################################################
-	# check if target computer is clustered
-	################################################
-
-	# get cluster for target computer
-	Try {
-		$TargetClusterName = Get-ClusterName -ComputerName $DestinationHost
-	}
-	Catch {
-		Throw $_
-	}
-
-	################################################
-	# get target CSVs from target cluster
+	# test VM paths against CSVs on target
 	################################################
 
 	# if target computer is clustered...
