@@ -570,7 +570,7 @@ Function Export-CmsCredentialCertificate {
 	.PARAMETER FilePath
 	Specifies the path for the exported public key.
 
-	.PARAMETER PfxFilePath
+	.PARAMETER PfxFile
 	Specifies the path for the exported PFX file.
 
 	.INPUTS
@@ -606,7 +606,7 @@ Function Export-CmsCredentialCertificate {
 		[Parameter(Position = 2)]
 		[string]$FilePath,
 		[Parameter(Position = 3)]
-		[string]$PfxFilePath,
+		[string]$PfxFile,
 		[Parameter(Position = 4)]
 		[switch]$SkipPublicKey,
 		[Parameter(Position = 5)]
@@ -739,21 +739,21 @@ Function Export-CmsCredentialCertificate {
 			#retrieve simple name from certificate
 			$ChildPath = $local:Certificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
 
-			# define PfxFilePath as simple name with .pfx extension in default pfx file path
-			$PfxFilePath = Join-Path -Path $local:PfxPath -ChildPath "$local:ChildPath.pfx"
+			# define PfxFile as simple name with .pfx extension in default pfx file path
+			$PfxFile = Join-Path -Path $local:PfxPath -ChildPath "$local:ChildPath.pfx"
 		}
 
-		# define parent path for PfxFilePath
-		$PFxFileParentPath = Split-Path -Path $PfxFilePath
+		# define parent path for PfxFile
+		$PfxFileParentPath = Split-Path -Path $PfxFile
 
-		# if parent path for PfxFilePath not found...
-		If (![System.IO.Directory]::Exists($PFxFileParentPath)) {
+		# if parent path for PfxFile not found...
+		If (![System.IO.Directory]::Exists($PfxFileParentPath)) {
 			# create Path
 			Try {
-				$null = New-Item -ItemType 'Directory' -Path $PFxFileParentPath
+				$null = New-Item -ItemType 'Directory' -Path $PfxFileParentPath
 			}
 			Catch {
-				Write-Warning -Message "could not create '$PFxFileParentPath' path for PFX file for certificate with '$($local:Certificate.Thumbprint)' thumbprint on host: $local:Hostname"
+				Write-Warning -Message "could not create '$PfxFileParentPath' path for PFX file for certificate with '$($local:Certificate.Thumbprint)' thumbprint on host: $local:Hostname"
 				Throw $_
 			}
 		}
@@ -761,7 +761,7 @@ Function Export-CmsCredentialCertificate {
 		# define parameters for Export-PfxCertificate
 		$ExportPfxCertificate = @{
 			Cert                  = $local:Certificate
-			FilePath              = $local:PfxFilePath
+			FilePath              = $local:PfxFile
 			ChainOption           = [Microsoft.CertificateServices.Commands.ExportChainOption]::EndEntityCertOnly
 			CryptoAlgorithmOption = [Microsoft.CertificateServices.Commands.CryptoAlgorithmOptions]::AES256_SHA256
 			ErrorAction           = [System.Management.Automation.ActionPreference]::Stop
@@ -788,9 +788,9 @@ Function Export-CmsCredentialCertificate {
 			Throw $_
 		}
 
-		# if PfxFilePath not provided...
-		If (!$PSBoundParameters.ContainsKey('PfxFilePath')) {
-			Write-Host "exported PFX file for certificate with '$($local:Certificate.Thumbprint)' thumbprint to path: $local:PfxFilePath"
+		# if PfxFile not provided...
+		If (!$PSBoundParameters.ContainsKey('PfxFile')) {
+			Write-Host "exported PFX file for certificate with '$($local:Certificate.Thumbprint)' thumbprint to path: $local:PfxFile"
 		}
 	}
 }
