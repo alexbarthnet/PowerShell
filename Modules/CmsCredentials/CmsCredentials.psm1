@@ -1235,13 +1235,13 @@ Function Get-CmsCredential {
 	}
 }
 
-Function Install-CmsCredential {
+Function Import-CmsCredential {
 	<#
 	.SYNOPSIS
-	Installs a CMS credential file and certificate to the local computer.
+	Imports a CMS credential file and certificate to the local computer.
 
 	.DESCRIPTION
-	Installs a CMS credential file and certificate to the local computer. The calling user must have permission to the public key that will protect the credential.
+	Imports a CMS credential file and certificate to the local computer. The calling user must have permission to the public key that protects the credential or provide the password for the PFX file.
 
 	.PARAMETER FilePath
 	Specifies the path to a CMS credential file.
@@ -1250,10 +1250,10 @@ Function Install-CmsCredential {
 	Specifies the path to the PFX file that containing the CMS certificate.
 
 	.PARAMETER Password
-	Specifies the password to the PFX file as a secure string. Requires the PfxFile parameter.
+	Specifies the password to the PFX file as a secure string.
 
 	.PARAMETER Exportable
-	Switch parameter to allow the CMS certificate to be installed as exportable.
+	Switch parameter to import the CMS certificate with the exportable flag.
 
 	.PARAMETER Force
 	Switch to overwrite existing CMS certificates and credential files.
@@ -2875,7 +2875,7 @@ $FunctionsToExport = @(
 	'Export-CmsCredentialCertificate'
 	'New-CmsCredentialCertificate'
 	'Get-CmsCredential'
-	'Install-CmsCredential'
+	'Import-CmsCredential'
 	'Protect-CmsCredential'
 	'Remove-CmsCredential'
 	'Show-CmsCredential'
