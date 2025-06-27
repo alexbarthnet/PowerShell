@@ -658,8 +658,22 @@ Function Export-CmsCredentialCertificate {
 
 	# if skip public key not requested...
 	If (!$local:SkipPublicKey) {
+		# if FilePath provided...
+		If ($PSBoundParameters.ContainsKey('FilePath')) {
+			# if FilePath is not an absolute path...
+			If (![System.IO.Path]::IsPathRooted($FilePath)) {
+				# get unresolved absolute path
+				Try {
+					$FilePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($FilePath)
+				}
+				Catch {
+					Write-Warning "could not create absolute path from the provided FilePath parameter: $FilePath"
+					Throw $_
+				}
+			}
+		}
 		# if FilePath not provided...
-		If (!$PSBoundParameters.ContainsKey('FilePath')) {
+		Else {
 			#retrieve simple name from certificate
 			$ChildPath = $local:Certificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
 
@@ -706,8 +720,22 @@ Function Export-CmsCredentialCertificate {
 
 	# if skip pfx file not requested...
 	If (!$local:SkipPfxFile) {
-		# if PfxFilePath not provided...
-		If (!$PSBoundParameters.ContainsKey('PfxFilePath')) {
+		# if PfxFile provided...
+		If ($PSBoundParameters.ContainsKey('PfxFile')) {
+			# if PfxFile is not an absolute path...
+			If (![System.IO.Path]::IsPathRooted($PfxFile)) {
+				# get unresolved absolute path
+				Try {
+					$PfxFile = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($PfxFile)
+				}
+				Catch {
+					Write-Warning "could not create absolute path from the provided FilePath parameter: $PfxFile"
+					Throw $_
+				}
+			}
+		}
+		# if PfxFile not provided...
+		Else {
 			#retrieve simple name from certificate
 			$ChildPath = $local:Certificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
 
@@ -1003,6 +1031,18 @@ Function Get-CmsCredential {
 
 	# if file path provided...
 	If ($PSBoundParameters.ContainsKey('FilePath')) {
+		# if FilePath is not an absolute path...
+		If (![System.IO.Path]::IsPathRooted($FilePath)) {
+			# get unresolved absolute path
+			Try {
+				$FilePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($FilePath)
+			}
+			Catch {
+				Write-Warning "could not create absolute path from the provided FilePath parameter: $FilePath"
+				Throw $_
+			}
+		}
+
 		# if file path is not a file...
 		If (![System.IO.File]::Exists($local:FilePath)) {
 			Write-Warning -Message "could not locate credential file with '$local:FilePath' path on host: $local:Hostname"
@@ -1023,6 +1063,18 @@ Function Get-CmsCredential {
 
 	# if PFX file provided...
 	If ($PSBoundParameters.ContainsKey('PfxFile')) {
+		# if PfxFile is not an absolute path...
+		If (![System.IO.Path]::IsPathRooted($PfxFile)) {
+			# get unresolved absolute path
+			Try {
+				$PfxFile = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($PfxFile)
+			}
+			Catch {
+				Write-Warning "could not create absolute path from the provided FilePath parameter: $PfxFile"
+				Throw $_
+			}
+		}
+
 		# define required parameters for Find-CmsCertificate
 		$FindCmsCertificate = @{
 			PfxFile = $local:PfxFile
