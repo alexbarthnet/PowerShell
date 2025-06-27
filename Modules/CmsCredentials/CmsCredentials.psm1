@@ -746,7 +746,7 @@ Function Export-CmsCredentialCertificate {
 					$PfxFile = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($PfxFile)
 				}
 				Catch {
-					Write-Warning "could not create absolute path from the provided FilePath parameter: $PfxFile"
+					Write-Warning "could not create absolute path from the provided PfxFile parameter: $PfxFile"
 					Throw $_
 				}
 			}
@@ -1089,7 +1089,7 @@ Function Get-CmsCredential {
 				$PfxFile = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($PfxFile)
 			}
 			Catch {
-				Write-Warning "could not create absolute path from the provided FilePath parameter: $PfxFile"
+				Write-Warning "could not create absolute path from the provided PfxFile parameter: $PfxFile"
 				Throw $_
 			}
 		}
