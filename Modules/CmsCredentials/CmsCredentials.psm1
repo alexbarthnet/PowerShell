@@ -1641,6 +1641,18 @@ Function Protect-CmsCredential {
 
 	# if PFX file provided...
 	If ($PSBoundParameters.ContainsKey('PfxFile')) {
+		# if PfxFile is not an absolute path...
+		If (![System.IO.Path]::IsPathRooted($PfxFile)) {
+			# get unresolved absolute path
+			Try {
+				$PfxFile = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($PfxFile)
+			}
+			Catch {
+				Write-Warning "could not create absolute path from the provided PfxFile parameter: $PfxFile"
+				Throw $_
+			}
+		}
+
 		# find CMS certificate from PFX file
 		Try {
 			$Certificate = Find-CmsCertificate -PfxFile $local:PfxFile
