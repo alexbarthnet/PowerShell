@@ -681,17 +681,22 @@ Function Export-CmsCredentialCertificate {
 			$FilePath = Join-Path -Path $local:Path -ChildPath "$local:ChildPath.cer"
 		}
 
-		# define parent path for FilePath
-		$FileParentPath = Split-Path -Path $FilePath
+		# if FilePath not found...
+		If (![System.IO.File]::Exists($FilePath)) {
+			# define parameters for New-Item
+			$NewItem = @{
+				Path        = $local:FilePath
+				Force       = $true
+				ItemType    = 'File'
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
 
-		# if parent path for FilePath not found...
-		If (![System.IO.Directory]::Exists($FileParentPath)) {
-			# create Path
+			# create file and path to file
 			Try {
-				$null = New-Item -ItemType 'Directory' -Path $FileParentPath
+				$null = New-Item @NewItem | Remove-Item -Force
 			}
 			Catch {
-				Write-Warning -Message "could not create '$FileParentPath' path for public key for certificate with '$($local:Certificate.Thumbprint)' thumbprint on host: $local:Hostname"
+				Write-Warning -Message "could not create file with '$local:FilePath' path on host: $local:Hostname"
 				Throw $_
 			}
 		}
@@ -743,19 +748,21 @@ Function Export-CmsCredentialCertificate {
 			$PfxFile = Join-Path -Path $local:PfxPath -ChildPath "$local:ChildPath.pfx"
 		}
 
-		# define parent path for PfxFile
-		$PfxFileParentPath = Split-Path -Path $PfxFile
+		# define parameters for New-Item
+		$NewItem = @{
+			Path        = $local:PfxFile
+			Force       = $true
+			ItemType    = 'File'
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
 
-		# if parent path for PfxFile not found...
-		If (![System.IO.Directory]::Exists($PfxFileParentPath)) {
-			# create Path
-			Try {
-				$null = New-Item -ItemType 'Directory' -Path $PfxFileParentPath
-			}
-			Catch {
-				Write-Warning -Message "could not create '$PfxFileParentPath' path for PFX file for certificate with '$($local:Certificate.Thumbprint)' thumbprint on host: $local:Hostname"
-				Throw $_
-			}
+		# create file and path to file
+		Try {
+			$null = New-Item @NewItem | Remove-Item -Force
+		}
+		Catch {
+			Write-Warning -Message "could not create file with '$local:PfxFile' path on host: $local:Hostname"
+			Throw $_
 		}
 
 		# define parameters for Export-PfxCertificate
@@ -2837,25 +2844,41 @@ Function Write-CmsCredentialSettings {
 
 	# if directory not found...
 	If (![System.IO.Directory]::Exists($local:PathToDirectoryInProgramData)) {
-		# create directory
+		# define parameters for New-Item
+		$NewItem = @{
+			Path        = $local:PathToDirectoryInProgramData
+			Force       = $true
+			ItemType    = 'Directory'
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# create directory and path to directory
 		Try {
-			$null = New-Item -ItemType 'Directory' -Path $local:PathToDirectoryInProgramData
+			$null = New-Item @NewItem | Remove-Item -Force
 		}
 		Catch {
-			Write-Warning -Message "could not create directory for CmsCredentials: $local:PathToDirectoryInProgramData"
-			Return $_
+			Write-Warning -Message "could not create directory with '$local:PathToDirectoryInProgramData' path on host: $local:Hostname"
+			Throw $_
 		}
 	}
 
 	# if file not found...
 	If (![System.IO.File]::Exists($local:PathToFileWithModuleDefaults)) {
-		# create folder
+		# define parameters for New-Item
+		$NewItem = @{
+			Path        = $local:PathToFileWithModuleDefaults
+			Force       = $true
+			ItemType    = 'File'
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# create file and path to file
 		Try {
-			$null = New-Item -ItemType 'File' -Path $local:PathToFileWithModuleDefaults
+			$null = New-Item @NewItem | Remove-Item -Force
 		}
 		Catch {
-			Write-Warning -Message "could not create file for CmsCredentials: $local:PathToFileWithModuleDefaults"
-			Return $_
+			Write-Warning -Message "could not create file with '$local:PathToFileWithModuleDefaults' path on host: $local:Hostname"
+			Throw $_
 		}
 	}
 
