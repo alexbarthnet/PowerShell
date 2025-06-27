@@ -1235,6 +1235,193 @@ Function Get-CmsCredential {
 	}
 }
 
+Function Install-CmsCredential {
+	<#
+	.SYNOPSIS
+	Installs a CMS credential file and certificate to the local computer.
+
+	.DESCRIPTION
+	Installs a CMS credential file and certificate to the local computer. The calling user must have permission to the public key that will protect the credential.
+
+	.PARAMETER FilePath
+	Specifies the path to a CMS credential file.
+
+	.PARAMETER PfxFile
+	Specifies the path to the PFX file that containing the CMS certificate.
+
+	.PARAMETER Password
+	Specifies the password to the PFX file as a secure string. Requires the PfxFile parameter.
+
+	.PARAMETER Exportable
+	Switch parameter to allow the CMS certificate to be installed as exportable.
+
+	.PARAMETER Force
+	Switch to overwrite existing CMS certificates and credential files.
+
+	.INPUTS
+	None.
+
+	.OUTPUTS
+	None.
+
+	#>
+
+	[CmdletBinding()]
+	Param (
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline)]
+		[string]$FilePath,
+		[Parameter(Position = 1, Mandatory = $true)]
+		[string]$PfxFile,
+		[Parameter(Mandatory = $false)]
+		[securestring]$Password,
+		[Parameter(Mandatory = $false)]
+		[switch]$Exportable,
+		[Parameter(Mandatory = $false)]
+		[switch]$Force,
+		[Parameter(DontShow)]
+		[string]$Path = $CmsCredentials['PathForCmsFiles'],
+		[Parameter(DontShow)]
+		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
+		[Parameter(DontShow)]
+		[string]$Pattern = '^CN=(?<FileName>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}), OU=(?<Identity>.+), O=CmsCredentials$',
+		[Parameter(DontShow)]
+		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
+	)
+
+	# if file path is not a file...
+	If (![System.IO.File]::Exists($local:FilePath)) {
+		Write-Warning -Message "could not locate credential file with '$local:FilePath' path on host: $local:Hostname"
+		Return $null
+	}
+
+	# define required parameters for Find-CmsCertificate
+	$FindCmsCertificate = @{
+		PfxFile = $local:PfxFile
+	}
+
+	# define optional parameters for Find-CmsCertificate
+	If ($PSBoundParameters.ContainsKey('Password')) {
+		$FindCmsCertificate.Add('Password', $local:Password)
+	}
+
+	# find CMS certificate from PFX file
+	Try {
+		$Certificate = Find-CmsCertificate @FindCmsCertificate
+	}
+	Catch {
+		Throw $_
+	}
+
+	# test subject against pattern
+	Try {
+		$SubjectMatchesPattern = $Certificate.Subject -match $Pattern
+	}
+	Catch {
+		# warn and return
+		Write-Warning -Message "could not compare subject of the certificate in the provided PFX file against the required pattern: $Pattern"
+		Throw $_
+	}
+
+	# if subject does not match pattern...
+	If (!$SubjectMatchesPattern) {
+		# warn and return
+		Write-Warning -Message "the subject of the certificate in the provided PFX file does not match the required regular expression: $Pattern"
+		Return
+	}
+
+	# extract file name and identity from matches
+	$FileName = $Matches.FileName
+	$Identity = $Matches.Identity
+
+	# if identity is too long or contains invalid characters...
+	If (Test-CmsInvalidIdentity -Identity $local:Identity) {
+		# warn and return
+		Write-Warning -Message "the value for the Identity in the subject of the certificate in the provided PFX file contains more than 64 characters or one or more of the following invalid characters: '\' (backslash), '=' (equal sign)"
+		Return
+	}
+
+	# construct path for certificate
+	Try {
+		$CertificatePath = Join-Path -Path $CertStoreLocation -ChildPath $Certificate.Thumbprint
+	}
+	Catch {
+		Write-Warning -Message 'could not build path to test if certificate already exists'
+		Throw $_
+	}
+
+	# test if certificate already installed
+	Try {
+		$CertificateFound = Test-Path -Path $CertificatePath -PathType Leaf
+	}
+	Catch {
+		Write-Warning -Message 'could not test if certificate already exists'
+		Throw $_
+	}
+
+	# if certificate found and force not requested...
+	If ($CertificateFound -and -not $Force) {
+		Write-Warning -Message 'skipping certificate install; found existing certificate with matching thumbprint'
+	}
+	# if certificate not found or force requested...
+	Else {
+		# define parameters
+		$ImportPfxCertificate = @{
+			FilePath          = $PfxFile
+			Exportable        = $Exportable
+			CertStoreLocation = $CertStoreLocation
+			ErrorAction       = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# import CMS certificate from PFX file
+		Try {
+			Import-PfxCertificate @ImportPfxCertificate
+		}
+		Catch {
+			Throw $_
+		}
+	}
+
+	# construct path for destination file
+	Try {
+		$DestinationPath = Join-Path -Path $Path -ChildPath "$FileName.txt"
+	}
+	Catch {
+		Write-Warning -Message 'could not build path for credential file'
+		Throw $_
+	}
+
+	# test if destination file already installed
+	Try {
+		$DestinationFound = Test-Path -Path $DestinationPath -PathType Leaf
+	}
+	Catch {
+		Write-Warning -Message 'could not test if credential file already exists'
+		Throw $_
+	}
+
+	# if destination file found and force not requested...
+	If ($DestinationFound -and -not $Force) {
+		Write-Warning -Message 'skipping credential file install; found existing credential file with matching guid'
+	}
+	# if certificate not found or force requested...
+	Else {
+		# define parameters
+		$CopyItem = @{
+			Path        = $FilePath
+			Destination = $DestinationPath
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# import CMS credential file
+		Try {
+			Copy-Item @CopyItem
+		}
+		Catch {
+			Throw $_
+		}
+	}
+}
+
 Function Protect-CmsCredential {
 	<#
 	.SYNOPSIS
@@ -2688,6 +2875,7 @@ $FunctionsToExport = @(
 	'Export-CmsCredentialCertificate'
 	'New-CmsCredentialCertificate'
 	'Get-CmsCredential'
+	'Install-CmsCredential'
 	'Protect-CmsCredential'
 	'Remove-CmsCredential'
 	'Show-CmsCredential'

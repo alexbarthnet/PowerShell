@@ -4,7 +4,7 @@
 RootModule = 'CmsCredentials.psm1'
 
 # Version number of this module.
-ModuleVersion = '2.2.0.0'
+ModuleVersion = '2.3.0.0'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -66,6 +66,7 @@ FunctionsToExport = @(
     'Export-CmsCredentialCertificate'
     'New-CmsCredentialCertificate'
     'Get-CmsCredential'
+    'Install-CmsCredential'
     'Protect-CmsCredential'
     'Remove-CmsCredential'
     'Show-CmsCredential'
