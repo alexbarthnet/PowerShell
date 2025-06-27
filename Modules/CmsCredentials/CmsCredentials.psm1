@@ -186,6 +186,18 @@ Function Find-CmsCertificate {
 
 	# if PFX file provided...
 	If ($PSBoundParameters.ContainsKey('PfxFile')) {
+		# if PfxFile is not an absolute path...
+		If (![System.IO.Path]::IsPathRooted($PfxFile)) {
+			# get unresolved absolute path
+			Try {
+				$PfxFile = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($PfxFile)
+			}
+			Catch {
+				Write-Warning "could not create absolute path from the provided PfxFile parameter: $PfxFile"
+				Throw $_
+			}
+		}
+
 		# define parameters string for reporting
 		$WithParameters = "with '{0}' path" -f $local:PfxFile
 
@@ -1701,6 +1713,18 @@ Function Protect-CmsCredential {
 	Catch {
 		Write-Warning -Message "could not prefix encrypted credential with certificate subject and thumbprint on host: $local:Hostname"
 		Throw $_
+	}
+
+	# if OutFile is not an absolute path...
+	If (![System.IO.Path]::IsPathRooted($OutFile)) {
+		# get unresolved absolute path
+		Try {
+			$OutFile = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutFile)
+		}
+		Catch {
+			Write-Warning "could not create absolute path from the provided OutFile parameter: $OutFile"
+			Throw $_
+		}
 	}
 
 	# if CMS credential file found...
