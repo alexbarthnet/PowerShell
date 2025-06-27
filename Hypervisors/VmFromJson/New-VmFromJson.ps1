@@ -3279,6 +3279,7 @@ Begin {
 
 				# get variables from arguments
 				$Path = $ArgumentList['Path']
+				$Name = $ArgumentList['Name']
 				$HostName = $ArgumentList['HostName']
 				$ComputerName = $ArgumentList['ComputerName']
 				$UnattendExpandStrings = $ArgumentList['UnattendExpandStrings']
