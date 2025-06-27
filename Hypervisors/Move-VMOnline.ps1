@@ -769,8 +769,7 @@ Begin {
 
 		# if planned VM and realized VM not found before first attempt to remove VM...
 		If (!$PlannedVM -and !$RealizedVM) {
-			# declare state and return
-			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM not found"
+			# return
 			Return $true
 		}
 
@@ -863,10 +862,6 @@ Begin {
 				# declare state
 				Write-Warning -Message 'could not remove planned VM after 30 seconds'
 			}
-			Else {
-				# declare state
-				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...planned VM removed"
-			}
 		}
 
 		################################################
@@ -916,11 +911,7 @@ Begin {
 			# if realized VM still found...
 			If ($RealizedVM) {
 				# declare state
-				Write-Warning -Message 'could not remove VM after 30 seconds'
-			}
-			Else {
-				# declare state
-				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM removed"
+				Write-Warning -Message 'could not remove realized VM after 30 seconds'
 			}
 		}
 
@@ -1280,9 +1271,6 @@ Begin {
 			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM not found"
 		}
 		Else {
-			# declare state
-			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM..."
-
 			# define parameters
 			$AssertVMRemoved = @{
 				VM           = $VM
@@ -1303,8 +1291,7 @@ Begin {
 				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VM"
 			}
 			Else {
-				# declare state
-				Write-Warning -Message 'could not remove VM'
+				# return; warnings issued by function
 				Return
 			}
 		}
@@ -1360,11 +1347,7 @@ Begin {
 				# if path removed...
 				If ($PathRemoved) {
 					# declare state
-					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VHD"
-				}
-				Else {
-					# declare state
-					Write-Warning -Message 'could not remove VHD'
+					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VHD removed"
 				}
 			}
 		}
@@ -1422,11 +1405,7 @@ Begin {
 				# if path removed...
 				If ($PathRemoved) {
 					# declare state
-					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VM folder"
-				}
-				Else {
-					# declare state
-					Write-Warning -Message 'could not remove VM folder'
+					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM folder removed"
 				}
 			}
 		}
