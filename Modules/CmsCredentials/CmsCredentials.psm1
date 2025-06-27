@@ -232,7 +232,7 @@ Function Find-CmsCertificate {
 			$Certificate = $local:MatchingCertificates | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
 		}
 		Catch {
-			Write-Warning -Message "could not create certificate object $local:Parameters on host: $local:Hostname"
+			Write-Warning -Message "could not sort or select latest Document Encryption certificates from '$local:CertStoreLocation' on host: $local:Hostname"
 			Throw $_
 		}
 
@@ -285,7 +285,7 @@ Function Find-CmsCertificate {
 			$Certificate = $local:MatchingCertificates | Sort-Object -Property 'NotBefore' | Select-Object -Last 1
 		}
 		Catch {
-			Write-Warning -Message "could not sort or select Document Encryption certificates from '$local:CertStoreLocation' on host: $local:Hostname"
+			Write-Warning -Message "could not sort or select latest Document Encryption certificates from '$local:CertStoreLocation' on host: $local:Hostname"
 			Throw $_
 		}
 
