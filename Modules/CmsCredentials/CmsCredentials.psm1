@@ -1349,7 +1349,7 @@ Function Import-CmsCredential {
 		Throw $_
 	}
 
-	# test if certificate already installed
+	# test if certificate already imported
 	Try {
 		$CertificateFound = Test-Path -Path $CertificatePath -PathType Leaf
 	}
@@ -1379,6 +1379,9 @@ Function Import-CmsCredential {
 		Catch {
 			Throw $_
 		}
+
+		# report state
+		Write-Host "imported credential certificate to store: '$CertStoreLocation'"
 	}
 
 	# construct path for destination file
@@ -1390,25 +1393,17 @@ Function Import-CmsCredential {
 		Throw $_
 	}
 
-	# test if destination file already installed
-	Try {
-		$DestinationFound = Test-Path -Path $DestinationPath -PathType Leaf
-	}
-	Catch {
-		Write-Warning -Message 'could not test if credential file already exists'
-		Throw $_
-	}
-
-	# if destination file found and force not requested...
-	If ($DestinationFound -and -not $Force) {
+	# if destination file exists and force not requested...
+	If ([System.IO.File]::Exists($DestinationPath) -and -not $Force) {
 		Write-Warning -Message 'skipping credential file install; found existing credential file with matching guid'
 	}
-	# if certificate not found or force requested...
+	# if destination file does not exist or force requested...
 	Else {
 		# define parameters
 		$CopyItem = @{
 			Path        = $FilePath
 			Destination = $DestinationPath
+			Force       = $true
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
 
@@ -1419,6 +1414,9 @@ Function Import-CmsCredential {
 		Catch {
 			Throw $_
 		}
+
+		# report state
+		Write-Host "copied credential file to path: '$DestinationPath'"
 	}
 }
 
