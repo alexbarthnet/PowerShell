@@ -1329,6 +1329,201 @@ Function Get-CmsCredential {
 	}
 }
 
+Function Export-CmsCredential {
+	<#
+	.SYNOPSIS
+	Exports the CMS credential and certificate files for the provided identity.
+
+	.DESCRIPTION
+	Exports the CMS credential and certificate files for the provided identity.
+
+	.PARAMETER Identity
+	Specifies the identity of the CMS credential.
+
+	.PARAMETER FilePath
+	Specifies the path to the CMS credential file.
+
+	.PARAMETER PfxFile
+	Specifies the path to the PFX file that containing the CMS certificate.
+
+	.PARAMETER ProtectTo
+	Specifies one or more security principals to grant access to the PFX file via DPAPI. Cannot be combined with the Password parameter
+
+	.PARAMETER Password
+	Specifies the password to the PFX file as a secure string. Cannot be combined with the ProtectTo parameter
+
+	.PARAMETER Force
+	Switch to overwrite an existing credential file and PFX file.
+
+	.INPUTS
+	None.
+
+	.OUTPUTS
+	None.
+
+	#>
+
+	[CmdletBinding(DefaultParameterSetName = 'ProtectTo')]
+	Param(
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'ProtectTo')]
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'Password')]
+		[string]$Identity,
+		[Parameter(Position = 1, Mandatory = $true, ParameterSetName = 'ProtectTo')]
+		[Parameter(Position = 1, Mandatory = $true, ParameterSetName = 'Password')]
+		[string]$FilePath,
+		[Parameter(Position = 2, Mandatory = $true, ParameterSetName = 'ProtectTo')]
+		[Parameter(Position = 2, Mandatory = $true, ParameterSetName = 'Password')]
+		[string]$PfxFile,
+		[Parameter(Position = 3, Mandatory = $true, ParameterSetName = 'ProtectTo')]
+		[string[]]$ProtectTo,
+		[Parameter(Position = 3, Mandatory = $true, ParameterSetName = 'Password')]
+		[securestring]$Password,
+		[Parameter(DontShow)]
+		[switch]$Force,
+		[Parameter(DontShow)]
+		[string]$Path = $CmsCredentials['PathForCmsFiles'],
+		[Parameter(DontShow)]
+		[string]$CertStoreLocation = 'Cert:\LocalMachine\My',
+		[Parameter(DontShow)]
+		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
+	)
+
+	# find CMS certificate with identity
+	Try {
+		$Certificate = Find-CmsCertificate -Identity $local:Identity -CertStoreLocation $local:CertStoreLocation
+	}
+	Catch {
+		Throw $_
+	}
+
+	# if path is not a folder...
+	If (!([System.IO.Directory]::Exists($local:Path))) {
+		Write-Warning -Message "could not locate folder for credential files with '$local:Path' path on host: $local:Hostname"
+		Return $null
+	}
+
+	# retrieve CMS credential files
+	Try {
+		$CredentialFiles = Get-ChildItem -Path $local:Path -Filter '*.txt' -File -ErrorAction 'Stop' | Sort-Object -Property 'LastWriteTime' -Descending
+	}
+	Catch {
+		Write-Warning -Message "could not retrieve credential files from '$local:Path' path on host: $local:Hostname"
+		Throw $_
+	}
+
+	# define subject as the tail of an X.509 distinguished name with organizational unit of the Identity followed by organization of CmsCredentials
+	$Subject = "OU=$local:Identity, O=CmsCredentials"
+
+	# retrieve latest CMS credential file with matching subject
+	:CredentialFiles ForEach ($CredentialFile in $CredentialFiles) {
+		# create stream reader
+		Try {
+			$StreamReader = [System.IO.StreamReader]::new($CredentialFile.FullName)
+		}
+		Catch {
+			Write-Warning -Message "could not open credential file with '$($CredentialFile.FullName)' path on host: $local:Hostname"
+			Throw $_
+		}
+
+		# retrieve first line
+		Try {
+			$FirstLine = $StreamReader.ReadLine()
+		}
+		Catch {
+			Write-Warning -Message "could not read first line of credential file with '$($CredentialFile.FullName)' path on host: $local:Hostname"
+			Throw $_
+		}
+
+		# close stream reader
+		Try {
+			$StreamReader.Close()
+		}
+		Catch {
+			Write-Warning -Message "could not open credential file with '$($CredentialFile.FullName)' path on host: $local:Hostname"
+			Throw $_
+		}
+
+		# if first line ends with subject...
+		If ($FirstLine.EndsWith($local:Subject, [System.StringComparison]::InvariantCultureIgnoreCase)) {
+			# set file path and break out of foreach loop
+			$OriginalFilePath = $CredentialFile.FullName
+			Break CredentialFiles
+		}
+	}
+
+	# if CMS credential file not found...
+	If ([string]::IsNullOrEmpty($local:OriginalFilePath)) {
+		Write-Warning -Message "could not locate credential file for '$Identity' identity in path: $Path"
+		Return $null
+	}
+
+	# define initial parameters for CMS certificate export
+	$ExportCmsCredentialCertificate = @{
+		Certificate   = $Certificate
+		PfxFilePath   = $PfxFile
+		SkipPublicKey = $true
+	}
+
+	# if ProtectTo provided...
+	If ($PSBoundParameters.Contains('ProtectTo')) {
+		$ExportCmsCredentialCertificate['ProtectTo'] = $ProtectTo
+	}
+
+	# if Password provided...
+	If ($PSBoundParameters.Contains('Password')) {
+		$ExportCmsCredentialCertificate['Password'] = $Password
+	}
+
+	# export CMS certificate
+	Try {
+		Export-CmsCredentialCertificate @ExportCmsCredentialCertificate
+	}
+	Catch {
+		Throw $_
+	}
+
+	# if destination file found and force not requested...
+	If ([System.IO.File]::Exists($FilePath) -and -not $Force) {
+		Write-Warning -Message 'skipping credential file export; found existing credential file with matching guid'
+	}
+	# if destination file not found or force requested...
+	Else {
+		# define parameters for New-Item
+		$NewItem = @{
+			Path        = $local:FilePath
+			Force       = $true
+			ItemType    = 'File'
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# create file and path to file
+		Try {
+			$null = New-Item @NewItem | Remove-Item -Force
+		}
+		Catch {
+			Write-Warning -Message "could not create file with '$local:FilePath' path on host: $local:Hostname"
+			Throw $_
+		}
+
+		# define parameters for Copy-Item
+		$CopyItem = @{
+			Path        = $local:OriginalFilePath
+			Destination = $local:FilePath
+			Force       = $true
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# export CMS credential file
+		Try {
+			Copy-Item @CopyItem
+		}
+		Catch {
+			Write-Warning -Message "could not copy '$local:OriginalFilePath' file to '$local:FilePath' path on host: $local:Hostname"
+			Throw $_
+		}
+	}
+}
+
 Function Import-CmsCredential {
 	<#
 	.SYNOPSIS
