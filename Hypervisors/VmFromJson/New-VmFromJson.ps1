@@ -11,7 +11,8 @@ Param(
 	[switch]$SkipStart,
 	[switch]$SkipClustering,
 	[switch]$ForceRestart,
-	[pscredential]$Credential,
+	[pscredential]$LocalAdminCredential,
+	[pscredential]$DomainJoinCredential,
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 )
@@ -2976,7 +2977,6 @@ Begin {
 	}
 
 	Function Copy-VHDFromParams {
-		[CmdletBinding()][Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', '')]
 		Param (
 			# define VM parameters
 			[Parameter(Mandatory = $true)]
@@ -2989,8 +2989,6 @@ Begin {
 			[uint16]$ControllerNumber = 0,
 			[uint16]$ControllerLocation = 0,
 			[string]$UnattendFile,
-			[string]$Username,
-			[string]$Password,
 			[string]$Domainname,
 			[string]$OrganizationalUnit
 		)
@@ -3232,48 +3230,142 @@ Begin {
 			'%COMPUTERNAME%' = $VMName.Split('.')[0]
 		}
 
-		# if Username provided...
-		If ($script:PSBoundParameters.ContainsKey('Credential')) {
-			$VariableHashtable['%USERNAME%'] = $script:Credential.GetNetworkCredential().Username
-			$VariableHashtable['%PASSWORD%'] = $script:Credential.GetNetworkCredential().Password
+		# define hashtable for unattend expand strings
+		$UnattendExpandStrings = [ordered]@{
+			'COMPUTERNAME' = $VMName.Split('.')[0]
+		}
+
+		# if LocalAdminCredential provided...
+		If ($script:PSBoundParameters.ContainsKey('LocalAdminCredential')) {
+			# append required string to plaintext password
+			$AppendedPlainText = '{0}AdministratorPassword' -f $script:DomainJoinCredential.GetNetworkCredential().Password
+
+			# encode appended password
+			Try {
+				$VariableHashtable['%ADMINISTRATORPASSWORD%'] = [System.Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($AppendedPlainText))
+				$UnattendExpandStrings['ADMINISTRATORPASSWORD'] = [System.Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($AppendedPlainText))
+			}
+			Catch {
+				Throw $_
+			}
+		}
+
+		# if DomainJoinCredential provided...
+		If ($script:PSBoundParameters.ContainsKey('DomainJoinCredential')) {
+			$VariableHashtable['%USERNAME%'] = $script:DomainJoinCredential.GetNetworkCredential().Username
+			$VariableHashtable['%PASSWORD%'] = $script:DomainJoinCredential.GetNetworkCredential().Password
+			$UnattendExpandStrings['USERNAME'] = $script:DomainJoinCredential.GetNetworkCredential().Username
+			$UnattendExpandStrings['PASSWORD'] = $script:DomainJoinCredential.GetNetworkCredential().Password
 		}
 
 		# if DomainName provided...
 		If ($PSBoundParameters.ContainsKey('DomainName')) {
 			$VariableHashtable['%DOMAINNAME%'] = $DomainName
+			$UnattendExpandStrings['DOMAINNAME'] = $DomainName
 		}
 
 		# if OrganizationalUnit provided...
 		If ($PSBoundParameters.ContainsKey('OrganizationalUnit')) {
 			$VariableHashtable['%ORGANIZATIONALUNIT%'] = $OrganizationalUnit
+			$UnattendExpandStrings['ORGANIZATIONALUNIT'] = $OrganizationalUnit
 		}
 
-		# loop through variables
-		ForEach ($Variable in $VariableHashtable.Keys) {
-			# update argument list for
-			$InvokeCommand['ArgumentList']['VariableName'] = $Variable
-			$InvokeCommand['ArgumentList']['VariableValue'] = $VariableHashtable[$Variable]
+		# update argument list with expand strings
+		$InvokeCommand['ArgumentList']['Hostname'] = $HostName
+		$InvokeCommand['ArgumentList']['ComputerName'] = $ComputerName
+		$InvokeCommand['ArgumentList']['UnattendExpandStrings'] = $UnattendExpandStrings
 
-			# update file on VHD
-			Try {
-				Write-Host ("$Hostname,$ComputerName,$Name - ...replacing values in deployment file: '$Variable'")
-				Invoke-Command @InvokeCommand -ScriptBlock {
-					Param($ArgumentList)
-					# get variables from arguments
-					$Path = $ArgumentList['Path']
-					$Variable = $ArgumentList['VariableName']
-					$VariableValue = $ArgumentList['VariableValue']
-					# get content of deployement file
+		# update file on VHD
+		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...replacing values in unattend file")
+			Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+
+				# get variables from arguments
+				$Path = $ArgumentList['Path']
+				$HostName = $ArgumentList['HostName']
+				$ComputerName = $ArgumentList['ComputerName']
+				$UnattendExpandStrings = $ArgumentList['UnattendExpandStrings']
+
+				# get contents of unattend file
+				Try {
 					$Content = Get-Content -Path $Path -Raw
-					$Content = $Content.Replace($Variable, $VariableValue)
-					$Content | Set-Content -Path $Path -Force
+				}
+				Catch {
+					Return $_
+				}
+
+				# if administrator password provided...
+				If ($UnattendExpandStrings.ContainsKey('AdministratorPassword')) {
+					$Content = $Content -replace '<!-- <AdministratorPassword>', '<AdministratorPassword>'
+					$Content = $Content -replace '</AdministratorPassword> -->', '</AdministratorPassword>'
+				}
+
+				# while content contains XML element with expand string as value...
+				While ($Content -match '<\w+>%(?<ExpandString>\w+)%</\w+>') {
+					# retrieve original XML element
+					$OriginalString = $Matches[0]
+					# retrieve expand string
+					$ExpandString = $Matches['ExpandString']
+					# if value for expand string provided...
+					If ($UnattendExpandStrings.ContainsKey($ExpandString)) {
+						# replace the expand string with the provided value
+						$ModifiedString = $OriginalString -replace "%$ExpandString%", $UnattendExpandStrings[$ExpandString]
+
+						# report state
+						Write-Host ("$Hostname,$ComputerName,$Name - ...replaced value in unattend file: '$ExpandString'")
+					}
+					Else {
+						# comment out the original XML element
+						$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace '%')
+
+						Write-Host ("$Hostname,$ComputerName,$Name - ...disabled value in unattend file: '$ExpandString'")
+					}
+					# replace original XML element with modified XML element
+					$Content = $Content -replace $OriginalString, $ModifiedString
+				}
+
+				# add unattend file to ISO
+				Try {
+					$Content | Set-Content -Path $Path
+				}
+				Catch {
+					Return $_
 				}
 			}
-			Catch {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not update file: '$UnattendFile'")
-				Throw $_
-			}
 		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not update file: '$UnattendFile'")
+			Throw $_
+		}
+
+		# # loop through variables
+		# ForEach ($Variable in $VariableHashtable.Keys) {
+		# 	# update argument list for
+		# 	$InvokeCommand['ArgumentList']['VariableName'] = $Variable
+		# 	$InvokeCommand['ArgumentList']['VariableValue'] = $VariableHashtable[$Variable]
+		# 	$InvokeCommand['ArgumentList']['$UnattendExpandStrings'] = $VariableHashtable
+
+		# 	# update file on VHD
+		# 	Try {
+		# 		Write-Host ("$Hostname,$ComputerName,$Name - ...replacing values in deployment file: '$Variable'")
+		# 		Invoke-Command @InvokeCommand -ScriptBlock {
+		# 			Param($ArgumentList)
+		# 			# get variables from arguments
+		# 			$Path = $ArgumentList['Path']
+		# 			$Variable = $ArgumentList['VariableName']
+		# 			$VariableValue = $ArgumentList['VariableValue']
+		# 			# get content of deployement file
+		# 			$Content = Get-Content -Path $Path -Raw
+		# 			$Content = $Content.Replace($Variable, $VariableValue)
+		# 			$Content | Set-Content -Path $Path -Force
+		# 		}
+		# 	}
+		# 	Catch {
+		# 		Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not update file: '$UnattendFile'")
+		# 		Throw $_
+		# 	}
+		# }
 
 		# update argument list for Dismount-VHD
 		$InvokeCommand['ArgumentList']['Path'] = $VhdPath
