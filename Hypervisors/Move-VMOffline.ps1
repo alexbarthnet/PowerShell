@@ -2099,6 +2099,15 @@ Process {
 		# declare state
 		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking if VM clustered on source computer..."
 
+		# validate source cluster is accessible
+		Try {
+			$null = Get-Cluster -Name $SourceClusterName -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not reach '$SourceClusterName' cluster: $($_.Exception.Message)"
+			Return $_
+		}
+
 		# define parameters for Get-ClusterGroup
 		$GetClusterGroup = @{
 			Cluster     = $SourceClusterName
