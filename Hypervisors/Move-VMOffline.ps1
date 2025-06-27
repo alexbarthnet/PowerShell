@@ -28,7 +28,9 @@ param (
 	# start stopped VM after migration
 	[switch]$Restart,
 	# upgrade VM version after import
-	[switch]$UpdateVmVersion
+	[switch]$UpdateVmVersion,
+	# switch to skip CSV storage check
+	[switch]$SkipClusteredStorageCheck
 )
 
 Begin {
@@ -2279,7 +2281,7 @@ Process {
 	################################################
 
 	# if target computer is clustered...
-	If ($TargetClusterName) {
+	If ($TargetClusterName -and -not $SkipClusteredStorageCheck) {
 		# retrieve CSV paths from target computer
 		Try {
 			$ClusterSharedVolumePaths = Get-ClusterSharedVolumePaths -ComputerName $DestinationHost
