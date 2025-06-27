@@ -1736,9 +1736,17 @@ Function Protect-CmsCredential {
 	}
 	# if CMS credential file not found...
 	Else {
+		# define parameters for New-Item
+		$NewItem = @{
+			Path        = $local:OutFile
+			Force       = $true
+			ItemType    = 'File'
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
 		# create file and path to file
 		Try {
-			$null = New-Item -Path $local:OutFile -Force -ItemType 'File' -ErrorAction 'Stop'
+			$null = New-Item @NewItem | Remove-Item -Force
 		}
 		Catch {
 			Write-Warning -Message "could not create file with '$local:OutFile' path on host: $local:Hostname"
