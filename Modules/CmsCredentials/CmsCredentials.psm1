@@ -878,6 +878,9 @@ Function Get-CmsCredential {
 	.PARAMETER PfxFile
 	Specifies the path to the PFX file that encrypted the CMS credential file. Requires the FilePath parameter and cannot be combined with the Certificate or Thumbprint parameters.
 
+	.PARAMETER Password
+	Specifies the password to the PFX file as a secure string. Requires the PfxFile parameter.
+
 	.PARAMETER ComputerName
 	Specifies the name of one or more remote computers. Requires the Identity or Thumbprint parameters.
 
@@ -925,6 +928,8 @@ Function Get-CmsCredential {
 		[string]$Thumbprint,
 		[Parameter(ParameterSetName = 'PfxFile', Position = 1, Mandatory)]
 		[string]$PfxFile,
+		[Parameter(ParameterSetName = 'PfxFile')]
+		[securestring]$Password,
 		[Parameter(Mandatory = $false)]
 		[switch]$AsPlainText,
 		[Parameter(Mandatory = $false)]
@@ -938,8 +943,6 @@ Function Get-CmsCredential {
 		[Parameter(ParameterSetName = 'Identity')]
 		[Parameter(ParameterSetName = 'Thumbprint')]
 		[string[]]$ComputerName,
-		[Parameter(ParameterSetName = 'PfxFile')]
-		[securestring]$Password,
 		[Parameter(DontShow)]
 		[string]$Path = $CmsCredentials['PathForCmsFiles'],
 		[Parameter(DontShow)]
@@ -997,9 +1000,19 @@ Function Get-CmsCredential {
 
 	# if PFX file provided...
 	If ($PSBoundParameters.ContainsKey('PfxFile')) {
+		# define required parameters for Find-CmsCertificate
+		$FindCmsCertificate = @{
+			PfxFile = $local:PfxFile
+		}
+
+		# define optional parameters for Find-CmsCertificate
+		If ($PSBoundParameters.ContainsKey('Password')) {
+			$FindCmsCertificate.Add('Password', $local:Password)
+		}
+
 		# find CMS certificate from PFX file
 		Try {
-			$Certificate = Find-CmsCertificate -PfxFile $local:PfxFile
+			$Certificate = Find-CmsCertificate @FindCmsCertificate
 		}
 		Catch {
 			Throw $_
