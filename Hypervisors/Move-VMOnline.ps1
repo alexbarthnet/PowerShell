@@ -642,77 +642,30 @@ Begin {
 			Throw $_
 		}
 
+		################################################
+		# return state
+		################################################
+
+		# if planned VM and realized VM are empty strings...
+		If ([string]::IsNullOrEmpty($PlannedVM) -and [string]::IsNullOrEmpty($RealizedVM)) {
+			# return true
+			Return $true
+		}
+
+		# if planned VM found and quiet not requested...
+		If (![string]::IsNullOrEmpty($PlannedVM) -and !$Quiet) {
+			# declare state
+			Write-Warning -Message "found planned VM by Id with '$PlannedVM' name on '$ComputerName' computer"
+		}
+
 		# if realized VM found...
-		If (![string]::IsNullOrEmpty($RealizedVM)) {
-			# declare state and return false
-			Write-Warning -Message "found VM by Id with '$RealizedVM' name on '$ComputerName' computer"
-			Return $false
-		}
-
-		################################################
-		# check for VM on target cluster
-		################################################
-
-		# get cluster for target computer
-		Try {
-			$ClusterName = Get-ClusterName -ComputerName $ComputerName
-		}
-		Catch {
-			Throw $_
-		}
-
-		# if target computer is clustered...
-		If ($ClusterName) {
+		If (![string]::IsNullOrEmpty($RealizedVM) -and !$Quiet) {
 			# declare state
-			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking for VM by Id in '$ClusterName' cluster..."
-
-			# retrieve CIM instance for realized VM by Id
-			Try {
-				$ClusterGroupOwnerNodeName = Invoke-Command @InvokeCommand -ScriptBlock {
-					# import argument list hashtable
-					Param($ArgumentList)
-
-					# define parameters for Get-ClusterGroup
-					$GetClusterGroup = @{
-						VMId        = $ArgumentList['VMId']
-						ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
-					}
-
-					# get cluster group for VM on target cluster
-					$ClusterGroup = Get-ClusterGroup @GetClusterGroup
-
-					# if cluster group found...
-					If ($ClusterGroup) {
-						# return owner node name
-						Return $ClusterGroup.OwnerNode.Name
-					}
-					Else {
-						# return empty string
-						Return [string]::Empty
-					}
-				}
-			}
-			Catch {
-				Throw $_
-			}
-
-			# if cluster group for VM found on target cluster...
-			If (![string]::IsNullOrEmpty($ClusterGroupOwnerNodeName)) {
-				# warn and return
-				Write-Warning -Message "VM found by Id on '$ClusterGroupOwnerNodeName' node in '$ClusterName' cluster"
-				Return $false
-			}
-
-			# declare state
-			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM not found by Id in '$ClusterName' cluster"
+			Write-Warning -Message "found realized VM by Id with '$RealizedVM' name on '$ComputerName' computer"
 		}
 
-		################################################
-		# return success
-		################################################
-
-		# return true after not finding VM by Id
-		Return $true
+		# return false
+		Return $false
 	}
 
 	Function Assert-VMRemoved {
