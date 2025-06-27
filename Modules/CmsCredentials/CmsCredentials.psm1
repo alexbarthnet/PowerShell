@@ -1382,10 +1382,34 @@ Function Import-CmsCredential {
 		[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 	)
 
+	# if FilePath is not an absolute path...
+	If (![System.IO.Path]::IsPathRooted($FilePath)) {
+		# get unresolved absolute path
+		Try {
+			$FilePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($FilePath)
+		}
+		Catch {
+			Write-Warning "could not create absolute path from the provided FilePath parameter: $FilePath"
+			Throw $_
+		}
+	}
+
 	# if file path is not a file...
 	If (![System.IO.File]::Exists($local:FilePath)) {
 		Write-Warning -Message "could not locate credential file with '$local:FilePath' path on host: $local:Hostname"
 		Return $null
+	}
+
+	# if PfxFile is not an absolute path...
+	If (![System.IO.Path]::IsPathRooted($PfxFile)) {
+		# get unresolved absolute path
+		Try {
+			$PfxFile = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($PfxFile)
+		}
+		Catch {
+			Write-Warning "could not create absolute path from the provided PfxFile parameter: $PfxFile"
+			Throw $_
+		}
 	}
 
 	# define required parameters for Find-CmsCertificate
