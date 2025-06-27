@@ -559,7 +559,10 @@ Function Export-CmsCredentialCertificate {
 	Specifies the identity of a certificate for protecting credentials with CMS. Cannot be combined with the Certificate or Thumbprint parameter.
 
 	.PARAMETER ProtectTo
-	Specifies one or more security principals.
+	Specifies one or more security principals to grant access to the PFX file via DPAPI. Cannot be combined with the Password parameter
+
+	.PARAMETER Password
+	Specifies the password to the PFX file as a secure string. Cannot be combined with the ProtectTo parameter
 
 	.PARAMETER Path
 	Specifies the path for the exported public key and PFX file when not overriden by the FilePath or PfxFilePath parameters.
@@ -581,16 +584,25 @@ Function Export-CmsCredentialCertificate {
 
 	#>
 
-	[CmdletBinding(DefaultParameterSetName = 'Certificate')]
+	[CmdletBinding(DefaultParameterSetName = 'CertificateWithProtectTo')]
 	Param (
-		[Parameter(ParameterSetName = 'Certificate', Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'CertificateWithProtectTo', ValueFromPipeline = $true)]
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'CertificateWithPassword', ValueFromPipeline = $true)]
 		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
-		[Parameter(ParameterSetName = 'Thumbprint', Mandatory = $true, Position = 0)]
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'ThumbprintWithProtectTo')]
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'ThumbprintWithPassword')]
 		[string]$Thumbprint,
-		[Parameter(ParameterSetName = 'Identity', Mandatory = $true, Position = 0)]
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'IdentityWithProtectTo')]
+		[Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'IdentityWithPassword')]
 		[string]$Identity,
-		[Parameter(Mandatory = $true, Position = 1)]
+		[Parameter(Position = 1, Mandatory = $true, ParameterSetName = 'CertificateWithProtectTo')]
+		[Parameter(Position = 1, Mandatory = $true, ParameterSetName = 'ThumbprintWithProtectTo')]
+		[Parameter(Position = 1, Mandatory = $true, ParameterSetName = 'IdentityWithProtectTo')]
 		[string[]]$ProtectTo,
+		[Parameter(Position = 1, Mandatory = $true, ParameterSetName = 'CertificateWithPassword')]
+		[Parameter(Position = 1, Mandatory = $true, ParameterSetName = 'ThumbprintWithPassword')]
+		[Parameter(Position = 1, Mandatory = $true, ParameterSetName = 'IdentityWithPassword')]
+		[securestring]$Password,
 		[Parameter(Position = 2)]
 		[string]$FilePath,
 		[Parameter(Position = 3)]
@@ -722,10 +734,21 @@ Function Export-CmsCredentialCertificate {
 		$ExportPfxCertificate = @{
 			Cert                  = $local:Certificate
 			FilePath              = $local:PfxFilePath
-			ProtectTo             = $local:ProtectTo
 			ChainOption           = [Microsoft.CertificateServices.Commands.ExportChainOption]::EndEntityCertOnly
 			CryptoAlgorithmOption = [Microsoft.CertificateServices.Commands.CryptoAlgorithmOptions]::AES256_SHA256
 			ErrorAction           = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# if ProtectTo provided...
+		If ($PSBoundParameters.ContainsKey('ProtectTo')) {
+			# update parameters for Export-PfxCertificate
+			$ExportPfxCertificate['ProtectTo'] = $local:ProtectTo
+		}
+
+		# if Password to provided...
+		If ($PSBoundParameters.ContainsKey('Password')) {
+			# update parameters for Export-PfxCertificate
+			$ExportPfxCertificate['Password'] = $local:Password
 		}
 
 		# export certificate as .pfx
