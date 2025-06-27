@@ -3231,23 +3231,19 @@ Begin {
 		}
 
 		# define hashtable for unattend expand strings
-		$UnattendExpandStrings = [ordered]@{
-			'COMPUTERNAME' = $VMName.Split('.')[0]
-		}
+		$UnattendExpandStrings = @{ 'COMPUTERNAME' = $VMName.Split('.')[0] }
 
 		# if LocalAdminCredential provided...
 		If ($script:PSBoundParameters.ContainsKey('LocalAdminCredential')) {
 			# append required string to plaintext password
-			$AppendedPlainText = '{0}AdministratorPassword' -f $script:DomainJoinCredential.GetNetworkCredential().Password
+			$AdministratorPasswordAppended = '{0}AdministratorPassword' -f $script:LocalAdminCredential.GetNetworkCredential().Password
 
-			# encode appended password
-			Try {
-				$VariableHashtable['%ADMINISTRATORPASSWORD%'] = [System.Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($AppendedPlainText))
-				$UnattendExpandStrings['ADMINISTRATORPASSWORD'] = [System.Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($AppendedPlainText))
-			}
-			Catch {
-				Throw $_
-			}
+			# encode appended password to base64
+			$AdministratorPasswordAsBase64 = [System.Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($AdministratorPasswordAppended))
+
+			# add encoded password to hashtable
+			$VariableHashtable['%ADMINISTRATORPASSWORD%'] = $AdministratorPasswordAsBase64
+			$UnattendExpandStrings['ADMINISTRATORPASSWORD'] = $AdministratorPasswordAsBase64
 		}
 
 		# if DomainJoinCredential provided...
