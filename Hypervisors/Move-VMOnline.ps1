@@ -547,15 +547,14 @@ Begin {
 			[object]$VM,
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName,
-			# number of attempts to assert path action; default is 6 attempts
-			[uint16]$Attempts = 6
+			# switch to skip warning when VMs found
+			[switch]$Quiet
 		)
 
 		################################################
 		# define objects from VM properties
 		################################################
 
-		$Name = $VM.Name.ToLowerInvariant()
 		$VMId = $VM.Id.ToString()
 
 		################################################
@@ -730,10 +729,10 @@ Begin {
 			# if planned VM found still in migrating state...
 			If ($PlannedVM.OperationalStatus -contains '32774') {
 				# declare state
-				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - found planned VM in migrating state, waiting for planned VM to exit state..."
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...found planned VM in migrating state, waiting for planned VM to exit state..."
 
 				# initialize counter
-				$Counter = [int32]1
+				$Counter = [int32]0
 
 				# while counter less than attempts and planned VM found still in migrating state...
 				While ($Counter -lt $Attempts -and $PlannedVM.OperationalStatus -contains '32774') {
@@ -757,24 +756,25 @@ Begin {
 
 				# if planned VM not found in migrating state...
 				If ($PlannedVM.OperationalStatus -contains '32774') {
-					# declare state
+					# declare state and set boolean
 					Write-Warning -Message 'found planned VM still in migrating state after 30 seconds'
+					$PlannedVMStuckInMigratingState = $true
 				}
 				Else {
 					# declare state
-					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...planned VM exited migrating state, removing planned VM..."
+					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...found planned VM has exited migrating state, removing VM..."
 				}
 			}
 			Else {
 				# declare state
-				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - found planned VM, removing..."
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...found planned VM, removing VM..."
 			}
 
 			# initialize counter
 			$Counter = [int32]1
 
-			# while counter less than attempts and planned VM found...
-			While ($Counter -lt $Attempts -and $PlannedVM) {
+			# while counter less than attempts and planned VM found not in migrating state...
+			While ($Counter -lt $Attempts -and $PlannedVM -and -not $PlannedVMStuckInMigratingState) {
 				# remove planned VM by Id
 				Try {
 					$null = Invoke-Command @InvokeCommand -ScriptBlock {
@@ -819,13 +819,16 @@ Begin {
 		# if realized VM found...
 		If ($RealizedVM) {
 			# declare state
-			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - found VM, removing..."
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...found realized VM, removing VM..."
 
 			# initialize counter
-			$Counter = [int32]1
+			$Counter = [int32]0
 
 			# while counter less than attempts and realized VM found...
 			While ($Counter -lt $Attempts -and $RealizedVM) {
+				# increment counter
+				$Counter++
+
 				# remove realized VM by Id
 				Try {
 					$null = Invoke-Command @InvokeCommand -ScriptBlock {
@@ -837,9 +840,6 @@ Begin {
 				Catch {
 					Throw $_
 				}
-
-				# increment counter
-				$Counter++
 
 				# sleep
 				Start-Sleep -Seconds 5
