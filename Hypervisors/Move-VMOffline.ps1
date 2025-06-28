@@ -1594,7 +1594,7 @@ Begin {
 
 			# declare state
 			If ($ImportedVM.Version -eq $HighestSupportedVmVersion) {
-				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...updated VM version to: $($ImportedVM.Version)"
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...updated VM version: $($ImportedVM.Version)"
 			}
 		}
 
@@ -2191,7 +2191,7 @@ Process {
 		# remove VM folder from end of path
 		$DestinationStoragePath = Split-Path -Path $DestinationStoragePath -Parent
 		# warn about change
-		Write-Warning -Message 'updated DestinationStoragePath to prevent twice-nested VM directory; Export-VM will create dedicated VM directory under DestinationStoragePath'
+		Write-Warning -Message "updated DestinationStoragePath to prevent twice-nested VM directory; Export-VM will create dedicated VM directory under DestinationStoragePath"
 	}
 
 	# define VM path list
