@@ -1196,6 +1196,7 @@ Begin {
 		$AssertVMNotFound = @{
 			VM           = $VM
 			ComputerName = $ComputerName
+			Quiet        = $true
 		}
 
 		# check VM
@@ -1242,7 +1243,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking VHDs..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VHDs..."
 
 		# remove VM hard disk drive files
 		ForEach ($VHDPath in $VHDPaths) {
@@ -1298,7 +1299,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking VM folders..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM folders..."
 
 		# remove VM path folders
 		ForEach ($VMPath in $VMPaths) {

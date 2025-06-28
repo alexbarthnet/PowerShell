@@ -1663,12 +1663,13 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking VM..."
 
 		# define parameters
 		$AssertVMNotFound = @{
 			VM           = $VM
 			ComputerName = $ComputerName
+			Quiet        = $true
 		}
 
 		# check VM
@@ -1702,7 +1703,7 @@ Begin {
 			# if VM removed...
 			If ($VMRemoved) {
 				# declare state
-				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VM"
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM removed"
 			}
 			Else {
 				# return; warnings issued by function
@@ -1715,7 +1716,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking VHDs..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VHDs..."
 
 		# remove VM hard disk drive files
 		ForEach ($VHDPath in $VHDPaths) {
@@ -1771,7 +1772,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking VM folders..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM folders..."
 
 		# remove VM path folders
 		ForEach ($VMPath in $VMPaths) {
