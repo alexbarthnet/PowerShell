@@ -600,13 +600,6 @@ Begin {
 			Throw $_
 		}
 
-		# if planned VM found...
-		If (![string]::IsNullOrEmpty($PlannedVM)) {
-			# declare state and return false
-			Write-Warning -Message "found planned VM by Id with '$PlannedVM' name on '$ComputerName' computer"
-			Return $false
-		}
-
 		################################################
 		# locate realized VM
 		################################################
