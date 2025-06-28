@@ -1727,7 +1727,7 @@ Process {
 		# add virtual machine path to parameters
 		$Parameters['VirtualMachinePath'] = $VirtualMachinePath
 
-		# define optional VM path properties
+		# define mapping of VM properties to Move-VM parameters
 		$VMPathPropertyMap = @{
 			SmartPagingFilePath  = 'SmartPagingFilePath'
 			SnapshotFileLocation = 'SnapshotFilePath'
