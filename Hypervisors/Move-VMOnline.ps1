@@ -1763,7 +1763,7 @@ Process {
 	}
 
 	################################################
-	# get VHD paths
+	# get VHD paths on source computer
 	################################################
 
 	# if destination storage path parameter not provided...
