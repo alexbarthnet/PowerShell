@@ -352,10 +352,10 @@ Begin {
 		$InvokeCommand['ArgumentList']['PathType'] = $PathType
 
 		################################################
-		# test path
+		# test path itself
 		################################################
 
-		# test path
+		# test path before attempting to remove path
 		Try {
 			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
@@ -366,13 +366,8 @@ Begin {
 			Throw $_
 		}
 
-		# return inverted value
-		If ($TestPath) {
-			Return $false
-		}
-		Else {
-			Return $true
-		}
+		# return inverted results from Test-Path
+		Return !$TestPath
 	}
 
 	Function Assert-PathRemoved {
