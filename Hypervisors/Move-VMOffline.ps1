@@ -28,7 +28,9 @@ param (
 	# start stopped VM after migration
 	[switch]$Restart,
 	# upgrade VM version after import
-	[switch]$UpdateVmVersion
+	[switch]$UpdateVmVersion,
+	# switch to skip CSV storage check
+	[switch]$SkipClusteredStorageCheck
 )
 
 Begin {
@@ -352,10 +354,10 @@ Begin {
 		$InvokeCommand['ArgumentList']['PathType'] = $PathType
 
 		################################################
-		# test path
+		# test path itself
 		################################################
 
-		# test path
+		# test path before attempting to remove path
 		Try {
 			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
@@ -366,13 +368,8 @@ Begin {
 			Throw $_
 		}
 
-		# return inverted value
-		If ($TestPath) {
-			Return $false
-		}
-		Else {
-			Return $true
-		}
+		# return inverted results from Test-Path
+		Return !$TestPath
 	}
 
 	Function Assert-PathRemoved {
@@ -552,15 +549,14 @@ Begin {
 			[object]$VM,
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName,
-			# number of attempts to assert path action; default is 6 attempts
-			[uint16]$Attempts = 6
+			# switch to skip warning when VMs found
+			[switch]$Quiet
 		)
 
 		################################################
 		# define objects from VM properties
 		################################################
 
-		$Name = $VM.Name.ToLowerInvariant()
 		$VMId = $VM.Id.ToString()
 
 		################################################
@@ -606,13 +602,6 @@ Begin {
 			Throw $_
 		}
 
-		# if planned VM found...
-		If (![string]::IsNullOrEmpty($PlannedVM)) {
-			# declare state and return false
-			Write-Warning -Message "found planned VM by Id with '$PlannedVM' name on '$ComputerName' computer"
-			Return $false
-		}
-
 		################################################
 		# locate realized VM
 		################################################
@@ -642,77 +631,30 @@ Begin {
 			Throw $_
 		}
 
+		################################################
+		# return state
+		################################################
+
+		# if planned VM and realized VM are empty strings...
+		If ([string]::IsNullOrEmpty($PlannedVM) -and [string]::IsNullOrEmpty($RealizedVM)) {
+			# return true
+			Return $true
+		}
+
+		# if planned VM found and quiet not requested...
+		If (![string]::IsNullOrEmpty($PlannedVM) -and !$Quiet) {
+			# declare state
+			Write-Warning -Message "found planned VM by Id with '$PlannedVM' name on '$ComputerName' computer"
+		}
+
 		# if realized VM found...
-		If (![string]::IsNullOrEmpty($RealizedVM)) {
-			# declare state and return false
-			Write-Warning -Message "found VM by Id with '$RealizedVM' name on '$ComputerName' computer"
-			Return $false
-		}
-
-		################################################
-		# check for VM on target cluster
-		################################################
-
-		# get cluster for target computer
-		Try {
-			$ClusterName = Get-ClusterName -ComputerName $ComputerName
-		}
-		Catch {
-			Throw $_
-		}
-
-		# if target computer is clustered...
-		If ($ClusterName) {
+		If (![string]::IsNullOrEmpty($RealizedVM) -and !$Quiet) {
 			# declare state
-			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking for VM by Id in '$ClusterName' cluster..."
-
-			# retrieve CIM instance for realized VM by Id
-			Try {
-				$ClusterGroupOwnerNodeName = Invoke-Command @InvokeCommand -ScriptBlock {
-					# import argument list hashtable
-					Param($ArgumentList)
-
-					# define parameters for Get-ClusterGroup
-					$GetClusterGroup = @{
-						VMId        = $ArgumentList['VMId']
-						ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
-					}
-
-					# get cluster group for VM on target cluster
-					$ClusterGroup = Get-ClusterGroup @GetClusterGroup
-
-					# if cluster group found...
-					If ($ClusterGroup) {
-						# return owner node name
-						Return $ClusterGroup.OwnerNode.Name
-					}
-					Else {
-						# return empty string
-						Return [string]::Empty
-					}
-				}
-			}
-			Catch {
-				Throw $_
-			}
-
-			# if cluster group for VM found on target cluster...
-			If (![string]::IsNullOrEmpty($ClusterGroupOwnerNodeName)) {
-				# warn and return
-				Write-Warning -Message "VM found by Id on '$ClusterGroupOwnerNodeName' node in '$ClusterName' cluster"
-				Return $false
-			}
-
-			# declare state
-			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM not found by Id in '$ClusterName' cluster"
+			Write-Warning -Message "found realized VM by Id with '$RealizedVM' name on '$ComputerName' computer"
 		}
 
-		################################################
-		# return success
-		################################################
-
-		# return true after not finding VM by Id
-		Return $true
+		# return false
+		Return $false
 	}
 
 	Function Assert-VMRemoved {
@@ -769,8 +711,7 @@ Begin {
 
 		# if planned VM and realized VM not found before first attempt to remove VM...
 		If (!$PlannedVM -and !$RealizedVM) {
-			# declare state and return
-			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM not found"
+			# return
 			Return $true
 		}
 
@@ -783,10 +724,10 @@ Begin {
 			# if planned VM found still in migrating state...
 			If ($PlannedVM.OperationalStatus -contains '32774') {
 				# declare state
-				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - found planned VM in migrating state, waiting for planned VM to exit state..."
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...found planned VM in migrating state, waiting for planned VM to exit state..."
 
 				# initialize counter
-				$Counter = [int32]1
+				$Counter = [int32]0
 
 				# while counter less than attempts and planned VM found still in migrating state...
 				While ($Counter -lt $Attempts -and $PlannedVM.OperationalStatus -contains '32774') {
@@ -810,24 +751,28 @@ Begin {
 
 				# if planned VM not found in migrating state...
 				If ($PlannedVM.OperationalStatus -contains '32774') {
-					# declare state
+					# declare state and set boolean
 					Write-Warning -Message 'found planned VM still in migrating state after 30 seconds'
+					$PlannedVMStuckInMigratingState = $true
 				}
 				Else {
 					# declare state
-					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...planned VM exited migrating state, removing planned VM..."
+					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...found planned VM exited migrating state, removing VM..."
 				}
 			}
 			Else {
 				# declare state
-				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - found planned VM, removing..."
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...found planned VM, removing VM..."
 			}
 
 			# initialize counter
-			$Counter = [int32]1
+			$Counter = [int32]0
 
-			# while counter less than attempts and planned VM found...
-			While ($Counter -lt $Attempts -and $PlannedVM) {
+			# while counter less than attempts and planned VM found not in migrating state...
+			While ($Counter -lt $Attempts -and $PlannedVM -and -not $PlannedVMStuckInMigratingState) {
+				# increment counter
+				$Counter++
+
 				# remove planned VM by Id
 				Try {
 					$null = Invoke-Command @InvokeCommand -ScriptBlock {
@@ -839,9 +784,6 @@ Begin {
 				Catch {
 					Throw $_
 				}
-
-				# increment counter
-				$Counter++
 
 				# sleep
 				Start-Sleep -Seconds 5
@@ -863,10 +805,6 @@ Begin {
 				# declare state
 				Write-Warning -Message 'could not remove planned VM after 30 seconds'
 			}
-			Else {
-				# declare state
-				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...planned VM removed"
-			}
 		}
 
 		################################################
@@ -876,13 +814,16 @@ Begin {
 		# if realized VM found...
 		If ($RealizedVM) {
 			# declare state
-			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - found VM, removing..."
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...found realized VM, removing VM..."
 
 			# initialize counter
-			$Counter = [int32]1
+			$Counter = [int32]0
 
 			# while counter less than attempts and realized VM found...
 			While ($Counter -lt $Attempts -and $RealizedVM) {
+				# increment counter
+				$Counter++
+
 				# remove realized VM by Id
 				Try {
 					$null = Invoke-Command @InvokeCommand -ScriptBlock {
@@ -894,9 +835,6 @@ Begin {
 				Catch {
 					Throw $_
 				}
-
-				# increment counter
-				$Counter++
 
 				# sleep
 				Start-Sleep -Seconds 5
@@ -916,11 +854,7 @@ Begin {
 			# if realized VM still found...
 			If ($RealizedVM) {
 				# declare state
-				Write-Warning -Message 'could not remove VM after 30 seconds'
-			}
-			Else {
-				# declare state
-				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM removed"
+				Write-Warning -Message 'could not remove realized VM after 30 seconds'
 			}
 		}
 
@@ -1660,7 +1594,7 @@ Begin {
 
 			# declare state
 			If ($ImportedVM.Version -eq $HighestSupportedVmVersion) {
-				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...updated VM version to: $($ImportedVM.Version)"
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...updated VM version: $($ImportedVM.Version)"
 			}
 		}
 
@@ -1729,12 +1663,13 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking VM..."
 
 		# define parameters
 		$AssertVMNotFound = @{
 			VM           = $VM
 			ComputerName = $ComputerName
+			Quiet        = $true
 		}
 
 		# check VM
@@ -1768,11 +1703,10 @@ Begin {
 			# if VM removed...
 			If ($VMRemoved) {
 				# declare state
-				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VM"
+				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM removed"
 			}
 			Else {
-				# declare state
-				Write-Warning -Message 'could not remove VM'
+				# return; warnings issued by function
 				Return
 			}
 		}
@@ -1782,7 +1716,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking VHDs..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VHDs..."
 
 		# remove VM hard disk drive files
 		ForEach ($VHDPath in $VHDPaths) {
@@ -1828,11 +1762,7 @@ Begin {
 				# if path removed...
 				If ($PathRemoved) {
 					# declare state
-					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VHD"
-				}
-				Else {
-					# declare state
-					Write-Warning -Message 'could not remove VHD'
+					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VHD removed"
 				}
 			}
 		}
@@ -1842,7 +1772,7 @@ Begin {
 		################################################
 
 		# declare state
-		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking VM folders..."
+		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM folders..."
 
 		# remove VM path folders
 		ForEach ($VMPath in $VMPaths) {
@@ -1890,11 +1820,7 @@ Begin {
 				# if path removed...
 				If ($PathRemoved) {
 					# declare state
-					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VM folder"
-				}
-				Else {
-					# declare state
-					Write-Warning -Message 'could not remove VM folder'
+					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM folder removed"
 				}
 			}
 		}
@@ -2099,6 +2025,15 @@ Process {
 		# declare state
 		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking if VM clustered on source computer..."
 
+		# validate source cluster is accessible
+		Try {
+			$null = Get-Cluster -Name $SourceClusterName -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not reach '$SourceClusterName' cluster: $($_.Exception.Message)"
+			Return $_
+		}
+
 		# define parameters for Get-ClusterGroup
 		$GetClusterGroup = @{
 			Cluster     = $SourceClusterName
@@ -2127,34 +2062,116 @@ Process {
 	}
 
 	################################################
-	# check for VM on target computer
+	# check if target computer is clustered
 	################################################
 
-	# declare state
-	Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost,$Name - checking destination host for VM..."
-
-	# define required parameters
-	$AssertVMNotFound = @{
-		VM           = $VM
-		ComputerName = $DestinationHost
-	}
-
-	# ensure VM not found on destination host
+	# get cluster for target computer
 	Try {
-		$VMNotFound = Assert-VMNotFound @AssertVMNotFound
+		$TargetClusterName = Get-ClusterName -ComputerName $DestinationHost
 	}
 	Catch {
 		Throw $_
 	}
 
-	# if VM found on destination host
-	If (!$VMNotFound) {
-		# return immediately; warnings were issued by function
-		Return
+	# if target computer is clustered...
+	If ($TargetClusterName) {
+		# declare state
+		Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost,$Name - checking if VM clustered on target computer..."
+
+		# retrieve target cluster nodes
+		Try {
+			$TargetClusterNodes = Get-ClusterNode -Cluster $TargetClusterName -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not retrieves nodes from '$TargetClusterName' cluster: $($_.Exception.Message)"
+			Return $_
+		}
+
+		# define parameters for Get-ClusterGroup
+		$GetClusterGroup = @{
+			Cluster     = $TargetClusterName
+			VMId        = $Id
+			ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
+		}
+
+		# get cluster group for VM on source cluster
+		$TargetClusterGroup = Get-ClusterGroup @GetClusterGroup
+
+		# clear errors due to the nature of looking up VMs by Id
+		$Error.Clear()
+
+		# if target cluster group found...
+		If ($TargetClusterGroup) {
+			# declare state
+			Write-Warning -Message "found VM on '$($TargetClusterGroup.OwnerNode.Name)' node in '$TargetClusterName' cluster"
+			Return
+		}
+		Else {
+			# declare state
+			Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost,$Name - ...VM not found on '$TargetClusterName' cluster"
+		}
 	}
 
 	################################################
-	# sanitize and retrieve VM paths
+	# check for VM on target computer
+	################################################
+
+	# define sorted set for target computer names
+	$TargetComputerNames = [System.Collections.Generic.SortedSet[System.String]]::new()
+
+	# if target computer is clustered...
+	If ($TargetClusterName) {
+		# define host type
+		$HostType = 'target cluster node'
+
+		# loop through nodes in target cluster
+		ForEach ($TargetClusterNode in $TargetClusterNodes) {
+			# add node name to sorted set
+			$null = $TargetComputerNames.Add($TargetClusterNode.Name)
+		}
+	}
+	# if target computer is not clustered...
+	Else {
+		# define host type
+		$HostType = 'destination host'
+
+		# add destination host to sorted set
+		$TargetClusterNames.Add($DestinationHost)
+	}
+
+	# loop through target computer names
+	ForEach ($TargetComputerName in $TargetComputerNames) {
+		# declare state
+		Write-Host "$([datetime]::Now.ToString('s')),$TargetComputerName,$Name - checking $HostType for VM..."
+
+		# define required parameters
+		$AssertVMNotFound = @{
+			VM           = $VM
+			ComputerName = $DestinationHost
+		}
+
+		# ensure VM not found on destination host
+		Try {
+			$VMNotFound = Assert-VMNotFound @AssertVMNotFound
+		}
+		Catch {
+			Throw $_
+		}
+
+		# if VM not found on target computer...
+		If ($VMNotFound) {
+			# declare state
+			Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost,$Name - ...VM not found on $HostType"
+		}
+		# if VM found on destination host
+		Else {
+			# return immediately; warnings were issued by function
+			Return
+		}
+	}
+
+	################################################
+	# get VM paths on source computer (sanitized)
 	################################################
 
 	# if destination storage path not provided as parameter...
@@ -2174,7 +2191,7 @@ Process {
 		# remove VM folder from end of path
 		$DestinationStoragePath = Split-Path -Path $DestinationStoragePath -Parent
 		# warn about change
-		Write-Warning -Message 'updated DestinationStoragePath to prevent twice-nested VM directory; Export-VM will create dedicated VM directory under DestinationStoragePath'
+		Write-Warning -Message "updated DestinationStoragePath to prevent twice-nested VM directory; Export-VM will create dedicated VM directory under DestinationStoragePath"
 	}
 
 	# define VM path list
@@ -2184,23 +2201,11 @@ Process {
 	$VMPaths.Add($DestinationStoragePath)
 
 	################################################
-	# check if target computer is clustered
-	################################################
-
-	# get cluster for target computer
-	Try {
-		$TargetClusterName = Get-ClusterName -ComputerName $DestinationHost
-	}
-	Catch {
-		Throw $_
-	}
-
-	################################################
-	# get target CSVs from target cluster
+	# test VM paths against CSVs on target
 	################################################
 
 	# if target computer is clustered...
-	If ($TargetClusterName) {
+	If ($TargetClusterName -and -not $SkipClusteredStorageCheck) {
 		# retrieve CSV paths from target computer
 		Try {
 			$ClusterSharedVolumePaths = Get-ClusterSharedVolumePaths -ComputerName $DestinationHost
