@@ -2,14 +2,14 @@
 
 [CmdletBinding(DefaultParameterSetName = 'VM')]
 param (
-	[Parameter(ParameterSetName = 'VM', Mandatory = $true, ValueFromPipeline = $true)]
-	[object]$VM,
-	[Parameter(ParameterSetName = 'VMName', Mandatory = $true)]
-	[string]$VMName,
-	[Parameter(ParameterSetName = 'VMName')]
-	[string]$ComputerName,
 	[Parameter(DontShow)]
-	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
+	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
+    [Parameter(Mandatory = $true, ValueFromPipeline = $true, ParameterSetName = 'Name')]
+	[string]$Name,
+	[Parameter(Mandatory = $true, ValueFromPipeline = $true, ParameterSetName = 'VM')]
+	[object]$VM,
+	[Parameter(Mandatory = $false)]
+	[string]$ComputerName = $Hostname
 )
 
 Begin {
@@ -68,25 +68,21 @@ Begin {
 }
 
 Process {
-	# if VM names provided...
-	If ($PSCmdlet.ParameterSetName -eq 'VMName') {
+	# if name provided...
+	If ($PSCmdlet.ParameterSetName.StartsWith('Name')) {
 		# define required parameters for Get-VM
 		$GetVM = @{
-			Name = $VMName
+			Name         = $Name
+			ComputerName = $ComputerName
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 		}
 
-		# define optional parameters for Get-VM
-		If ($PSBoundParameters.ContainsKey('ComputerName')) {
-			$GetVM['ComputerName'] = $ComputerName
-		}
-
-		# retrieve VM
+		# get VM object from input
 		Try {
 			$VM = Get-VM @GetVM
 		}
 		Catch {
-			Write-Warning -Message "could not retrieve VM with name: $Name"
-			Return $_
+			Throw $_
 		}
 	}
 
