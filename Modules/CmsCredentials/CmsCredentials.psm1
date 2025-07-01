@@ -1465,12 +1465,12 @@ Function Export-CmsCredential {
 	}
 
 	# if ProtectTo provided...
-	If ($PSBoundParameters.Contains('ProtectTo')) {
+	If ($PSBoundParameters.ContainsKey('ProtectTo')) {
 		$ExportCmsCredentialCertificate['ProtectTo'] = $ProtectTo
 	}
 
 	# if Password provided...
-	If ($PSBoundParameters.Contains('Password')) {
+	If ($PSBoundParameters.ContainsKey('Password')) {
 		$ExportCmsCredentialCertificate['Password'] = $Password
 	}
 
