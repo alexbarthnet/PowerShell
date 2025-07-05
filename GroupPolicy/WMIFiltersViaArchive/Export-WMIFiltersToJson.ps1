@@ -15,7 +15,7 @@ Param(
 	[Parameter(DontShow)]
 	[string]$Domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain().Name,
 	[Parameter(DontShow)]
-	[string]$DomainNCName = [System.DirectorySErvices.ActiveDirectory.Domain]::GetCurrentDomain().GetDirectoryEntry().DistinguishedName,
+	[string]$DomainNCName = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().GetDirectoryEntry().DistinguishedName,
 	[Parameter(DontShow)]
 	[string]$WMIContainer = "CN=SOM,CN=WMIPolicy,CN=System,$DomainNCName",
 	[Parameter(DontShow)]

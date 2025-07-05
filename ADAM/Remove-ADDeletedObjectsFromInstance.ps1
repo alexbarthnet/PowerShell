@@ -13,10 +13,10 @@ param (
 	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.'),
 	# PDC role owner for computer domain
 	[Parameter(DontShow)]
-	[string]$PdcRoleOwner = [System.DirectorySErvices.ActiveDirectory.Domain]::GetComputerDomain().PdcRoleOwner.Name,
+	[string]$PdcRoleOwner = [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain().PdcRoleOwner.Name,
 	# naming context for computer domain
 	[Parameter(DontShow)]
-	[string]$DomainNCName = [System.DirectorySErvices.ActiveDirectory.Domain]::GetComputerDomain().GetDirectoryEntry().DistinguishedName,
+	[string]$DomainNCName = [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain().GetDirectoryEntry().DistinguishedName,
 	# port for ADAM instance
 	[Parameter(DontShow)]
 	[uint16]$Port = 389,
