@@ -4000,7 +4000,6 @@ Process {
 					$AddVMNetworkAdapterToVM['AllowTeaming'] = $VMNetworkAdapterEntry.AllowTeaming
 				}
 
-
 				# add VMNetworkAdapter to VM and get VMNetworkAdapter
 				Try {
 					$VMNetworkAdapter = Add-VMNetworkAdapterToVM @AddVMNetworkAdapterToVM
