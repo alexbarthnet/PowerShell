@@ -103,7 +103,7 @@ Param(
 	# VMNetworkAdapter - VLAN ID for network adapter
 	[Parameter(Position = 12, ParameterSetName = 'Add')]
 	[Parameter(Position = 5, ParameterSetName = 'AddVMNetworkAdapter')]
-	[ValidateSet('Untagged','Access', 'Trunk', 'Isolation')]
+	[ValidateSet('Untagged', 'Access', 'Trunk', 'Isolation')]
 	[string]$VlanMode,
 	# VM - VLAN ID for default network adapter
 	# VMNetworkAdapter - VLAN ID for network adapter
@@ -146,13 +146,13 @@ Param(
 	# VMNetworkAdapter - allow network adapter to change MAC address on outgoing packets
 	[Parameter(Position = 20, ParameterSetName = 'Add')]
 	[Parameter(Position = 13, ParameterSetName = 'AddVMNetworkAdapter')]
-	[ValidateSet("On","Off")]
+	[ValidateSet('On', 'Off')]
 	[string]$MacAddressSpoofing,
 	# VM - allow default network adapter to be teamed with other network adapters on the same virtual switch
 	# VMNetworkAdapter - allow network adapter to be teamed with other network adapters on the same virtual switch
 	[Parameter(Position = 21, ParameterSetName = 'Add')]
 	[Parameter(Position = 14, ParameterSetName = 'AddVMNetworkAdapter')]
-	[ValidateSet("On","Off")]
+	[ValidateSet('On', 'Off')]
 	[string]$AllowTeaming,
 	# OS Deployment - multiple - server name for WDS or SCCM
 	[Parameter(Position = 4, ParameterSetName = 'AddOSDeployment')]
