@@ -10,18 +10,22 @@ Param(
 	[switch]$Add,
 	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'Remove')]
 	[switch]$Remove,
-	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'AddVMHardDiskDrive')]
+	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'AddVMHardDiskDrive')][Alias('AddVHD')]
 	[switch]$AddVMHardDiskDrive,
-	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'RemoveVMHardDiskDrive')]
+	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'RemoveVMHardDiskDrive')][Alias('RemoveVHD')]
 	[switch]$RemoveVMHardDiskDrive,
-	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'AddVMNetworkAdapter')]
+	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'AddVMNetworkAdapter')][Alias('AddVMNic')]
 	[switch]$AddVMNetworkAdapter,
-	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'RemoveVMNetworkAdapter')]
+	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'RemoveVMNetworkAdapter')][Alias('RemoveVMNic')]
 	[switch]$RemoveVMNetworkAdapter,
-	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'AddOSD')]
-	[switch]$AddOSD,
-	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'RemoveOSD')]
-	[switch]$RemoveOSD,
+	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'AddADComputer')]
+	[switch]$AddADComputer,
+	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'RemoveADComputer')]
+	[switch]$RemoveADComputer,
+	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'AddOSDeployment')][Alias('AddOSD')]
+	[switch]$AddOSDeployment,
+	[Parameter(Mandatory = $True, Position = 1, ParameterSetName = 'RemoveOSDeployment')][Alias('RemoveOSD')]
+	[switch]$RemoveOSDeployment,
 	# All - name of VM
 	[Parameter(Mandatory = $False, Position = 1, ParameterSetName = 'Default')]
 	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'Add')]
@@ -30,8 +34,10 @@ Param(
 	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'RemoveVMHardDiskDrive')]
 	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'AddVMNetworkAdapter')]
 	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'RemoveVMNetworkAdapter')]
-	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'AddOSD')]
-	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'RemoveOSD')]
+	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'AddADComputer')]
+	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'RemoveADComputer')]
+	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'AddOSDeployment')]
+	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'RemoveOSDeployment')]
 	[string]$VMName,
 	# VM - path of virtual machine files
 	# VMHardDiskDrive - path of virtual hard disk drive
@@ -43,8 +49,12 @@ Param(
 	[Parameter(Mandatory = $True, Position = 3, ParameterSetName = 'AddVMNetworkAdapter')]
 	[Parameter(Mandatory = $True, Position = 3, ParameterSetName = 'RemoveVMNetworkAdapter')]
 	[string]$NetworkAdapterName,
+	# AD Computer - Domain Name
+	[Parameter(Mandatory = $true, Position = 3, ParameterSetName = 'AddADComputer')]
+	[Parameter(Mandatory = $true, Position = 3, ParameterSetName = 'RemoveADComputer')]
+	[string]$Domain,
 	# OS Deployment - OSD method
-	[Parameter(Mandatory = $true, Position = 3, ParameterSetName = 'AddOSD')]
+	[Parameter(Mandatory = $true, Position = 3, ParameterSetName = 'AddOSDeployment')]
 	[ValidateSet('ISO', 'SCCM', 'WDS')]
 	[string]$DeploymentMethod,
 	# VMHardDiskDrive - bytes for VHD size
@@ -145,48 +155,53 @@ Param(
 	[ValidateSet("On","Off")]
 	[string]$AllowTeaming,
 	# OS Deployment - multiple - server name for WDS or SCCM
-	[Parameter(Position = 4, ParameterSetName = 'AddOSD')]
+	[Parameter(Position = 4, ParameterSetName = 'AddOSDeployment')]
 	[string]$DeploymentServer,
 	# OS Deployment - based upon Deployment Method
 	#  ISO	: literal path to ISO file on hypervisor
 	#  VHD	: literal path to VHD file on hypervisor
 	#  SCCM	: distinguished name of OU where VM will be created
-	[Parameter(Position = 5, ParameterSetName = 'AddOSD')]
+	[Parameter(Position = 5, ParameterSetName = 'AddOSDeployment')]
 	[string]$DeploymentPath,
 	# OS Deployment - SCCM - NetBIOS name of Windows domain
-	[Parameter(Position = 6, ParameterSetName = 'AddOSD')]
+	[Parameter(Position = 6, ParameterSetName = 'AddOSDeployment')]
 	[string]$DeploymentDomain,
 	# OS Deployment - SCCM - deployment collection
-	[Parameter(Position = 7, ParameterSetName = 'AddOSD')]
+	[Parameter(Position = 7, ParameterSetName = 'AddOSDeployment')]
 	[string]$DeploymentCollection,
 	# OS Deployment - SCCM - maintenance window collection
-	[Parameter(Position = 8, ParameterSetName = 'AddOSD')]
+	[Parameter(Position = 8, ParameterSetName = 'AddOSDeployment')]
 	[string]$MaintenanceCollection,
 	# OS Deployment - VHD - literal path to unattend XML file on hypervisor
-	[Parameter(Position = 9, ParameterSetName = 'AddOSD')]
+	[Parameter(Position = 9, ParameterSetName = 'AddOSDeployment')]
 	[string]$UnattendFile,
 	# OS Deployment - VHD - FQDN of domain for VM to join
-	[Parameter(Position = 10, ParameterSetName = 'AddOSD')]
+	[Parameter(Position = 10, ParameterSetName = 'AddOSDeployment')]
 	[string]$DomainName,
 	# OS Deployment - VHD - FQDN of OU where VM will be created
-	[Parameter(Position = 11, ParameterSetName = 'AddOSD')]
+	[Parameter(Position = 11, ParameterSetName = 'AddOSDeployment')]
+	# AD Computer - FQDN of OU where computer object for VM will be created
+	[Parameter(Position = 4, ParameterSetName = 'AddADComputer')]
 	[string]$OrganizationalUnit,
+	# AD Computer - Groups which computer object for VM will join
+	[Parameter(Position = 5, ParameterSetName = 'AddADComputer')]
+	[string[]]$Groups,
 	# VM - optional affinity rules for clustered VMs
 	[Parameter(Position = 22, ParameterSetName = 'Add')]
 	[string[]]$ClusterAffinityRules,
 	# VM - startup priority value for clustered VMs, 0 = no auto start, 1000 = low, 2000 = medium, 3000 = high
-	[Parameter(Position = 22, ParameterSetName = 'Add')]
+	[Parameter(Position = 23, ParameterSetName = 'Add')]
 	[ValidateSet(0, 1000, 2000, 3000)]
 	[uint32]$ClusterPriority,
 	# VM - define VM generation; 1 = generation 1 VM, 2 = generation 2 VM
-	[Parameter(Position = 21, ParameterSetName = 'Add')]
+	[Parameter(Position = 24, ParameterSetName = 'Add')]
 	[ValidateSet(1, 2)]
 	[uint16]$Generation,
 	# VM - enable the virtual TPM for the VM (warning: virtual TPM locked to host without additional work)
-	[Parameter(Position = 22, ParameterSetName = 'Add')]
+	[Parameter(Position = 25, ParameterSetName = 'Add')]
 	[switch]$EnableVMTPM,
 	# VM - do not add VM to cluster if created a hypervisor joined to a cluster
-	[Parameter(Position = 23, ParameterSetName = 'Add')]
+	[Parameter(Position = 26, ParameterSetName = 'Add')]
 	[switch]$DoNotCluster,
 	# VM - preserve existing parameters when editing a VM
 	[Parameter(ParameterSetName = 'Add')]
@@ -517,7 +532,7 @@ Begin {
 		$JsonKey = $JsonData.$JsonKeyName
 
 		# if verbose...
-		If ($VerbosePreference -eq 'Continue') {
+		If ($VerbosePreference -eq 'Continue' -or -not $script:PSBoundParameters.ContainsKey($JsonKeyParameter)) {
 			# ...display full file
 			Write-Host "`nDisplaying full configuration file: '$Json'"
 			$JsonData | ConvertTo-Json -Depth 100
@@ -531,7 +546,7 @@ Begin {
 				$JsonKey | ConvertTo-Json -Depth 100
 			}
 			ElseIf ($PSCmdlet.ParameterSetName -eq 'Default') {
-				Write-Warning "`nCould not locate'$(Get-Variable -Name $JsonKeyParameter -ValueOnly)' entry in configuration file: '$Json'"
+				Write-Warning -Message "could not locate '$(Get-Variable -Name $JsonKeyParameter -ValueOnly)' entry in configuration file: '$Json'"
 			}
 		}
 	}
@@ -623,6 +638,7 @@ Process {
 	If ($PSCmdlet.ParameterSetName -notin @('Clear', 'Default')) {
 		# define JsonKeyName from JsonKeyParameter property
 		$JsonKey = (Get-Variable -Name $JsonKeyParameter -ValueOnly)
+
 		# retrieve JsonEntry from JsonData
 		# $JsonEntry = $JsonData | Where-Object { $_.$JsonKeyParameter -eq $JsonKey }
 
@@ -653,7 +669,29 @@ Process {
 			# update JSON file
 			Update-JsonFile -JsonPath $Json -JsonData $JsonData
 		}
-		$RemoveOSD {
+		$RemoveADComputer {
+			# define parameters for function
+			$RemoveNestedJsonKeyValuePair = @{
+				# define keys between root key and nested key
+				JsonPathToKey   = 'ADComputer'
+				# define key for finding existing key value pair
+				JsonNestedKey   = 'Domain'
+				# define value for finding existing key value pair
+				JsonNestedValue = $Domain
+			}
+
+			# remove object from nested JSON key
+			Try {
+				Remove-NestedJsonKeyValuePair @RemoveNestedJsonKeyValuePair
+			}
+			Catch {
+				Return $_
+			}
+
+			# update JSON file
+			Update-JsonFile -JsonData $JsonData
+		}
+		$RemoveOSDeployment {
 			# define parameters for function
 			$RemoveNestedJsonKeyValuePair = @{
 				# define keys between root key and nested key
@@ -868,13 +906,39 @@ Process {
 			# update JSON file
 			Update-JsonFile -JsonData $JsonData
 		}
-		$AddOSD {
+		$AddADComputer {
 			# define parameters for function
 			$AddNestedJsonKeyValuePair = @{
 				# define parameters
 				BoundParameters  = $PSBoundParameters
 				# define paramter set name
-				ParameterSetName = 'AddOSD'
+				ParameterSetName = 'AddADComputer'
+				# define keys between root key and nested key
+				JsonPathToKey    = 'ADComputer'
+				# define key for finding existing key value pair
+				JsonNestedKey    = 'Domain'
+				# define value for finding existing key value pair
+				JsonNestedValue  = $Domain
+			}
+
+			# add object to nested JSON key
+			Try {
+				Add-NestedJsonKeyValuePair @AddNestedJsonKeyValuePair
+			}
+			Catch {
+				Return $_
+			}
+
+			# update JSON file
+			Update-JsonFile -JsonData $JsonData
+		}
+		$AddOSDeployment {
+			# define parameters for function
+			$AddNestedJsonKeyValuePair = @{
+				# define parameters
+				BoundParameters  = $PSBoundParameters
+				# define paramter set name
+				ParameterSetName = 'AddOSDeployment'
 				# define keys between root key and nested key
 				JsonPathToKey    = 'OSDeployment'
 				# define key for finding existing key value pair
