@@ -517,7 +517,7 @@ Begin {
 		$JsonKey = $JsonData.$JsonKeyName
 
 		# if verbose...
-		If ($VerbosePreference -eq 'Continue') {
+		If ($VerbosePreference -eq 'Continue' -or -not $script:PSBoundParameters.ContainsKey($JsonKeyParameter)) {
 			# ...display full file
 			Write-Host "`nDisplaying full configuration file: '$Json'"
 			$JsonData | ConvertTo-Json -Depth 100
