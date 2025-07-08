@@ -531,7 +531,7 @@ Begin {
 				$JsonKey | ConvertTo-Json -Depth 100
 			}
 			ElseIf ($PSCmdlet.ParameterSetName -eq 'Default') {
-				Write-Warning "`nCould not locate'$(Get-Variable -Name $JsonKeyParameter -ValueOnly)' entry in configuration file: '$Json'"
+				Write-Warning -Message "could not locate '$(Get-Variable -Name $JsonKeyParameter -ValueOnly)' entry in configuration file: '$Json'"
 			}
 		}
 	}
