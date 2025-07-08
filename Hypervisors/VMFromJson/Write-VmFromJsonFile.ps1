@@ -186,7 +186,7 @@ Param(
 	[Parameter(Position = 22, ParameterSetName = 'Add')]
 	[switch]$EnableVMTPM,
 	# VM - do not add VM to cluster if created a hypervisor joined to a cluster
-	[Parameter(Position = 26, ParameterSetName = 'Add')]
+	[Parameter(Position = 23, ParameterSetName = 'Add')]
 	[switch]$DoNotCluster,
 	# VM - preserve existing parameters when editing a VM
 	[Parameter(ParameterSetName = 'Add')]
