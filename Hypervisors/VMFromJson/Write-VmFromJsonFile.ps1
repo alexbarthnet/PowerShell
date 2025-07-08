@@ -623,6 +623,7 @@ Process {
 	If ($PSCmdlet.ParameterSetName -notin @('Clear', 'Default')) {
 		# define JsonKeyName from JsonKeyParameter property
 		$JsonKey = (Get-Variable -Name $JsonKeyParameter -ValueOnly)
+
 		# retrieve JsonEntry from JsonData
 		# $JsonEntry = $JsonData | Where-Object { $_.$JsonKeyParameter -eq $JsonKey }
 
