@@ -121,9 +121,17 @@ catch {
 		# report state
 		Write-Host ("$Hostname,$Name - retrieving '$Group' group...")
 
+		# define parameters
+		$GetADGroup = @{
+			Server      = $Server
+			Identity    = $Group
+			Properties  = 'Member'
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
 		# retrieve group by name
 		try {
-			$GroupObject = Get-ADGroup -Server $Server -Identity $Group -Properties 'member' -ErrorAction 'Stop'
+			$GroupObject = Get-ADGroup @GetADGroup
 		}
 		catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
 			Write-Warning -Message "could not locate group with '$Group' name on '$Server' server in '$Domain' domain"
@@ -146,9 +154,17 @@ catch {
 		# report state
 		Write-Host ("$Hostname,$Name - ...adding computer to group...")
 
+		# define parameters
+		$AddADGroupMember = @{
+			Server      = $Server
+			Identity    = $GroupObject
+			Members     = $ComputerObject
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
 		# add computer to group
 		try {
-			Add-ADGroupMember -Server $Server -Identity $GroupObject -Members $ComputerObject -ErrorAction 'Stop'
+			Add-ADGroupMember @AddADGroupMember
 		}
 		catch {
 			Write-Warning -Message "could not add computer to  group with '$Group' name on '$Server' server in '$Domain' domain"
