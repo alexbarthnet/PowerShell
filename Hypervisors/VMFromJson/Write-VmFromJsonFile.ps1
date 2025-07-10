@@ -154,33 +154,27 @@ Param(
 	[Parameter(Position = 14, ParameterSetName = 'AddVMNetworkAdapter')]
 	[ValidateSet('On', 'Off')]
 	[string]$AllowTeaming,
-	# OS Deployment - multiple - server name for WDS or SCCM
+	# OS Deployment - ISO - literal path to ISO file on hypervisor
+	# OS Deployment - VHD - literal path to VHD file on hypervisor
 	[Parameter(Position = 4, ParameterSetName = 'AddOSDeployment')]
-	[string]$DeploymentServer,
-	# OS Deployment - based upon Deployment Method
-	#  ISO	: literal path to ISO file on hypervisor
-	#  VHD	: literal path to VHD file on hypervisor
-	#  SCCM	: distinguished name of OU where VM will be created
+	[string]$FilePath,
+	# OS Deployment - SCCM - server name for SCCM
 	[Parameter(Position = 5, ParameterSetName = 'AddOSDeployment')]
-	[string]$DeploymentPath,
-	# OS Deployment - SCCM - NetBIOS name of Windows domain
+	[string]$Server,
+	# OS Deployment - SCCM - collections
 	[Parameter(Position = 6, ParameterSetName = 'AddOSDeployment')]
-	[string]$DeploymentDomain,
-	# OS Deployment - SCCM - deployment collection
-	[Parameter(Position = 7, ParameterSetName = 'AddOSDeployment')]
-	[string]$DeploymentCollection,
-	# OS Deployment - SCCM - maintenance window collection
-	[Parameter(Position = 8, ParameterSetName = 'AddOSDeployment')]
-	[string]$MaintenanceCollection,
+	[string[]]$Collections,
 	# OS Deployment - VHD - literal path to unattend XML file on hypervisor
-	[Parameter(Position = 9, ParameterSetName = 'AddOSDeployment')]
+	[Parameter(Position = 7, ParameterSetName = 'AddOSDeployment')]
 	[string]$UnattendFile,
+	# OS Deployment - SCCM - NetBIOS name of Windows domain
 	# OS Deployment - VHD - FQDN of domain for VM to join
-	[Parameter(Position = 10, ParameterSetName = 'AddOSDeployment')]
+	[Parameter(Position = 8, ParameterSetName = 'AddOSDeployment')]
 	[string]$DomainName,
+	# OS Deployment - SCCM - FQDN of OU where VM will be created
 	# OS Deployment - VHD - FQDN of OU where VM will be created
-	[Parameter(Position = 11, ParameterSetName = 'AddOSDeployment')]
 	# AD Computer - FQDN of OU where computer object for VM will be created
+	[Parameter(Position = 9, ParameterSetName = 'AddOSDeployment')]
 	[Parameter(Position = 4, ParameterSetName = 'AddADComputer')]
 	[string]$OrganizationalUnit,
 	# AD Computer - Groups which computer object for VM will join
