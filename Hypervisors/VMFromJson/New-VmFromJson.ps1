@@ -715,9 +715,7 @@ Begin {
 			[Parameter(Mandatory)]
 			[string[]]$Collections,
 			[Parameter(Mandatory)]
-			[string]$DomainName,
-			[Parameter(Mandatory)]
-			[string]$OrganizationalUnit
+			[hashtable]$DeviceVariables
 		)
 
 		# get hashtable for InvokeCommand splat
@@ -811,12 +809,11 @@ Begin {
 		$InvokeCommand['ArgumentList']['Name'] = $Name
 
 		# update arguments for Invoke-Command - deployment
-		$InvokeCommand['ArgumentList']['Collections'] = $Collections
 		$InvokeCommand['ArgumentList']['ModulePath'] = $CMModulePath
 		$InvokeCommand['ArgumentList']['SiteCode'] = $CMSiteCode
 		$InvokeCommand['ArgumentList']['BIOSGUID'] = $BIOSGUID
-		$InvokeCommand['ArgumentList']['OSDDOMAIN'] = $DomainName
-		$InvokeCommand['ArgumentList']['OSDDOMAINOUNAME'] = $OrganizationalUnit
+		$InvokeCommand['ArgumentList']['Collections'] = $Collections
+		$InvokeCommand['ArgumentList']['DeviceVariables'] = $DeviceVariables
 
 		# add VM to SCCM
 		Invoke-Command @InvokeCommand -ScriptBlock {
@@ -1261,55 +1258,6 @@ Begin {
 				Write-Host ("$Hostname,$ComputerName,$Name - ...cleared PXE deployment for existing device")
 			}
 
-			# if device variable not provided...
-			If ([string]::IsNullOrEmpty($ArgumentList['OSDDOMAIN'])) {
-				Write-Host ("$Hostname,$ComputerName,$Name - skipping device variable: 'OSDDOMAIN'; value not provided")
-			}
-			# if deployment collection name provided...
-			Else {
-				# define parameterss for Update-CMDeviceVariable
-				$UpdateCMDeviceVariable = @{
-					ResourceId    = $Device.ResourceID
-					VariableName  = 'OSDDOMAIN'
-					VariableValue = $ArgumentList['OSDDomain']
-					ErrorAction   = [System.Management.Automation.ActionPreference]::Stop
-				}
-
-				# update device variable for OSD domain
-				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - checking device variable: 'OSDDOMAIN'")
-					Update-CMDeviceVariable @UpdateCMDeviceVariable
-				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: checking device variable")
-					Throw $_
-				}
-			}
-
-			# if device variable not provided...
-			If ([string]::IsNullOrEmpty($ArgumentList['OSDDOMAINOUNAME'])) {
-				Write-Host ("$Hostname,$ComputerName,$Name - skipping device variable: 'OSDDOMAINOUNAME'; value not provided")
-			}
-			Else {
-				# define parameterss for Update-CMDeviceVariable
-				$UpdateCMDeviceVariable = @{
-					ResourceId    = $Device.ResourceID
-					VariableName  = 'OSDDOMAINOUNAME'
-					VariableValue = $ArgumentList['OSDDOMAINOUNAME']
-					ErrorAction   = [System.Management.Automation.ActionPreference]::Stop
-				}
-
-				# update device variable for OSD domain OU name
-				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - checking device variable: 'OSDDOMAINOUNAME'")
-					Update-CMDeviceVariable @UpdateCMDeviceVariable
-				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: checking device variable")
-					Throw $_
-				}
-			}
-
 			# loop through collections
 			ForEach ($Collection in $ArgumentList['Collections']) {
 				# define parameters for Get-CMDeviceFromCollection
@@ -1329,179 +1277,33 @@ Begin {
 					Throw $_
 				}
 			}
-		}
-	}
 
-	Function Add-DeviceToWds {
-		[CmdletBinding()]
-		Param (
-			# define VM parameters
-			[Parameter(Mandatory = $true)]
-			[object]$VM,
-			[string]$ComputerName = $VM.ComputerName.ToLower(),
-			# define OSD parameters
-			[Parameter(Mandatory)]
-			[string]$DeploymentPath,
-			[Parameter(Mandatory)]
-			[string]$DeploymentServer
-		)
-
-		# get hashtable for InvokeCommand splat
-		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $DeploymentServer
-		}
-		Catch {
-			Throw $_
-		}
-
-		# get VM from parameters
-		Try {
-			$VM = Get-VMFromParameters -ComputerName $ComputerName -VM $VM
-		}
-		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
-			Throw $_
-		}
-
-		# define CIM instance for VM system settings
-		$GetCimInstanceForVM = @{
-			VM          = $VM
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# retrieve original VM system settings and host management service via CIM
-		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...retrieving CIM instance for VM...")
-			$CimInstanceForVM = Get-CimInstanceForVM @GetCimInstanceForVM
-		}
-		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve CIM instance for VM")
-			Throw $_
-		}
-
-		# retrive BIOS GUID from CIM data
-		If ([string]::IsNullOrEmpty($CimInstanceForVM.BIOSGUID)) {
-			Write-Host ("$Hostname,$ComputerName,$Name - WARNING: BIOS GUID for VM is empty; skipping WDS provisioning...")
-			Return
-		}
-		Else {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...found BIOS GUID for VM: '$($CimInstanceForVM.BIOSGUID)'")
-			$BIOSGUID = $CimInstanceForVM.BIOSGUID
-		}
-
-		# update arguments for Invoke-Command
-		$InvokeCommand['ArgumentList']['Hostname'] = $Hostname
-		$InvokeCommand['ArgumentList']['ComputerName'] = $DeploymentServer
-		$InvokeCommand['ArgumentList']['DeviceName'] = $Name
-		$InvokeCommand['ArgumentList']['DeviceID'] = $BIOSGUID
-		$InvokeCommand['ArgumentList']['WdsClientUnattend'] = $DeploymentPath
-
-		# add VM to WDS
-		Invoke-Command @InvokeCommand -ScriptBlock {
-			Param($ArgumentList)
-
-			# create objects for reporting
-			$Hostname = $ArgumentList['Hostname']
-			$ComputerName = $ArgumentList['ComputerName']
-			$Name = $ArgumentList['DeviceName']
-
-			# define parameters for Get-Item Property
-			$GetItemProperty = @{
-				Path        = 'HKLM:\SYSTEM\CurrentControlSet\Services\WDSServer\Providers\WDSDCMGR\Providers\WDSADDC'
-				Name        = 'Disabled'
-				ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
-			}
-
-			# retrieve Disabled item property for WDS Active Directory inegration
-			Try {
-				Write-Host ("$Hostname,$ComputerName,$Name - checking WDS server...")
-				$Disabled = Get-ItemProperty @GetItemProperty | Select-Object -ExpandProperty 'Disabled'
-			}
-			Catch {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not check WDS integration")
-				Throw $_
-			}
-
-			# if WDS Active Directory integration is not disabled...
-			If ($Disabled -eq 0) {
-				# ...declare and return
-				Write-Host ("$Hostname,$ComputerName,$Name - WARNING: WDS server is in Active Directory mode; skipping WDS provisioning...")
+			# if device variables object is not a hashtable...
+			If ($ArgumentList['DeviceVariables'] -isnot [hashtable]) {
+				# return before calling GetEnumerator method on unsupported object
 				Return
 			}
 
-			# define parameters for Get-WdsClient
-			$GetWdsClient = @{
-				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-			}
+			# loop through device variables
+			ForEach ($DeviceVariable in $ArgumentList['DeviceVariables'].GetEnumerator()) {
+				# define parameterss for Update-CMDeviceVariable
+				$UpdateCMDeviceVariable = @{
+					ResourceId    = $Device.ResourceID
+					VariableName  = $DeviceVariable.Key
+					VariableValue = $DeviceVariable.Value
+					ErrorAction   = [System.Management.Automation.ActionPreference]::Stop
+				}
 
-			# retrieve existing WDS clients
-			Try {
-				Write-Host ("$Hostname,$ComputerName,$Name - checking for matching WDS devices...")
-				$WdsClients = Get-WdsClient @GetWdsClient
-			}
-			Catch {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve existing WDS devices")
-				Throw $_
-			}
-
-			# create objects for device
-			$DeviceID = $ArgumentList['DeviceID']
-
-			# filter WDS clients
-			$WdsClients = $WdsClients | Where-Object { $_.DeviceId -eq "{$DeviceId}" -or $_.DeviceName -eq $Name }
-
-			# if no WDS clients found...
-			If ($null -eq $WdsClients) {
-				# ...declare and continue
-				Write-Host ("$Hostname,$ComputerName,$Name - ...no matching WDS device found")
-			}
-			# if WDS clients found with matching DeviceId or DeviceName...
-			Else {
-				# process WDS clients
-				ForEach ($WdsClient in $WdsClients) {
-					# declare device found
-					Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing WDS device: ")
-					Write-Host ("$Hostname,$ComputerName,$Name - ... - DeviceName : $($WdsClient.DeviceName)")
-					Write-Host ("$Hostname,$ComputerName,$Name - ... - DeviceId   : $($WdsClient.DeviceId)")
-
-					# define parameters for Remove-WdsClient
-					$RemoveWdsClient = @{
-						DeviceId    = $WdsClient.DeviceId
-						ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-					}
-
-					# remove matching WDS client by DeviceId
-					Try {
-						Remove-WdsClient @RemoveWdsClient
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove existing WDS device")
-						Throw $_
-					}
+				# update device variable for OSD domain OU name
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - checking device variable: '$($DeviceVariable.Key)'")
+					Update-CMDeviceVariable @UpdateCMDeviceVariable
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: checking device variable")
+					Throw $_
 				}
 			}
-
-			# define parameters for New-WdsClient
-			$NewWdsClient = @{
-				DeviceId          = $DeviceId
-				DeviceName        = $Name
-				WdsClientUnattend = $ArgumentList['WdsClientUnattend']
-				ErrorAction       = [System.Management.Automation.ActionPreference]::Stop
-			}
-
-			# create WDS client
-			Try {
-				Write-Host ("$Hostname,$ComputerName,$Name - creating WDS device...")
-				$null = New-WdsClient @NewWdsClient
-			}
-			Catch {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create WDS device")
-				Throw $_
-			}
-
-			# declare complete and return
-			Write-Host ("$Hostname,$ComputerName,$Name - ...created WDS device")
-			Return
 		}
 	}
 
@@ -4147,13 +3949,28 @@ Process {
 						}
 					}
 					'SCCM' {
+						# if device variables provided...
+						If ($JsonData.$Name.OSDeployment.DeviceVariables) {
+							# convert property from JSON to hashtable
+							try {
+								$DeviceVariablesHashtable = ConvertTo-Collection -InputObject $JsonData.$Name.OSDeployment.DeviceVariables
+							}
+							catch {
+								Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create hashtable from DeviceVariables in OS Deployment")
+								Throw $_
+							}
+						}
+						Else {
+							# create empty hashtable
+							$DeviceVariablesHashtable = @{}
+						}
+
 						# define parameters for Add-DeviceToSccm
 						$AddDeviceToSccm = @{
-							VM                 = $VM
-							Server             = $JsonData.$Name.OSDeployment.Server
-							Collections        = $JsonData.$Name.OSDeployment.Collections
-							DomainName         = $JsonData.$Name.OSDeployment.DomainName
-							OrganizationalUnit = $JsonData.$Name.OSDeployment.OrganizationalUnit
+							VM              = $VM
+							Server          = $JsonData.$Name.OSDeployment.Server
+							Collections     = $JsonData.$Name.OSDeployment.Collections
+							DeviceVariables = $DeviceVariablesHashtable
 						}
 
 						# add VM to SCCM
