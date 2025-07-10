@@ -765,7 +765,7 @@ Begin {
 
 		# define parameters for Get-CMModulePath
 		$GetCMModulePath = @{
-			ComputerName = $DeploymentServer
+			ComputerName = $Server
 			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 		}
 
