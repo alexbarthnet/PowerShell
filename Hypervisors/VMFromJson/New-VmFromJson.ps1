@@ -646,20 +646,18 @@ Begin {
 			[string]$ComputerName = $VM.ComputerName.ToLower(),
 			# define OSD parameters
 			[Parameter(Mandatory)]
-			[string]$DeploymentPath,
+			[string]$Server,
 			[Parameter(Mandatory)]
-			[string]$DeploymentServer,
+			[string[]]$Collections,
 			[Parameter(Mandatory)]
-			[string]$DeploymentDomain,
+			[string]$DomainName,
 			[Parameter(Mandatory)]
-			[string]$DeploymentCollection,
-			[Parameter(Mandatory)]
-			[string]$MaintenanceCollection
+			[string]$OrganizationalUnit
 		)
 
 		# get hashtable for InvokeCommand splat
 		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $DeploymentServer
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $Server
 		}
 		Catch {
 			Throw $_
@@ -723,7 +721,7 @@ Begin {
 
 		# define parameters for Get-CMSiteCode
 		$GetCMSiteCode = @{
-			ComputerName = $DeploymentServer
+			ComputerName = $Server
 			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 		}
 
@@ -744,17 +742,16 @@ Begin {
 
 		# update arguments for Invoke-Command - reporting
 		$InvokeCommand['ArgumentList']['Hostname'] = $Hostname
-		$InvokeCommand['ArgumentList']['ComputerName'] = $DeploymentServer
+		$InvokeCommand['ArgumentList']['ComputerName'] = $Server
 		$InvokeCommand['ArgumentList']['Name'] = $Name
 
 		# update arguments for Invoke-Command - deployment
-		$InvokeCommand['ArgumentList']['DeploymentCollection'] = $DeploymentCollection
-		$InvokeCommand['ArgumentList']['MaintenanceCollection'] = $MaintenanceCollection
+		$InvokeCommand['ArgumentList']['Collections'] = $Collections
 		$InvokeCommand['ArgumentList']['ModulePath'] = $CMModulePath
 		$InvokeCommand['ArgumentList']['SiteCode'] = $CMSiteCode
 		$InvokeCommand['ArgumentList']['BIOSGUID'] = $BIOSGUID
-		$InvokeCommand['ArgumentList']['OSDDOMAIN'] = $DeploymentDomain
-		$InvokeCommand['ArgumentList']['OSDDOMAINOUNAME'] = $DeploymentPath
+		$InvokeCommand['ArgumentList']['OSDDOMAIN'] = $DomainName
+		$InvokeCommand['ArgumentList']['OSDDOMAINOUNAME'] = $OrganizationalUnit
 
 		# add VM to SCCM
 		Invoke-Command @InvokeCommand -ScriptBlock {
@@ -1248,46 +1245,18 @@ Begin {
 				}
 			}
 
-			# if collection name not provided...
-			If ([string]::IsNullOrEmpty($ArgumentList['DeploymentCollection'])) {
-				Write-Host ("$Hostname,$ComputerName,$Name - skipping deployment collection; name not provided")
-			}
-			# if collection name provided...
-			Else {
+			# loop through collections
+			ForEach ($Collection in $ArgumentList['Collections']) {
 				# define parameters for Get-CMDeviceFromCollection
 				$AddCMDeviceToCollection = @{
-					CollectionName = $ArgumentList['DeploymentCollection']
-					ResourceId     = $Device.ResourceID
-					ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
-				}
-
-				# add device to deployment collection
-				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - adding device to deployment collection: $($ArgumentList['DeploymentCollection'])")
-					$Device = Add-CMDeviceToCollection @AddCMDeviceToCollection
-				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add device to deployment collection")
-					Throw $_
-				}
-			}
-
-			# if collection name not provided...
-			If ([string]::IsNullOrEmpty($ArgumentList['MaintenanceCollection'])) {
-				Write-Host ("$Hostname,$ComputerName,$Name - skipping maintenance collection; name not provided")
-			}
-			# if collection name provided...
-			Else {
-				# define parameters for Get-CMDeviceFromCollection
-				$AddCMDeviceToCollection = @{
-					CollectionName = $ArgumentList['MaintenanceCollection']
+					CollectionName = $Collection
 					ResourceId     = $Device.ResourceID
 					ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
 				}
 
 				# add device to collection
 				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - adding device to maintenance collection: $($ArgumentList['MaintenanceCollection'])")
+					Write-Host ("$Hostname,$ComputerName,$Name - adding device to collection: $Collection")
 					$Device = Add-CMDeviceToCollection @AddCMDeviceToCollection
 				}
 				Catch {
@@ -1480,7 +1449,7 @@ Begin {
 			[string]$ComputerName = $VM.ComputerName.ToLower(),
 			# define OSD parameters
 			[Parameter(Mandatory)]
-			[string]$DeploymentPath
+			[string]$Path
 		)
 
 		# get hashtable for InvokeCommand splat
@@ -1501,7 +1470,7 @@ Begin {
 		}
 
 		# update argument list for Test-Path
-		$InvokeCommand['ArgumentList']['Path'] = $DeploymentPath
+		$InvokeCommand['ArgumentList']['Path'] = $Path
 
 		# test deployment path
 		Try {
@@ -1522,7 +1491,7 @@ Begin {
 
 		# evaluate deployment path
 		If (-not $TestPath) {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping ISO attach, host did not find file: '$DeploymentPath'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping ISO attach, host did not find file: '$Path'")
 			Return
 		}
 
@@ -1612,13 +1581,13 @@ Begin {
 		# define parameters for Set-VMDvdDrive
 		$SetVMDvdDrive = @{
 			VMDvdDrive  = $VMDvdDrive
-			Path        = $DeploymentPath
+			Path        = $Path
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
 
 		# attach ISO to DVD drive
 		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...attaching ISO file: '$DeploymentPath'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...attaching ISO file: '$Path'")
 			Set-VMDvdDrive @SetVMDvdDrive
 		}
 		Catch {
@@ -2985,7 +2954,7 @@ Begin {
 			[string]$VMName = $VM.Name.ToLower(),
 			# define OSD parameters
 			[Parameter(Mandatory)]
-			[string]$DeploymentPath,
+			[string]$Path,
 			[uint16]$ControllerNumber = 0,
 			[uint16]$ControllerLocation = 0,
 			[string]$UnattendFile,
@@ -3011,7 +2980,7 @@ Begin {
 		}
 
 		# update argument list for Test-Path
-		$InvokeCommand['ArgumentList']['Path'] = $DeploymentPath
+		$InvokeCommand['ArgumentList']['Path'] = $Path
 
 		# test deployment path
 		Try {
@@ -3032,10 +3001,10 @@ Begin {
 
 		# evaluate deployment path
 		If ($TestPath) {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...found source VHD: $DeploymentPath")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...found source VHD: $Path")
 		}
 		Else {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD attach, host did not find file: '$DeploymentPath'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD attach, host did not find file: '$Path'")
 			Return
 		}
 
@@ -3077,7 +3046,7 @@ Begin {
 		}
 
 		# update argument list for Copy-Item
-		$InvokeCommand['ArgumentList']['Path'] = $DeploymentPath
+		$InvokeCommand['ArgumentList']['Path'] = $Path
 		$InvokeCommand['ArgumentList']['Destination'] = $VhdPath
 
 		# copy deployment path to VHD
@@ -4000,7 +3969,6 @@ Process {
 					$AddVMNetworkAdapterToVM['AllowTeaming'] = $VMNetworkAdapterEntry.AllowTeaming
 				}
 
-
 				# add VMNetworkAdapter to VM and get VMNetworkAdapter
 				Try {
 					$VMNetworkAdapter = Add-VMNetworkAdapterToVM @AddVMNetworkAdapterToVM
@@ -4099,8 +4067,8 @@ Process {
 					'ISO' {
 						# define parameters for Add-IsoToVM
 						$AddIsoToVM = @{
-							VM             = $VM
-							DeploymentPath = $JsonData.$Name.OSDeployment.DeploymentPath
+							VM   = $VM
+							Path = $JsonData.$Name.OSDeployment.FilePath
 						}
 
 						# mount ISO file on VM
@@ -4113,11 +4081,34 @@ Process {
 							Throw $_
 						}
 					}
+					'SCCM' {
+						# define parameters for Add-DeviceToSccm
+						$AddDeviceToSccm = @{
+							VM                 = $VM
+							Server             = $JsonData.$Name.OSDeployment.Server
+							Collections        = $JsonData.$Name.OSDeployment.Collections
+							DomainName         = $JsonData.$Name.OSDeployment.DomainName
+							OrganizationalUnit = $JsonData.$Name.OSDeployment.OrganizationalUnit
+						}
+
+						# add VM to SCCM
+						Try {
+							Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via PXE boot and SCCM")
+							Add-DeviceToSccm @AddDeviceToSccm
+						}
+						Catch {
+							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VM to SCCM")
+							Throw $_
+						}
+					}
+					default {
+						Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, unknown provisioning method provided: '$DeploymentMethod'")
+					}
 					'VHD' {
 						# define parameters for Copy-VHDFromParams
 						$CopyVHDFromParams = @{
 							VM                 = $VM
-							DeploymentPath     = $JsonData.$Name.OSDeployment.DeploymentPath
+							Path               = $JsonData.$Name.OSDeployment.FilePath
 							ControllerNumber   = $JsonData.$Name.OSDeployment.ControllerNumber
 							ControllerLocation = $JsonData.$Name.OSDeployment.ControllerLocation
 							UnattendFile       = $JsonData.$Name.OSDeployment.UnattendFile
@@ -4134,48 +4125,6 @@ Process {
 							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VHD to VM")
 							Throw $_
 						}
-					}
-					'WDS' {
-						# define parameters for Add-DeviceToWds
-						$AddDeviceToWds = @{
-							VM               = $VM
-							DeploymentPath   = $JsonData.$Name.OSDeployment.DeploymentPath
-							DeploymentServer = $JsonData.$Name.OSDeployment.DeploymentServer
-						}
-
-						# add VM to WDS
-						Try {
-							Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via PXE boot and WDS")
-							Add-DeviceToWds @AddDeviceToWds
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VM to WDS")
-							Throw $_
-						}
-					}
-					'SCCM' {
-						# define parameters for Add-DeviceToSccm
-						$AddDeviceToSccm = @{
-							VM                    = $VM
-							DeploymentPath        = $JsonData.$Name.OSDeployment.DeploymentPath
-							DeploymentServer      = $JsonData.$Name.OSDeployment.DeploymentServer
-							DeploymentDomain      = $JsonData.$Name.OSDeployment.DeploymentDomain
-							DeploymentCollection  = $JsonData.$Name.OSDeployment.DeploymentCollection
-							MaintenanceCollection = $JsonData.$Name.OSDeployment.MaintenanceCollection
-						}
-
-						# add VM to SCCM
-						Try {
-							Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via PXE boot and SCCM")
-							Add-DeviceToSccm @AddDeviceToSccm
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VM to SCCM")
-							Throw $_
-						}
-					}
-					default {
-						Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, unknown provisioning method provided: '$DeploymentMethod'")
 					}
 				}
 			}
