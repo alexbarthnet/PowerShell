@@ -3000,7 +3000,7 @@ Begin {
 		}
 
 		# evaluate deployment file
-		If (-not $TestPath) {
+		If (!$TestPath) {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping target VHD update, host did not find unattend file: '$UnattendFile'")
 			Return
 		}
@@ -3027,7 +3027,7 @@ Begin {
 		}
 
 		# evaluate deployment path
-		If (-not $DriveLetter) {
+		If (!$DriveLetter) {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD attach, could not mount target VHD: '$Destination'")
 			Return
 		}
