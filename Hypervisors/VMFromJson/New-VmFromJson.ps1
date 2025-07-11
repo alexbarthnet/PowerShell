@@ -2825,8 +2825,7 @@ Begin {
 			[uint16]$ControllerNumber = 0,
 			[uint16]$ControllerLocation = 0,
 			[string]$UnattendFile,
-			[string]$Domainname,
-			[string]$OrganizationalUnit
+			[hashtable]$ExpandStrings = @{ }
 		)
 
 		# get hashtable for InvokeCommand splat
@@ -3061,8 +3060,8 @@ Begin {
 		# update argument list for Get-Content and Set-Content
 		$InvokeCommand['ArgumentList']['Path'] = $UnattendFileOnVHD
 
-		# define hashtable for unattend expand strings
-		$UnattendExpandStrings = @{ 'COMPUTERNAME' = $VMName.Split('.')[0] }
+		# add computer name to expand strings hashtable
+		$ExpandStrings['COMPUTERNAME'] = $VMName.Split('.')[0]
 
 		# if LocalAdminCredential provided...
 		If ($script:PSBoundParameters.ContainsKey('LocalAdminCredential')) {
@@ -3072,31 +3071,24 @@ Begin {
 			# encode appended password to base64
 			$AdministratorPasswordAsBase64 = [System.Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($AdministratorPasswordAppended))
 
-			# add encoded password to hashtable
-			$UnattendExpandStrings['ADMINISTRATORPASSWORD'] = $AdministratorPasswordAsBase64
+			# add encoded password to expand strings hashtable
+			$ExpandStrings['ADMINISTRATORPASSWORD'] = $AdministratorPasswordAsBase64
 		}
 
 		# if DomainJoinCredential provided...
 		If ($script:PSBoundParameters.ContainsKey('DomainJoinCredential')) {
-			$UnattendExpandStrings['USERNAME'] = $script:DomainJoinCredential.GetNetworkCredential().Username
-			$UnattendExpandStrings['PASSWORD'] = $script:DomainJoinCredential.GetNetworkCredential().Password
-		}
+			# add domain join username expand strings hashtable
+			$ExpandStrings['USERNAME'] = $script:DomainJoinCredential.GetNetworkCredential().Username
 
-		# if DomainName provided...
-		If ($PSBoundParameters.ContainsKey('DomainName')) {
-			$UnattendExpandStrings['DOMAINNAME'] = $DomainName
-		}
-
-		# if OrganizationalUnit provided...
-		If ($PSBoundParameters.ContainsKey('OrganizationalUnit')) {
-			$UnattendExpandStrings['ORGANIZATIONALUNIT'] = $OrganizationalUnit
+			# add domain join password expand strings hashtable
+			$ExpandStrings['PASSWORD'] = $script:DomainJoinCredential.GetNetworkCredential().Password
 		}
 
 		# update argument list with expand strings
 		$InvokeCommand['ArgumentList']['Name'] = $Name
 		$InvokeCommand['ArgumentList']['Hostname'] = $HostName
 		$InvokeCommand['ArgumentList']['ComputerName'] = $ComputerName
-		$InvokeCommand['ArgumentList']['UnattendExpandStrings'] = $UnattendExpandStrings
+		$InvokeCommand['ArgumentList']['ExpandStrings'] = $ExpandStrings
 
 		# update file on VHD
 		Try {
@@ -3109,7 +3101,7 @@ Begin {
 				$Name = $ArgumentList['Name']
 				$HostName = $ArgumentList['HostName']
 				$ComputerName = $ArgumentList['ComputerName']
-				$UnattendExpandStrings = $ArgumentList['UnattendExpandStrings']
+				$ExpandStrings = $ArgumentList['ExpandStrings']
 
 				# get contents of unattend file
 				Try {
@@ -3120,7 +3112,7 @@ Begin {
 				}
 
 				# if administrator password provided...
-				If ($UnattendExpandStrings.ContainsKey('AdministratorPassword')) {
+				If ($ExpandStrings.ContainsKey('AdministratorPassword')) {
 					$Content = $Content -replace '<!-- <AdministratorPassword>', '<AdministratorPassword>'
 					$Content = $Content -replace '</AdministratorPassword> -->', '</AdministratorPassword>'
 				}
@@ -3132,9 +3124,9 @@ Begin {
 					# retrieve expand string
 					$ExpandString = $Matches['ExpandString']
 					# if value for expand string provided...
-					If ($UnattendExpandStrings.ContainsKey($ExpandString)) {
+					If ($ExpandStrings.ContainsKey($ExpandString)) {
 						# replace the expand string with the provided value
-						$ModifiedString = $OriginalString -replace "%$ExpandString%", $UnattendExpandStrings[$ExpandString]
+						$ModifiedString = $OriginalString -replace "%$ExpandString%", $ExpandStrings[$ExpandString]
 
 						# report state
 						Write-Host ("$Hostname,$ComputerName,$Name - ...replaced value in unattend file: '$ExpandString'")
@@ -3987,15 +3979,28 @@ Process {
 						Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, unknown provisioning method provided: '$DeploymentMethod'")
 					}
 					'VHD' {
+						# if device variables provided...
+						If ($JsonData.$Name.OSDeployment.ExpandStrings) {
+							# convert property from JSON to hashtable
+							try {
+								$ExpandStringsHashtable = ConvertTo-Collection -InputObject $JsonData.$Name.OSDeployment.ExpandStrings
+							}
+							catch {
+								Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create hashtable from ExpandStrings in OS Deployment")
+								Throw $_
+							}
+						}
+						Else {
+							# create empty hashtable
+							$ExpandStringsHashtable = @{}
+						}
+
 						# define parameters for Copy-VHDFromParams
 						$CopyVHDFromParams = @{
 							VM                 = $VM
 							Path               = $JsonData.$Name.OSDeployment.FilePath
-							ControllerNumber   = $JsonData.$Name.OSDeployment.ControllerNumber
-							ControllerLocation = $JsonData.$Name.OSDeployment.ControllerLocation
 							UnattendFile       = $JsonData.$Name.OSDeployment.UnattendFile
-							DomainName         = $JsonData.$Name.OSDeployment.DomainName
-							OrganizationalUnit = $JsonData.$Name.OSDeployment.OrganizationalUnit
+							ExpandStrings      = $ExpandStringsHashtable
 						}
 
 						# mount ISO file on VM
