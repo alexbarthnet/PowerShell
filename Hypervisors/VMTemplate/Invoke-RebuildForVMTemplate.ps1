@@ -36,7 +36,7 @@ Param(
 	[Parameter(DontShow)]
 	[datetime]$Today = [System.DateTime]::Today,
 	[Parameter(DontShow)]
-	[datetime]$Yesterday = [System.DateTime]::Today
+	[datetime]$Yesterday = [System.DateTime]::Today.AddDays(-1)
 )
 
 # set error preference
