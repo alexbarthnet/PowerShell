@@ -52,7 +52,7 @@ Param(
 	# AD Computer - Domain Name
 	[Parameter(Mandatory = $true, Position = 3, ParameterSetName = 'AddADComputer')]
 	[Parameter(Mandatory = $true, Position = 3, ParameterSetName = 'RemoveADComputer')]
-	[string]$Domain,
+	[string]$DomainName,
 	# OS Deployment - OSD method
 	[Parameter(Mandatory = $true, Position = 3, ParameterSetName = 'AddOSDeployment')]
 	[ValidateSet('ISO', 'SCCM', 'WDS')]
@@ -669,9 +669,9 @@ Process {
 				# define keys between root key and nested key
 				JsonPathToKey   = 'ADComputer'
 				# define key for finding existing key value pair
-				JsonNestedKey   = 'Domain'
+				JsonNestedKey   = 'DomainName'
 				# define value for finding existing key value pair
-				JsonNestedValue = $Domain
+				JsonNestedValue = $DomainName
 			}
 
 			# remove object from nested JSON key
@@ -910,9 +910,9 @@ Process {
 				# define keys between root key and nested key
 				JsonPathToKey    = 'ADComputer'
 				# define key for finding existing key value pair
-				JsonNestedKey    = 'Domain'
+				JsonNestedKey    = 'DomainName'
 				# define value for finding existing key value pair
-				JsonNestedValue  = $Domain
+				JsonNestedValue  = $DomainName
 			}
 
 			# add object to nested JSON key
