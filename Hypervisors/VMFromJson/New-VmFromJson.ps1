@@ -21,6 +21,71 @@ Begin {
 	# set error action preference
 	$ErrorActionPreference = [System.Management.Automation.ActionPreference]::Stop
 
+	Function ConvertTo-Collection {
+		Param (
+			[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
+			[object]$InputObject,
+			[Parameter(Position = 1)][ValidateSet('Hashtable', 'SortedList', 'OrderedDictionary')]
+			[string]$Type = 'Hashtable'
+		)
+
+		# switch on type
+		switch ($Type) {
+			'OrderedDictionary' {
+				$Collection = [System.Collections.Specialized.OrderedDictionary]::new()
+			}
+			'SortedList' {
+				$Collection = [System.Collections.SortedList]::new()
+			}
+			'Hashtable' {
+				$Collection = [System.Collections.Hashtable]::new()
+			}
+		}
+
+		# process each property of input object
+		ForEach ($Property in $InputObject.PSObject.Properties) {
+			# if property contains multiple values...
+			If ($Property.Value.Count -gt 1) {
+				# define list for property values
+				$PropertyValues = [System.Collections.Generic.List[object]]::new($Property.Value.Count)
+				# process each property value
+				ForEach ($PropertyValue in $Property.Value) {
+					# if property value is a pscustomobject...
+					If ($PropertyValue -is [System.Management.Automation.PSCustomObject]) {
+						# convert property value into collection
+						$PropertyValueCollection = ConvertTo-Collection -InputObject $PropertyValue -Type $Type
+						# add property value collection to list
+						$PropertyValues.Add($PropertyValueCollection)
+					}
+					# if property value is not a pscustomobject...
+					Else {
+						# add property value to list
+						$PropertyValues.Add($PropertyValue)
+					}
+				}
+				# convert list to array then add array to collection
+				$Collection[$Property.Name] = $PropertyValues.ToArray()
+			}
+			Else {
+				# if property value is a pscustomobject...
+				If ($Property.Value -is [System.Management.Automation.PSCustomObject]) {
+					# convert property value into collection
+					$PropertyValueCollection = ConvertTo-Collection -InputObject $Property.Value -Type $Type
+					# add property name and value to collection
+					$Collection[$Property.Name] = $PropertyValueCollection
+				}
+				# if property value is not a pscustomobject...
+				Else {
+					# add property name and value to collection
+					$Collection[$Property.Name] = $Property.Value
+				}
+			}
+		}
+
+		# return collection
+		Return $Collection
+	}
+
 	Function Format-Bytes {
 		[CmdletBinding()]
 		Param (
@@ -646,20 +711,16 @@ Begin {
 			[string]$ComputerName = $VM.ComputerName.ToLower(),
 			# define OSD parameters
 			[Parameter(Mandatory)]
-			[string]$DeploymentPath,
+			[string]$Server,
 			[Parameter(Mandatory)]
-			[string]$DeploymentServer,
+			[string[]]$Collections,
 			[Parameter(Mandatory)]
-			[string]$DeploymentDomain,
-			[Parameter(Mandatory)]
-			[string]$DeploymentCollection,
-			[Parameter(Mandatory)]
-			[string]$MaintenanceCollection
+			[hashtable]$DeviceVariables
 		)
 
 		# get hashtable for InvokeCommand splat
 		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $DeploymentServer
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $Server
 		}
 		Catch {
 			Throw $_
@@ -702,7 +763,7 @@ Begin {
 
 		# define parameters for Get-CMModulePath
 		$GetCMModulePath = @{
-			ComputerName = $DeploymentServer
+			ComputerName = $Server
 			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 		}
 
@@ -723,7 +784,7 @@ Begin {
 
 		# define parameters for Get-CMSiteCode
 		$GetCMSiteCode = @{
-			ComputerName = $DeploymentServer
+			ComputerName = $Server
 			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 		}
 
@@ -744,17 +805,15 @@ Begin {
 
 		# update arguments for Invoke-Command - reporting
 		$InvokeCommand['ArgumentList']['Hostname'] = $Hostname
-		$InvokeCommand['ArgumentList']['ComputerName'] = $DeploymentServer
+		$InvokeCommand['ArgumentList']['ComputerName'] = $Server
 		$InvokeCommand['ArgumentList']['Name'] = $Name
 
 		# update arguments for Invoke-Command - deployment
-		$InvokeCommand['ArgumentList']['DeploymentCollection'] = $DeploymentCollection
-		$InvokeCommand['ArgumentList']['MaintenanceCollection'] = $MaintenanceCollection
 		$InvokeCommand['ArgumentList']['ModulePath'] = $CMModulePath
 		$InvokeCommand['ArgumentList']['SiteCode'] = $CMSiteCode
 		$InvokeCommand['ArgumentList']['BIOSGUID'] = $BIOSGUID
-		$InvokeCommand['ArgumentList']['OSDDOMAIN'] = $DeploymentDomain
-		$InvokeCommand['ArgumentList']['OSDDOMAINOUNAME'] = $DeploymentPath
+		$InvokeCommand['ArgumentList']['Collections'] = $Collections
+		$InvokeCommand['ArgumentList']['DeviceVariables'] = $DeviceVariables
 
 		# add VM to SCCM
 		Invoke-Command @InvokeCommand -ScriptBlock {
@@ -1199,95 +1258,18 @@ Begin {
 				Write-Host ("$Hostname,$ComputerName,$Name - ...cleared PXE deployment for existing device")
 			}
 
-			# if device variable not provided...
-			If ([string]::IsNullOrEmpty($ArgumentList['OSDDOMAIN'])) {
-				Write-Host ("$Hostname,$ComputerName,$Name - skipping device variable: 'OSDDOMAIN'; value not provided")
-			}
-			# if deployment collection name provided...
-			Else {
-				# define parameterss for Update-CMDeviceVariable
-				$UpdateCMDeviceVariable = @{
-					ResourceId    = $Device.ResourceID
-					VariableName  = 'OSDDOMAIN'
-					VariableValue = $ArgumentList['OSDDomain']
-					ErrorAction   = [System.Management.Automation.ActionPreference]::Stop
-				}
-
-				# update device variable for OSD domain
-				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - checking device variable: 'OSDDOMAIN'")
-					Update-CMDeviceVariable @UpdateCMDeviceVariable
-				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: checking device variable")
-					Throw $_
-				}
-			}
-
-			# if device variable not provided...
-			If ([string]::IsNullOrEmpty($ArgumentList['OSDDOMAINOUNAME'])) {
-				Write-Host ("$Hostname,$ComputerName,$Name - skipping device variable: 'OSDDOMAINOUNAME'; value not provided")
-			}
-			Else {
-				# define parameterss for Update-CMDeviceVariable
-				$UpdateCMDeviceVariable = @{
-					ResourceId    = $Device.ResourceID
-					VariableName  = 'OSDDOMAINOUNAME'
-					VariableValue = $ArgumentList['OSDDOMAINOUNAME']
-					ErrorAction   = [System.Management.Automation.ActionPreference]::Stop
-				}
-
-				# update device variable for OSD domain OU name
-				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - checking device variable: 'OSDDOMAINOUNAME'")
-					Update-CMDeviceVariable @UpdateCMDeviceVariable
-				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: checking device variable")
-					Throw $_
-				}
-			}
-
-			# if collection name not provided...
-			If ([string]::IsNullOrEmpty($ArgumentList['DeploymentCollection'])) {
-				Write-Host ("$Hostname,$ComputerName,$Name - skipping deployment collection; name not provided")
-			}
-			# if collection name provided...
-			Else {
+			# loop through collections
+			ForEach ($Collection in $ArgumentList['Collections']) {
 				# define parameters for Get-CMDeviceFromCollection
 				$AddCMDeviceToCollection = @{
-					CollectionName = $ArgumentList['DeploymentCollection']
-					ResourceId     = $Device.ResourceID
-					ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
-				}
-
-				# add device to deployment collection
-				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - adding device to deployment collection: $($ArgumentList['DeploymentCollection'])")
-					$Device = Add-CMDeviceToCollection @AddCMDeviceToCollection
-				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add device to deployment collection")
-					Throw $_
-				}
-			}
-
-			# if collection name not provided...
-			If ([string]::IsNullOrEmpty($ArgumentList['MaintenanceCollection'])) {
-				Write-Host ("$Hostname,$ComputerName,$Name - skipping maintenance collection; name not provided")
-			}
-			# if collection name provided...
-			Else {
-				# define parameters for Get-CMDeviceFromCollection
-				$AddCMDeviceToCollection = @{
-					CollectionName = $ArgumentList['MaintenanceCollection']
+					CollectionName = $Collection
 					ResourceId     = $Device.ResourceID
 					ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
 				}
 
 				# add device to collection
 				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - adding device to maintenance collection: $($ArgumentList['MaintenanceCollection'])")
+					Write-Host ("$Hostname,$ComputerName,$Name - adding device to collection: $Collection")
 					$Device = Add-CMDeviceToCollection @AddCMDeviceToCollection
 				}
 				Catch {
@@ -1295,179 +1277,33 @@ Begin {
 					Throw $_
 				}
 			}
-		}
-	}
 
-	Function Add-DeviceToWds {
-		[CmdletBinding()]
-		Param (
-			# define VM parameters
-			[Parameter(Mandatory = $true)]
-			[object]$VM,
-			[string]$ComputerName = $VM.ComputerName.ToLower(),
-			# define OSD parameters
-			[Parameter(Mandatory)]
-			[string]$DeploymentPath,
-			[Parameter(Mandatory)]
-			[string]$DeploymentServer
-		)
-
-		# get hashtable for InvokeCommand splat
-		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $DeploymentServer
-		}
-		Catch {
-			Throw $_
-		}
-
-		# get VM from parameters
-		Try {
-			$VM = Get-VMFromParameters -ComputerName $ComputerName -VM $VM
-		}
-		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
-			Throw $_
-		}
-
-		# define CIM instance for VM system settings
-		$GetCimInstanceForVM = @{
-			VM          = $VM
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# retrieve original VM system settings and host management service via CIM
-		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...retrieving CIM instance for VM...")
-			$CimInstanceForVM = Get-CimInstanceForVM @GetCimInstanceForVM
-		}
-		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve CIM instance for VM")
-			Throw $_
-		}
-
-		# retrive BIOS GUID from CIM data
-		If ([string]::IsNullOrEmpty($CimInstanceForVM.BIOSGUID)) {
-			Write-Host ("$Hostname,$ComputerName,$Name - WARNING: BIOS GUID for VM is empty; skipping WDS provisioning...")
-			Return
-		}
-		Else {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...found BIOS GUID for VM: '$($CimInstanceForVM.BIOSGUID)'")
-			$BIOSGUID = $CimInstanceForVM.BIOSGUID
-		}
-
-		# update arguments for Invoke-Command
-		$InvokeCommand['ArgumentList']['Hostname'] = $Hostname
-		$InvokeCommand['ArgumentList']['ComputerName'] = $DeploymentServer
-		$InvokeCommand['ArgumentList']['DeviceName'] = $Name
-		$InvokeCommand['ArgumentList']['DeviceID'] = $BIOSGUID
-		$InvokeCommand['ArgumentList']['WdsClientUnattend'] = $DeploymentPath
-
-		# add VM to WDS
-		Invoke-Command @InvokeCommand -ScriptBlock {
-			Param($ArgumentList)
-
-			# create objects for reporting
-			$Hostname = $ArgumentList['Hostname']
-			$ComputerName = $ArgumentList['ComputerName']
-			$Name = $ArgumentList['DeviceName']
-
-			# define parameters for Get-Item Property
-			$GetItemProperty = @{
-				Path        = 'HKLM:\SYSTEM\CurrentControlSet\Services\WDSServer\Providers\WDSDCMGR\Providers\WDSADDC'
-				Name        = 'Disabled'
-				ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
-			}
-
-			# retrieve Disabled item property for WDS Active Directory inegration
-			Try {
-				Write-Host ("$Hostname,$ComputerName,$Name - checking WDS server...")
-				$Disabled = Get-ItemProperty @GetItemProperty | Select-Object -ExpandProperty 'Disabled'
-			}
-			Catch {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not check WDS integration")
-				Throw $_
-			}
-
-			# if WDS Active Directory integration is not disabled...
-			If ($Disabled -eq 0) {
-				# ...declare and return
-				Write-Host ("$Hostname,$ComputerName,$Name - WARNING: WDS server is in Active Directory mode; skipping WDS provisioning...")
+			# if device variables object is not a hashtable...
+			If ($ArgumentList['DeviceVariables'] -isnot [hashtable]) {
+				# return before calling GetEnumerator method on unsupported object
 				Return
 			}
 
-			# define parameters for Get-WdsClient
-			$GetWdsClient = @{
-				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-			}
+			# loop through device variables
+			ForEach ($DeviceVariable in $ArgumentList['DeviceVariables'].GetEnumerator()) {
+				# define parameterss for Update-CMDeviceVariable
+				$UpdateCMDeviceVariable = @{
+					ResourceId    = $Device.ResourceID
+					VariableName  = $DeviceVariable.Key
+					VariableValue = $DeviceVariable.Value
+					ErrorAction   = [System.Management.Automation.ActionPreference]::Stop
+				}
 
-			# retrieve existing WDS clients
-			Try {
-				Write-Host ("$Hostname,$ComputerName,$Name - checking for matching WDS devices...")
-				$WdsClients = Get-WdsClient @GetWdsClient
-			}
-			Catch {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve existing WDS devices")
-				Throw $_
-			}
-
-			# create objects for device
-			$DeviceID = $ArgumentList['DeviceID']
-
-			# filter WDS clients
-			$WdsClients = $WdsClients | Where-Object { $_.DeviceId -eq "{$DeviceId}" -or $_.DeviceName -eq $Name }
-
-			# if no WDS clients found...
-			If ($null -eq $WdsClients) {
-				# ...declare and continue
-				Write-Host ("$Hostname,$ComputerName,$Name - ...no matching WDS device found")
-			}
-			# if WDS clients found with matching DeviceId or DeviceName...
-			Else {
-				# process WDS clients
-				ForEach ($WdsClient in $WdsClients) {
-					# declare device found
-					Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing WDS device: ")
-					Write-Host ("$Hostname,$ComputerName,$Name - ... - DeviceName : $($WdsClient.DeviceName)")
-					Write-Host ("$Hostname,$ComputerName,$Name - ... - DeviceId   : $($WdsClient.DeviceId)")
-
-					# define parameters for Remove-WdsClient
-					$RemoveWdsClient = @{
-						DeviceId    = $WdsClient.DeviceId
-						ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-					}
-
-					# remove matching WDS client by DeviceId
-					Try {
-						Remove-WdsClient @RemoveWdsClient
-					}
-					Catch {
-						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove existing WDS device")
-						Throw $_
-					}
+				# update device variable for OSD domain OU name
+				Try {
+					Write-Host ("$Hostname,$ComputerName,$Name - checking device variable: '$($DeviceVariable.Key)'")
+					Update-CMDeviceVariable @UpdateCMDeviceVariable
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: checking device variable")
+					Throw $_
 				}
 			}
-
-			# define parameters for New-WdsClient
-			$NewWdsClient = @{
-				DeviceId          = $DeviceId
-				DeviceName        = $Name
-				WdsClientUnattend = $ArgumentList['WdsClientUnattend']
-				ErrorAction       = [System.Management.Automation.ActionPreference]::Stop
-			}
-
-			# create WDS client
-			Try {
-				Write-Host ("$Hostname,$ComputerName,$Name - creating WDS device...")
-				$null = New-WdsClient @NewWdsClient
-			}
-			Catch {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create WDS device")
-				Throw $_
-			}
-
-			# declare complete and return
-			Write-Host ("$Hostname,$ComputerName,$Name - ...created WDS device")
-			Return
 		}
 	}
 
@@ -1480,7 +1316,7 @@ Begin {
 			[string]$ComputerName = $VM.ComputerName.ToLower(),
 			# define OSD parameters
 			[Parameter(Mandatory)]
-			[string]$DeploymentPath
+			[string]$Path
 		)
 
 		# get hashtable for InvokeCommand splat
@@ -1501,7 +1337,7 @@ Begin {
 		}
 
 		# update argument list for Test-Path
-		$InvokeCommand['ArgumentList']['Path'] = $DeploymentPath
+		$InvokeCommand['ArgumentList']['Path'] = $Path
 
 		# test deployment path
 		Try {
@@ -1522,7 +1358,7 @@ Begin {
 
 		# evaluate deployment path
 		If (-not $TestPath) {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping ISO attach, host did not find file: '$DeploymentPath'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping ISO attach, host did not find file: '$Path'")
 			Return
 		}
 
@@ -1612,13 +1448,13 @@ Begin {
 		# define parameters for Set-VMDvdDrive
 		$SetVMDvdDrive = @{
 			VMDvdDrive  = $VMDvdDrive
-			Path        = $DeploymentPath
+			Path        = $Path
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
 
 		# attach ISO to DVD drive
 		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...attaching ISO file: '$DeploymentPath'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...attaching ISO file: '$Path'")
 			Set-VMDvdDrive @SetVMDvdDrive
 		}
 		Catch {
@@ -2985,12 +2821,11 @@ Begin {
 			[string]$VMName = $VM.Name.ToLower(),
 			# define OSD parameters
 			[Parameter(Mandatory)]
-			[string]$DeploymentPath,
+			[string]$Path,
 			[uint16]$ControllerNumber = 0,
 			[uint16]$ControllerLocation = 0,
 			[string]$UnattendFile,
-			[string]$Domainname,
-			[string]$OrganizationalUnit
+			[hashtable]$ExpandStrings = @{ }
 		)
 
 		# get hashtable for InvokeCommand splat
@@ -3011,7 +2846,7 @@ Begin {
 		}
 
 		# update argument list for Test-Path
-		$InvokeCommand['ArgumentList']['Path'] = $DeploymentPath
+		$InvokeCommand['ArgumentList']['Path'] = $Path
 
 		# test deployment path
 		Try {
@@ -3032,10 +2867,10 @@ Begin {
 
 		# evaluate deployment path
 		If ($TestPath) {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...found source VHD: $DeploymentPath")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...found source VHD: $Path")
 		}
 		Else {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD attach, host did not find file: '$DeploymentPath'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD attach, host did not find file: '$Path'")
 			Return
 		}
 
@@ -3077,7 +2912,7 @@ Begin {
 		}
 
 		# update argument list for Copy-Item
-		$InvokeCommand['ArgumentList']['Path'] = $DeploymentPath
+		$InvokeCommand['ArgumentList']['Path'] = $Path
 		$InvokeCommand['ArgumentList']['Destination'] = $VhdPath
 
 		# copy deployment path to VHD
@@ -3164,7 +2999,7 @@ Begin {
 		}
 
 		# evaluate deployment file
-		If (-not $TestPath) {
+		If (!$TestPath) {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping target VHD update, host did not find unattend file: '$UnattendFile'")
 			Return
 		}
@@ -3191,7 +3026,7 @@ Begin {
 		}
 
 		# evaluate deployment path
-		If (-not $DriveLetter) {
+		If (!$DriveLetter) {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD attach, could not mount target VHD: '$Destination'")
 			Return
 		}
@@ -3225,8 +3060,8 @@ Begin {
 		# update argument list for Get-Content and Set-Content
 		$InvokeCommand['ArgumentList']['Path'] = $UnattendFileOnVHD
 
-		# define hashtable for unattend expand strings
-		$UnattendExpandStrings = @{ 'COMPUTERNAME' = $VMName.Split('.')[0] }
+		# add computer name to expand strings hashtable
+		$ExpandStrings['COMPUTERNAME'] = $VMName.Split('.')[0]
 
 		# if LocalAdminCredential provided...
 		If ($script:PSBoundParameters.ContainsKey('LocalAdminCredential')) {
@@ -3236,31 +3071,24 @@ Begin {
 			# encode appended password to base64
 			$AdministratorPasswordAsBase64 = [System.Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($AdministratorPasswordAppended))
 
-			# add encoded password to hashtable
-			$UnattendExpandStrings['ADMINISTRATORPASSWORD'] = $AdministratorPasswordAsBase64
+			# add encoded password to expand strings hashtable
+			$ExpandStrings['ADMINISTRATORPASSWORD'] = $AdministratorPasswordAsBase64
 		}
 
 		# if DomainJoinCredential provided...
 		If ($script:PSBoundParameters.ContainsKey('DomainJoinCredential')) {
-			$UnattendExpandStrings['USERNAME'] = $script:DomainJoinCredential.GetNetworkCredential().Username
-			$UnattendExpandStrings['PASSWORD'] = $script:DomainJoinCredential.GetNetworkCredential().Password
-		}
+			# add domain join username expand strings hashtable
+			$ExpandStrings['USERNAME'] = $script:DomainJoinCredential.GetNetworkCredential().Username
 
-		# if DomainName provided...
-		If ($PSBoundParameters.ContainsKey('DomainName')) {
-			$UnattendExpandStrings['DOMAINNAME'] = $DomainName
-		}
-
-		# if OrganizationalUnit provided...
-		If ($PSBoundParameters.ContainsKey('OrganizationalUnit')) {
-			$UnattendExpandStrings['ORGANIZATIONALUNIT'] = $OrganizationalUnit
+			# add domain join password expand strings hashtable
+			$ExpandStrings['PASSWORD'] = $script:DomainJoinCredential.GetNetworkCredential().Password
 		}
 
 		# update argument list with expand strings
 		$InvokeCommand['ArgumentList']['Name'] = $Name
 		$InvokeCommand['ArgumentList']['Hostname'] = $HostName
 		$InvokeCommand['ArgumentList']['ComputerName'] = $ComputerName
-		$InvokeCommand['ArgumentList']['UnattendExpandStrings'] = $UnattendExpandStrings
+		$InvokeCommand['ArgumentList']['ExpandStrings'] = $ExpandStrings
 
 		# update file on VHD
 		Try {
@@ -3273,7 +3101,7 @@ Begin {
 				$Name = $ArgumentList['Name']
 				$HostName = $ArgumentList['HostName']
 				$ComputerName = $ArgumentList['ComputerName']
-				$UnattendExpandStrings = $ArgumentList['UnattendExpandStrings']
+				$ExpandStrings = $ArgumentList['ExpandStrings']
 
 				# get contents of unattend file
 				Try {
@@ -3284,7 +3112,7 @@ Begin {
 				}
 
 				# if administrator password provided...
-				If ($UnattendExpandStrings.ContainsKey('AdministratorPassword')) {
+				If ($ExpandStrings.ContainsKey('AdministratorPassword')) {
 					$Content = $Content -replace '<!-- <AdministratorPassword>', '<AdministratorPassword>'
 					$Content = $Content -replace '</AdministratorPassword> -->', '</AdministratorPassword>'
 				}
@@ -3296,9 +3124,9 @@ Begin {
 					# retrieve expand string
 					$ExpandString = $Matches['ExpandString']
 					# if value for expand string provided...
-					If ($UnattendExpandStrings.ContainsKey($ExpandString)) {
+					If ($ExpandStrings.ContainsKey($ExpandString)) {
 						# replace the expand string with the provided value
-						$ModifiedString = $OriginalString -replace "%$ExpandString%", $UnattendExpandStrings[$ExpandString]
+						$ModifiedString = $OriginalString -replace "%$ExpandString%", $ExpandStrings[$ExpandString]
 
 						# report state
 						Write-Host ("$Hostname,$ComputerName,$Name - ...replaced value in unattend file: '$ExpandString'")
@@ -4000,7 +3828,6 @@ Process {
 					$AddVMNetworkAdapterToVM['AllowTeaming'] = $VMNetworkAdapterEntry.AllowTeaming
 				}
 
-
 				# add VMNetworkAdapter to VM and get VMNetworkAdapter
 				Try {
 					$VMNetworkAdapter = Add-VMNetworkAdapterToVM @AddVMNetworkAdapterToVM
@@ -4099,8 +3926,8 @@ Process {
 					'ISO' {
 						# define parameters for Add-IsoToVM
 						$AddIsoToVM = @{
-							VM             = $VM
-							DeploymentPath = $JsonData.$Name.OSDeployment.DeploymentPath
+							VM   = $VM
+							Path = $JsonData.$Name.OSDeployment.FilePath
 						}
 
 						# mount ISO file on VM
@@ -4113,55 +3940,29 @@ Process {
 							Throw $_
 						}
 					}
-					'VHD' {
-						# define parameters for Copy-VHDFromParams
-						$CopyVHDFromParams = @{
-							VM                 = $VM
-							DeploymentPath     = $JsonData.$Name.OSDeployment.DeploymentPath
-							ControllerNumber   = $JsonData.$Name.OSDeployment.ControllerNumber
-							ControllerLocation = $JsonData.$Name.OSDeployment.ControllerLocation
-							UnattendFile       = $JsonData.$Name.OSDeployment.UnattendFile
-							DomainName         = $JsonData.$Name.OSDeployment.DomainName
-							OrganizationalUnit = $JsonData.$Name.OSDeployment.OrganizationalUnit
-						}
-
-						# mount ISO file on VM
-						Try {
-							Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via VHD file")
-							Copy-VHDFromParams @CopyVHDFromParams
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VHD to VM")
-							Throw $_
-						}
-					}
-					'WDS' {
-						# define parameters for Add-DeviceToWds
-						$AddDeviceToWds = @{
-							VM               = $VM
-							DeploymentPath   = $JsonData.$Name.OSDeployment.DeploymentPath
-							DeploymentServer = $JsonData.$Name.OSDeployment.DeploymentServer
-						}
-
-						# add VM to WDS
-						Try {
-							Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via PXE boot and WDS")
-							Add-DeviceToWds @AddDeviceToWds
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VM to WDS")
-							Throw $_
-						}
-					}
 					'SCCM' {
+						# if device variables provided...
+						If ($JsonData.$Name.OSDeployment.DeviceVariables) {
+							# convert property from JSON to hashtable
+							try {
+								$DeviceVariablesHashtable = ConvertTo-Collection -InputObject $JsonData.$Name.OSDeployment.DeviceVariables
+							}
+							catch {
+								Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create hashtable from DeviceVariables in OS Deployment")
+								Throw $_
+							}
+						}
+						Else {
+							# create empty hashtable
+							$DeviceVariablesHashtable = @{}
+						}
+
 						# define parameters for Add-DeviceToSccm
 						$AddDeviceToSccm = @{
-							VM                    = $VM
-							DeploymentPath        = $JsonData.$Name.OSDeployment.DeploymentPath
-							DeploymentServer      = $JsonData.$Name.OSDeployment.DeploymentServer
-							DeploymentDomain      = $JsonData.$Name.OSDeployment.DeploymentDomain
-							DeploymentCollection  = $JsonData.$Name.OSDeployment.DeploymentCollection
-							MaintenanceCollection = $JsonData.$Name.OSDeployment.MaintenanceCollection
+							VM              = $VM
+							Server          = $JsonData.$Name.OSDeployment.Server
+							Collections     = $JsonData.$Name.OSDeployment.Collections
+							DeviceVariables = $DeviceVariablesHashtable
 						}
 
 						# add VM to SCCM
@@ -4176,6 +3977,41 @@ Process {
 					}
 					default {
 						Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, unknown provisioning method provided: '$DeploymentMethod'")
+					}
+					'VHD' {
+						# if device variables provided...
+						If ($JsonData.$Name.OSDeployment.ExpandStrings) {
+							# convert property from JSON to hashtable
+							try {
+								$ExpandStringsHashtable = ConvertTo-Collection -InputObject $JsonData.$Name.OSDeployment.ExpandStrings
+							}
+							catch {
+								Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create hashtable from ExpandStrings in OS Deployment")
+								Throw $_
+							}
+						}
+						Else {
+							# create empty hashtable
+							$ExpandStringsHashtable = @{}
+						}
+
+						# define parameters for Copy-VHDFromParams
+						$CopyVHDFromParams = @{
+							VM                 = $VM
+							Path               = $JsonData.$Name.OSDeployment.FilePath
+							UnattendFile       = $JsonData.$Name.OSDeployment.UnattendFile
+							ExpandStrings      = $ExpandStringsHashtable
+						}
+
+						# mount ISO file on VM
+						Try {
+							Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via VHD file")
+							Copy-VHDFromParams @CopyVHDFromParams
+						}
+						Catch {
+							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VHD to VM")
+							Throw $_
+						}
 					}
 				}
 			}

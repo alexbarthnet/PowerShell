@@ -52,7 +52,7 @@ Param(
 	# AD Computer - Domain Name
 	[Parameter(Mandatory = $true, Position = 3, ParameterSetName = 'AddADComputer')]
 	[Parameter(Mandatory = $true, Position = 3, ParameterSetName = 'RemoveADComputer')]
-	[string]$Domain,
+	[string]$DomainName,
 	# OS Deployment - OSD method
 	[Parameter(Mandatory = $true, Position = 3, ParameterSetName = 'AddOSDeployment')]
 	[ValidateSet('ISO', 'SCCM', 'WDS')]
@@ -154,32 +154,25 @@ Param(
 	[Parameter(Position = 14, ParameterSetName = 'AddVMNetworkAdapter')]
 	[ValidateSet('On', 'Off')]
 	[string]$AllowTeaming,
-	# OS Deployment - multiple - server name for WDS or SCCM
+	# OS Deployment - ISO - literal path to ISO file on hypervisor
+	# OS Deployment - VHD - literal path to VHD file on hypervisor
 	[Parameter(Position = 4, ParameterSetName = 'AddOSDeployment')]
-	[string]$DeploymentServer,
-	# OS Deployment - based upon Deployment Method
-	#  ISO	: literal path to ISO file on hypervisor
-	#  VHD	: literal path to VHD file on hypervisor
-	#  SCCM	: distinguished name of OU where VM will be created
+	[string]$FilePath,
+	# OS Deployment - SCCM - server name for SCCM
 	[Parameter(Position = 5, ParameterSetName = 'AddOSDeployment')]
-	[string]$DeploymentPath,
-	# OS Deployment - SCCM - NetBIOS name of Windows domain
+	[string]$Server,
+	# OS Deployment - SCCM - string array of device collections
 	[Parameter(Position = 6, ParameterSetName = 'AddOSDeployment')]
-	[string]$DeploymentDomain,
-	# OS Deployment - SCCM - deployment collection
+	[string[]]$Collections,
+	# OS Deployment - SCCM - hashtable of device variable names and values
 	[Parameter(Position = 7, ParameterSetName = 'AddOSDeployment')]
-	[string]$DeploymentCollection,
-	# OS Deployment - SCCM - maintenance window collection
-	[Parameter(Position = 8, ParameterSetName = 'AddOSDeployment')]
-	[string]$MaintenanceCollection,
+	[hashtable]$DeviceVariables,
 	# OS Deployment - VHD - literal path to unattend XML file on hypervisor
-	[Parameter(Position = 9, ParameterSetName = 'AddOSDeployment')]
+	[Parameter(Position = 8, ParameterSetName = 'AddOSDeployment')]
 	[string]$UnattendFile,
-	# OS Deployment - VHD - FQDN of domain for VM to join
-	[Parameter(Position = 10, ParameterSetName = 'AddOSDeployment')]
-	[string]$DomainName,
-	# OS Deployment - VHD - FQDN of OU where VM will be created
-	[Parameter(Position = 11, ParameterSetName = 'AddOSDeployment')]
+	# OS Deployment - VHD - hashtable of unattend XML file expand strings and values
+	[Parameter(Position = 9, ParameterSetName = 'AddOSDeployment')]
+	[hashtable]$ExpandStrings,
 	# AD Computer - FQDN of OU where computer object for VM will be created
 	[Parameter(Position = 4, ParameterSetName = 'AddADComputer')]
 	[string]$OrganizationalUnit,
@@ -675,9 +668,9 @@ Process {
 				# define keys between root key and nested key
 				JsonPathToKey   = 'ADComputer'
 				# define key for finding existing key value pair
-				JsonNestedKey   = 'Domain'
+				JsonNestedKey   = 'DomainName'
 				# define value for finding existing key value pair
-				JsonNestedValue = $Domain
+				JsonNestedValue = $DomainName
 			}
 
 			# remove object from nested JSON key
@@ -916,9 +909,9 @@ Process {
 				# define keys between root key and nested key
 				JsonPathToKey    = 'ADComputer'
 				# define key for finding existing key value pair
-				JsonNestedKey    = 'Domain'
+				JsonNestedKey    = 'DomainName'
 				# define value for finding existing key value pair
-				JsonNestedValue  = $Domain
+				JsonNestedValue  = $DomainName
 			}
 
 			# add object to nested JSON key
