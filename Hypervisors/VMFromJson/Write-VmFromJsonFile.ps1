@@ -161,20 +161,19 @@ Param(
 	# OS Deployment - SCCM - server name for SCCM
 	[Parameter(Position = 5, ParameterSetName = 'AddOSDeployment')]
 	[string]$Server,
-	# OS Deployment - SCCM - collections
+	# OS Deployment - SCCM - string array of device collections
 	[Parameter(Position = 6, ParameterSetName = 'AddOSDeployment')]
 	[string[]]$Collections,
-	# OS Deployment - VHD - literal path to unattend XML file on hypervisor
+	# OS Deployment - SCCM - hashtable of device variable names and values
 	[Parameter(Position = 7, ParameterSetName = 'AddOSDeployment')]
-	[string]$UnattendFile,
-	# OS Deployment - SCCM - NetBIOS name of Windows domain
-	# OS Deployment - VHD - FQDN of domain for VM to join
+	[hashtable]$DeviceVariables,
+	# OS Deployment - VHD - literal path to unattend XML file on hypervisor
 	[Parameter(Position = 8, ParameterSetName = 'AddOSDeployment')]
-	[string]$DomainName,
-	# OS Deployment - SCCM - FQDN of OU where VM will be created
-	# OS Deployment - VHD - FQDN of OU where VM will be created
-	# AD Computer - FQDN of OU where computer object for VM will be created
+	[string]$UnattendFile,
+	# OS Deployment - VHD - hashtable of unattend XML file expand strings and values
 	[Parameter(Position = 9, ParameterSetName = 'AddOSDeployment')]
+	[hashtable]$ExpandStrings,
+	# AD Computer - FQDN of OU where computer object for VM will be created
 	[Parameter(Position = 4, ParameterSetName = 'AddADComputer')]
 	[string]$OrganizationalUnit,
 	# AD Computer - Groups which computer object for VM will join
