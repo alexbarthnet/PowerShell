@@ -1,25 +1,27 @@
 #requires -Modules ActiveDirectory
 
 param(
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
-	[string]$Json,
-	[Parameter(ValueFromPipeline = $True)]
-	[string[]]$VMName,
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
 	[Parameter(DontShow)]
-	[string]$ActiveDirectoryRights = 'CreateChild, DeleteChild, ListChildren, ReadProperty, DeleteTree, ExtendedRight, Delete, GenericWrite, WriteDacl, WriteOwner'
+	[string]$ActiveDirectoryRights = 'CreateChild, DeleteChild, ListChildren, ReadProperty, DeleteTree, ExtendedRight, Delete, GenericWrite, WriteDacl, WriteOwner',
+	[Parameter(Position = 0, Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
+	[string]$Json,
+	[Parameter(Position = 1, ValueFromPipeline = $True)]
+	[string[]]$VMName,
+	[Parameter(Position = 2)]
+	[switch]$SkipDnsUpdate
 )
 
 # if Json is not an absolute path...
-If (![System.IO.Path]::IsPathRooted($Json)) {
+if (![System.IO.Path]::IsPathRooted($Json)) {
 	# get unresolved absolute path
-	Try {
+	try {
 		$Json = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Json)
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "could not create absolute path from the provided Json parameter: $Json"
-		Return
+		return
 	}
 
 	# report absolute path
@@ -39,24 +41,24 @@ catch {
 :NextVMName foreach ($Name in $VMName) {
 	# if ADComputer not found...
 	if ($null -eq $JsonData.$Name.ADComputer) {
-		Write-Warning -Message "could not locate 'ADComputer' section for '$Name' VM in configuration file: '$Json'"
+		Write-Warning -Message "could not retrieve required 'ADComputer' section of '$Name' VM in configuration file: '$Json'"
 		continue NextVMName
 	}
 
 	# if domain not provided...
-	if ([string]::IsNullOrEmpty($JsonData.$Name.ADComputer.Domain)) {
-		Write-Warning -Message "could not locate required 'Domain' value in 'ADComputer' section for '$Name' VM in configuration file: '$Json'"
+	if ([string]::IsNullOrEmpty($JsonData.$Name.ADComputer.DomainName)) {
+		Write-Warning -Message "could not retrieve required 'DomainName' value in 'ADComputer' section of '$Name' VM in configuration file: '$Json'"
 		continue NextVMName
 	}
 	# if domain provided...
 	else {
 		# assign variable to provided domain for ease of use
-		$Domain = $JsonData.$Name.ADComputer.Domain
+		$DomainName = $JsonData.$Name.ADComputer.DomainName
 	}
 
 	# if OU not provided...
 	if ([string]::IsNullOrEmpty($JsonData.$Name.ADComputer.OrganizationalUnit)) {
-		Write-Warning -Message "could not locate required 'OrganizationalUnit' value in 'ADComputer' section for '$Name' VM in configuration file: '$Json'"
+		Write-Warning -Message "could not retrieve required 'OrganizationalUnit' value in 'ADComputer' section of '$Name' VM in configuration file: '$Json'"
 		continue NextVMName
 	}
 	# if OU provided...
@@ -67,28 +69,47 @@ catch {
 
 	# resolve domain
 	try {
-		$null = Resolve-DnsName -Name $Domain -DnsOnly -Type A_AAAA -QuickTimeout -ErrorAction 'Stop'
+		$null = Resolve-DnsName -Name $DomainName -DnsOnly -Type A_AAAA -QuickTimeout -ErrorAction 'Stop'
 	}
 	catch {
-		Write-Warning -Message "could not resolve A_AAAA record(s) for '$Domain' domain in 'ADComputer' section for '$Name' VM in configuration file: '$Json'"
+		Write-Warning -Message "could not resolve A_AAAA record(s) for '$DomainName' domain in 'ADComputer' section of '$Name' VM in configuration file: '$Json'"
 		continue NextVMName
 	}
+
+	# define parameters
+	$GetADComputer = @{
+		Identity    = $DomainName
+		Properties  = 'msDS-PrincipalName'
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+	}
+
+	# report state
+	Write-Host ("$Hostname,$Name - connecting to domain...")
 
 	# get domain object
 	try {
-		$DomainObject = Get-ADDomain -Identity $Domain
+		$DomainObject = Get-ADDomain -Identity $DomainName
 	}
 	catch [System.Security.Authentication.AuthenticationException] {
-		Write-Warning -Message "could not authenticate to '$Domain' domain in 'ADComputer' section for '$Name' VM in configuration file: '$Json'"
+		Write-Warning -Message "could not authenticate to '$DomainName' domain in 'ADComputer' section of '$Name' VM in configuration file: '$Json'"
 		continue NextVMName
 	}
 	catch {
-		Write-Warning -Message "could not retrieve object for '$Domain' domain in 'ADComputer' section for '$Name' VM in configuration file: '$Json'"
+		Write-Warning -Message "could not retrieve object for '$DomainName' domain in 'ADComputer' section of '$Name' VM in configuration file: '$Json'"
 		continue NextVMName
 	}
 
+	# report state
+	Write-Host ("$Hostname,$Name - ...connected to domain: $($DomainObject.Name)")
+
 	# retrieve server from domain object
 	$Server = $DomainObject.PDCEmulator
+
+	# report state
+	Write-Host ("$Hostname,$Name - ...located PDCEmulator: $Server")
+
+	# report state
+	Write-Host ("$Hostname,$Name - checking computer object...")
 
 	# define identity for computer object
 	$Identity = 'CN={0},{1}' -f $Name, $Path
@@ -97,8 +118,7 @@ catch {
 	$GetADComputer = @{
 		Server      = $Server
 		Identity    = $Identity
-		Properties  = 'msDS-PrincipalName'
-		ErrorAction = 'Stop'
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 	}
 
 	# retrieve computer object
@@ -106,16 +126,20 @@ catch {
 		$ComputerObject = Get-ADComputer @GetADComputer
 		Write-Host ("$Hostname,$Name - ...computer object retrieved")
 	}
+	catch [System.Security.Authentication.AuthenticationException] {
+		Write-Warning -Message "could not authenticate to '$Server' server for '$DomainName' domain in 'ADComputer' section of '$Name' VM in configuration file: '$Json'"
+		continue NextVMName
+	}
 	catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
 		# report state
-		Write-Host ("$Hostname,$Name - computer object not found; creating computer object...")
+		Write-Host ("$Hostname,$Name - ...computer object not found; creating computer object...")
 
 		# create computer object
 		try {
 			New-ADComputer -Server $Server -Name $Name -Path $Path -ErrorAction 'Stop'
 		}
 		catch {
-			Write-Warning -Message "could not create Computer with '$Name$' name on '$Server' server in '$Domain' domain"
+			Write-Warning -Message "could not create Computer with '$Name$' name on '$Server' server for '$DomainName' domain"
 			continue NextVMName
 		}
 
@@ -124,7 +148,7 @@ catch {
 			$ComputerObject = Get-ADComputer @GetADComputer
 		}
 		catch {
-			Write-Warning -Message "could not retrieve Computer with '$Name$' name on '$Server' server in '$Domain' domain after creating new object"
+			Write-Warning -Message "could not retrieve Computer with '$Name$' name on '$Server' server for '$DomainName' domain after creating new object"
 			continue NextVMName
 		}
 
@@ -132,13 +156,9 @@ catch {
 		Write-Host ("$Hostname,$Name - ...computer object created")
 	}
 	catch {
-		Write-Warning -Message "could not retrieve Computer with '$Name$' name on '$Server' server in '$Domain' domain"
+		Write-Warning -Message "could not retrieve Computer with '$Name$' name on '$Server' server for '$DomainName' domain"
 		continue NextVMName
 	}
-
-	# retrieve principal name
-	$Principal = $ComputerObject.'msDS-PrincipalName'
-	$ObjectSID = $ComputerObject.SID
 
 	# loop through groups
 	:NextGroup foreach ($Group in $JsonData.$Name.ADComputer.Groups) {
@@ -158,11 +178,11 @@ catch {
 			$GroupObject = Get-ADGroup @GetADGroup
 		}
 		catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
-			Write-Warning -Message "could not locate group with '$Group' name on '$Server' server in '$Domain' domain"
+			Write-Warning -Message "could not locate group with '$Group' name on '$Server' server in '$DomainName' domain"
 			continue NextGroup
 		}
 		catch {
-			Write-Warning -Message "could not retrieve group with '$Group' name on '$Server' server in '$Domain' domain"
+			Write-Warning -Message "could not retrieve group with '$Group' name on '$Server' server in '$DomainName' domain"
 			continue NextGroup
 		}
 
@@ -171,7 +191,7 @@ catch {
 
 		# if computer already a member...
 		if ($ComputerObject.DistinguishedName -in $GroupObject.Member) {
-			Write-Host ("$Hostname,$Name - ...found computer already in group members")
+			Write-Host ("$Hostname,$Name - ...found computer already in group")
 			continue NextGroup
 		}
 
@@ -191,7 +211,7 @@ catch {
 			Add-ADGroupMember @AddADGroupMember
 		}
 		catch {
-			Write-Warning -Message "could not add computer to  group with '$Group' name on '$Server' server in '$Domain' domain"
+			Write-Warning -Message "could not add computer to  group with '$Group' name on '$Server' server in '$DomainName' domain"
 			continue NextGroup
 		}
 
@@ -204,152 +224,333 @@ catch {
 		continue NextVMName
 	}
 
-	# retrieve DNS zone for looking up zones
-	try {
-		$DnsServerZone = Get-DnsServerZone -ComputerName $Server -Name $Domain
-	}
-	catch {
-		Write-Warning -Message "could not retrieve zone for '$Domain' domain on '$Server' server"
-		continue NextGroup
-	}
+	# if skip DNS Update not requested...
+	if (!$SkipDnsUpdate) {
+		# create list for IP address objects
+		$IPAddresses = [System.Collections.Generic.List[System.Net.IPAddress]]::new()
 
-	# loop through VMNetwork adapters
-	:NextVMNetworkAdapter ForEach ($VMNetworkAdapter in $JsonData.$Name.VMNetworkAdapters) {
-		# if VM network adapter does not have an IP address...
-		if ([string]::IsNullOrEmpty($VMNetworkAdapter.IPAddress)) {
-			continue NextVMNetworkAdapter
-		}
-
-		# define parameters
-		$GetADObjectForAddress = @{
-			Server      = $Server
-			SearchBase  = $DnsServerZone.DistinguishedName
-			SearchScope = 'OneLevel'
-			Filter      = "Name -eq '$Name'"
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# retrieve DNS record object for address updates
-		try {
-			$ADObjectForAddress = Get-ADObject @GetADObjectForAddress
-		}
-		catch {
-			Write-Warning -Message "could not perform first query for DNS record object with '$Name' name in '$Domain' zone on '$Server' server"
-			Return $_
-		}
-
-		# if DNS record object not found...
-		If ($null -eq $ADObjectForAddress) {
-			# define parameters
-			$AddDnsServerResourceRecord = @{
-				ComputerName = $Server
-				ZoneName     = $Domain
-				Name         = $Name
-				RRType       = 'A'
-				IPv4Address  = $VMNetworkAdapter.IPAddress
-				PassThru     = $true
-				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+		# loop through VMNetwork adapters
+		:NextVMNetworkAdapter foreach ($VMNetworkAdapter in $JsonData.$Name.VMNetworkAdapters) {
+			# if VM network adapter does not have a name or an IP address...
+			if ([string]::IsNullOrEmpty($VMNetworkAdapter.NetworkAdapterName) -or [string]::IsNullOrEmpty($VMNetworkAdapter.IPAddress)) {
+				continue NextVMNetworkAdapter
 			}
 
-			# create DNS record
+			# create IP address object from properties
 			try {
-				$DnsServerResourceRecord = Add-DnsServerResourceRecord @AddDnsServerResourceRecord
+				$IPAddress = [System.Net.IPAddress]::Parse($VMNetworkAdapter.IPAddress)
 			}
 			catch {
-				Write-Warning -Message "could not create DNS record for '$Name' name in '$Domain' zone on '$Server' server"
-				Return $_
-			}
-		}
-		# if DNS record object found...
-		Else {
-			# retrieve existing DNS record
-			Try {
-				$OldInputObject = Get-DnsServerResourceRecord -ComputerName $Server -ZoneName $Domain -Name $Name -RRType A
-			}
-			Catch {
-				Write-Warning -Message "could not retrieve DNS record for '$Name' name in '$Domain' zone on '$Server' server: $($_.Exception.Message)"
-				Return $_
+				Write-Warning -Message "could not parse '$($VMNetworkAdapter.IPAddress)' value in IPAddress on '$($VMNetworkAdapter.NetworkAdapterName)' network adapter: $($_.Exception.Message)"
+				continue NextVMNetworkAdapter
 			}
 
-			# if value of existing DNS record does not match JSON file...
-			If ($OldInputObject.RecordData.IPv4Address.IPAddressToString -ne $VMNetworkAdapter.IPAddress) {
-				# clone DNS record object
-				$NewInputObject = $OldInputObject.Clone()
-
-				# update IP address of cloned DNS record object 
-				$NewInputObject.RecordData.IPv4Address = [System.Net.IPAddress]::Parse($VMNetworkAdapter.IPAddress)
-
-				# define parameters
-				$SetDnsServerResourceRecord = @{
-					ComputerName   = $Server
-					ZoneName       = $Domain
-					OldInputObject = $OldInputObject
-					NewInputObject = $NewInputObject
-					PassThru       = $true
-					ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
-				}
-
-				# set new A record
-				Try {
-					$DnsServerResourceRecord = Set-DnsServerResourceRecord @SetDnsServerResourceRecord
-				}
-				Catch {
-					Write-Warning -Message "could not update DNS record for '$Name' name in '$Domain' zone on '$Server' server: $($_.Exception.Message)"
-					Return $_
-				}
-			}
+			# add IP address object to list
+			$IPAddresses.Add($IPAddress)
 		}
 
-		# retrieve DN of DNS record
-		$Identity = $DnsServerResourceRecord.DistinguishedName
+		# report count
+		Write-Host "$Hostname,$Name - found '$($IPAddresses.Count)' IP addresses for '$Name' VM in configuration file: '$Json'"
+
+		####################
+		# forward records
+		####################
 
 		# define parameters
-		$GetADObjectForSecurity = @{
+		$GetDnsServerZone = @{
+			ComputerName = $Server
+			Name         = $DomainName
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# retrieve DNS zone for looking up zones
+		try {
+			$DnsServerZone = Get-DnsServerZone @GetDnsServerZone
+		}
+		catch {
+			Write-Warning -Message "could not retrieve zone for '$DomainName' domain on '$Server' server"
+			continue NextGroup
+		}
+
+		# assign zone name
+		$ZoneName = $DnsServerZone.Name
+
+		# define parameters
+		$GetDnsServerResourceRecord = @{
+			ComputerName = $Server
+			ZoneName     = $ZoneName
+			Name         = $Name
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Ignore
+		}
+
+		# retrieve existing DNS records from DNS
+		try {
+			$DnsServerResourceRecords = Get-DnsServerResourceRecord @GetDnsServerResourceRecord
+		}
+		catch {
+			Write-Warning -Message "could not retrieve DNS records for '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+			return $_
+		}
+
+		# get count of DNS records
+		try {
+			$DnsServerResourceRecordCount = Measure-Object -InputObject $DnsServerResourceRecords | Select-Object -ExpandProperty 'Count'
+		}
+		catch {
+			Write-Warning -Message "could not retrieve count of DNS records for '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+			continue NextADObject
+		}
+
+		# report count
+		Write-Host "$Hostname,$Name - found '$DnsServerResourceRecordCount' DNS records for '$Name' name in '$ZoneName' zone on '$Server' server"
+
+		# loop through DNS records to remove expired DNS records
+		:NextDnsServerResourceRecord foreach ($DnsServerResourceRecord in $DnsServerResourceRecords) {
+			# assign record type to object
+			$RRType = $DnsServerResourceRecord.RecordType
+			
+			# switch on record type
+			switch ($RRType) {
+				'A' {
+					# get existing IPv6 address as string for reporting
+					$IPAddress = $DnsServerResourceRecord.RecordData.IPv4Address.IPAddressToString
+
+					# if no IP addresses retrieved from network adapters...
+					if ($IPAddresses.Count -eq 0) {
+						# report and continue to next DNS record
+						Write-Host "$Hostname,$Name - found existing '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
+						continue NextDnsServerResourceRecord
+					}
+
+					# if IPv4 address is in IP addresses list...
+					if ($DnsServerResourceRecord.RecordData.IPv4Address -notin $IPAddresses) {
+						# define parameters
+						$RemoveDnsServerResourceRecord = @{
+							ComputerName = $Server
+							ZoneName     = $ZoneName
+							Name         = $Name
+							RRType       = $RRType
+							RecordData   = $IPAddress
+							Force        = $true
+							ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+						}
+
+						# retrieve existing DNS record
+						try {
+							Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
+						}
+						catch {
+							Write-Warning -Message "could not remove '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+							return $_
+						}
+
+						# report state
+						Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
+					}
+				}
+				'AAAA' {
+					# get existing IPv6 address as string for reporting
+					$IPAddress = $DnsServerResourceRecord.RecordData.IPv6Address.IPAddressToString
+
+					# if no IP addresses retrieved from network adapters...
+					if ($IPAddresses.Count -eq 0) {
+						# report and continue to next DNS record
+						Write-Host "$Hostname,$Name - found existing '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
+						continue NextDnsServerResourceRecord
+					}
+
+					# if IPv6 address is in IP addresses list...
+					if ($DnsServerResourceRecord.RecordData.IPv6Address -notin $IPAddresses) {
+						# define parameters
+						$RemoveDnsServerResourceRecord = @{
+							ComputerName = $Server
+							ZoneName     = $ZoneName
+							Name         = $Name
+							RRType       = $RRType
+							RecordData   = $IPAddress
+							Force        = $true
+							ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+						}
+
+						# retrieve existing DNS record
+						try {
+							Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
+						}
+						catch {
+							Write-Warning -Message "could not remove '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+							return $_
+						}
+
+						# report state
+						Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
+					}
+				}
+				Default {
+					# if no IP addresses retrieved from network adapters...
+					if ($IPAddresses.Count -eq 0) {
+						Write-Host "$Hostname,$Name - found existing '$RRType' DNS record for '$Name' name in '$ZoneName' zone on '$Server' server"
+						continue NextDnsServerResourceRecord
+					}
+
+					# define parameters
+					$RemoveDnsServerResourceRecord = @{
+						ComputerName = $Server
+						ZoneName     = $ZoneName
+						Name         = $Name
+						RRType       = $RRType
+						Force        = $true
+						ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+					}
+
+					# retrieve existing DNS record
+					try {
+						Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
+					}
+					catch {
+						Write-Warning -Message "could not remove '$RRType' DNS record for '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+						return $_
+					}
+
+					# report state
+					Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name in '$ZoneName' zone on '$Server' server"
+				}
+			}
+		}
+
+		# loop through IP addresses to create missing DNS records
+		:NextIPAddress foreach ($IPAddress in $IPAddresses) {
+			# switch on IP address family
+			switch ($IPAddress.AddressFamily) {
+				'InterNetwork' {
+					# set record type
+					$RRType = 'A'
+
+					# if IP address is not DNS records data for IPv4 addresses...
+					if ($IPAddress -notin $DnsServerResourceRecords.RecordData.IPv4Address) {
+						# define parameters
+						$AddDnsServerResourceRecord = @{
+							ComputerName = $Server
+							ZoneName     = $ZoneName
+							Name         = $Name
+							RRType       = $RRType
+							IPv4Address  = $IPAddress
+							ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+						}
+
+						# create new DNS record
+						try {
+							Add-DnsServerResourceRecord @AddDnsServerResourceRecord
+						}
+						catch {
+							Write-Warning -Message "could not create '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+							return $_
+						}
+
+						# report state
+						Write-Host "$Hostname,$Name - created '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
+					}
+				}
+				'InterNetworkV6' {
+					# set record type
+					$RRType = 'AAAA'
+
+					# if IP address is not DNS records data for IPv6 addresses...
+					if ($IPAddress -notin $DnsServerResourceRecord.RecordData.IPv6Address) {
+						# define parameters
+						$AddDnsServerResourceRecord = @{
+							ComputerName = $Server
+							ZoneName     = $ZoneName
+							Name         = $Name
+							RRType       = $RRType
+							RecordData   = $IPAddress
+							ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+						}
+
+						# create new DNS record
+						try {
+							Add-DnsServerResourceRecord @AddDnsServerResourceRecord
+						}
+						catch {
+							Write-Warning -Message "could not create '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+							return $_
+						}
+
+						# report state
+						Write-Host "$Hostname,$Name - created '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
+					}
+				}
+			}
+		}
+
+		####################
+		# forward object
+		####################
+
+		# define DNS object identity
+		$Identity = 'DC={0},{1}' -f $Name, $DnsServerZone.DistinguishedName
+
+		# define parameters
+		$GetADObject = @{
 			Server      = $Server
 			Identity    = $Identity
 			Properties  = 'nTSecurityDescriptor'
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
 
-		# retrieve DNS record object for security updates
+		# retrieve DNS object
 		try {
-			$ADObjectForSecurity = Get-ADObject @GetADObjectForSecurity
+			$ADObject = Get-ADObject @GetADObject
+		}
+		catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
+			Write-Warning -Message "could not locate AD object for DNS record with '$Name' name in '$ZoneName' zone on '$Server' server"
+			return $_
 		}
 		catch {
-			Write-Warning -Message "could not perform second query for DNS record object with '$Name' name in '$Domain' zone on '$Server' server"
-			Return $_
+			Write-Warning -Message "could not retrieve AD object for DNS record with '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+			return $_
 		}
 
-		# if DNS record object not found...
-		If ($null -eq $ADObjectForSecurity) {
-			Write-Warning -Message "could not locate DNS record object with '$Name' name in '$Domain' zone on '$Server' server after address update"
-			continue NextVMNetworkAdapter
+		# if nTSecurityDescriptor not found...
+		if ($null -eq $ADObject.nTSecurityDescriptor) {
+			# warn and return
+			Write-Warning -Message "could not retrieve Security Descriptor object: '$($ADObject.DistinguishedName)'"
+			return
+		}
+		# if nTSecurityDescriptor found...
+		else {
+			# assign property to object
+			$nTSecurityDescriptor = $ADObject.nTSecurityDescriptor
 		}
 
-		# retrieve nTSecurityDescriptor from object
-		$nTSecurityDescriptor = $ADObjectForSecurity.nTSecurityDescriptor
-
-		# validate nTSecurityDescriptor object type
-		If ($nTSecurityDescriptor -isnot [System.DirectoryServices.ActiveDirectorySecurity]) {
-			Write-Warning -Message "found invalid '[$($nTSecurityDescriptor.GetType().FullName)]' object type for nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
-			Return $_
+		# if nTSecurityDescriptor is not the expected object type...
+		if ($nTSecurityDescriptor -isnot [System.DirectoryServices.ActiveDirectorySecurity]) {
+			# warn and return
+			Write-Warning -Message "found invalid '[$($nTSecurityDescriptor.GetType().FullName)]' object type for nTSecurityDescriptor on '$Server' server with DN: '$($ADObject.DistinguishedName)'"
+			return
 		}
-
-		# retrieve invalid access rules for DNS record object where identity matches computer but rights are incorrect
-		$AccessRules = $nTSecurityDescriptor.GetAccessRules($true, $false, [System.Security.Principal.NTAccount]).Where({ $_.IdentityReference -eq $Principal -and $_.ActiveDirectoryRights -ne $ActiveDirectoryRights })
-
-		# if no invalid access rules found...
-		If ($AccessRules.Count -eq 0) {
-			continue NextVMNetworkAdapter
-		}
-
-		# loop through invalid access rules
-		:NextAccessRule ForEach ($AccessRule in $AccessRules) {
-			$nTSecurityDescriptor.RemoveAccessRuleSpecific($AccessRule)
+		# if nTSecurityDescriptor found and is the expected object type...
+		else {
+			# retrieve the access rules
+			$AccessRules = $nTSecurityDescriptor.GetAccessRules($true, $false, [System.Security.Principal.SecurityIdentifier])
 		}
 
 		# create access rule
-		$AccessRule = [System.DirectoryServices.ActiveDirectoryAccessRule]::new($ObjectSID, $ActiveDirectoryRights, 'Allow')
+		$AccessRule = [System.DirectoryServices.ActiveDirectoryAccessRule]::new($ComputerObject.SID, $ActiveDirectoryRights, 'Allow')
+
+		# if access rules found in access rules...
+		if ($AccessRule -in $AccessRules) {
+			# report and return
+			Write-Host "$Hostname,$Name - validated access rules on AD object for DNS record with '$Name' name in '$ZoneName' zone on '$Server' server"
+			return
+		}
+
+		# retrieve access rules for DNS object where identity matches computer SID
+		$AccessRulesToRemove = $AccessRules.Where({ $_.IdentityReference -eq $ComputerObject.SID })
+
+		# loop through access rules to remove
+		foreach ($AccessRule in $AccessRulesToRemove) {
+			$nTSecurityDescriptor.RemoveAccessRuleSpecific($AccessRule)
+		}
 
 		# add access rule to security descriptor
 		$nTSecurityDescriptor.AddAccessRule($AccessRule)
@@ -367,8 +568,12 @@ catch {
 			Set-ADObject @SetADObject
 		}
 		catch {
-			Write-Warning -Message "could not update security on DNS record object with '$Name' name in '$Domain' zone on '$Server' server: $($_.Exception.Message)"
-			Return $_
+			Write-Warning -Message "could not update security on AD object for DNS record with '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+			return $_
 		}
+
+		# report and return
+		Write-Host "$Hostname,$Name - updated access rules on AD object for DNS record with '$Name' name in '$ZoneName' zone on '$Server' server"
+		return
 	}
 }
