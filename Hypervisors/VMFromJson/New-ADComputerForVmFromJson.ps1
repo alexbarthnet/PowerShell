@@ -538,7 +538,7 @@ catch {
 		$AccessRule = [System.DirectoryServices.ActiveDirectoryAccessRule]::new($ComputerObject.SID, $ActiveDirectoryRights, 'Allow')
 
 		# if access rules found in access rules...
-		if ($AccessRule -in $AccessRules) {
+		if ($AccessRules.Where({ $_.IdentityReference -eq $ComputerObject.SID -and $_.ActiveDirectoryRights -eq $ActiveDirectoryRights})) {
 			# report and return
 			Write-Host "$Hostname,$Name - validated access rules on AD object for DNS record with '$Name' name in '$ZoneName' zone on '$Server' server"
 			return
