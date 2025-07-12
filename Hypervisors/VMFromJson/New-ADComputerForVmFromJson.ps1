@@ -139,7 +139,7 @@ catch {
 			New-ADComputer -Server $Server -Name $Name -Path $Path -ErrorAction 'Stop'
 		}
 		catch {
-			Write-Warning -Message "could not create Computer with '$Name$' name on '$Server' server for '$DomainName' domain"
+			Write-Warning -Message "could not create Computer with '$Name' name on '$Server' server for '$DomainName' domain: $($_.Exception.Message)"
 			continue NextVMName
 		}
 
@@ -148,7 +148,7 @@ catch {
 			$ComputerObject = Get-ADComputer @GetADComputer
 		}
 		catch {
-			Write-Warning -Message "could not retrieve Computer with '$Name$' name on '$Server' server for '$DomainName' domain after creating new object"
+			Write-Warning -Message "could not retrieve Computer with '$Name' name on '$Server' server for '$DomainName' domain after creating new object"
 			continue NextVMName
 		}
 
@@ -156,7 +156,7 @@ catch {
 		Write-Host ("$Hostname,$Name - ...computer object created")
 	}
 	catch {
-		Write-Warning -Message "could not retrieve Computer with '$Name$' name on '$Server' server for '$DomainName' domain"
+		Write-Warning -Message "could not retrieve Computer with '$Name$' name on '$Server' server for '$DomainName' domain: $($_.Exception.Message)"
 		continue NextVMName
 	}
 
