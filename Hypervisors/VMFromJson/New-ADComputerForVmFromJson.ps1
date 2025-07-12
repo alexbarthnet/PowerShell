@@ -273,7 +273,7 @@ catch {
 		}
 
 		# assign zone name
-		$ZoneName = $DnsServerZone.Name
+		$ZoneName = $DnsServerZone.ZoneName
 
 		# define parameters
 		$GetDnsServerResourceRecord = @{
