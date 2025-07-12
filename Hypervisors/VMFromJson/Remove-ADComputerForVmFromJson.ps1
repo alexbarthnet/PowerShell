@@ -113,7 +113,7 @@ catch {
 		Write-Warning -Message "could not authenticate to '$Server' server for '$DomainName' domain in 'ADComputer' section of '$Name' VM in configuration file: '$Json'"
 		continue NextVMName
 	}
-	catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
+	catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
 		Write-Warning -Message "could not locate computer with '$Name$' name on '$Server' server for '$DomainName' domain"
 		continue NextVMName
 	}

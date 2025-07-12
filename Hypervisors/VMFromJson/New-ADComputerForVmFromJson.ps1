@@ -130,7 +130,7 @@ catch {
 		Write-Warning -Message "could not authenticate to '$Server' server for '$DomainName' domain in 'ADComputer' section of '$Name' VM in configuration file: '$Json'"
 		continue NextVMName
 	}
-	catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
+	catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
 		# report state
 		Write-Host ("$Hostname,$Name - ...computer object not found; creating computer object...")
 
@@ -177,7 +177,7 @@ catch {
 		try {
 			$GroupObject = Get-ADGroup @GetADGroup
 		}
-		catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
+		catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
 			Write-Warning -Message "could not locate group with '$Group' name on '$Server' server in '$DomainName' domain"
 			continue NextGroup
 		}
@@ -501,7 +501,7 @@ catch {
 		try {
 			$ADObject = Get-ADObject @GetADObject
 		}
-		catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
+		catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
 			Write-Warning -Message "could not locate AD object for DNS record with '$Name' name in '$ZoneName' zone on '$Server' server"
 			return $_
 		}
