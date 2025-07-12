@@ -2825,7 +2825,7 @@ Begin {
 			[uint16]$ControllerNumber = 0,
 			[uint16]$ControllerLocation = 0,
 			[string]$UnattendFile,
-			[hashtable]$ExpandStrings = @{ }
+			[hashtable]$ExpandStrings = @{}
 		)
 
 		# get hashtable for InvokeCommand splat
@@ -3975,9 +3975,6 @@ Process {
 							Throw $_
 						}
 					}
-					default {
-						Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, unknown provisioning method provided: '$DeploymentMethod'")
-					}
 					'VHD' {
 						# if device variables provided...
 						If ($JsonData.$Name.OSDeployment.ExpandStrings) {
@@ -4012,6 +4009,9 @@ Process {
 							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VHD to VM")
 							Throw $_
 						}
+					}
+					default {
+						Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, unknown provisioning method provided: '$DeploymentMethod'")
 					}
 				}
 			}
