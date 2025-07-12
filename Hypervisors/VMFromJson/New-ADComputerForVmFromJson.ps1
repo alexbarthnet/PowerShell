@@ -432,7 +432,7 @@ catch {
 							ComputerName = $Server
 							ZoneName     = $ZoneName
 							Name         = $Name
-							RRType       = $RRType
+							$RRType      = $true
 							IPv4Address  = $IPAddress
 							ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 						}
@@ -461,7 +461,7 @@ catch {
 							ComputerName = $Server
 							ZoneName     = $ZoneName
 							Name         = $Name
-							RRType       = $RRType
+							$RRType      = $true
 							RecordData   = $IPAddress
 							ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 						}
