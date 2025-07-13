@@ -10,7 +10,7 @@ param(
 	[Parameter(Position = 1, ValueFromPipeline = $True)]
 	[string[]]$VMName,
 	[Parameter(Position = 2)]
-	[switch]$SkipDnsCleanup
+	[switch]$Force
 )
 
 # if Json is not an absolute path...
@@ -125,12 +125,17 @@ catch {
 	# report state
 	Write-Host ("$Hostname,$Name - computer object found; removing computer object...")
 
-	# define parameters
+	# define required parameters
 	$RemoveADObject = @{
 		Identity    = $ComputerObject
 		Server      = $Server
 		Recursive   = $true
 		ErrorAction = 'Stop'
+	}
+
+	# define optional parameters
+	If ($script:Force) {
+		$RemoveADObject['Confirm'] = $false
 	}
 
 	# remove computer object
