@@ -76,13 +76,6 @@ catch {
 		continue NextVMName
 	}
 
-	# define parameters
-	$GetADComputer = @{
-		Identity    = $DomainName
-		Properties  = 'msDS-PrincipalName'
-		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-	}
-
 	# report state
 	Write-Host ("$Hostname,$Name - connecting to domain...")
 
