@@ -3999,10 +3999,10 @@ Process {
 
 						# define parameters for Copy-VHDFromParams
 						$CopyVHDFromParams = @{
-							VM                 = $VM
-							Path               = $JsonData.$Name.OSDeployment.FilePath
-							UnattendFile       = $JsonData.$Name.OSDeployment.UnattendFile
-							ExpandStrings      = $ExpandStringsHashtable
+							VM            = $VM
+							Path          = $JsonData.$Name.OSDeployment.FilePath
+							UnattendFile  = $JsonData.$Name.OSDeployment.UnattendFile
+							ExpandStrings = $ExpandStringsHashtable
 						}
 
 						# mount ISO file on VM
