@@ -3117,6 +3117,10 @@ Begin {
 					$Content = $Content -replace '<!-- <AdministratorPassword>', '<AdministratorPassword>'
 					$Content = $Content -replace '</AdministratorPassword> -->', '</AdministratorPassword>'
 				}
+				# if administrator password not provided...
+				Else {
+					$Content = $Content -replace '%AdministratorPassword%', '<%>AdministratorPassword<%>'
+				}
 
 				# while content contains XML element with expand string as value...
 				While ($Content -match '<\w+>%(?<ExpandString>\w+)%</\w+>') {
