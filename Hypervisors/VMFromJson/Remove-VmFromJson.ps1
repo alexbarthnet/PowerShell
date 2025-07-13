@@ -1,8 +1,8 @@
 [CmdletBinding()]
 Param(
-	[Parameter(Mandatory = $True)][ValidateScript({ Test-Path -Path $_ })]
+	[Parameter(Position = 0, Mandatory)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Json,
-	[Parameter(ValueFromPipeline = $True)]
+	[Parameter(Position = 1, ValueFromPipeline)]
 	[string[]]$VMName,
 	[Parameter()]
 	[string]$ComputerName,
