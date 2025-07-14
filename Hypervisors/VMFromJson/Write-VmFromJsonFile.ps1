@@ -158,7 +158,7 @@ Param(
 	# OS Deployment - VHD - literal path to VHD file on hypervisor
 	[Parameter(Position = 4, ParameterSetName = 'AddOSDeployment')]
 	[string]$FilePath,
-	# OS Deployment - SCCM - server name for SCCM
+	# OS Deployment - SCCM - name of the SCCM server
 	[Parameter(Position = 5, ParameterSetName = 'AddOSDeployment')]
 	[string]$Server,
 	# OS Deployment - SCCM - string array of device collections
@@ -166,7 +166,7 @@ Param(
 	[string[]]$Collections,
 	# OS Deployment - SCCM - hashtable of device variable names and values
 	[Parameter(Position = 7, ParameterSetName = 'AddOSDeployment')]
-	[hashtable]$DeviceVariables,
+	[hashtable]$Variables,
 	# OS Deployment - VHD - literal path to unattend XML file on hypervisor
 	[Parameter(Position = 8, ParameterSetName = 'AddOSDeployment')]
 	[string]$UnattendFile,
