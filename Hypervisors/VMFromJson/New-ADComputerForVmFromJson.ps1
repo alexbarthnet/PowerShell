@@ -8,7 +8,9 @@ param(
 	[Parameter(Position = 0, Mandatory)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Json,
 	[Parameter(Position = 1, Mandatory, ValueFromPipeline)]
-	[string[]]$VMName
+	[string[]]$VMName,
+	[Parameter(Position = 2)]
+	[switch]$Reset
 )
 
 # if Json is not an absolute path...
