@@ -2667,8 +2667,8 @@ Begin {
 			# define VHD parameters
 			[Parameter(Mandatory = $true)]
 			[string]$Path,
-			[int32]$ControllerNumber = [int32]0,
-			[int32]$ControllerLocation,
+			[uint16]$ControllerNumber = 0,
+			[uint16]$ControllerLocation,
 			[switch]$PreserveDrives
 		)
 
