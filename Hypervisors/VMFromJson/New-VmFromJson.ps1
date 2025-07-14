@@ -2823,8 +2823,7 @@ Begin {
 			# define OSD parameters
 			[Parameter(Mandatory)]
 			[string]$Path,
-			[uint16]$ControllerNumber = 0,
-			[uint16]$ControllerLocation = 0,
+			[string]$DestinationPath,
 			[string]$UnattendFile,
 			[hashtable]$ExpandStrings = @{}
 		)
@@ -2875,16 +2874,27 @@ Begin {
 			Return
 		}
 
-		# retrieve path to hard drive with provided controller number and location
-		$VhdPath = $VM.HardDrives.Where({ $_.ControllerNumber -eq $ControllerNumber -and $_.ControllerLocation -eq $ControllerLocation }).Path
-
-		# evaluate path to hard drive with provided controller number and location
-		If ([System.String]::IsNullOrEmpty($VhdPath)) {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD copy, could not locate VHD on controller $ControllerNumber at LUN $ControllerLocation")
-			Return
+		# if DestinationPath provided...
+		If ($script:PSBoundParameters.ContainsKey('DestinationPath')) {
+			# if hard drives do not contain VHD with provided destination path...
+			If (!$VM.HardDrives.Where({ $_.Path -eq $DestinationPath })) {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD copy, could not locate target VHD on VM with path: $DestinationPath")
+				Return
+			}
 		}
+		# if DestinationPath not provided...
 		Else {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...found target VHD: $VhdPath")
+			# select path of first hard drive by controller number then controller location
+			$DestinationPath = $VM.HardDrives | Sort-Object -Property 'ControllerNumber', 'ControllerLocation' | Select-Object -First 1 -ExpandProperty 'Path'
+
+			# if destination path is null or empty...
+			If ([System.String]::IsNullOrEmpty($DestinationPath)) {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD copy, could not locate the first VHD on VM")
+				Return
+			}
+			Else {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...found target VHD: $DestinationPath")
+			}
 		}
 
 		# update argument list for Get-Item
@@ -2902,19 +2912,19 @@ Begin {
 			}
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve first VHD in boot order: '$VhdPath'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve target VHD: '$DestinationPath'")
 			Throw $_
 		}
 
 		# evaluate first hard drive
 		If ($GetItem.Length -gt 4MB) {
-			Write-Warning ("$Hostname,$ComputerName,$Name - found VHD larger than expected: '$(Format-Bytes -Size $GetItem.Length)'")
+			Write-Warning ("$Hostname,$ComputerName,$Name - found target VHD larger than expected: '$(Format-Bytes -Size $GetItem.Length)'")
 			Write-Warning ("$Hostname,$ComputerName,$Name - replace VHD?") -WarningAction Inquire
 		}
 
 		# update argument list for Copy-Item
 		$InvokeCommand['ArgumentList']['Path'] = $Path
-		$InvokeCommand['ArgumentList']['Destination'] = $VhdPath
+		$InvokeCommand['ArgumentList']['Destination'] = $DestinationPath
 
 		# copy deployment path to VHD
 		Try {
@@ -2935,7 +2945,7 @@ Begin {
 		}
 
 		# update argument list for Get-ACL
-		$InvokeCommand['ArgumentList']['Path'] = $VhdPath
+		$InvokeCommand['ArgumentList']['Path'] = $DestinationPath
 		$InvokeCommand['ArgumentList']['VMId'] = $VM.Id
 		$InvokeCommand['ArgumentList'].Remove('Destination')
 
@@ -2970,7 +2980,7 @@ Begin {
 			}
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not update ACL for VHD: '$Destination'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not update ACL for VHD: '$DestinationPath'")
 			Throw $_
 		}
 
@@ -3006,7 +3016,7 @@ Begin {
 		}
 
 		# update argument list for Mount-VHD
-		$InvokeCommand['ArgumentList']['Path'] = $VhdPath
+		$InvokeCommand['ArgumentList']['Path'] = $DestinationPath
 
 		# mount VHD
 		Try {
@@ -3161,7 +3171,7 @@ Begin {
 		}
 
 		# update argument list for Dismount-VHD
-		$InvokeCommand['ArgumentList']['Path'] = $VhdPath
+		$InvokeCommand['ArgumentList']['Path'] = $DestinationPath
 
 		# dismount VHD
 		Try {
