@@ -147,7 +147,7 @@ catch {
 		Write-Host ("$Hostname,$Name - ...computer object created")
 	}
 	catch {
-		Write-Warning -Message "could not retrieve computer with '$Name$' name on '$Server' server for '$DomainName' domain: $($_.Exception.Message)"
+		Write-Warning -Message "could not retrieve computer with '$Name' name on '$Server' server for '$DomainName' domain: $($_.Exception.Message)"
 		continue NextVMName
 	}
 
