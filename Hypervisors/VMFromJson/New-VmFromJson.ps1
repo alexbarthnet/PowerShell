@@ -3927,17 +3927,17 @@ Process {
 		# if VM has OS deployment...
 		If ($null -ne $VM -and $null -ne $JsonData.$Name.OSDeployment) {
 			# ...retrieve OS deployment method
-			$DeploymentMethod = $JsonData.$Name.OSDeployment.DeploymentMethod.ToUpper()
+			$Method = $JsonData.$Name.OSDeployment.Method.ToUpper()
 
 			# ...configure OS deployment
-			If ([string]::IsNullOrEmpty($DeploymentMethod)) {
+			If ([string]::IsNullOrEmpty($Method)) {
 				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, no provisioning method provided")
 			}
 			ElseIf ($SkipProvisioning) {
 				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, SkipProvisioning set")
 			}
 			Else {
-				switch ($DeploymentMethod) {
+				switch ($Method) {
 					'ISO' {
 						# define parameters for Add-IsoToVM
 						$AddIsoToVM = @{
@@ -4026,7 +4026,7 @@ Process {
 						}
 					}
 					default {
-						Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, unknown provisioning method provided: '$DeploymentMethod'")
+						Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, unknown provisioning method provided: '$Method'")
 					}
 				}
 			}

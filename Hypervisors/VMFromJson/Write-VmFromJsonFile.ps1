@@ -56,7 +56,7 @@ Param(
 	# OS Deployment - OSD method
 	[Parameter(Mandatory = $true, Position = 3, ParameterSetName = 'AddOSDeployment')]
 	[ValidateSet('ISO', 'SCCM', 'WDS')]
-	[string]$DeploymentMethod,
+	[string]$Method,
 	# VMHardDiskDrive - bytes for VHD size
 	[Parameter(Mandatory = $True, Position = 4, ParameterSetName = 'AddVMHardDiskDrive')]
 	[ValidateScript({ ($_ -ge 3MB) -and ($_ -le 64TB) })]
@@ -690,9 +690,9 @@ Process {
 				# define keys between root key and nested key
 				JsonPathToKey   = 'OSDeployment'
 				# define key for finding existing key value pair
-				JsonNestedKey   = 'DeploymentMethod'
+				JsonNestedKey   = 'Method'
 				# define value for finding existing key value pair
-				JsonNestedValue = $DeploymentMethod
+				JsonNestedValue = $Method
 			}
 
 			# remove object from nested JSON key
@@ -935,9 +935,9 @@ Process {
 				# define keys between root key and nested key
 				JsonPathToKey    = 'OSDeployment'
 				# define key for finding existing key value pair
-				JsonNestedKey    = 'DeploymentMethod'
+				JsonNestedKey    = 'Method'
 				# define value for finding existing key value pair
-				JsonNestedValue  = $DeploymentMethod
+				JsonNestedValue  = $Method
 			}
 
 			# add object to nested JSON key
