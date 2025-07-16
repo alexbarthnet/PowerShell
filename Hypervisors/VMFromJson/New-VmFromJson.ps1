@@ -3820,7 +3820,7 @@ Process {
 
 		# if VM has network adapters...
 		If ($null -ne $VM -and $null -ne $JsonData.$Name.VMNetworkAdapters) {
-			# create VM network adapter
+			# loop through VM network adapter
 			ForEach ($VMNetworkAdapterEntry in $JsonData.$Name.VMNetworkAdapters) {
 				# define required parameters for VMNetworkAdapter
 				$AddVMNetworkAdapterToVM = @{
