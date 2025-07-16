@@ -2667,7 +2667,8 @@ Begin {
 			# define VHD parameters
 			[Parameter(Mandatory = $true)]
 			[string]$Path,
-			[uint16]$ControllerNumber = 0,
+			[string]$ControllerType = 'SCSI',
+			[uint16]$ControllerNumber,
 			[uint16]$ControllerLocation,
 			[switch]$PreserveDrives
 		)
@@ -2681,15 +2682,44 @@ Begin {
 			Throw $_
 		}
 
-		# if scsi controller with requested number does not exist on VM...
-		While ($null -eq (Get-VMScsiController -VM $VM -ControllerNumber $ControllerNumber)) {
-			# ...create scsi controller on VM
-			Try {
-				Write-Host ("$Hostname,$ComputerName,$Name - adding VMScsiController to VM")
-				Add-VMScsiController -VM $VM -ErrorAction Stop
+		# switch on controller type
+		switch ($ControllerType) {
+			'IDE' {
+				# if VM generation is not 1...
+				If ($VM.Generation -ne 1) {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: found '$ControllerType' controller type requested on generation $($VM.Generation) VM")
+					Return
+				}
+				# if controller number not valid...
+				If ($ControllerNumber -notin 0..1) {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: found unsupported '$ControllerNumber' controller number for '$ControllerType' controller type")
+					Return
+				}
+				# if controller location not valid...
+				If ($PSBoundParameters.ContainsKey('ControllerLocation') -and $ControllerLocation -notin 0..1) {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: found unsupported '$ControllerLocation' controller location for '$ControllerType' controller type")
+					Return
+				}
 			}
-			Catch {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VMScsiController to VM")
+			'SCSI' {
+				# if controller number provided...
+				If ($PSBoundParameters.ContainsKey('ControllerNumber')) {
+					# if scsi controller with requested number does not exist on VM...
+					While ($null -eq (Get-VMScsiController -VM $VM -ControllerNumber $ControllerNumber)) {
+						# ...create scsi controller on VM
+						Try {
+							Write-Host ("$Hostname,$ComputerName,$Name - adding VMScsiController to VM")
+							Add-VMScsiController -VM $VM -ErrorAction Stop
+						}
+						Catch {
+							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VMScsiController to VM")
+							Throw $_
+						}
+					}
+				}
+			}
+			Default {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: found unsupported '$ControllerType' controller type")
 				Throw $_
 			}
 		}
@@ -2702,9 +2732,8 @@ Begin {
 		}
 
 		# define optional parameters for Get-VMHardDiskDrive
-		If ($PSBoundParameters['ControllerLocation']) {
-			$GetVMHardDiskDrive['ControllerLocation'] = $ControllerLocation
-		}
+		If ($PSBoundParameters['ControllerNumber']) { $GetVMHardDiskDrive['ControllerNumber'] = $ControllerNumber }
+		If ($PSBoundParameters['ControllerLocation']) { $GetVMHardDiskDrive['ControllerLocation'] = $ControllerLocation }
 
 		# get all drives with matching parameters
 		Try {
@@ -2770,6 +2799,7 @@ Begin {
 		$AddVMHardDiskDrive = @{
 			VM               = $VM
 			Path             = $Path
+			ControllerType   = $ControllerType
 			ControllerNumber = $ControllerNumber
 			ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
 		}
@@ -3683,12 +3713,14 @@ Process {
 					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
 				}
 
-				# create VHD
+				# define parameters
 				$NewVHDFromParams = @{
 					ComputerName = $ComputerName
 					Path         = $VMHardDiskDrivePath
 					SizeBytes    = $VMHardDiskDrive.SizeBytes
 				}
+
+				# create VHD
 				Try {
 					New-VHDFromParams @NewVHDFromParams
 				}
@@ -3712,14 +3744,17 @@ Process {
 					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
 				}
 
-				# add VHD to VM
+				# define parameters
 				$AddVHDFromParams = @{
 					ComputerName       = $ComputerName
 					VM                 = $VM
 					Path               = $VMHardDiskDrivePath
+					ControllerType     = $VMHardDiskDrive.ControllerType
 					ControllerNumber   = $VMHardDiskDrive.ControllerNumber
 					ControllerLocation = $VMHardDiskDrive.ControllerLocation
 				}
+
+				# add VHD to VM
 				Try {
 					Add-VHDFromParams @AddVHDFromParams
 				}
@@ -3743,13 +3778,16 @@ Process {
 					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
 				}
 
-				# add VHD to VM
+				# define parameters
 				$AddVHDFromParams = @{
 					ComputerName     = $ComputerName
 					VM               = $VM
 					Path             = $VMHardDiskDrivePath
+					ControllerType   = $VMHardDiskDrive.ControllerType
 					ControllerNumber = $VMHardDiskDrive.ControllerNumber
 				}
+
+				# add VHD to VM
 				Try {
 					Add-VHDFromParams @AddVHDFromParams
 				}
@@ -3773,13 +3811,16 @@ Process {
 					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
 				}
 
-				# add VHD to VM
+				# define parameters
 				$AddVHDFromParams = @{
 					ComputerName       = $ComputerName
 					VM                 = $VM
 					Path               = $VMHardDiskDrivePath
+					ControllerType     = $VMHardDiskDrive.ControllerType
 					ControllerLocation = $VMHardDiskDrive.ControllerLocation
 				}
+
+				# add VHD to VM
 				Try {
 					Add-VHDFromParams @AddVHDFromParams
 				}
@@ -3805,10 +3846,13 @@ Process {
 
 				# add VHD to VM
 				$AddVHDFromParams = @{
-					ComputerName = $ComputerName
-					VM           = $VM
-					Path         = $VMHardDiskDrivePath
+					ComputerName   = $ComputerName
+					VM             = $VM
+					Path           = $VMHardDiskDrivePath
+					ControllerType = $VMHardDiskDrive.ControllerType
 				}
+
+				# add VHD to VM
 				Try {
 					Add-VHDFromParams @AddVHDFromParams
 				}
