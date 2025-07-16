@@ -2667,7 +2667,7 @@ Begin {
 			# define VHD parameters
 			[Parameter(Mandatory = $true)]
 			[string]$Path,
-			[string]$ControllerType = 'SCSI',
+			[string]$ControllerType,
 			[uint16]$ControllerNumber,
 			[uint16]$ControllerLocation,
 			[switch]$PreserveDrives
@@ -2680,6 +2680,17 @@ Begin {
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
 			Throw $_
+		}
+
+		# if controller type is empty...
+		If ([string]::IsNullOrEmpty($ControllerType)) {
+			# if generation 1 VM...
+			If ($VM.Generation -eq 1) {
+				$ControllerType = 'IDE'
+			}
+			Else {
+				$ControllerType = 'SCSI'
+			}
 		}
 
 		# switch on controller type
