@@ -36,7 +36,16 @@ Param(
 	[string]$Role,
 	# local DNS hostname
 	[Parameter(Position = 1)]
-	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
+	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.'),
+	# switch to write response to a variable instead of to the pipeline
+	[Parameter(Position = 2)]
+	[switch]$AsVariable,
+	# name of variable when AsVariable is true
+	[Parameter(Position = 3)]
+	[string]$VariableName = 'TestFsmoForDnsHostname',
+	# scope of variable when AsVariable is true
+	[Parameter(Position = 4)]
+	[string]$VariableScope = 'global'
 )
 
 Process {
