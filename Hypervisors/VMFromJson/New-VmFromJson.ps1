@@ -2916,11 +2916,14 @@ Begin {
 		}
 
 		# if DestinationPath provided...
-		If ($script:PSBoundParameters.ContainsKey('DestinationPath')) {
+		If ($PSBoundParameters.ContainsKey('DestinationPath')) {
 			# if hard drives do not contain VHD with provided destination path...
 			If (!$VM.HardDrives.Where({ $_.Path -eq $DestinationPath })) {
 				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD copy, could not locate target VHD on VM with path: $DestinationPath")
 				Return
+			}
+			Else {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...found target VHD: $DestinationPath")
 			}
 		}
 		# if DestinationPath not provided...
@@ -2934,12 +2937,12 @@ Begin {
 				Return
 			}
 			Else {
-				Write-Host ("$Hostname,$ComputerName,$Name - ...found target VHD: $DestinationPath")
+				Write-Host ("$Hostname,$ComputerName,$Name - ...located first VHD: $DestinationPath")
 			}
 		}
 
 		# update argument list for Get-Item
-		$InvokeCommand['ArgumentList']['Path'] = $VhdPath
+		$InvokeCommand['ArgumentList']['Path'] = $DestinationPath
 
 		# retrieve first hard drive
 		Try {
@@ -4066,12 +4069,24 @@ Process {
 
 							# define parameters for Copy-VHDFromParams
 							$CopyVHDFromParams = @{
-								VM              = $VM
-								Path            = $OSDeployment.FilePath
-								Destinationpath = $OSDeployment.Destinationpath
-								UnattendFile    = $OSDeployment.UnattendFile
-								ExpandStrings   = $ExpandStringsHashtable
+								VM            = $VM
+								Path          = $OSDeployment.FilePath
+								ExpandStrings = $ExpandStringsHashtable
 							}
+
+							# define optional parameters
+							If (![string]::IsNullOrEmpty($OSDeployment.DestinationPath)) {
+								$CopyVHDFromParams['DestinationPath'] = $OSDeployment.DestinationPath
+							}
+							If (![string]::IsNullOrEmpty($OSDeployment.UnattendFile)) {
+								$CopyVHDFromParams['UnattendFile'] = $OSDeployment.UnattendFile
+							}
+							# If (![string]::IsNullOrEmpty($OSDeployment.ControllerNumber)) {
+							# 	 $CopyVHDFromParams['ControllerNumber'] = $OSDeployment.ControllerNumber
+							# }
+							# If (![string]::IsNullOrEmpty($OSDeployment.ControllerLocation)) {
+							# 	 $CopyVHDFromParams['ControllerLocation'] = $OSDeployment.ControllerLocation
+							# }
 
 							# mount ISO file on VM
 							Try {
