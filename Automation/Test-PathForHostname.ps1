@@ -1,15 +1,15 @@
 <#
 .SYNOPSIS
-Test if the content retrieved from a patch matches the local hostname.
+Test if the content of the most recently updated file in a path matches the local hostname.
 
 .DESCRIPTION
-Test if the content retrieved from a patch matches the local hostname.
+Test if the content of the most recently updated file in a path matches the local hostname.
 
 .PARAMETER Path
 The path with one or more files to evaluate.
 
 .PARAMETER Hostname
-The local hostname expected in the files. The default value is the hostname of the local system.
+The hostname expected in the files. The default value is the hostname of the local system.
 
 .INPUTS
 String.
