@@ -55,78 +55,87 @@ Param(
 	[string]$VariableScope = 'global'
 )
 
-
-# retrieve the CIM instance
-Try {
-	$ServiceWindows = Get-CimInstance -Namespace "root\ccm\clientsdk" -Class "CCM_ServiceWindow"
-}
-Catch {
-	Write-Warning -Message "could not filter the service window objects: $($_.Exception.Message)"
-	Return $_
-}
+Process {
+	# retrieve the CIM instance
+	Try {
+		$ServiceWindows = Get-CimInstance -Namespace "root\ccm\clientsdk" -Class "CCM_ServiceWindow"
+	}
+	Catch {
+		Write-Warning -Message "could not filter the service window objects: $($_.Exception.Message)"
+		Return $_
+	}
 	
-# filter the CIM instance to the ALLPROGRAM_SERVICEWINDOW type
-Try {
-	$FilteredServiceWindows = $ServiceWindows.Where({ $_.Type -eq 1 })
-}
-Catch {
-	Write-Warning -Message "could not filter the service window objects: $($_.Exception.Message)"
-	Return $_
-}
+	# filter the CIM instance to the ALLPROGRAM_SERVICEWINDOW type
+	Try {
+		$FilteredServiceWindows = $ServiceWindows.Where({ $_.Type -eq 1 })
+	}
+	Catch {
+		Write-Warning -Message "could not filter the service window objects: $($_.Exception.Message)"
+		Return $_
+	}
 
-# retrieve adjusted datetime
-switch ($Mode) {
-	'StartsWithin' {
-		Try {
-			$DateTime = $Now.Add($TimeSpan)
-		}
-		Catch {
-			Write-Warning -Message "could not create datetime from timespan: $($_.Exception.Message)"
-			Return $_
+	# retrieve adjusted datetime
+	switch ($Mode) {
+		'StartsWithin' {
+			Try {
+				$DateTime = $Now.Add($TimeSpan)
+			}
+			Catch {
+				Write-Warning -Message "could not create datetime from timespan: $($_.Exception.Message)"
+				Return $_
+			}
 		}
 	}
-}
 
-# loop through maintenance windows
-ForEach ($ServiceWindow in $FilteredServiceWindows) {
-	# retrieve service window start time and end time converted to universal time
-	# the datetime values are reported as UTC values but with a "local" type
-	# the datetime values are converted "to" universal time to retrieve the actual local times
-	$StartTime = $ServiceWindow.StartTime.ToUniversalTime()
-	$EndTime = $ServiceWindow.EndTime.ToUniversalTime().AddSeconds(-1)
+	# loop through maintenance windows
+	ForEach ($ServiceWindow in $FilteredServiceWindows) {
+		# retrieve service window start time and end time converted to universal time
+		# the datetime values are reported as UTC values but with a "local" type
+		# the datetime values are converted "to" universal time to retrieve the actual local times
+		$StartTime = $ServiceWindow.StartTime.ToUniversalTime()
+		$EndTime = $ServiceWindow.EndTime.ToUniversalTime().AddSeconds(-1)
 
-	# switch on mode
+		# switch on mode
+		switch ($Mode) {
+			'DayOfWeek' {
+				# if service window starts today...
+				If ($StartTime.DayOfWeek -eq $Now.DayOfWeek) {
+					Write-Verbose -Message "Service Window found that starts today: $($Now.ToString('o'))"
+					$Value = $true
+				}
+				# if service window ends today...
+				If ($EndTime.DayOfWeek -eq $Now.DayOfWeek) {
+					Write-Verbose -Message "Service Window found that ends today: $($Now.ToString('o'))"
+					$Value = $true
+				}
+			}
+			'StartsWithin' {
+				# if adjusted date time is within start and end time...
+				If ($DateTime -gt $StartTime -and $DateTime -lt $EndTime) {
+					Write-Verbose -Message "Service Window found that starts within '$($TimeSpan.ToString())' timespan from now: $($Now.ToString('o'))"
+					$Value = $true
+				}
+			}
+		}
+	}
+
+	# return false if not conditions met
 	switch ($Mode) {
 		'DayOfWeek' {
-			# if service window starts today...
-			If ($StartTime.DayOfWeek -eq $Now.DayOfWeek) {
-				Write-Verbose -Message "Service Window found that starts today: $($Now.ToString('o'))"
-				Return $true
-			}
-			# if service window ends today...
-			If ($EndTime.DayOfWeek -eq $Now.DayOfWeek) {
-				Write-Verbose -Message "Service Window found that ends today: $($Now.ToString('o'))"
-				Return $true
-			}
+			Write-Verbose -Message "No Service Window found that starts or ends today: $($Now.ToString('o'))"
+			$Value = $false
 		}
 		'StartsWithin' {
-			# if adjusted date time is within start and end time...
-			If ($DateTime -gt $StartTime -and $DateTime -lt $EndTime) {
-				Write-Verbose -Message "Service Window found that starts within '$($TimeSpan.ToString())' timespan from now: $($Now.ToString('o'))"
-				Return $true
-			}
+			Write-Verbose -Message "No Service Window found that starts within '$($TimeSpan.ToString())' timespan from now: $($Now.ToString('o'))"
+			$Value = $false
 		}
 	}
-}
 
-# return false if not conditions met
-switch ($Mode) {
-	'DayOfWeek' {
-		Write-Verbose -Message "No Service Window found that starts or ends today: $($Now.ToString('o'))"
-		Return $false
+	# if AsVariable requested...
+	If ($AsVariable) {
+		New-Variable -Name $VariableName -Scope $VariableScope -Value $Value -Force
 	}
-	'StartsWithin' {
-		Write-Verbose -Message "No Service Window found that starts within '$($TimeSpan.ToString())' timespan from now: $($Now.ToString('o'))"
-		Return $true
+	Else {
+		return $Value
 	}
 }
