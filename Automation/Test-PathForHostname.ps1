@@ -69,9 +69,17 @@ Process {
 
 	# if path content matches hostname...
 	If ($PathContent -eq $HostName) {
-		Return $true
+		$Value = $true
 	}
 	Else {
-		Return $false
+		$Value = $false
+	}
+
+	# if AsVariable requested...
+	If ($AsVariable) {
+		New-Variable -Name $VariableName -Scope $VariableScope -Value $Value -Force
+	}
+	Else {
+		return $Value
 	}
 }

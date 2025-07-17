@@ -61,9 +61,17 @@ Process {
 
 	# if role owner matches DNS hostname...
 	If ($RoleOnwer -eq $DnsHostName) {
-		Return $true
+		$Value = $true
 	}
 	Else {
-		Return $false
+		$Value = $false
+	}
+
+	# if AsVariable requested...
+	If ($AsVariable) {
+		New-Variable -Name $VariableName -Scope $VariableScope -Value $Value -Force
+	}
+	Else {
+		return $Value
 	}
 }
