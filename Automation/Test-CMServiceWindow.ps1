@@ -35,15 +35,24 @@ https://learn.microsoft.com/en-us/mem/configmgr/develop/reference/core/clients/s
 
 [CmdletBinding()]
 Param(
+	# current time
+	[Parameter(DontShow)]
+	[datetime]$Now = [System.DateTime]::Now,
 	# mode for script
 	[Parameter(Position = 0)][ValidateSet('DayOfWeek', 'StartsWithin')]
 	[string]$Mode = 'DayOfWeek',
 	# timespan for parameters
 	[Parameter(Position = 1)]
 	[timespan]$TimeSpan = [System.TimeSpan]::FromHours(1),
-	# current time
-	[Parameter(DontShow)]
-	[datetime]$Now = [System.DateTime]::Now
+	# switch to write response to a variable instead of to the pipeline
+	[Parameter(Position = 2)]
+	[switch]$AsVariable,
+	# name of variable when AsVariable is true
+	[Parameter(Position = 3)]
+	[name]$VariableName = 'TestCMServiceWindow',
+	# scope of variable when AsVariable is true
+	[Parameter(Position = 4)]
+	[name]$VariableScope = 'global'
 )
 
 

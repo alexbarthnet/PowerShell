@@ -30,7 +30,16 @@ Param(
 	[string]$Path,
 	# local host name
 	[Parameter(Position = 1)]
-	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant()
+	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
+	# switch to write response to a variable instead of to the pipeline
+	[Parameter(Position = 2)]
+	[switch]$AsVariable,
+	# name of variable when AsVariable is true
+	[Parameter(Position = 3)]
+	[name]$VariableName = 'TestPathForHostName',
+	# scope of variable when AsVariable is true
+	[Parameter(Position = 4)]
+	[name]$VariableScope = 'global'
 )
 
 Process {
