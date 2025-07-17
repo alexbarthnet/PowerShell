@@ -71,73 +71,83 @@ param(
 	[string]$VariableScope = 'global'
 )
 
-# define LDAP identifer properties
-$FullyQualifiedDnsHostName = $true
-$Connectionless = $false
+Process {
+	# define LDAP identifer properties
+	$FullyQualifiedDnsHostName = $true
+	$Connectionless = $false
 
-# create LDAP identifier
-try {
-	$LdapDirectoryIdentifier = [System.DirectoryServices.Protocols.LdapDirectoryIdentifier]::new($Server, $Port, $FullyQualifiedDnsHostName, $Connectionless)
-}
-catch {
-	Write-Warning -Message "could not create 'LdapDirectoryIdentifier' object: $($_.Exception.Message)"
-	throw $_
-}
+	# create LDAP identifier
+	try {
+		$LdapDirectoryIdentifier = [System.DirectoryServices.Protocols.LdapDirectoryIdentifier]::new($Server, $Port, $FullyQualifiedDnsHostName, $Connectionless)
+	}
+	catch {
+		Write-Warning -Message "could not create 'LdapDirectoryIdentifier' object: $($_.Exception.Message)"
+		throw $_
+	}
 
-# create LDAP connection with LDAP identifier
-try {
-	$LdapConnection = [System.DirectoryServices.Protocols.LdapConnection]::new($LdapDirectoryIdentifier)
-}
-catch {
-	Write-Warning -Message "could not create 'LdapConnection' object: $($_.Exception.Message)"
-	throw $_
-}
+	# create LDAP connection with LDAP identifier
+	try {
+		$LdapConnection = [System.DirectoryServices.Protocols.LdapConnection]::new($LdapDirectoryIdentifier)
+	}
+	catch {
+		Write-Warning -Message "could not create 'LdapConnection' object: $($_.Exception.Message)"
+		throw $_
+	}
 
-# update protocol settings for LDAP connection
-$LdapConnection.SessionOptions.ProtocolVersion = 3
-$LdapConnection.SessionOptions.ReferralChasing = [System.DirectoryServices.Protocols.ReferralChasingOptions]::None
+	# update protocol settings for LDAP connection
+	$LdapConnection.SessionOptions.ProtocolVersion = 3
+	$LdapConnection.SessionOptions.ReferralChasing = [System.DirectoryServices.Protocols.ReferralChasingOptions]::None
 
-# update security settings for LDAP connection 
-$LdapConnection.AuthType = [System.DirectoryServices.Protocols.AuthType]::Anonymous
-$LdapConnection.SessionOptions.SecureSocketLayer = $SSL
+	# update security settings for LDAP connection 
+	$LdapConnection.AuthType = [System.DirectoryServices.Protocols.AuthType]::Anonymous
+	$LdapConnection.SessionOptions.SecureSocketLayer = $SSL
 
-# create LDAP search request
-try {
-	$SearchRequest = [System.DirectoryServices.Protocols.SearchRequest]::new($SearchBase, $Filter, $SearchScope, $Attribute)
-}
-catch {
-	Write-Warning -Message "could not create 'SearchRequest' object: $($_.Exception.Message)"
-	throw $_
-}
+	# create LDAP search request
+	try {
+		$SearchRequest = [System.DirectoryServices.Protocols.SearchRequest]::new($SearchBase, $Filter, $SearchScope, $Attribute)
+	}
+	catch {
+		Write-Warning -Message "could not create 'SearchRequest' object: $($_.Exception.Message)"
+		throw $_
+	}
 
-# bind to LDAP server
-try {
-	$LdapConnection.Bind()
-}
-catch {
-	Write-Warning -Message "could not execute 'Bind' method on 'LdapConnection' object: $($_.Exception.Message)"
-	throw $_
-}
+	# bind to LDAP server
+	try {
+		$LdapConnection.Bind()
+	}
+	catch {
+		Write-Warning -Message "could not execute 'Bind' method on 'LdapConnection' object: $($_.Exception.Message)"
+		throw $_
+	}
 
-# submit LDAP query
-try {
-	$SearchResponse = [System.DirectoryServices.Protocols.SearchResponse]($LdapConnection.SendRequest($SearchRequest))
-}
-catch {
-	Write-Warning -Message "could not execute 'SendRequest' method on 'LdapConnection' object: $($_.Exception.Message)"
-	throw $_
-}
+	# submit LDAP query
+	try {
+		$SearchResponse = [System.DirectoryServices.Protocols.SearchResponse]($LdapConnection.SendRequest($SearchRequest))
+	}
+	catch {
+		Write-Warning -Message "could not execute 'SendRequest' method on 'LdapConnection' object: $($_.Exception.Message)"
+		throw $_
+	}
 
-# retrieve first entry
-$LdapDnsHostName = $SearchResponse.Entries[0].Attributes[$Attribute][0]
+	# retrieve first entry
+	$LdapDnsHostName = $SearchResponse.Entries[0].Attributes[$Attribute][0]
 
-# report verbose
-Write-Verbose "found dnsHostName: $LdapDnsHostName"
+	# report verbose
+	Write-Verbose "found dnsHostName: $LdapDnsHostName"
 
-# if ldap DNS host name matches local DNS host name...
-if ($LdapDnsHostName -eq $DnsHostName) {
-	return $true
-}
-else {
-	return $false
+	# if ldap DNS host name matches local DNS host name...
+	if ($LdapDnsHostName -eq $DnsHostName) {
+		$Value = $true
+	}
+	Else {
+		$Value = $false
+	}
+
+	# if AsVariable requested...
+	If ($AsVariable) {
+		New-Variable -Name $VariableName -Scope $VariableScope -Value $Value -Force
+	}
+	Else {
+		return $Value
+	}
 }
