@@ -8,7 +8,9 @@ param(
 	[Parameter(Position = 0, Mandatory)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Json,
 	[Parameter(Position = 1, Mandatory, ValueFromPipeline)]
-	[string[]]$VMName
+	[string[]]$VMName,
+	[Parameter(Position = 2)]
+	[switch]$RemoveOtherRecords
 )
 
 # if Json is not an absolute path...
@@ -249,7 +251,7 @@ catch {
 			}
 			Default {
 				# if no IP addresses retrieved from network adapters...
-				if ($IPAddresses.Count -eq 0) {
+				if ($IPAddresses.Count -eq 0 -or -not $RemoveOtherRecords) {
 					Write-Host "$Hostname,$Name - found existing '$RRType' DNS record for '$Name' name in '$ZoneName' zone on '$Server' server"
 					continue NextDnsServerResourceRecord
 				}

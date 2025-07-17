@@ -56,7 +56,7 @@ Param(
 	# OS Deployment - OSD method
 	[Parameter(Mandatory = $true, Position = 3, ParameterSetName = 'AddOSDeployment')]
 	[ValidateSet('ISO', 'SCCM', 'WDS')]
-	[string]$DeploymentMethod,
+	[string]$Method,
 	# VMHardDiskDrive - bytes for VHD size
 	[Parameter(Mandatory = $True, Position = 4, ParameterSetName = 'AddVMHardDiskDrive')]
 	[ValidateScript({ ($_ -ge 3MB) -and ($_ -le 64TB) })]
@@ -158,7 +158,7 @@ Param(
 	# OS Deployment - VHD - literal path to VHD file on hypervisor
 	[Parameter(Position = 4, ParameterSetName = 'AddOSDeployment')]
 	[string]$FilePath,
-	# OS Deployment - SCCM - server name for SCCM
+	# OS Deployment - SCCM - name of the SCCM server
 	[Parameter(Position = 5, ParameterSetName = 'AddOSDeployment')]
 	[string]$Server,
 	# OS Deployment - SCCM - string array of device collections
@@ -166,7 +166,7 @@ Param(
 	[string[]]$Collections,
 	# OS Deployment - SCCM - hashtable of device variable names and values
 	[Parameter(Position = 7, ParameterSetName = 'AddOSDeployment')]
-	[hashtable]$DeviceVariables,
+	[hashtable]$Variables,
 	# OS Deployment - VHD - literal path to unattend XML file on hypervisor
 	[Parameter(Position = 8, ParameterSetName = 'AddOSDeployment')]
 	[string]$UnattendFile,
@@ -690,9 +690,9 @@ Process {
 				# define keys between root key and nested key
 				JsonPathToKey   = 'OSDeployment'
 				# define key for finding existing key value pair
-				JsonNestedKey   = 'DeploymentMethod'
+				JsonNestedKey   = 'Method'
 				# define value for finding existing key value pair
-				JsonNestedValue = $DeploymentMethod
+				JsonNestedValue = $Method
 			}
 
 			# remove object from nested JSON key
@@ -935,9 +935,9 @@ Process {
 				# define keys between root key and nested key
 				JsonPathToKey    = 'OSDeployment'
 				# define key for finding existing key value pair
-				JsonNestedKey    = 'DeploymentMethod'
+				JsonNestedKey    = 'Method'
 				# define value for finding existing key value pair
-				JsonNestedValue  = $DeploymentMethod
+				JsonNestedValue  = $Method
 			}
 
 			# add object to nested JSON key

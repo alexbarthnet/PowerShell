@@ -1,4 +1,4 @@
-#requires -Modules ActiveDirectory
+#requires -Modules ActiveDirectory,DnsServer
 
 param(
 	[Parameter(DontShow)]

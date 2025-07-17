@@ -2667,8 +2667,9 @@ Begin {
 			# define VHD parameters
 			[Parameter(Mandatory = $true)]
 			[string]$Path,
-			[int32]$ControllerNumber = [int32]0,
-			[int32]$ControllerLocation,
+			[string]$ControllerType,
+			[uint16]$ControllerNumber,
+			[uint16]$ControllerLocation,
 			[switch]$PreserveDrives
 		)
 
@@ -2681,15 +2682,55 @@ Begin {
 			Throw $_
 		}
 
-		# if scsi controller with requested number does not exist on VM...
-		While ($null -eq (Get-VMScsiController -VM $VM -ControllerNumber $ControllerNumber)) {
-			# ...create scsi controller on VM
-			Try {
-				Write-Host ("$Hostname,$ComputerName,$Name - adding VMScsiController to VM")
-				Add-VMScsiController -VM $VM -ErrorAction Stop
+		# if controller type is empty...
+		If ([string]::IsNullOrEmpty($ControllerType)) {
+			# if generation 1 VM...
+			If ($VM.Generation -eq 1) {
+				$ControllerType = 'IDE'
 			}
-			Catch {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VMScsiController to VM")
+			Else {
+				$ControllerType = 'SCSI'
+			}
+		}
+
+		# switch on controller type
+		switch ($ControllerType) {
+			'IDE' {
+				# if VM generation is not 1...
+				If ($VM.Generation -ne 1) {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: found '$ControllerType' controller type requested on generation $($VM.Generation) VM")
+					Return
+				}
+				# if controller number not valid...
+				If ($ControllerNumber -notin 0..1) {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: found unsupported '$ControllerNumber' controller number for '$ControllerType' controller type")
+					Return
+				}
+				# if controller location not valid...
+				If ($PSBoundParameters.ContainsKey('ControllerLocation') -and $ControllerLocation -notin 0..1) {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: found unsupported '$ControllerLocation' controller location for '$ControllerType' controller type")
+					Return
+				}
+			}
+			'SCSI' {
+				# if controller number provided...
+				If ($PSBoundParameters.ContainsKey('ControllerNumber')) {
+					# if scsi controller with requested number does not exist on VM...
+					While ($null -eq (Get-VMScsiController -VM $VM -ControllerNumber $ControllerNumber)) {
+						# ...create scsi controller on VM
+						Try {
+							Write-Host ("$Hostname,$ComputerName,$Name - adding VMScsiController to VM")
+							Add-VMScsiController -VM $VM -ErrorAction Stop
+						}
+						Catch {
+							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VMScsiController to VM")
+							Throw $_
+						}
+					}
+				}
+			}
+			Default {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: found unsupported '$ControllerType' controller type")
 				Throw $_
 			}
 		}
@@ -2702,9 +2743,8 @@ Begin {
 		}
 
 		# define optional parameters for Get-VMHardDiskDrive
-		If ($PSBoundParameters['ControllerLocation']) {
-			$GetVMHardDiskDrive['ControllerLocation'] = $ControllerLocation
-		}
+		If ($PSBoundParameters['ControllerNumber']) { $GetVMHardDiskDrive['ControllerNumber'] = $ControllerNumber }
+		If ($PSBoundParameters['ControllerLocation']) { $GetVMHardDiskDrive['ControllerLocation'] = $ControllerLocation }
 
 		# get all drives with matching parameters
 		Try {
@@ -2770,6 +2810,7 @@ Begin {
 		$AddVMHardDiskDrive = @{
 			VM               = $VM
 			Path             = $Path
+			ControllerType   = $ControllerType
 			ControllerNumber = $ControllerNumber
 			ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
 		}
@@ -2823,8 +2864,7 @@ Begin {
 			# define OSD parameters
 			[Parameter(Mandatory)]
 			[string]$Path,
-			[uint16]$ControllerNumber = 0,
-			[uint16]$ControllerLocation = 0,
+			[string]$DestinationPath,
 			[string]$UnattendFile,
 			[hashtable]$ExpandStrings = @{}
 		)
@@ -2875,16 +2915,27 @@ Begin {
 			Return
 		}
 
-		# retrieve path to hard drive with provided controller number and location
-		$VhdPath = $VM.HardDrives.Where({ $_.ControllerNumber -eq $ControllerNumber -and $_.ControllerLocation -eq $ControllerLocation }).Path
-
-		# evaluate path to hard drive with provided controller number and location
-		If ([System.String]::IsNullOrEmpty($VhdPath)) {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD copy, could not locate VHD on controller $ControllerNumber at LUN $ControllerLocation")
-			Return
+		# if DestinationPath provided...
+		If ($script:PSBoundParameters.ContainsKey('DestinationPath')) {
+			# if hard drives do not contain VHD with provided destination path...
+			If (!$VM.HardDrives.Where({ $_.Path -eq $DestinationPath })) {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD copy, could not locate target VHD on VM with path: $DestinationPath")
+				Return
+			}
 		}
+		# if DestinationPath not provided...
 		Else {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...found target VHD: $VhdPath")
+			# select path of first hard drive by controller number then controller location
+			$DestinationPath = $VM.HardDrives | Sort-Object -Property 'ControllerNumber', 'ControllerLocation' | Select-Object -First 1 -ExpandProperty 'Path'
+
+			# if destination path is null or empty...
+			If ([System.String]::IsNullOrEmpty($DestinationPath)) {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD copy, could not locate the first VHD on VM")
+				Return
+			}
+			Else {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...found target VHD: $DestinationPath")
+			}
 		}
 
 		# update argument list for Get-Item
@@ -2902,19 +2953,19 @@ Begin {
 			}
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve first VHD in boot order: '$VhdPath'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve target VHD: '$DestinationPath'")
 			Throw $_
 		}
 
 		# evaluate first hard drive
 		If ($GetItem.Length -gt 4MB) {
-			Write-Warning ("$Hostname,$ComputerName,$Name - found VHD larger than expected: '$(Format-Bytes -Size $GetItem.Length)'")
+			Write-Warning ("$Hostname,$ComputerName,$Name - found target VHD larger than expected: '$(Format-Bytes -Size $GetItem.Length)'")
 			Write-Warning ("$Hostname,$ComputerName,$Name - replace VHD?") -WarningAction Inquire
 		}
 
 		# update argument list for Copy-Item
 		$InvokeCommand['ArgumentList']['Path'] = $Path
-		$InvokeCommand['ArgumentList']['Destination'] = $VhdPath
+		$InvokeCommand['ArgumentList']['Destination'] = $DestinationPath
 
 		# copy deployment path to VHD
 		Try {
@@ -2935,7 +2986,7 @@ Begin {
 		}
 
 		# update argument list for Get-ACL
-		$InvokeCommand['ArgumentList']['Path'] = $VhdPath
+		$InvokeCommand['ArgumentList']['Path'] = $DestinationPath
 		$InvokeCommand['ArgumentList']['VMId'] = $VM.Id
 		$InvokeCommand['ArgumentList'].Remove('Destination')
 
@@ -2970,7 +3021,7 @@ Begin {
 			}
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not update ACL for VHD: '$Destination'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not update ACL for VHD: '$DestinationPath'")
 			Throw $_
 		}
 
@@ -3006,7 +3057,7 @@ Begin {
 		}
 
 		# update argument list for Mount-VHD
-		$InvokeCommand['ArgumentList']['Path'] = $VhdPath
+		$InvokeCommand['ArgumentList']['Path'] = $DestinationPath
 
 		# mount VHD
 		Try {
@@ -3161,7 +3212,7 @@ Begin {
 		}
 
 		# update argument list for Dismount-VHD
-		$InvokeCommand['ArgumentList']['Path'] = $VhdPath
+		$InvokeCommand['ArgumentList']['Path'] = $DestinationPath
 
 		# dismount VHD
 		Try {
@@ -3673,12 +3724,14 @@ Process {
 					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
 				}
 
-				# create VHD
+				# define parameters
 				$NewVHDFromParams = @{
 					ComputerName = $ComputerName
 					Path         = $VMHardDiskDrivePath
 					SizeBytes    = $VMHardDiskDrive.SizeBytes
 				}
+
+				# create VHD
 				Try {
 					New-VHDFromParams @NewVHDFromParams
 				}
@@ -3702,14 +3755,17 @@ Process {
 					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
 				}
 
-				# add VHD to VM
+				# define parameters
 				$AddVHDFromParams = @{
 					ComputerName       = $ComputerName
 					VM                 = $VM
 					Path               = $VMHardDiskDrivePath
+					ControllerType     = $VMHardDiskDrive.ControllerType
 					ControllerNumber   = $VMHardDiskDrive.ControllerNumber
 					ControllerLocation = $VMHardDiskDrive.ControllerLocation
 				}
+
+				# add VHD to VM
 				Try {
 					Add-VHDFromParams @AddVHDFromParams
 				}
@@ -3733,13 +3789,16 @@ Process {
 					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
 				}
 
-				# add VHD to VM
+				# define parameters
 				$AddVHDFromParams = @{
 					ComputerName     = $ComputerName
 					VM               = $VM
 					Path             = $VMHardDiskDrivePath
+					ControllerType   = $VMHardDiskDrive.ControllerType
 					ControllerNumber = $VMHardDiskDrive.ControllerNumber
 				}
+
+				# add VHD to VM
 				Try {
 					Add-VHDFromParams @AddVHDFromParams
 				}
@@ -3763,13 +3822,16 @@ Process {
 					$VMHardDiskDrivePath = $VMHardDiskDrive.Path
 				}
 
-				# add VHD to VM
+				# define parameters
 				$AddVHDFromParams = @{
 					ComputerName       = $ComputerName
 					VM                 = $VM
 					Path               = $VMHardDiskDrivePath
+					ControllerType     = $VMHardDiskDrive.ControllerType
 					ControllerLocation = $VMHardDiskDrive.ControllerLocation
 				}
+
+				# add VHD to VM
 				Try {
 					Add-VHDFromParams @AddVHDFromParams
 				}
@@ -3795,10 +3857,13 @@ Process {
 
 				# add VHD to VM
 				$AddVHDFromParams = @{
-					ComputerName = $ComputerName
-					VM           = $VM
-					Path         = $VMHardDiskDrivePath
+					ComputerName   = $ComputerName
+					VM             = $VM
+					Path           = $VMHardDiskDrivePath
+					ControllerType = $VMHardDiskDrive.ControllerType
 				}
+
+				# add VHD to VM
 				Try {
 					Add-VHDFromParams @AddVHDFromParams
 				}
@@ -3810,7 +3875,7 @@ Process {
 
 		# if VM has network adapters...
 		If ($null -ne $VM -and $null -ne $JsonData.$Name.VMNetworkAdapters) {
-			# create VM network adapter
+			# loop through VM network adapter
 			ForEach ($VMNetworkAdapterEntry in $JsonData.$Name.VMNetworkAdapters) {
 				# define required parameters for VMNetworkAdapter
 				$AddVMNetworkAdapterToVM = @{
@@ -3916,110 +3981,116 @@ Process {
 
 		# if VM has OS deployment...
 		If ($null -ne $VM -and $null -ne $JsonData.$Name.OSDeployment) {
-			# ...retrieve OS deployment method
-			$DeploymentMethod = $JsonData.$Name.OSDeployment.DeploymentMethod.ToUpper()
+			# loop through VM network adapter
+			ForEach ($OSDeployment in $JsonData.$Name.OSDeployment) {
+				# ...retrieve OS deployment method
+				$Method = $OSDeployment.Method.ToUpper()
 
-			# ...configure OS deployment
-			If ([string]::IsNullOrEmpty($DeploymentMethod)) {
-				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, no provisioning method provided")
-			}
-			ElseIf ($SkipProvisioning) {
-				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, SkipProvisioning set")
-			}
-			Else {
-				switch ($DeploymentMethod) {
-					'ISO' {
-						# define parameters for Add-IsoToVM
-						$AddIsoToVM = @{
-							VM   = $VM
-							Path = $JsonData.$Name.OSDeployment.FilePath
-						}
-
-						# mount ISO file on VM
-						Try {
-							Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via ISO file")
-							Add-IsoToVM @AddIsoToVM
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add ISO to VM")
-							Throw $_
-						}
-					}
-					'SCCM' {
-						# if device variables provided...
-						If ($JsonData.$Name.OSDeployment.DeviceVariables) {
-							# convert property from JSON to hashtable
-							try {
-								$DeviceVariablesHashtable = ConvertTo-Collection -InputObject $JsonData.$Name.OSDeployment.DeviceVariables
+				# ...configure OS deployment
+				If ([string]::IsNullOrEmpty($Method)) {
+					Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, no provisioning method provided")
+				}
+				ElseIf ($SkipProvisioning) {
+					Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, SkipProvisioning set")
+				}
+				Else {
+					switch ($Method) {
+						'ISO' {
+							# define parameters for Add-IsoToVM
+							$AddIsoToVM = @{
+								VM   = $VM
+								Path = $OSDeployment.FilePath
 							}
-							catch {
-								Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create hashtable from DeviceVariables in OS Deployment")
+
+							# mount ISO file on VM
+							Try {
+								Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via ISO file")
+								Add-IsoToVM @AddIsoToVM
+							}
+							Catch {
+								Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add ISO to VM")
 								Throw $_
 							}
 						}
-						Else {
-							# create empty hashtable
-							$DeviceVariablesHashtable = @{}
-						}
-
-						# define parameters for Add-DeviceToSccm
-						$AddDeviceToSccm = @{
-							VM              = $VM
-							Server          = $JsonData.$Name.OSDeployment.Server
-							Collections     = $JsonData.$Name.OSDeployment.Collections
-							DeviceVariables = $DeviceVariablesHashtable
-						}
-
-						# add VM to SCCM
-						Try {
-							Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via PXE boot and SCCM")
-							Add-DeviceToSccm @AddDeviceToSccm
-						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VM to SCCM")
-							Throw $_
-						}
-					}
-					'VHD' {
-						# if device variables provided...
-						If ($JsonData.$Name.OSDeployment.ExpandStrings) {
-							# convert property from JSON to hashtable
-							try {
-								$ExpandStringsHashtable = ConvertTo-Collection -InputObject $JsonData.$Name.OSDeployment.ExpandStrings
+						'SCCM' {
+							# if device variables provided...
+							If ($OSDeployment.DeviceVariables) {
+								# convert property from JSON to hashtable
+								try {
+									$DeviceVariablesHashtable = ConvertTo-Collection -InputObject $OSDeployment.DeviceVariables
+								}
+								catch {
+									Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create hashtable from DeviceVariables in OS Deployment")
+									Throw $_
+								}
 							}
-							catch {
-								Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create hashtable from ExpandStrings in OS Deployment")
+							Else {
+								# create empty hashtable
+								$DeviceVariablesHashtable = @{}
+							}
+
+							# define parameters for Add-DeviceToSccm
+							$AddDeviceToSccm = @{
+								VM              = $VM
+								Server          = $OSDeployment.Server
+								Collections     = $OSDeployment.Collections
+								DeviceVariables = $DeviceVariablesHashtable
+							}
+
+							# add VM to SCCM
+							Try {
+								Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via PXE boot and SCCM")
+								Add-DeviceToSccm @AddDeviceToSccm
+							}
+							Catch {
+								Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VM to SCCM")
 								Throw $_
 							}
 						}
-						Else {
-							# create empty hashtable
-							$ExpandStringsHashtable = @{}
-						}
+						'VHD' {
+							# if device variables provided...
+							If ($OSDeployment.ExpandStrings) {
+								# convert property from JSON to hashtable
+								try {
+									$ExpandStringsHashtable = ConvertTo-Collection -InputObject $OSDeployment.ExpandStrings
+								}
+								catch {
+									Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create hashtable from ExpandStrings in OS Deployment")
+									Throw $_
+								}
+							}
+							Else {
+								# create empty hashtable
+								$ExpandStringsHashtable = @{}
+							}
 
-						# define parameters for Copy-VHDFromParams
-						$CopyVHDFromParams = @{
-							VM            = $VM
-							Path          = $JsonData.$Name.OSDeployment.FilePath
-							UnattendFile  = $JsonData.$Name.OSDeployment.UnattendFile
-							ExpandStrings = $ExpandStringsHashtable
-						}
+							# define parameters for Copy-VHDFromParams
+							$CopyVHDFromParams = @{
+								VM              = $VM
+								Path            = $OSDeployment.FilePath
+								Destinationpath = $OSDeployment.Destinationpath
+								UnattendFile    = $OSDeployment.UnattendFile
+								ExpandStrings   = $ExpandStringsHashtable
+							}
 
-						# mount ISO file on VM
-						Try {
-							Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via VHD file")
-							Copy-VHDFromParams @CopyVHDFromParams
+							# mount ISO file on VM
+							Try {
+								Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via VHD file")
+								Copy-VHDFromParams @CopyVHDFromParams
+							}
+							Catch {
+								Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VHD to VM")
+								Throw $_
+							}
 						}
-						Catch {
-							Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VHD to VM")
-							Throw $_
+						default {
+							Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, unknown provisioning method provided: '$Method'")
 						}
-					}
-					default {
-						Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, unknown provisioning method provided: '$DeploymentMethod'")
 					}
 				}
+
 			}
+
 		}
 
 		# if VM is on a cluster...

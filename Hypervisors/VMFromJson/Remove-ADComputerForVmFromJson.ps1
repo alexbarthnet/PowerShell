@@ -114,11 +114,11 @@ catch {
 		continue NextVMName
 	}
 	catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
-		Write-Warning -Message "could not locate computer with '$Name$' name on '$Server' server for '$DomainName' domain"
+		Write-Warning -Message "could not locate computer with '$Name' name on '$Server' server for '$DomainName' domain"
 		continue NextVMName
 	}
 	catch {
-		Write-Warning -Message "could not retrieve computer with '$Name$' name on '$Server' server for '$DomainName' domain: $($_.Exception.Message)"
+		Write-Warning -Message "could not retrieve computer with '$Name' name on '$Server' server for '$DomainName' domain: $($_.Exception.Message)"
 		continue NextVMName
 	}
 
@@ -143,7 +143,7 @@ catch {
 		Remove-ADObject @RemoveADObject
 	}
 	catch {
-		Write-Warning -Message "could not remove computer object with '$Name$' name on '$Server' server for '$DomainName' domain"
+		Write-Warning -Message "could not remove computer object with '$Name' name on '$Server' server for '$DomainName' domain"
 		continue NextVMName
 	}
 

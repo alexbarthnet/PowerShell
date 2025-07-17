@@ -8,7 +8,9 @@ param(
 	[Parameter(Position = 0, Mandatory)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Json,
 	[Parameter(Position = 1, Mandatory, ValueFromPipeline)]
-	[string[]]$VMName
+	[string[]]$VMName,
+	[Parameter(Position = 2)]
+	[switch]$Reset
 )
 
 # if Json is not an absolute path...
@@ -147,7 +149,7 @@ catch {
 		Write-Host ("$Hostname,$Name - ...computer object created")
 	}
 	catch {
-		Write-Warning -Message "could not retrieve computer with '$Name$' name on '$Server' server for '$DomainName' domain: $($_.Exception.Message)"
+		Write-Warning -Message "could not retrieve computer with '$Name' name on '$Server' server for '$DomainName' domain: $($_.Exception.Message)"
 		continue NextVMName
 	}
 
