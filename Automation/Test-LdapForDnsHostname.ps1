@@ -65,10 +65,10 @@ param(
 	[switch]$AsVariable,
 	# name of variable when AsVariable is true
 	[Parameter(Position = 5)]
-	[name]$VariableName = 'TestLdapForDnsHostname',
+	[string]$VariableName = 'TestLdapForDnsHostname',
 	# scope of variable when AsVariable is true
 	[Parameter(Position = 6)]
-	[name]$VariableScope = 'global'
+	[string]$VariableScope = 'global'
 )
 
 # define LDAP identifer properties

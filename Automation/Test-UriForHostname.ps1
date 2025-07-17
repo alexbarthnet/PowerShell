@@ -36,10 +36,10 @@ Param(
 	[switch]$AsVariable,
 	# name of variable when AsVariable is true
 	[Parameter(Position = 3)]
-	[name]$VariableName = 'TestUriForHostName',
+	[string]$VariableName = 'TestUriForHostName',
 	# scope of variable when AsVariable is true
 	[Parameter(Position = 4)]
-	[name]$VariableScope = 'global'
+	[string]$VariableScope = 'global'
 )
 
 Begin {
