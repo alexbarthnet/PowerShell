@@ -2593,7 +2593,7 @@ Process {
 				# inquire before removing existing entry
 				Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction 'Inquire'
 				# remove existing entry with same primary key(s)
-				$JsonData = [array]($JsonData.Where({ $_.TaskName -ne $TaskName -and $_.TaskPath -ne $TaskPath }))
+				$JsonData = [array]($JsonData.Where({ !($_.TaskName -eq 'Remove-OldFiles' -and $_.TaskPath -eq '\AAD\') }))
 			}
 
 			# create ordered dictionary for custom object
