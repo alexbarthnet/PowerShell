@@ -2524,7 +2524,7 @@ Process {
 		# remove entry from configuration file
 		$Remove {
 			# remove existing entry by primary key(s)...
-			$JsonData = [array]($JsonData.Where({ $_.TaskName -ne $TaskName -and $_.TaskPath -ne $TaskPath }))
+			$JsonData = [array]($JsonData.Where({ !($_.TaskName -eq 'Remove-OldFiles' -and $_.TaskPath -eq '\AAD\') }))
 
 			# if JSON data empty...
 			If ($JsonData.Count -eq 0) {
