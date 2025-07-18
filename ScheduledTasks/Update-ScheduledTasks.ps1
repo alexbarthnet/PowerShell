@@ -2524,7 +2524,7 @@ Process {
 		# remove entry from configuration file
 		$Remove {
 			# remove existing entry by primary key(s)...
-			$JsonData = [array]($JsonData.Where({ !($_.TaskName -eq 'Remove-OldFiles' -and $_.TaskPath -eq '\AAD\') }))
+			$JsonData = [array]($JsonData.Where({ !($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath ) }))
 
 			# if JSON data empty...
 			If ($JsonData.Count -eq 0) {
@@ -2593,7 +2593,7 @@ Process {
 				# inquire before removing existing entry
 				Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction 'Inquire'
 				# remove existing entry with same primary key(s)
-				$JsonData = [array]($JsonData.Where({ !($_.TaskName -eq 'Remove-OldFiles' -and $_.TaskPath -eq '\AAD\') }))
+				$JsonData = [array]($JsonData.Where({ !($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath ) }))
 			}
 
 			# create ordered dictionary for custom object
