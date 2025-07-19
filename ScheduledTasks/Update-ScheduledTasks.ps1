@@ -2385,6 +2385,10 @@ Process {
 						Write-Warning -Message "required value (LogonType) not found in configuration file: $Json"
 						Continue NextJsonEntry
 					}
+					($null -ne $JsonEntry.Disable -and -not [boolean]::TryParse($JsonEntry.Disable, [ref][boolean]::TrueString)) {
+						Write-Warning -Message 'optional value (Disable) found in configuration file but cannot be parsed into a boolean object'
+						Continue NextJsonEntry
+					}
 					($null -ne $JsonEntry.TriggerAt -and -not [datetime]::TryParse($JsonEntry.TriggerAt, [ref][datetime]::Now)) {
 						Write-Warning -Message 'optional value (TriggerAt) found in configuration file but cannot be parsed into a datetime object'
 						Continue NextJsonEntry
@@ -2444,6 +2448,12 @@ Process {
 					Argument  = [string]$JsonEntry.Argument
 					UserId    = [string]$JsonEntry.UserId
 					LogonType = [string]$JsonEntry.LogonType
+				}
+
+				# if Disable defined in JSON...
+				If ($null -ne $JsonEntry.Disable) {
+					# add Disable to hashtable
+					$UpdateScheduledTaskFromJson['Disable'] = [boolean]$Disable
 				}
 
 				# if RunLevel defined in JSON...
