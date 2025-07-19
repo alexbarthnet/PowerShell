@@ -80,6 +80,9 @@ The logon type for the scheduled task. The accepted values are 'ServiceAccount' 
 .PARAMETER RunLevel
 The run level for the scheduled task. The accepted values are 'Highest' and 'Limited'. The default value is 'Highest'.
 
+.PARAMETER Disable
+Switch parameter to disable the scheduled task. The scheduled task will be enabled if this parameter is not present.
+
 .PARAMETER ReportUndefinedTasks
 Switch parameter to report scheduled tasks that are not defined in the JSON file and located in any of the task paths defined on the entries in the JSON configuration file.
 
@@ -193,6 +196,11 @@ Param(
 	[Parameter(ParameterSetName = 'Register')]
 	[ValidateSet('Highest', 'Limited')]
 	[string]$RunLevel = 'Highest',
+	# switch to disable scheduled
+	[Parameter(ParameterSetName = 'Add')]
+	[Parameter(ParameterSetName = 'AddSelf')]
+	[Parameter(ParameterSetName = 'Register')]
+	[switch]$Disable,
 	# switch to report undefined tasks during run
 	[Parameter(ParameterSetName = 'Default')]
 	[Parameter(ParameterSetName = 'AddSelf')]
@@ -348,6 +356,7 @@ Begin {
 			[timespan]$RandomDelay,
 			[timespan]$RepetitionInterval,
 			# settings
+			[boolean]$Disable,
 			[timespan]$ExecutionTimeLimit,
 			# principal
 			[string]$UserId,
@@ -380,6 +389,11 @@ Begin {
 		$ScheduledTaskSettingsSetParameters = @{
 			AllowStartIfOnBatteries    = $true
 			DontStopIfGoingOnBatteries = $true
+		}
+
+		# update parameters for New-ScheduledTaskSettingsSet with Disable if provided
+		If ($PSBoundParameters.ContainsKey('Disable')) {
+			$ScheduledTaskSettingsSetParameters['Disable'] = $Disable
 		}
 
 		# update parameters for New-ScheduledTaskSettingsSet with ExecutionTimeLimit if provided
@@ -2260,9 +2274,15 @@ Process {
 				LogonType = [string]$LogonType
 			}
 
+			# if Disable provided...
+			If ($script:Disable) {
+				# add Disable to parameters
+				$JsonParameters['Disable'] = [boolean]$Disable
+			}
+
 			# if RunLevel provided...
 			If ($script:RunLevel) {
-				# add RunLevel as 
+				# add RunLevel to parameters
 				$JsonParameters['RunLevel'] = [string]$RunLevel
 			}
 
