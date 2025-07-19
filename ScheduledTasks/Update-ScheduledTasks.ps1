@@ -2453,13 +2453,13 @@ Process {
 				# if Disable defined in JSON...
 				If ($null -ne $JsonEntry.Disable) {
 					# add Disable to hashtable
-					$UpdateScheduledTaskFromJson['Disable'] = [boolean]$Disable
+					$UpdateScheduledTaskFromJson['Disable'] = [boolean]($JsonEntry.Disable)
 				}
 
 				# if RunLevel defined in JSON...
 				If ($null -ne $JsonEntry.RunLevel) {
 					# add RunLevel to hashtable
-					$UpdateScheduledTaskFromJson['RunLevel'] = [string]$RunLevel
+					$UpdateScheduledTaskFromJson['RunLevel'] = [string]($JsonEntry.RunLevel)
 				}
 
 				# if TriggerAt defined in JSON...
