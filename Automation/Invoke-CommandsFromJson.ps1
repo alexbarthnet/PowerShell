@@ -141,10 +141,10 @@ Param(
 	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
 	[string]$OutputName,
 	# script parameter - order of command
-	[Parameter(Mandatory = $True, ParameterSetName = 'RemoveByOrder')]
-	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
-	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')]
-	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
+	[Parameter(Mandatory = $True, ParameterSetName = 'RemoveByOrder')][ValidateRange({ 1, [uint16]::MaxValue })]
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')][ValidateRange({ 1, [uint16]::MaxValue })]
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')][ValidateRange({ 1, [uint16]::MaxValue })]
+	[Parameter(Mandatory = $False, ParameterSetName = 'Add')][ValidateRange({ 1, [uint16]::MaxValue })]
 	[uint16]$Order = 1,
 	# script parameter - disable command
 	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
@@ -1702,17 +1702,9 @@ Process {
 			# if order parameter not provided...
 			If (!$PSBoundParameters.ContainsKey('Order')) {
 				# while order is not assigned...
-				While ($Order -lt [uint16]::MaxValue -and -not $OrderAssigned) {
-					# if JSON contains entry with current Order...
-					If ($JsonData.Where({ $_.Order -eq $Order })) {
-						# increment order
-						$Order++
-					}
-					# if JSON does not contains entry with current Order...
-					Else {
-						# declare order assigned
-						$OrderAssigned = $true
-					}
+				While ($Order -in $JsonData.Order -and $Order -lt [uint16]::MaxValue) {
+					# increment order
+					$Order++
 				}
 			}
 
