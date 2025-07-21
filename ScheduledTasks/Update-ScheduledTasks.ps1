@@ -120,7 +120,7 @@ None. The script reports the actions taken and does not provide any actionable o
 .\Update-ScheduledTasks.ps1 -Json C:\Content\config.json
 #>
 
-[CmdletBinding(DefaultParameterSetName = 'Default')]
+[CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Default')]
 Param(
 	# path to JSON configuration file
 	[Parameter(Mandatory = $True, Position = 0)]
@@ -1979,6 +1979,15 @@ Begin {
 			Throw $_
 		}
 	}
+
+	# if confirm provided and set to false...
+	If ($PSBoundParameters.ContainsKey('Confirm') -and $script:Confirm -eq $false) {
+		$WarningActionFromConfirm = [System.Management.Automation.ActionPreference]::Continue
+	}
+	# if confirm not provided or set to true...
+	Else {
+		$WarningActionFromConfirm = [System.Management.Automation.ActionPreference]::Inquire
+	}
 }
 
 Process {
@@ -2259,7 +2268,8 @@ Process {
 			# if existing entry has same primary key(s)...
 			If ($JsonData.Where({ $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath })) {
 				# inquire before removing existing entry
-				Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction 'Inquire'
+				Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json'" -WarningAction Continue
+				Write-Warning -Message "Any previous configuration for this entry will **NOT** be preserved" -WarningAction $WarningActionFromConfirm
 				# remove existing entry with same primary key(s)
 				$JsonData = [array]($JsonData.Where({ !($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath ) }))
 			}

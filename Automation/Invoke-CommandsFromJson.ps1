@@ -88,7 +88,7 @@ None. The script reports the actions taken and does not provide any actionable o
 
 #>
 
-[CmdletBinding(DefaultParameterSetName = 'Default')]
+[CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Default')]
 Param(
 	# path to JSON configuration file
 	[Parameter(Mandatory = $True, Position = 0)]
@@ -1537,6 +1537,15 @@ Begin {
 			Throw $_
 		}
 	}
+
+	# if confirm provided and set to false...
+	If ($PSBoundParameters.ContainsKey('Confirm') -and $script:Confirm -eq $false) {
+		$WarningActionFromConfirm = [System.Management.Automation.ActionPreference]::Continue
+	}
+	# if confirm not provided or set to true...
+	Else {
+		$WarningActionFromConfirm = [System.Management.Automation.ActionPreference]::Inquire
+	}
 }
 
 Process {
@@ -1624,8 +1633,9 @@ Process {
 				$JsonDataToRemove = [array]($JsonData.Where({ $_.Command -eq $Command }))
 				# if JSON data empty...
 				If ($JsonDataToRemove.Count -gt 1) {
-					# warn and inquire
-					Write-Warning -Message "Found multiple entries with $ParametersForReporting in configuration file: $Json`nAll matching entries will be removed" -WarningAction 'Inquire'
+					# inquire before removing multiple entries
+					Write-Warning -Message "Found multiple entries with $ParametersForReporting in configuration file: $Json" -WarningAction Continue
+					Write-Warning -Message "All matching entries will be removed" -WarningAction $WarningActionFromConfirm
 				}
 				# remove existing entry by primary key(s)...
 				$JsonData = [array]($JsonData.Where({ $_.Command -ne $Command }))
@@ -1639,8 +1649,9 @@ Process {
 				$JsonDataToRemove = [array]($JsonData.Where({ $_.Order -eq $Order }))
 				# if JSON data empty...
 				If ($JsonDataToRemove.Count -gt 1) {
-					# warn and inquire
-					Write-Warning -Message "Found multiple entries with $ParametersForReporting in configuration file: $Json`nAll matching entries will be removed" -WarningAction 'Inquire'
+					# inquire before removing multiple entries
+					Write-Warning -Message "Found multiple entries with $ParametersForReporting in configuration file: $Json" -WarningAction Continue
+					Write-Warning -Message "All matching entries will be removed" -WarningAction $WarningActionFromConfirm
 				}
 				# remove existing entry by primary key(s)...
 				$JsonData = [array]($JsonData.Where({ $_.Order -ne $Order }))
@@ -1700,7 +1711,8 @@ Process {
 			# if existing entry has same primary key(s)...
 			If ($JsonData.Where({ $_.Order -eq $Order })) {
 				# inquire before removing existing entry
-				Write-Warning "Will overwrite existing entry for '$Command' with order '$Order' in configuration file: '$Json' `nAny previous configuration for this entry will **NOT** be preserved" -WarningAction 'Inquire'
+				Write-Warning -Message "Will overwrite existing entry for '$Command' with order '$Order' in configuration file: $Json" -WarningAction Continue
+				Write-Warning -Message 'Any previous configuration for this entry will **NOT** be preserved' -WarningAction $WarningActionFromConfirm
 				# remove existing entry with same primary key(s)
 				$JsonData = [array]($JsonData.Where({ $_.Order -ne $Order }))
 			}
