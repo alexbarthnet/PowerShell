@@ -178,20 +178,17 @@ Function Invoke-LdapQuery {
 		# update LDAP search request
 		$SearchRequest.SizeLimit = $SizeLimit
 
-		# if SearchFilter is not empty...
-		If (![string]::IsNullOrEmpty($SearchFilter)) {
-			# define LDAP paging controls
-			$PageResultRequestControl = [System.DirectoryServices.Protocols.PageResultRequestControl]::new($PageSize)
-		
-			# define LDAP scope controls; instructs server not to generate LDAP referrals
-			$DomainScopeControl = [System.DirectoryServices.Protocols.DomainScopeControl]::new()
+		# define LDAP paging controls
+		$PageResultRequestControl = [System.DirectoryServices.Protocols.PageResultRequestControl]::new($PageSize)
 
-			# add LDAP paging controls to LDAP search request
-			$null = $SearchRequest.Controls.Add($PageResultRequestControl)
+		# define LDAP scope controls; instructs server not to generate LDAP referrals
+		$DomainScopeControl = [System.DirectoryServices.Protocols.DomainScopeControl]::new()
 
-			# add LDAP scope controls to LDAP search request
-			$null = $SearchRequest.Controls.Add($DomainScopeControl)
-		}
+		# add LDAP paging controls to LDAP search request
+		$null = $SearchRequest.Controls.Add($PageResultRequestControl)
+
+		# add LDAP scope controls to LDAP search request
+		$null = $SearchRequest.Controls.Add($DomainScopeControl)
 
 		# create scoped dictionary for ldap queries
 		If ($script:LdapQueries -isnot [System.Collections.Generic.Dictionary[guid, object]]) {
