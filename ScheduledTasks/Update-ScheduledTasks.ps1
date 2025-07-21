@@ -2297,25 +2297,25 @@ Process {
 			}
 
 			# if TriggerAt provided and NoTrigger not set...
-			If ($script:TriggerAt -and -not $script:NoTrigger) {
+			If ($PSBoundParameters.ContainsKey('TriggerAt') -and -not $script:NoTrigger) {
 				# add TriggerAt as datetime in IS0 8601 extended format
 				$JsonParameters['TriggerAt'] = $TriggerAt.ToString('s')
 			}
 
 			# if RandomDelay provided and NoTrigger not set...
-			If ($script:RandomDelay -and -not $script:NoTrigger) {
+			If ($PSBoundParameters.ContainsKey('RandomDelay') -and -not $script:NoTrigger) {
 				# add RandomDelay as timespan in 'constant' format
 				$JsonParameters['RandomDelay'] = $RandomDelay.ToString('c')
 			}
 
 			# if RepetitionInterval provided and NoTrigger not set...
-			If ($script:RepetitionInterval -and -not $script:NoTrigger) {
+			If ($PSBoundParameters.ContainsKey('RepetitionInterval') -and -not $script:NoTrigger) {
 				# add RepetitionInterval as timespan in 'constant' format
 				$JsonParameters['RepetitionInterval'] = $RepetitionInterval.ToString('c')
 			}
 
 			# if ExecutionTimeLimit provided...
-			If ($script:ExecutionTimeLimit) {
+			If ($PSBoundParameters.ContainsKey('ExecutionTimeLimit')) {
 				# add ExecutionTimeLimit as timespan in 'constant' format
 				$JsonParameters['ExecutionTimeLimit'] = $ExecutionTimeLimit.ToString('c')
 			}

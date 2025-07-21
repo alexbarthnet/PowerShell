@@ -1732,7 +1732,7 @@ Process {
 			}
 
 			# if Arguments provided...
-			If ($script:Arguments) {
+			If ($PSBoundParameters.ContainsKey('Arguments')) {
 				# process each key in Arguments
 				ForEach ($Key in $Arguments.Keys) {
 					# if key cannot be cast as a Character...
@@ -1746,31 +1746,31 @@ Process {
 			}
 
 			# if Parameters provided...
-			If ($script:Parameters) {
+			If ($PSBoundParameters.ContainsKey('Parameters')) {
 				# add Parameters to dictionary
 				$JsonParameters['Parameters'] = [hashtable]$Parameters
 			}
 
 			# if Expression provided...
-			If ($script:Expression) {
+			If ($PSBoundParameters.ContainsKey('Expression')) {
 				# add Expression to dictionary
 				$JsonParameters['Expression'] = [string]$Expression
 			}
 
 			# if Modules provided...
-			If ($script:Modules) {
+			If ($PSBoundParameters.ContainsKey('Modules')) {
 				# add Modules to dictionary
 				$JsonParameters['Modules'] = [string[]]$Modules
 			}
 
 			# if InputName provided...
-			If ($script:InputName) {
+			If ($PSBoundParameters.ContainsKey('InputName')) {
 				# add InputName to dictionary
 				$JsonParameters['InputName'] = [string[]]$InputName
 			}
 
 			# if OutputName provided...
-			If ($script:OutputName) {
+			If ($PSBoundParameters.ContainsKey('OutputName')) {
 				# add OutputName to dictionary
 				$JsonParameters['OutputName'] = [string]$OutputName
 			}
