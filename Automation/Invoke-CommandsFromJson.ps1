@@ -1547,7 +1547,7 @@ Begin {
 	}
 
 	# if confirm provided and set to false...
-	If ($PSBoundParameters.ContainsKey('Confirm') -and $script:Confirm -eq $false) {
+	If ($PSBoundParameters.ContainsKey('Confirm') -and $PSBoundParameters['Confirm'] -eq $false) {
 		$WarningActionFromConfirm = [System.Management.Automation.ActionPreference]::Continue
 	}
 	# if confirm not provided or set to true...
