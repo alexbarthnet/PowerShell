@@ -44,6 +44,9 @@ The name of the script-wide variable where the output of the command should be s
 .PARAMETER Order
 An unsigned 16-bit integer representing the order that the command will be run when multiple commands are defined in a JSON file. The first command is assigned a value of 1 and each additional command is assigned an incrementing value. Providing a value that is already assigned will prompt the user to overwrite the command assigned the provided value.
 
+.PARAMETER Disable
+Switch parameter to skip the current command. The command will be run if this parameter is not present or set to false.
+
 .PARAMETER SkipTranscript
 Switch parameter to skip creating a transcript file for this script and any commands run by this script.
 
@@ -143,6 +146,11 @@ Param(
 	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
 	[uint16]$Order = 1,
+	# script parameter - disable command
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')]
+	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
+	[switch]$Disable,
 	# switch parameter to skip transcript logging
 	[switch]$SkipTranscript,
 	# switch parameter to skip text output logging
@@ -1767,6 +1775,9 @@ Process {
 				$JsonParameters['OutputName'] = [string]$OutputName
 			}
 
+			# add Disable as boolean
+			$JsonParameters['Disable'] = [boolean]$Disable
+
 			# add current time as FileDateTimeUniversal
 			$JsonParameters['Updated'] = [datetime]::Now.ToString('s')
 
@@ -1852,6 +1863,10 @@ Process {
 
 				# validate optional values in hashtable with expressions that should be false
 				Switch ($true) {
+					($HashtableFromJsonEntry.ContainsKey('Disable') -and $HashtableFromJsonEntry['Disable'] -isnot [boolean]) {
+						Write-Warning -Message 'optional value (Disable) found in configuration file but was not parsed into a boolean'
+						Continue NextJsonEntry
+					}
 					($HashtableFromJsonEntry.ContainsKey('Arguments') -and $HashtableFromJsonEntry['Arguments'] -isnot [System.Collections.Hashtable]) {
 						Write-Warning -Message 'optional value (Arguments) found in configuration file but was not parsed into a hashtable'
 						Continue NextJsonEntry
@@ -1880,6 +1895,12 @@ Process {
 						Write-Warning -Message 'optional value (OutputName and Arguments) found in configuration file but cannot be combined'
 						Continue NextJsonEntry
 					}
+				}
+
+				# if disable defined...
+				If ($HashtableFromJsonEntry.ContainsKey('Disable') -and $HashtableFromJsonEntry['Disable'] -eq $true) {
+					Write-Warning -Message "skipping disabled entry for Command: '$($HashtableFromJsonEntry['Command'])'"
+					Continue NextJsonEntry
 				}
 
 				# if modules defined...
