@@ -103,12 +103,12 @@ Function Invoke-LdapQuery {
 	Param(
 		[Parameter(Position = 0, Mandatory = $true)]
 		[string]$Server,
-		[Parameter(Position = 1, Mandatory = $true)][AllowEmptyString()]
-		[string]$SearchBase,
-		[Parameter(Position = 2, Mandatory = $true)]
-		[string]$Filter,
-		[Parameter(Position = 3)]
+		[Parameter(Position = 1)]
+		[string]$Filter = '(objectClass=*)',
+		[Parameter(Position = 2)]
 		[string[]]$Attributes = '*',
+		[Parameter(Position = 3)][AllowEmptyString()]
+		[string]$SearchBase = [string]::Empty,
 		[Parameter(Position = 4)][ValidateSet('Base', 'OneLevel', 'Subtree')]
 		[string]$SearchScope = 'Subtree',
 		[Parameter(Position = 5)][ValidateRange(1, 65535)]
