@@ -2113,19 +2113,36 @@ Process {
 			$Argument = "$Argument -RemoveUndefinedTasks"
 		}
 
+		# if TriggerAt parameter not provided...
+		If (!$PSBoundParameters.ContainsKey('TriggerAt')) {
+			# create variable with default value
+			$TriggerAt = [datetime]'00:00:00'
+			# add variable to bound parameters
+			$PSBoundParameters.Add('TriggerAt', $TriggerAt)
+		}
+
 		# if RandomDelay parameter not provided...
 		If (!$PSBoundParameters.ContainsKey('RandomDelay')) {
+			# create variable with default value
 			$RandomDelay = [timespan]::FromMinutes(0)
+			# add variable to bound parameters
+			$PSBoundParameters.Add('RandomDelay', $RandomDelay)
 		}
 
 		# if ExecutionTimeLimit parameter not provided...
 		If (!$PSBoundParameters.ContainsKey('ExecutionTimeLimit')) {
+			# create variable with default value
 			$ExecutionTimeLimit = [timespan]::FromMinutes(1)
+			# add variable to bound parameters
+			$PSBoundParameters.Add('ExecutionTimeLimit', $ExecutionTimeLimit)
 		}
 
 		# if RepetitionInterval parameter not provided...
 		If (!$PSBoundParameters.ContainsKey('RepetitionInterval')) {
+			# create variable with default value
 			$RepetitionInterval = [timespan]::FromMinutes(15)
+			# add variable to bound parameters
+			$PSBoundParameters.Add('RepetitionInterval', $RepetitionInterval)
 		}
 	}
 
