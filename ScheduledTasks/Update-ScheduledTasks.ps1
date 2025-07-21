@@ -81,7 +81,7 @@ The logon type for the scheduled task. The accepted values are 'ServiceAccount' 
 The run level for the scheduled task. The accepted values are 'Highest' and 'Limited'. The default value is 'Highest'.
 
 .PARAMETER Disable
-Switch parameter to disable the scheduled task. The scheduled task will be enabled if this parameter is not present.
+Switch parameter to disable the scheduled task. The scheduled task will be enabled if this parameter is not present or set to false.
 
 .PARAMETER ReportUndefinedTasks
 Switch parameter to report scheduled tasks that are not defined in the JSON file and located in any of the task paths defined on the entries in the JSON configuration file.
@@ -196,7 +196,7 @@ Param(
 	[Parameter(ParameterSetName = 'Register')]
 	[ValidateSet('Highest', 'Limited')]
 	[string]$RunLevel = 'Highest',
-	# switch to disable scheduled
+	# switch to disable scheduled tasks
 	[Parameter(ParameterSetName = 'Add')]
 	[Parameter(ParameterSetName = 'AddSelf')]
 	[Parameter(ParameterSetName = 'Register')]
@@ -2282,43 +2282,35 @@ Process {
 				Argument  = [string]$Argument
 				UserId    = [string]$UserId
 				LogonType = [string]$LogonType
-			}
-
-			# if Disable provided...
-			If ($script:Disable) {
-				# add Disable to parameters
-				$JsonParameters['Disable'] = [boolean]$Disable
-			}
-
-			# if RunLevel provided...
-			If ($script:RunLevel) {
-				# add RunLevel to parameters
-				$JsonParameters['RunLevel'] = [string]$RunLevel
+				RunLevel  = [string]$RunLevel
 			}
 
 			# if TriggerAt provided and NoTrigger not set...
 			If ($PSBoundParameters.ContainsKey('TriggerAt') -and -not $script:NoTrigger) {
 				# add TriggerAt as datetime in IS0 8601 extended format
-				$JsonParameters['TriggerAt'] = $TriggerAt.ToString('s')
+				$JsonParameters['TriggerAt'] = [string]$TriggerAt.ToString('s')
 			}
 
 			# if RandomDelay provided and NoTrigger not set...
 			If ($PSBoundParameters.ContainsKey('RandomDelay') -and -not $script:NoTrigger) {
 				# add RandomDelay as timespan in 'constant' format
-				$JsonParameters['RandomDelay'] = $RandomDelay.ToString('c')
+				$JsonParameters['RandomDelay'] = [string]$RandomDelay.ToString('c')
 			}
 
 			# if RepetitionInterval provided and NoTrigger not set...
 			If ($PSBoundParameters.ContainsKey('RepetitionInterval') -and -not $script:NoTrigger) {
 				# add RepetitionInterval as timespan in 'constant' format
-				$JsonParameters['RepetitionInterval'] = $RepetitionInterval.ToString('c')
+				$JsonParameters['RepetitionInterval'] = [string]$RepetitionInterval.ToString('c')
 			}
 
 			# if ExecutionTimeLimit provided...
 			If ($PSBoundParameters.ContainsKey('ExecutionTimeLimit')) {
 				# add ExecutionTimeLimit as timespan in 'constant' format
-				$JsonParameters['ExecutionTimeLimit'] = $ExecutionTimeLimit.ToString('c')
+				$JsonParameters['ExecutionTimeLimit'] = [string]$ExecutionTimeLimit.ToString('c')
 			}
+
+			# add Disable as boolean
+			$JsonParameters['Disable'] = [boolean]$Disable
 
 			# add Updated as current datetime in IS0 8601 extended format
 			$JsonParameters['Updated'] = [datetime]::Now.ToString('s')
