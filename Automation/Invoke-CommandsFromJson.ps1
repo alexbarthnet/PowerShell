@@ -141,10 +141,10 @@ Param(
 	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
 	[string]$OutputName,
 	# script parameter - order of command
-	[Parameter(Mandatory = $True, ParameterSetName = 'RemoveByOrder')][ValidateRange({ 1, [uint16]::MaxValue })]
-	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')][ValidateRange({ 1, [uint16]::MaxValue })]
-	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')][ValidateRange({ 1, [uint16]::MaxValue })]
-	[Parameter(Mandatory = $False, ParameterSetName = 'Add')][ValidateRange({ 1, [uint16]::MaxValue })]
+	[Parameter(Mandatory = $True, ParameterSetName = 'RemoveByOrder')][ValidateRange( 1, [uint16]::MaxValue )]
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')][ValidateRange( 1, [uint16]::MaxValue )]
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')][ValidateRange( 1, [uint16]::MaxValue )]
+	[Parameter(Mandatory = $False, ParameterSetName = 'Add')][ValidateRange( 1, [uint16]::MaxValue )]
 	[uint16]$Order = 1,
 	# script parameter - disable command
 	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
