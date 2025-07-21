@@ -29,7 +29,7 @@ Switch parameter to add an entry to the JSON configuration file for this script.
  - The entry will run for a maximum of 1 minute
 
 .PARAMETER RemoveSelf
-Switch parameter to remove an entry from the JSON configuration file for this script. Cannot be combined with the Show, Clear, Remove, Add, AddSelf, Register, or Unregister parameters.
+Switch parameter to remove the entry from the JSON configuration file for this script. Cannot be combined with the Show, Clear, Remove, Add, AddSelf, Register, or Unregister parameters.
 
 .PARAMETER Register
 Switch parameter to register a scheduled task for this script. Cannot be combined with the Show, Clear, Remove, Add, AddSelf, RemoveSelf, or Unregister parameters. The task is created with the following defaults:
