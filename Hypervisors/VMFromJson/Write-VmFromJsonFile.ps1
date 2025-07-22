@@ -55,7 +55,7 @@ Param(
 	[string]$DomainName,
 	# OS Deployment - OSD method
 	[Parameter(Mandatory = $true, Position = 3, ParameterSetName = 'AddOSDeployment')]
-	[ValidateSet('ISO', 'SCCM', 'WDS')]
+	[ValidateSet('ISO', 'SCCM', 'VHD')]
 	[string]$Method,
 	# VMHardDiskDrive - bytes for VHD size
 	[Parameter(Mandatory = $True, Position = 4, ParameterSetName = 'AddVMHardDiskDrive')]
