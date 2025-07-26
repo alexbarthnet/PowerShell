@@ -561,56 +561,51 @@ Begin {
 			Return
 		}
 
-		# get hashtable for InvokeCommand splat
+		# define parameters for Get-ClusterSharedVolume
+		$GetClusterSharedVolume = @{
+			Cluster     = $ClusterName
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# retrieve cluster shared volumes
 		Try {
-			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+			$ClusterSharedVolumes = Get-ClusterSharedVolume @GetClusterSharedVolume
 		}
 		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving cluster shared volumes")
 			Throw $_
 		}
 
-		# update argument list for Invoke-Command
-		$InvokeCommand['ArgumentList']['ClusterName'] = $ClusterName
-		$InvokeCommand['ArgumentList']['ComputerName'] = $ComputerName
-
-		# check cluster shared volumes
-		Invoke-Command @InvokeCommand -ScriptBlock {
-			Param($ArgumentList)
-			# define parameters for Get-ClusterSharedVolume
-			$GetClusterSharedVolume = @{
-				Cluster     = $ArgumentList['ClusterName']
-				ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
+		# loop through cluster shared volumes
+		:NextClusterSharedVolume ForEach ($ClusterSharedVolume in $ClusterSharedVolumes) {
+			# if CSV already on current host...
+			If ($ClusterSharedVolume.OwnerNode.Name -eq $ComputerName) {
+				Continue NextClusterSharedVolume
 			}
 
-			# retrieve names of cluster nodes
-			$ClusterSharedVolumes = Get-ClusterSharedVolume @GetClusterSharedVolume
-
-			# process each volume
-			ForEach ($ClusterSharedVolume in $ClusterSharedVolumes) {
-				$CsvFriendlyName = $ClusterSharedVolume.SharedVolumeInfo.FriendlyVolumeName
-				# is path on CSV?
-				$PathOnVolume = $Path.StartsWith($CsvFriendlyName, [System.StringComparison]::InvariantCultureIgnoreCase)
-				# is CSV owned by requested computer?
-				$VolumeOnHost = $ClusterSharedVolume.OwnerNode.Name -eq $ArgumentList['ComputerName']
-				# if path on volume and volume on host or path not on volume...
-				If (-not $PathOnVolume -or ($PathOnVolume -and $VolumeOnHost)) {
-					# ...filter volume out of collection
-					$ClusterSharedVolumes = $ClusterSharedVolumes | Where-Object { $_.SharedVolumeInfo.FriendlyVolumeName -ne $CsvFriendlyName }
-				}
+			# if path on CVS...
+			If (!$Path.StartsWith($ClusterSharedVolume.SharedVolumeInfo.FriendlyVolumeName, [Sytem.StringComparison]::InvariantCultureIgnoreCase)) {
+				Continue NextClusterSharedVolume
 			}
 
-			# process each remaining volume
-			ForEach ($ClusterSharedVolume in $ClusterSharedVolumes) {
-				# define parameters for Move-ClusterSharedVolume
-				$MoveClusterSharedVolume = @{
-					Name        = $ClusterSharedVolume.Name
-					Node        = $ArgumentList['ComputerName']
-					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-				}
+			# define parameters for Move-ClusterSharedVolume
+			$MoveClusterSharedVolume = @{
+				Name        = $ClusterSharedVolume.Name
+				Node        = $ComputerName
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
 
-				# move cluster shared volume to requested computer
+			# move cluster shared volume to requested computer
+			Try {
 				$null = Move-ClusterSharedVolume @MoveClusterSharedVolume
 			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: moving '$($ClusterSharedVolume.Name)' cluster shared volume to current node")
+				Throw $_
+			}
+
+			# report state
+			Write-Host ("$Hostname,$ComputerName,$Name - moved '$($ClusterSharedVolume.Name)' cluster shared volume to current node")
 		}
 	}
 
