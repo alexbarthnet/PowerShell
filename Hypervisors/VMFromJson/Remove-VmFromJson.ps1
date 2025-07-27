@@ -1809,8 +1809,21 @@ Process {
 				}
 				Else {
 					# add VHD path to list
-					Write-Host ("$Hostname,$ComputerName,$Name - ...found VHD to remove: '$($VHD.Path)'")
+					Write-Host ("$Hostname,$ComputerName,$Name - ...found VHD from VM to remove: '$($VHD.Path)'")
 					$VHDPaths.Add($VHD.Path)
+				}
+			}
+
+			# retrieve VHDs from JSON
+			$VHDPathsFromJson = $JsonData.$Name.VMHardDiskDrives.Path
+
+			# loop through VHDs
+			ForEach ($VHDPath in $VHDPathsFromJson) {
+				# if VHD path not in list...
+				If ($VHDPath -notin $VHDs) {
+					# add VHD path to list
+					Write-Host ("$Hostname,$ComputerName,$Name - ...found VHD from JSON to remove: '$VHDPath'")
+					$VHDPaths.Add($VHDPath)
 				}
 			}
 		}
