@@ -594,7 +594,7 @@ Begin {
 			}
 
 			# if path on CVS...
-			If (!$Path.StartsWith($ClusterSharedVolume.SharedVolumeInfo.FriendlyVolumeName, [Sytem.StringComparison]::InvariantCultureIgnoreCase)) {
+			If (!$Path.StartsWith($ClusterSharedVolume.SharedVolumeInfo.FriendlyVolumeName, [System.StringComparison]::InvariantCultureIgnoreCase)) {
 				Continue NextClusterSharedVolume
 			}
 
