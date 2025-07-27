@@ -125,25 +125,35 @@ Begin {
 		}
 
 		# if session exists for computer...
-		If ($script:PSSessions.ContainsKey($ComputerName) -and $script:PSSessions[$ComputerName] -is [System.Management.Automation.Runspaces.PSSession]) {
-			# ...return true as session can already be referenced
-			Return $true
+		If ($script:PSSessions[$ComputerName] -is [System.Management.Automation.Runspaces.PSSession]) {
+			# if session is open and available...
+			If ($script:PSSessions[$ComputerName].State -eq 'Opened' -and $script:PSSessions[$ComputerName].Availability -eq 'Available') {
+				# ...return true as session can already be referenced
+				Return $true
+			}
 		}
-		Else {
-			# ...try to create a session
-			Try {
-				$script:PSSessions[$ComputerName] = New-PSSession -ComputerName $ComputerName -Name $ComputerName -Authentication Default
-			}
-			Catch {
-				Return $false
-			}
-			# ...validate session
-			If ($script:PSSessions[$ComputerName] -is [System.Management.Automation.Runspaces.PSSession]) {
+
+		# create a new session
+		Try {
+			$script:PSSessions[$ComputerName] = New-PSSession -ComputerName $ComputerName -Name $ComputerName -Authentication Default
+		}
+		Catch {
+			Return $false
+		}
+
+		# ...validate session
+		If ($script:PSSessions[$ComputerName] -is [System.Management.Automation.Runspaces.PSSession]) {
+			# if session is open and available...
+			If ($script:PSSessions[$ComputerName].State -eq 'Opened' -and $script:PSSessions[$ComputerName].Availability -eq 'Available') {
+				# ...return true as session can already be referenced
 				Return $true
 			}
 			Else {
 				Return $false
 			}
+		}
+		Else {
+			Return $false
 		}
 	}
 
@@ -4292,5 +4302,14 @@ Process {
 }
 
 End {
-	# remove sessions
+	# loop through keys in sessions hashtable
+	ForEach ($SessionName in $script:PSSessions.Keys) {
+		# remove session
+		Try {
+			$script:PSSessions[$SessionName] | Remove-PSSession
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: removing '$SessionName' session")
+		}
+	}
 }
