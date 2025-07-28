@@ -37,7 +37,7 @@ param(
 	[Parameter(DontShow)]
 	[string]$Attribute = 'dnsHostName',
 	# search base for RootDSE
-	[Parameter(DontShow)][ValidateSet('Base', 'OneLevel', 'Subtree')]
+	[Parameter(DontShow)]
 	[string]$SearchBase = [string]::Empty,
 	# search scope for RootDSE
 	[Parameter(DontShow)][ValidateSet('Base', 'OneLevel', 'Subtree')]
