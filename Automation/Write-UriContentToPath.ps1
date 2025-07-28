@@ -169,6 +169,9 @@ process {
 		}
 	}
 
+	# retrieve original host
+	$DnsSafeHost = $Uri.DnsSafeHost
+
 	# if URI with IP address required...
 	if ($local:UriWithIPAddressRequired) {
 		# retrieve updated URI with hostname for ADFS service replaced with IP address of ADFS service to address hosts file configuration for non-split-brain DNS
@@ -184,7 +187,7 @@ process {
 	# define parameters for Invoke-WebRequest
 	$InvokeWebRequest = @{
 		Uri                = $Uri
-		Headers            = @{ 'host' = $UriBuilder.Host }
+		Headers            = @{ 'host' = $DnsSafeHost }
 		UseBasicParsing    = $true
 		MaximumRedirection = 0
 		ErrorAction        = [System.Management.Automation.ActionPreference]::Stop
