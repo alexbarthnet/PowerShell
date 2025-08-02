@@ -13,8 +13,6 @@ Function New-TemporaryFolder {
 		$PathForTEMP = [System.Environment]::GetEnvironmentVariable('TEMP', 'User')
 	}
 
-	# clear 
-
 	# define path for temporary folder
 	Do {
 		# define temporary folder name
@@ -22,6 +20,7 @@ Function New-TemporaryFolder {
 		# combine TEMP path and temporary folder name
 		$PathForTemporaryFolder = Join-Path -Path $PathForTEMP -ChildPath $NameForTemporaryFolder
 	}
+	# until path for temporary folder does not exist
 	Until (![System.IO.Directory]::Exists($PathForTemporaryFolder))
 
 	# create temporary folder
