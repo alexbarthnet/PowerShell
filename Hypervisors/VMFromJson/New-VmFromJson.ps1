@@ -11,6 +11,7 @@ Param(
 	[switch]$SkipProvisioning,
 	[switch]$SkipStart,
 	[switch]$SkipClustering,
+	[switch]$ChooseBestNode,
 	[switch]$ForceRestart,
 	[pscredential]$LocalAdminCredential,
 	[pscredential]$DomainJoinCredential,
@@ -4165,12 +4166,16 @@ Process {
 				# declare and begin
 				Write-Host ("$Hostname,$ComputerName,$Name - VM cluster group is offline, starting VM on cluster...")
 
-				# define parameters for Start-ClusterGroup
+				# define required parameters for Start-ClusterGroup
 				$StartClusterGroup = @{
 					Cluster        = $ClusterName
 					Name           = $Name
-					ChooseBestNode = $true
 					ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# define optional parameters for Start-ClusterGroup
+				If ($ChooseBestNode) {
+					$StartClusterGroup.Add('ChooseBestNode', $true)
 				}
 
 				# start cluster group
@@ -4195,7 +4200,6 @@ Process {
 				$StopClusterGroup = @{
 					Cluster        = $ClusterName
 					Name           = $Name
-					ChooseBestNode = $true
 					ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
 				}
 
@@ -4208,12 +4212,16 @@ Process {
 					Throw $_
 				}
 
-				# define parameters for Start-ClusterGroup
+				# define required parameters for Start-ClusterGroup
 				$StartClusterGroup = @{
 					Cluster        = $ClusterName
 					Name           = $Name
-					ChooseBestNode = $true
 					ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# define optional parameters for Start-ClusterGroup
+				If ($ChooseBestNode) {
+					$StartClusterGroup.Add('ChooseBestNode', $true)
 				}
 
 				# start cluster group
