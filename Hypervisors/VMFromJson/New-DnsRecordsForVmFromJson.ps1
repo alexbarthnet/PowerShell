@@ -178,7 +178,7 @@ catch {
 	}
 	catch {
 		Write-Warning -Message "could not retrieve zone for '$DomainName' domain on '$Server' server"
-		continue NextGroup
+		continue NextVMName
 	}
 
 	# assign zone name
@@ -207,7 +207,7 @@ catch {
 	}
 	catch {
 		Write-Warning -Message "could not retrieve count of DNS records for '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
-		continue NextADObject
+		continue NextVMName
 	}
 
 	# report count
@@ -447,7 +447,7 @@ catch {
 	if ($nTSecurityDescriptor -isnot [System.DirectoryServices.ActiveDirectorySecurity]) {
 		# warn and return
 		Write-Warning -Message "found invalid '[$($nTSecurityDescriptor.GetType().FullName)]' object type for nTSecurityDescriptor on '$Server' server with DN: '$($ADObject.DistinguishedName)'"
-		return
+			continue NextVMName
 	}
 	# if nTSecurityDescriptor found and is the expected object type...
 	else {
@@ -462,7 +462,7 @@ catch {
 	if ($AccessRules.Where({ $_.IdentityReference -eq $ComputerObject.SID -and $_.ActiveDirectoryRights -eq $ActiveDirectoryRights })) {
 		# report and return
 		Write-Host "$Hostname,$Name - validated access rules on AD object for DNS record with '$Name' name in '$ZoneName' zone on '$Server' server"
-		return
+			continue NextVMName
 	}
 
 	# retrieve access rules for DNS object where identity matches computer SID
@@ -490,7 +490,7 @@ catch {
 	}
 	catch {
 		Write-Warning -Message "could not update security on AD object for DNS record with '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
-		return $_
+			continue NextVMName
 	}
 
 	# report and return
