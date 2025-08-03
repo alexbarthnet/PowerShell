@@ -413,7 +413,9 @@ catch {
 	# define parameters
 	$GetADObject = @{
 		Server      = $Server
-		Identity    = $Identity
+		SearchBase  = $DnsServerZone.DistinguishedName
+		SearchScope = [System.DirectoryServices.SearchScope]::OneLevel
+		LdapFilter  = "(&(objectClass=dnsNode)(name=$Name))"
 		Properties  = 'nTSecurityDescriptor'
 		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 	}
@@ -422,26 +424,24 @@ catch {
 	try {
 		$ADObject = Get-ADObject @GetADObject
 	}
-	catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
-		Write-Warning -Message "could not locate AD object for DNS record with '$Name' name in '$ZoneName' zone on '$Server' server"
-		return $_
-	}
 	catch {
-		Write-Warning -Message "could not retrieve AD object for DNS record with '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
-		return $_
+		Write-Warning -Message "could not query AD for DNS record objects with '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+		continue NextVMName
 	}
 
-	# if nTSecurityDescriptor not found...
-	if ($null -eq $ADObject.nTSecurityDescriptor) {
-		# warn and return
-		Write-Warning -Message "could not retrieve Security Descriptor object: '$($ADObject.DistinguishedName)'"
-		return
+	# get count of DNS records
+	try {
+		$ADObjectCount = Measure-Object -InputObject $ADObject | Select-Object -ExpandProperty 'Count'
 	}
-	# if nTSecurityDescriptor found...
-	else {
-		# assign property to object
-		$nTSecurityDescriptor = $ADObject.nTSecurityDescriptor
+	catch {
+		Write-Warning -Message "could not retrieve count of DNS objects for '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+		continue NextVMName
 	}
+
+	# report count
+	Write-Host "$Hostname,$Name - found '$ADObjectCount' DNS objects for '$Name' name in '$ZoneName' zone on '$Server' server"
+
+	# if DNS object retrieved...
 
 	# if nTSecurityDescriptor is not the expected object type...
 	if ($nTSecurityDescriptor -isnot [System.DirectoryServices.ActiveDirectorySecurity]) {
