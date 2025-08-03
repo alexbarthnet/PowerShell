@@ -129,7 +129,7 @@ catch {
 
 		# create computer object
 		try {
-			New-ADComputer -Server $Server -Name $Name -Path $Path -ErrorAction 'Stop'
+			New-ADComputer -Server $Server -Name $Name.ToUpperInvariant() -Path $Path -ErrorAction 'Stop'
 		}
 		catch {
 			Write-Warning -Message "could not create Computer with '$Name' name on '$Server' server for '$DomainName' domain: $($_.Exception.Message)"
