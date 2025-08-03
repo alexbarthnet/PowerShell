@@ -2,9 +2,9 @@
 
 param(
 	[Parameter(DontShow)]
-	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
+	[System.DirectoryServices.ActiveDirectoryRights]$ActiveDirectoryRights = 'CreateChild, DeleteChild, ListChildren, ReadProperty, DeleteTree, ExtendedRight, Delete, GenericWrite, WriteDacl, WriteOwner',
 	[Parameter(DontShow)]
-	[string]$ActiveDirectoryRights = 'CreateChild, DeleteChild, ListChildren, ReadProperty, DeleteTree, ExtendedRight, Delete, GenericWrite, WriteDacl, WriteOwner',
+	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
 	[Parameter(Position = 0, Mandatory)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Json,
 	[Parameter(Position = 1, Mandatory, ValueFromPipeline)]
