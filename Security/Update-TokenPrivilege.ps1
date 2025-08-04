@@ -126,7 +126,7 @@ public static class Advapi32
 }
 '@
 
-# start job to update process token avoid loading type defintions directly into session
+# start job to update process token avoid loading type definitions directly into session
 $Job = Start-Job -ScriptBlock {
 	# define objects
 	$VerbosePreference = $using:VerbosePreference

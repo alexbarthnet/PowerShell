@@ -1,4 +1,4 @@
-#requires -Modules ActiveDirectory,DnsServer
+#requires -Modules ActiveDirectory,DnsServer,DnsClient
 
 param(
 	[Parameter(DontShow)]
@@ -159,6 +159,9 @@ catch {
 	# report count
 	Write-Host "$Hostname,$Name - found '$DnsServerResourceRecordCount' DNS records for '$Name' name in '$ZoneName' zone on '$Server' server"
 
+	# create lists for IPv4 and IPv6 addresses
+	$IPAddressesFromDnsRecords = [System.Collections.Generic.List[string]]::new()
+
 	# loop through DNS records to remove expired DNS records
 	:NextDnsServerResourceRecord foreach ($DnsServerResourceRecord in $DnsServerResourceRecords) {
 		# assign record type to object
@@ -167,21 +170,22 @@ catch {
 		# switch on record type
 		switch ($RRType) {
 			'A' {
-				# get existing IPv6 address as string for reporting
+				# get existing IPv4 address as string for reporting
 				$IPAddress = $DnsServerResourceRecord.RecordData.IPv4Address.IPAddressToString
+
+				# add existing IPv4 address to list for pointer removal
+				$IPAddressesFromDnsRecords.Add($IPAddress)
 
 				# if no IP addresses retrieved from network adapters...
 				if ($IPAddresses.Count -eq 0) {
 					# report and continue to next DNS record
 					Write-Host "$Hostname,$Name - found existing '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
-					continue NextDnsServerResourceRecord
 				}
 
 				# if IPv4 address is in IP addresses list...
 				if ($DnsServerResourceRecord.RecordData.IPv4Address -in $IPAddresses) {
 					# report and continue to next DNS record
 					Write-Host "$Hostname,$Name - found expected '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
-					continue NextDnsServerResourceRecord
 				}
 
 				# define parameters
@@ -206,24 +210,24 @@ catch {
 
 				# report state
 				Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
-
 			}
 			'AAAA' {
 				# get existing IPv6 address as string for reporting
 				$IPAddress = $DnsServerResourceRecord.RecordData.IPv6Address.IPAddressToString
 
+				# add existing IPv6 address to list for pointer removal
+				$IPAddressesFromDnsRecords.Add($IPAddress)
+
 				# if no IP addresses retrieved from network adapters...
 				if ($IPAddresses.Count -eq 0) {
 					# report and continue to next DNS record
 					Write-Host "$Hostname,$Name - found existing '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
-					continue NextDnsServerResourceRecord
 				}
 
 				# if IPv6 address is in IP addresses list...
 				if ($DnsServerResourceRecord.RecordData.IPv6Address -in $IPAddresses) {
 					# report and continue to next DNS record
 					Write-Host "$Hostname,$Name - found expected '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
-					continue NextDnsServerResourceRecord
 				}
 
 				# define parameters
@@ -277,6 +281,113 @@ catch {
 
 				# report state
 				Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name in '$ZoneName' zone on '$Server' server"
+			}
+		}
+	}
+
+	####################
+	# reverse records
+	####################
+
+	# loop through IP addresses from DNS records
+	:NextIPAddressFromDnsRecord foreach ($IPAddressFromDnsRecord in $IPAddressesFromDnsRecords) {
+		# try to parse the IP address
+		try {
+			$IPAddress = [System.Net.IPAddress]::Parse($IPAddressFromDnsRecord)
+		}
+		catch {
+			Write-Warning -Message "could not parse '$IPAddressFromDnsRecord' into an IP address: $($_.Exception.Message)"
+			return $_
+		}
+
+		# switch on IP address family
+		switch ($IPAddress.AddressFamily) {
+			'InterNetwork' {
+				# split IPv4 address into octets
+				$Octets = $IPAddress.IPAddressToString.Split('.')
+				# define IPv6 PTR suffix for DNS record
+				$DnsRecordSuffix = 'in-addr.arpa.'
+			}
+			'InterNetworkV6' {
+				# split IPv6 address into octets
+				$Octets = $IPAddress.IPAddressToString.Split(':')
+				# define IPv6 PTR suffix for DNS record
+				$DnsRecordSuffix = 'ip6.arpa.'
+
+				# warn and continue
+				Write-Warning -Message 'found IPv6 address which is not currently supported by this script'
+				continue NextIPAddressFromDnsRecord
+
+			}
+			Default {
+				Write-Warning -Message "found unknown '$($IPAddress.AddressFamily)' address family for '$IPAddressFromDnsRecord' IP address: $($_.Exception.Message)"
+				continue NextIPAddressFromDnsRecord
+			}
+		}
+
+		# split IPv4 address into octets
+		$Octets = $IPAddress.IPAddressToString.Split('.')
+
+		# reverse octets
+		[array]::Reverse($Octets)
+
+		# create PTR record
+		$PtrRecordName = '{0}.{1}' -f ($Octets -join '.'), $DnsRecordSuffix
+
+		# define parameters
+		$ResolveDnsName = @{
+			Server       = $Server
+			Name         = $PtrRecordName 
+			Type         = 'PTR'
+			DnsOnly      = $true
+			QuickTimeout = $true
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Ignore
+		}
+
+		# resolve PTR record
+		try {
+			$DnsRecords = Resolve-DnsName @ResolveDnsName
+		}
+		catch {
+			Write-Warning -Message "could not query '$Server' server for '$PtrRecordName' PTR record for '$IPAddressFromDnsRecord' IPv4 address: $($_.Exception.Message)"
+			return $_
+		}
+
+		# loop through DNS names
+		:NextDnsRecord foreach ($DnsRecord in $DnsRecords) {
+			# assign record type and data to objects
+			$RRType = $DnsRecord.Type
+			$RecordData = $DnsRecord.NameHost
+
+			# switch on record type
+			switch ($RRType) {
+				'PTR' {
+					# extract actual record name and zone
+					$RecordName, $ZoneName = $DnsRecord.Name.Split('.', 2)
+
+					# define parameters
+					$RemoveDnsServerResourceRecord = @{
+						ComputerName = $Server
+						ZoneName     = $ZoneName
+						Name         = $Name
+						RRType       = $RRType
+						RecordData   = $RecordData
+						Force        = $true
+						ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+					}
+
+					# retrieve existing DNS record
+					try {
+						Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
+					}
+					catch {
+						Write-Warning -Message "could not remove '$RRType' DNS record for '$Name' name with '$RecordData' value in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+						return $_
+					}
+
+					# report state
+					Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name with '$RecordData' value in '$ZoneName' zone on '$Server' server"
+				}
 			}
 		}
 	}
