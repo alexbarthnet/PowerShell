@@ -167,7 +167,7 @@ catch {
 		# switch on record type
 		switch ($RRType) {
 			'A' {
-				# get existing IPv6 address as string for reporting
+				# get existing IPv4 address as string for reporting
 				$IPAddress = $DnsServerResourceRecord.RecordData.IPv4Address.IPAddressToString
 
 				# if no IP addresses retrieved from network adapters...
