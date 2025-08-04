@@ -174,14 +174,12 @@ catch {
 				if ($IPAddresses.Count -eq 0) {
 					# report and continue to next DNS record
 					Write-Host "$Hostname,$Name - found existing '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
-					continue NextDnsServerResourceRecord
 				}
 
 				# if IPv4 address is in IP addresses list...
 				if ($DnsServerResourceRecord.RecordData.IPv4Address -in $IPAddresses) {
 					# report and continue to next DNS record
 					Write-Host "$Hostname,$Name - found expected '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
-					continue NextDnsServerResourceRecord
 				}
 
 				# define parameters
@@ -206,7 +204,6 @@ catch {
 
 				# report state
 				Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
-
 			}
 			'AAAA' {
 				# get existing IPv6 address as string for reporting
@@ -216,14 +213,12 @@ catch {
 				if ($IPAddresses.Count -eq 0) {
 					# report and continue to next DNS record
 					Write-Host "$Hostname,$Name - found existing '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
-					continue NextDnsServerResourceRecord
 				}
 
 				# if IPv6 address is in IP addresses list...
 				if ($DnsServerResourceRecord.RecordData.IPv6Address -in $IPAddresses) {
 					# report and continue to next DNS record
 					Write-Host "$Hostname,$Name - found expected '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
-					continue NextDnsServerResourceRecord
 				}
 
 				# define parameters
