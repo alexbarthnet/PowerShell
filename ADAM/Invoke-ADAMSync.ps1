@@ -1,4 +1,14 @@
+[CmdletBinding(SupportsShouldProcess)]
 param(
+    # working directory for ADAM sync
+    [Parameter(DontShow)]
+    [string]$WorkingDirectory = (Join-Path -Path $env:ProgramData -ChildPath 'ADAMSync\working'),
+    # log file directory for ADAM sync
+    [Parameter(DontShow)]
+    [string]$LogFileDirectory = (Join-Path -Path $env:ProgramData -ChildPath 'ADAMSync\logs'),
+    # log file date time
+    [Parameter(DontShow)]
+    [string]$LogFileDateTime = ([datetime]::Now.ToString('yyyyMMddTHHmmss')),
     # local host name
     [Parameter(DontShow)]
     [string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -14,25 +24,19 @@ param(
     # local domain path
     [Parameter(Position = 2)]
     [string]$Partition = $DomainPath,
-    # working directory for ADAM sync
-    [Parameter(Position = 3)]
-    [string]$WorkingDirectory = (Join-Path -Path $env:ProgramData -ChildPath 'ADAMSync\working'),
-    # log file directory for ADAM sync
+    # action for ADAM sync
+    [Parameter(Position = 3)][ValidateSet('AgeAll', 'FullSync', 'Sync')]
+    [string]$Action = 'Sync',
+    # switch to skip checking sync status
     [Parameter(Position = 4)]
-    [string]$LogFileDirectory = (Join-Path -Path $env:ProgramData -ChildPath 'ADAMSync\logs'),
-    # switch to skip aging pass
-    [Parameter(Position = 5)]
-    [switch]$SkipAging,
-    # switch to skip sync pass
-    [Parameter(Position = 6)]
-    [switch]$SkipSync,
-    # switch to perform full sync
-    [Parameter(Position = 7)]
-    [switch]$FullSync,
+    [switch]$SkipStatusCheck,
     # server for AD cmdlets
     [Parameter(DontShow)]
     [string]$Server = ($ComputerName, $Port -join ':')
 )
+
+# define action as lowercase
+$Action = $Action.ToLowerInvariant()
 
 # connect to instance
 try {
@@ -44,16 +48,61 @@ catch {
 }
 
 # validate AD LDS server name
-if ($ADRootDSE.serverName -match '^CN=\w+\$(?<InstanceName>\w+)') {
+if ($ADRootDSE.serverName -match '^CN=[\w-]+\$(?<InstanceName>\w+)') {
     $InstanceName = $Matches.InstanceName
 }
 else {
-    Write-Warning -Message "could not extract InstanceName from '$($ADRootDSE.serverName)' serverName property on root DSE"
+    Write-Warning -Message "cannot sync instance: could not extract InstanceName from '$($ADRootDSE.serverName)' serverName property on root DSE"
     return
 }
 
 # report state
 Write-Host "found '$InstanceName' instance name from root DSE on '$Server' server"
+
+# retrieve partition object
+try {
+    $ADObject = Get-ADObject -Server $Server -Identity $Partition -Properties 'configurationFile'
+}
+catch {
+    Write-Warning -Message "could not retrieve '$Partition' object on '$Server' server: $($_.Exception.Message)"
+    throw $_
+}
+
+# if configuration file is empty...
+if ([string]::IsNullOrEmpty($ADObject.configurationFile)) {
+    Write-Warning -Message "cannot sync instance: found empty configurationFile property on '$Partition' object on '$Server' server"
+    return
+}
+
+# if SkipStatusCheck not provided...
+if (!$SkipStatusCheck) {
+    # create XML object
+    try {
+        $Xml = [System.Xml.XmlDocument]::new()
+    }
+    catch {
+        Write-Warning -Message "could not create XML document object: $($_.Exception.Message)"
+        throw $_
+    }
+
+    # populate XML object from configuration file
+    try {
+        $Xml.LoadXml($ADObject.configurationFile)
+    }
+    catch {
+        Write-Warning -Message "could not load configuration file into XML document object: $($_.Exception.Message)"
+        throw $_
+    }
+
+    # retrieve status of synchronizer state from XML object
+    $SynchronizerStateStatus = $Xml.doc.'synchronizer-state'.'status'
+
+    # if status is not empty...
+    if (![string]::IsNullOrEmpty($SynchronizerStateStatus)) {
+        Write-Warning -Message "skipping sync: found '$SynchronizerStateStatus' status in synchronizer state"
+        return
+    }
+}
 
 # create working directory
 if (![System.IO.Directory]::Exists($WorkingDirectory)) {
@@ -77,70 +126,32 @@ if (![System.IO.Directory]::Exists($LogFileDirectory)) {
     } 
 }
 
-# if skip aging not requested...
-if (!$SkipAging) {
-    # define action
-    $Action = 'ageall'
+# define log file name
+$LogFileName = '{0}_{1}_{2}_{3}_{4}_{5}.txt' -f $LogFileDateTime, $InstanceName, $Action, $ComputerName, $Port, $Partition
 
-    # define log file name
-    $LogFileName = '{0}_{1}_{2}_{3}_{4}_{5}.txt' -f [datetime]::Now.ToString('yyyyMMddTHHmmss'), $InstanceName, $Action, $ComputerName, $Port, $Partition
+# define log file
+$LogFile = Join-Path -Path $LogFileDirectory -ChildPath $LogFileName
 
-    # define log file
-    $LogFile = Join-Path -Path $LogFileDirectory -ChildPath $LogFileName
+# define argument list
+$ArgumentList = @(
+    '/{0}' -f $Action
+    $Server
+    '"{0}"' -f $Partition
+    '/log'
+    '"{0}"' -f $LogFile
+)
 
-    # define argument list
-    $ArgumentList = @(
-        '/{0}' -f $Action
-        $Server
-        '"{0}"' -f $Partition
-        '/log'
-        '"{0}"' -f $LogFile
-    )
+# report state
+Write-Host "starting $Action run on '$Partition' partition of '$InstanceName' instance name on '$Server' server"
 
-    # report state
-    Write-Host "starting  '$InstanceName' instance name from root DSE on '$Server' server"
-
-    # sync ADAM
-    try {
-        Start-Process -NoNewWindow -Wait -WorkingDirectory $WorkingDirectory -FilePath 'C:\Windows\ADAM\adamsync.exe' -ArgumentList $ArgumentList
-    }
-    catch {
-        Write-Warning -Message "could not start ADAMSync ageall run for '$Partition' partition on '$Server' server: $($_.Exception.Message)"
-        throw $_
-    }
+# sync ADAM
+try {
+    Start-Process -NoNewWindow -Wait -WorkingDirectory $WorkingDirectory -FilePath 'C:\Windows\ADAM\adamsync.exe' -ArgumentList $ArgumentList
+}
+catch {
+    Write-Warning -Message "could not start $Action run on '$Partition' partition of '$InstanceName' instance name on '$Server' server: $($_.Exception.Message)"
+    throw $_
 }
 
-# if skip sync not requested...
-if (!$SkipSync) {
-    # if full sync requested...
-    if ($FullSync) {
-        $Action = 'fullsync'
-    }
-    else {
-        $Action = 'sync'
-    }
-
-    # define log file name
-    $LogFileName = '{0}_{1}_{2}_{3}_{4}_{5}.txt' -f [datetime]::Now.ToString('yyyyMMddTHHmmss'), $InstanceName, $Action, $ComputerName, $Port, $Partition
-
-    # define log file
-    $LogFile = Join-Path -Path $LogFileDirectory -ChildPath $LogFileName
-
-    # define argument list
-    $ArgumentList = @(
-        '/{0}' -f $Action
-        $Server
-        '"{0}"' -f $Partition
-        '/log'
-        '"{0}"' -f $LogFile
-    )
-
-    # sync ADAM
-    try {
-        Start-Process -NoNewWindow -Wait -WorkingDirectory $WorkingDirectory -FilePath 'C:\Windows\ADAM\adamsync.exe' -ArgumentList $ArgumentList
-    }
-    catch {
-        Write-Warning -Message "could not start ADAMSync sync run for '$Partition' partition on '$Server' server: $($_.Exception.Message)"
-        throw $_
-    }
-}
+# report state
+Write-Host "completed $Action run on '$Partition' partition of '$InstanceName' instance name on '$Server' server"
