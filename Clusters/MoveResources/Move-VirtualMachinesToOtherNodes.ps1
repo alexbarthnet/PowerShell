@@ -1,75 +1,38 @@
-#requires -Modules TranscriptWithHostAndDate, FailoverClusters
+#requires -Modules FailoverClusters
 
 [CmdletBinding()]
-Param(
-	# switch to skip transcript logging
-	[Parameter(DontShow)]
-	[switch]$SkipTranscript,
+param(
 	# local host name
 	[Parameter(DontShow)]
-	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
-	# local domain name
-	[Parameter(DontShow)]
-	[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
-	# local DNS hostname
-	[Parameter(DontShow)]
-	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
+	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant()
 )
 
-Begin {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# start transcript with default parameters
-		Try {
-			Start-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
-	}
+# get cluster shared volumes on local node
+try {
+	$ClusterVirtualMachines = Get-ClusterNode -Name $HostName | Get-ClusterGroup | Where-Object { $_.GroupType -eq 'VirtualMachine' } | Sort-Object -Property 'Name'
+}
+catch {
+	Write-Warning -Message "could not retrieve virtual machines on node: $HostName"
+	return $_
 }
 
-Process {
-	# get cluster shared volumes on local node
-	Try {
-		$ClusterVirtualMachines = Get-ClusterNode -Name $HostName | Get-ClusterGroup | Where-Object { $_.GroupType -eq 'VirtualMachine' } | Sort-Object -Property 'Name'
+# declare count
+Write-Verbose -Verbose -Message "found '$($ClusterVirtualMachines.Count)' virtual machines on node: $HostName"
+
+# process cluster shared volumes
+foreach ($ClusterVirtualMachine in $ClusterVirtualMachines) {
+	# report intent
+	Write-Verbose -Verbose -Message "starting migration for '$($ClusterVirtualMachine.Name)' virtual machine"
+
+	# move virtual machine
+	try {
+		$MovedClusterVirtualMachine = Move-ClusterVirtualMachineRole -InputObject $ClusterVirtualMachine -MigrationType Live
 	}
-	Catch {
-		Write-Warning -Message "could not retrieve virtual machines on node: $HostName"
-		Return $_
+	catch {
+		Write-Warning -Message "could not move virtual machine: $($ClusterVirtualMachine.Name)"
+		return $_
 	}
 
-	# declare count
-	Write-Verbose -Verbose -Message "found '$($ClusterVirtualMachines.Count)' virtual machines on node: $HostName"
-
-	# process cluster shared volumes
-	ForEach ($ClusterVirtualMachine in $ClusterVirtualMachines) {
-		# report intent
-		Write-Verbose -Verbose -Message "starting migration for '$($ClusterVirtualMachine.Name)' virtual machine"
-
-		# move virtual machine
-		Try {
-			$MovedClusterVirtualMachine = Move-ClusterVirtualMachineRole -InputObject $ClusterVirtualMachine -MigrationType Live
-		}
-		Catch {
-			Write-Warning -Message "could not move virtual machine: $($ClusterVirtualMachine.Name)"
-			Return $_
-		}
-
-		# report complete
-		Write-Verbose -Verbose -Message "finished migration for '$($MovedClusterVirtualMachine.Name)' virtual machine to node: $($MovedClusterVirtualMachine.OwnerNode.Name)"
-	}
-}
-
-End {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# stop transcript with default parameters
-		Try {
-			Stop-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
-	}
+	# report complete
+	Write-Verbose -Verbose -Message "finished migration for '$($MovedClusterVirtualMachine.Name)' virtual machine to node: $($MovedClusterVirtualMachine.OwnerNode.Name)"
 }

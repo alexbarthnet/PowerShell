@@ -1,104 +1,67 @@
-#requires -Modules TranscriptWithHostAndDate, FailoverClusters
+#requires -Modules FailoverClusters
 
 [CmdletBinding()]
-Param(
-	# switch to skip transcript logging
-	[Parameter(DontShow)]
-	[switch]$SkipTranscript,
+param(
 	# local host name
 	[Parameter(DontShow)]
-	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
-	# local domain name
-	[Parameter(DontShow)]
-	[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
-	# local DNS hostname
-	[Parameter(DontShow)]
-	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
+	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant()
 )
 
-Begin {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# start transcript with default parameters
-		Try {
-			Start-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
-	}
+# get cluster shared volumes on local node
+try {
+	$ClusterSharedVolumes = Get-ClusterNode -Name $HostName | Get-ClusterSharedVolume | Sort-Object -Property 'Name'
+}
+catch {
+	Write-Warning -Message "could not retrieve cluster shared volumes on node: $HostName"
+	return $_
 }
 
-Process {
-	# get cluster shared volumes on local node
-	Try {
-		$ClusterSharedVolumes = Get-ClusterNode -Name $HostName | Get-ClusterSharedVolume | Sort-Object -Property 'Name'
+# declare count
+Write-Verbose -Verbose -Message "found '$($ClusterSharedVolumes.Count)' cluster shared volumes on node: $HostName"
+
+# process cluster shared volumes
+foreach ($ClusterSharedVolume in $ClusterSharedVolumes) {
+	# get cluster owner node
+	try {
+		$ClusterOwnerNode = $ClusterSharedVolume | Get-ClusterOwnerNode
 	}
-	Catch {
-		Write-Warning -Message "'could not retrieve cluster shared volumes on node: $HostName"
-		Return $_
+	catch {
+		Write-Warning -Message "could not retrieve owner node for cluster shared volume: $($ClusterSharedVolume.Name)"
+		return $_
 	}
 
-	# declare count
-	Write-Verbose -Verbose -Message "found '$($ClusterSharedVolumes.Count)' cluster shared volumes on node: $HostName"
-
-	# process cluster shared volumes
-	ForEach ($ClusterSharedVolume in $ClusterSharedVolumes) {
-		# get cluster owner node
-		Try {
-			$ClusterOwnerNode = $ClusterSharedVolume | Get-ClusterOwnerNode
-		}
-		Catch {
-			Write-Warning -Message "could not retrieve owner node for cluster shared volume: $($ClusterSharedVolume.Name)"
-			Return $_
-		}
-
-		# if no preferred owners are defined...
-		If ($ClusterOwnerNode.OwnerNodes.Count -eq 0) {
-			Write-Warning -Message "no preferred owner is defined for cluster shared volume: $($ClusterSharedVolume.Name)"
-			Continue
-		}
-
-		# if current host in list of preferred owners
-		If ($ClusterOwnerNode.OwnerNodes.Name -contains $Hostname) {
-			Write-Warning -Message "current hypervisor is a preferred owner for cluster shared volume: $($ClusterSharedVolume.Name)"
-			Continue
-		}
-
-		# if preferred owner is not singular
-		If ($ClusterOwnerNode.OwnerNodes.Count -gt 1) {
-			$Node = Get-Random -InputObject $ClusterOwnerNode.OwnerNodes.Name
-		}
-		Else {
-			$Node = $ClusterOwnerNode.OwnerNodes.Name
-		}
-
-		# report intent
-		Write-Verbose -Verbose -Message "starting migration for '$($ClusterSharedVolume.Name)' cluster shared volume to node: $Node"
-
-		# move cluster shared volume to preferred owner
-		Try {
-			$MovedClusterSharedVolume = Move-ClusterSharedVolume -InputObject $ClusterSharedVolume -Node $Node
-		}
-		Catch {
-			Write-Warning -Message "could not move cluster shared volume: $($ClusterSharedVolume.Name)"
-			Return $_
-		}
-
-		# report complete
-		Write-Verbose -Verbose -Message "finished migration for '$($MovedClusterSharedVolume.Name)' cluster shared volume to node: $($MovedClusterSharedVolume.OwnerNode.Name)"
+	# if no preferred owners are defined...
+	if ($ClusterOwnerNode.OwnerNodes.Count -eq 0) {
+		Write-Warning -Message "no preferred owner is defined for cluster shared volume: $($ClusterSharedVolume.Name)"
+		continue
 	}
-}
 
-End {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# stop transcript with default parameters
-		Try {
-			Stop-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
+	# if current host in list of preferred owners
+	if ($ClusterOwnerNode.OwnerNodes.Name -contains $Hostname) {
+		Write-Warning -Message "current hypervisor is a preferred owner for cluster shared volume: $($ClusterSharedVolume.Name)"
+		continue
 	}
+
+	# if preferred owner is not singular
+	if ($ClusterOwnerNode.OwnerNodes.Count -gt 1) {
+		$Node = Get-Random -InputObject $ClusterOwnerNode.OwnerNodes.Name
+	}
+	else {
+		$Node = $ClusterOwnerNode.OwnerNodes.Name
+	}
+
+	# report intent
+	Write-Verbose -Verbose -Message "starting migration for '$($ClusterSharedVolume.Name)' cluster shared volume to node: $Node"
+
+	# move cluster shared volume to preferred owner
+	try {
+		$MovedClusterSharedVolume = Move-ClusterSharedVolume -InputObject $ClusterSharedVolume -Node $Node
+	}
+	catch {
+		Write-Warning -Message "could not move cluster shared volume: $($ClusterSharedVolume.Name)"
+		return $_
+	}
+
+	# report complete
+	Write-Verbose -Verbose -Message "finished migration for '$($MovedClusterSharedVolume.Name)' cluster shared volume to node: $($MovedClusterSharedVolume.OwnerNode.Name)"
 }

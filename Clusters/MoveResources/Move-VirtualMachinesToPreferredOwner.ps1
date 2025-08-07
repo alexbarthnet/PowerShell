@@ -1,104 +1,67 @@
-#requires -Modules TranscriptWithHostAndDate, FailoverClusters
+#requires -Modules FailoverClusters
 
 [CmdletBinding()]
-Param(
-	# switch to skip transcript logging
-	[Parameter(DontShow)]
-	[switch]$SkipTranscript,
+param(
 	# local host name
 	[Parameter(DontShow)]
-	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
-	# local domain name
-	[Parameter(DontShow)]
-	[string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
-	# local DNS hostname
-	[Parameter(DontShow)]
-	[string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.')
+	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant()
 )
 
-Begin {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# start transcript with default parameters
-		Try {
-			Start-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
-	}
+# get cluster shared volumes on local node
+try {
+	$ClusterVirtualMachines = Get-ClusterNode -Name $HostName | Get-ClusterGroup | Where-Object { $_.GroupType -eq 'VirtualMachine' } | Sort-Object -Property 'Name'
+}
+catch {
+	Write-Warning -Message "could not retrieve virtual machines on node: $HostName"
+	return $_
 }
 
-Process {
-	# get cluster shared volumes on local node
-	Try {
-		$ClusterVirtualMachines = Get-ClusterNode -Name $HostName | Get-ClusterGroup | Where-Object { $_.GroupType -eq 'VirtualMachine' } | Sort-Object -Property 'Name'
+# declare count
+Write-Verbose -Verbose -Message "found '$($ClusterVirtualMachines.Count)' virtual machines on node: $HostName"
+
+# process cluster shared volumes
+foreach ($ClusterVirtualMachine in $ClusterVirtualMachines) {
+	# get cluster owner node
+	try {
+		$ClusterOwnerNode = $ClusterVirtualMachine | Get-ClusterOwnerNode
 	}
-	Catch {
-		Write-Warning -Message "could not retrieve virtual machines on node: $HostName"
-		Return $_
+	catch {
+		Write-Warning -Message "could not retrieve owner node for virtual machine: $($ClusterVirtualMachine.Name)"
+		return $_
 	}
 
-	# declare count
-	Write-Verbose -Verbose -Message "found '$($ClusterVirtualMachines.Count)' virtual machines on node: $HostName"
-
-	# process cluster shared volumes
-	ForEach ($ClusterVirtualMachine in $ClusterVirtualMachines) {
-		# get cluster owner node
-		Try {
-			$ClusterOwnerNode = $ClusterVirtualMachine | Get-ClusterOwnerNode
-		}
-		Catch {
-			Write-Warning -Message "could not retrieve owner node for virtual machine: $($ClusterVirtualMachine.Name)"
-			Return $_
-		}
-
-		# if no preferred owners are defined...
-		If ($ClusterOwnerNode.OwnerNodes.Count -eq 0) {
-			Write-Warning -Message "no preferred owner is defined for virtual machine: $($ClusterVirtualMachine.Name)"
-			Continue
-		}
-
-		# if current host in list of preferred owners
-		If ($ClusterOwnerNode.OwnerNodes.Name -contains $Hostname) {
-			Write-Warning -Message "current hypervisor is a preferred owner for virtual machine: $($ClusterVirtualMachine.Name)"
-			Continue
-		}
-
-		# if preferred owner is not singular
-		If ($ClusterOwnerNode.OwnerNodes.Count -gt 1) {
-			$Node = Get-Random -InputObject $ClusterOwnerNode.OwnerNodes.Name
-		}
-		Else {
-			$Node = $ClusterOwnerNode.OwnerNodes.Name
-		}
-
-		# report intent
-		Write-Verbose -Verbose -Message "starting migration for '$($ClusterVirtualMachine.Name)' virtual machine to node: $Node"
-
-		# move virtual machine to preferred owner
-		Try {
-			$MovedClusterVirtualMachine = Move-ClusterVirtualMachineRole -InputObject $ClusterVirtualMachine -Node $Node -MigrationType Live
-		}
-		Catch {
-			Write-Warning -Message "could not move virtual machine: $($ClusterVirtualMachine.Name)"
-			Return $_
-		}
-
-		# report complete
-		Write-Verbose -Verbose -Message "finished migration for '$($MovedClusterVirtualMachine.Name)' virtual machine to node: $($MovedClusterVirtualMachine.OwnerNode.Name)"
+	# if no preferred owners are defined...
+	if ($ClusterOwnerNode.OwnerNodes.Count -eq 0) {
+		Write-Warning -Message "no preferred owner is defined for virtual machine: $($ClusterVirtualMachine.Name)"
+		continue
 	}
-}
 
-End {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# stop transcript with default parameters
-		Try {
-			Stop-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
+	# if current host in list of preferred owners
+	if ($ClusterOwnerNode.OwnerNodes.Name -contains $Hostname) {
+		Write-Warning -Message "current hypervisor is a preferred owner for virtual machine: $($ClusterVirtualMachine.Name)"
+		continue
 	}
+
+	# if preferred owner is not singular
+	if ($ClusterOwnerNode.OwnerNodes.Count -gt 1) {
+		$Node = Get-Random -InputObject $ClusterOwnerNode.OwnerNodes.Name
+	}
+	else {
+		$Node = $ClusterOwnerNode.OwnerNodes.Name
+	}
+
+	# report intent
+	Write-Verbose -Verbose -Message "starting migration for '$($ClusterVirtualMachine.Name)' virtual machine to node: $Node"
+
+	# move virtual machine to preferred owner
+	try {
+		$MovedClusterVirtualMachine = Move-ClusterVirtualMachineRole -InputObject $ClusterVirtualMachine -Node $Node -MigrationType Live
+	}
+	catch {
+		Write-Warning -Message "could not move virtual machine: $($ClusterVirtualMachine.Name)"
+		return $_
+	}
+
+	# report complete
+	Write-Verbose -Verbose -Message "finished migration for '$($MovedClusterVirtualMachine.Name)' virtual machine to node: $($MovedClusterVirtualMachine.OwnerNode.Name)"
 }
