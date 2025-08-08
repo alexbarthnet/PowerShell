@@ -196,7 +196,7 @@ Begin {
 	}
 
 	# retrieve all zones
-	Write-Output "`nRetrieveing DNS zones..."
+	Write-Output "`nRetrieving DNS zones..."
 	Try {
 		$DnsServerZones = Get-DnsServerZone -ComputerName $ComputerName -ErrorAction 'Stop' | Where-Object { $_.ZoneName.Contains('.') -and $_.ZoneType -eq 'Primary' -and -not $_.IsAutoCreated }
 	}
