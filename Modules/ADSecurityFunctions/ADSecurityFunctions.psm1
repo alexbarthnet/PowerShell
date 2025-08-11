@@ -912,6 +912,19 @@ Function New-ADAccessRule {
 				# create ACE and add to array
 				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
+				# define ACE: allow 'Validated write to computer attributes' rights on descendent 'computer' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'Self'
+					type                = 'Allow'
+					objectType          = [guid]'9b026da6-0d3c-465c-8bee-5199d7165cba' # GUID for 'Validated write to computer attributes' rights
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+				}
+
+				# create ACE and add to array
+				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
 				# define ACE: allow 'Validated write to DNS host name' rights on descendent 'computer' objects
 				$Ace = @{
 					objectSid           = $SecurityIdentifier
@@ -971,6 +984,19 @@ Function New-ADAccessRule {
 					adRights            = 'WriteProperty'
 					type                = 'Allow'
 					objectType          = [guid]'4c164200-20c0-11d0-a768-00aa006e0529' # GUID for 'Account Restrictions' property set
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+				}
+
+				# create ACE and add to array
+				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'Validated write to computer attributes' rights on descendent 'computer' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'Self'
+					type                = 'Allow'
+					objectType          = [guid]'9b026da6-0d3c-465c-8bee-5199d7165cba' # GUID for 'Validated write to computer attributes' rights
 					inheritanceType     = 'Descendents'
 					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
 				}
