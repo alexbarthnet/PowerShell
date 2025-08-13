@@ -902,7 +902,7 @@ Function New-ADAccessRule {
 				# define ACE: allow 'Reset Password' on descendent 'computer' objects"
 				$Ace = @{
 					objectSid           = $SecurityIdentifier
-					adRights            = 'Self'
+					adRights            = 'ExtendedRight'
 					type                = 'Allow'
 					objectType          = [guid]'00299570-246d-11d0-a768-00aa006e0529' # GUID for 'Reset Password' rights
 					inheritanceType     = 'Descendents'
