@@ -559,7 +559,7 @@ Process {
 		# if autounattend file provided...
 		If ($PSBoundParameters.ContainsKey('PathToAutounattendFile')) {
 			# report state
-			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating ISO contents with unattend file for sysprep', $AutounattendXmlOnISO
+			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating ISO contents with Autounattend file', $AutounattendXmlOnISO
 
 			# get contents of unattend file
 			Try {
@@ -606,7 +606,7 @@ Process {
 		# if unattend file provided...
 		If ($PSBoundParameters.ContainsKey('PathToUnattendFile')) {
 			# report state
-			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating ISO contents with unattend file for install', $UnattendXmlOnISO
+			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating ISO contents with Unattend file', $UnattendXmlOnISO
 
 			# get contents of unattend file
 			Try {
