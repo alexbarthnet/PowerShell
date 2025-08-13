@@ -163,11 +163,14 @@ begin {
 }
 
 process {
+	# define LDAP filter
+	$LDAPFilter = "(&(!(objectClass=contact))(!(objectClass=computer))(|(objectClass=user)(objectClass=group))(whenChanged>=$WhenChanged))"
+
 	# define parameters
 	$GetADObject = @{
 		Server                = $PdcRoleOwner
 		SearchBase            = $DeletedObjectsContainer
-		LDAPFilter            = '(&(!(objectClass=contact))(!(objectClass=computer))(|(objectClass=user)(objectClass=group)))'
+		LDAPFilter            = $LDAPFilter
 		Properties            = 'objectGuid'
 		IncludeDeletedObjects = $true
 	}
