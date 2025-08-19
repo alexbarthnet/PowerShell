@@ -304,7 +304,7 @@ Process {
 		# define file path
 		$FilePath = Join-Path -Path $Path -ChildPath "$BaseName.pfx"
 
-		# define required paramters for Export-PfxCertificateWithDpapi
+		# define required parameters for Export-PfxCertificateWithDpapi
 		$ExportPfxCertificateWithDpapi = @{
 			FilePath    = $FilePath
 			Certificate = $Certificate

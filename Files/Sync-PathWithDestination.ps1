@@ -12,7 +12,7 @@ The path of the source directory.
 The path of the target directory.
 
 .PARAMETER Preset
-String paramter to specify multiple parameters from a single value:
+String parameter to specify multiple parameters from a single value:
 - 'Sync' sets Direction = 'Both', SkipDelete = $false, SkipExisting = $false
 - 'Merge' sets Direction = 'Both', SkipDelete = $true, SkipExisting = $false
 - 'Mirror' sets Direction = 'Forward', SkipDelete = $false, SkipExisting = $false
