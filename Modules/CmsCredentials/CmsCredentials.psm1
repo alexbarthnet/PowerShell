@@ -577,7 +577,7 @@ Function Export-CmsCredentialCertificate {
 	Specifies the password to the PFX file as a secure string. Cannot be combined with the ProtectTo parameter
 
 	.PARAMETER Path
-	Specifies the path for the exported public key and PFX file when not overriden by the FilePath or PfxFilePath parameters.
+	Specifies the path for the exported public key and PFX file when not overriden by the FilePath or PfxFile parameters.
 
 	.PARAMETER FilePath
 	Specifies the path for the exported public key.
@@ -1460,7 +1460,7 @@ Function Export-CmsCredential {
 	# define initial parameters for CMS certificate export
 	$ExportCmsCredentialCertificate = @{
 		Certificate   = $Certificate
-		PfxFilePath   = $PfxFile
+		PfxFile       = $PfxFile
 		SkipPublicKey = $true
 	}
 
