@@ -389,12 +389,12 @@ Begin {
 		ForEach ($Parameter in $Parameters) {
 			# if optional parameter is defined...
 			If ($BoundParameters.ContainsKey($Parameter)) {
-				# ...and is a switch paramter
+				# ...and is a switch parameter
 				If ($BoundParameters[$Parameter] -is [System.Management.Automation.SwitchParameter]) {
 					# ...add to provided dictionary after converting to boolean
 					$JsonNestedParams[$Parameter] = $BoundParameters[$Parameter].ToBool()
 				}
-				# ...and is not a switch paramter
+				# ...and is not a switch parameter
 				Else {
 					# ...add to provided dictionary as-is
 					$JsonNestedParams[$Parameter] = $BoundParameters[$Parameter]
@@ -803,12 +803,12 @@ Process {
 			ForEach ($Parameter in $Parameters) {
 				# if optional parameter is defined...
 				If ($PSBoundParameters[$Parameter]) {
-					# ...and is a switch paramter
+					# ...and is a switch parameter
 					If ($PSBoundParameters[$Parameter] -is [System.Management.Automation.SwitchParameter]) {
 						# ...convert to boolean then add to hashtable
 						$JsonKeyValues[$Parameter] = $PSBoundParameters[$Parameter].ToBool()
 					}
-					# ...and is not a switch paramter
+					# ...and is not a switch parameter
 					Else {
 						# ...add to hashtable as-is
 						$JsonKeyValues[$Parameter] = $PSBoundParameters[$Parameter]
@@ -873,7 +873,7 @@ Process {
 				$AddNestedJsonKeyValuePair = @{
 					# define parameters
 					BoundParameters  = $PSBoundParameters
-					# define paramter set name
+					# define parameter set name
 					ParameterSetName = 'AddVMNetworkAdapter'
 					# define keys between root key and nested key
 					JsonPathToKey    = 'VMNetworkAdapters'
@@ -904,7 +904,7 @@ Process {
 			$AddNestedJsonKeyValuePair = @{
 				# define parameters
 				BoundParameters  = $PSBoundParameters
-				# define paramter set name
+				# define parameter set name
 				ParameterSetName = 'AddADComputer'
 				# define keys between root key and nested key
 				JsonPathToKey    = 'ADComputer'
@@ -930,7 +930,7 @@ Process {
 			$AddNestedJsonKeyValuePair = @{
 				# define parameters
 				BoundParameters  = $PSBoundParameters
-				# define paramter set name
+				# define parameter set name
 				ParameterSetName = 'AddOSDeployment'
 				# define keys between root key and nested key
 				JsonPathToKey    = 'OSDeployment'
@@ -956,7 +956,7 @@ Process {
 			$AddNestedJsonKeyValuePair = @{
 				# define parameters
 				BoundParameters  = $PSBoundParameters
-				# define paramter set name
+				# define parameter set name
 				ParameterSetName = 'AddVMHardDiskDrive'
 				# define keys between root key and nested key
 				JsonPathToKey    = 'VMHardDiskDrives'
@@ -982,7 +982,7 @@ Process {
 			$AddNestedJsonKeyValuePair = @{
 				# define parameters
 				BoundParameters  = $PSBoundParameters
-				# define paramter set name
+				# define parameter set name
 				ParameterSetName = 'AddVMNetworkAdapter'
 				# define keys between root key and nested key
 				JsonPathToKey    = 'VMNetworkAdapters'

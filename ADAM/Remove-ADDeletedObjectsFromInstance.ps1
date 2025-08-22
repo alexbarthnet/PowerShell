@@ -163,11 +163,14 @@ begin {
 }
 
 process {
+	# define LDAP filter
+	$LDAPFilter = "(&(!(objectClass=contact))(!(objectClass=computer))(|(objectClass=user)(objectClass=group))(whenChanged>=$WhenChanged))"
+
 	# define parameters
 	$GetADObject = @{
 		Server                = $PdcRoleOwner
 		SearchBase            = $DeletedObjectsContainer
-		LDAPFilter            = '(&(!(objectClass=contact))(!(objectClass=computer))(|(objectClass=user)(objectClass=group)))'
+		LDAPFilter            = $LDAPFilter
 		Properties            = 'objectGuid'
 		IncludeDeletedObjects = $true
 	}
@@ -190,7 +193,7 @@ process {
 		$ExistingObjectIdentity = '{0},{1}' -f $DeletedObject.DistinguishedName.Split('\0ADEL:', 2)[0], $DeletedObject.LastKnownParent
 
 		# report state
-		Write-Host "found deleted '$ObjectClass' object with identity: $ExistingObjectIdentity"
+		Write-Host "found deleted '$ObjectClass' object in source with identity: $ExistingObjectIdentity"
 
 		# if WhatIf provided...
 		if ($PSCmdlet.ShouldProcess($ExistingObjectIdentity)) {
@@ -208,7 +211,7 @@ process {
 			}
 
 			# report state
-			Write-Host "removed '$ObjectClass' object with identity: $ExistingObjectIdentity"
+			Write-Host "removed '$ObjectClass' object in target with identity: $ExistingObjectIdentity"
 		}
 	}
 }

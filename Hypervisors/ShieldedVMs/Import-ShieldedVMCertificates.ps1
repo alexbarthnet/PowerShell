@@ -209,7 +209,7 @@ Process {
 
 	# import PFX files to store
 	ForEach ($PfxFile in $PfxFiles) {
-		# define required paramters for Import-PfxCertificateFromPath
+		# define required parameters for Import-PfxCertificateFromPath
 		$ImportPfxCertificateWithDpapi = @{
 			FilePath          = $PfxFile.FullName
 			CertStoreLocation = $CertStoreLocation

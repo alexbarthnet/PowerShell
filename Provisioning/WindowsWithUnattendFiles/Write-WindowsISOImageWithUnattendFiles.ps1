@@ -1,21 +1,18 @@
 <#
 .SYNOPSIS
-Create a bootable USB drive from a Windows ISO image.
+Create a Windows ISO image with unattend files from a Windows ISO image.
 
 .DESCRIPTION
-Create a bootable USB drive from a Windows ISO image.
+Create a Windows ISO image with unattend files from a Windows ISO image.
 
 .PARAMETER PathToOriginalIsoImage
 Path to the original Windows ISO image.
 
-.PARAMETER DriveLetter
-Character for the drive letter of an existing volume on the USB drive.
-
-.PARAMETER Number
-Integer for the disk number of the USB drive.
+.PARAMETER PathForUpdatedIsoImage
+Path for the updated Windows ISO image.
 
 .PARAMETER PathToAutounattendFile
-Path to autounattend XML file to add to Windows ISO image. The file will be saved as 'Autounattend.xml' at the root of the ISO file system and will be executed by Windows Setup after booting from the ISO. The file should include the following passes and components:
+Path to autounattend XML file to add to the ISO image. The file will be saved as 'Autounattend.xml' at the root of the USB file system and will be executed by Windows Setup after booting from the USB drive. The file should include the following passes and components:
  - windowsPE pass and Microsoft-Windows-International-Core-WinPE component with the language settings for setup
  - windowsPE pass Microsoft-Windows-Setup component with the UserData section to set the product key for setup and the DiskConfiguration section to partition and format the disks
  - specialize pass and Microsoft-Windows-International-Core component with the language settings for the Windows installation
@@ -25,21 +22,21 @@ Path to autounattend XML file to add to Windows ISO image. The file will be save
  - auditUser pass and Microsoft-Windows-Deployment component with the Generalize settings to generalize the image at the end of Windows setup
 
 .PARAMETER PathToUnattendFile
-Path to unattend XML file to add to Windows ISO image. The file will be saved as 'Unattend.xml' at the root of the ISO file system and will be executed by Windows Setup after generalization is complete. The file should include the following passes and components:
+Path to unattend XML file to add to the ISO image. The file will be saved as 'Unattend.xml' at the root of the ISO file system and will be executed by Windows Setup after generalization is complete. The file should include the following passes and components:
  - oobeSystem pass and Microsoft-Windows-International-Core component with the language settings for the Windows installation
  - oobeSystem pass and Microsoft-Windows-Shell-Setup component with the administrator password settings
 
 .PARAMETER PathToUpdateScript
-Path to required "update" PowerShell file to add to Windows WIM image. The file will be saved as 'Update-Windows.ps1' under the Windows directory in the WIM image.
+Path to required "update" PS1 file to add to WIM file. The file will be saved as 'Update-Windows.ps1' under the Windows directory in the WIM image.
 
 .PARAMETER PathToInvokeScript
-Path to required "invoke" PowerShell file to add to Windows WIM image. The file will be saved as 'Invoke-ScriptsFromRemovableMedia.ps1' under the Windows directory in the WIM image.
+Path to required "invoke" PS1 file to add to WIM file. The file will be saved as 'Invoke-ScriptsFromRemovableMedia.ps1' under the Windows directory in the WIM image.
 
 .PARAMETER PathToScriptFolder
-Path to optional folder containing PS1 scripts to add to Windows ISO image.
+Path to optional folder containing PS1 scripts to add to the ISO image.
 
 .PARAMETER PathToResourcesFolder
-Path to optional folder containing file resources to add to Windows ISO image.
+Path to optional folder containing file resources to add to the ISO image.
 
 .PARAMETER StagingPath
 Path to folder for staging the ISO file contents and mounting the WIM image. The default staging path is a randomly named folder in the system temp directory.
@@ -48,22 +45,22 @@ Path to folder for staging the ISO file contents and mounting the WIM image. The
 Switch parameter to remove any existing files and folders in the StagingPath folder.
 
 .PARAMETER ReuseStagingPath
-Switch parameter to use any existing files and folders in the StagingPath folder rather than copying new files from the original ISO image or script folders.
+Switch parameter to use any existing files and folders in the StagingPath folder rather than copying new files from the original ISO image or provided folders.
 
 .PARAMETER StopAfterPreparingImage
-Switch parameter to stop after preparing the contents Windows ISO image. Requires StagingPath parameter.
+Switch parameter to stop after preparing the contents for the ISO image. Requires StagingPath parameter.
 
 .PARAMETER SkipExclude
 Switch parameter to skip creating Microsoft Defender path exclusion for the staging path.
 
 .PARAMETER UpdateAllWindowsImages
-Switch parameter to update all images on the Windows ISO regardless of Index value in UnattendExpandStrings hashtable.
-
-.PARAMETER FileSystem
-String with file system to apply to USB drive. The default value is "NTFS" and the value must be "NTFS" or "FAT32".
+Switch parameter to update all images in the WIM file regardless of Index value in the UnattendExpandStrings hashtable.
 
 .PARAMETER AdministratorPassword
-Credential containing administrator password for unattend XML files.
+Credential containing the administrator password to add to unattend XML files.
+
+.PARAMETER UnattendedJoinCredential
+Credential containing the unattended domain join username and password to add to unattend XML files.
 
 .PARAMETER UnattendExpandStrings
 Hashtable of expand strings and values for autounattend and unattend XML files. The default values are as follows:
@@ -76,30 +73,51 @@ None.
 .OUTPUTS
 None. The function does not generate any output.
 
+.LINK
+https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nn-wuapi-iinstallationresult
+
+.LINK
+https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatesearcher-search
+
+.LINK
+https://learn.microsoft.com/en-us/windows/win32/api/wuapi/ne-wuapi-operationresultcode
+
+.LINK
+https://learn.microsoft.com/en-us/windows/win32/wua_sdk/searching--downloading--and-installing-updates
+
+.LINK
+https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-deployment-runsynchronous-runsynchronouscommand-willreboot
+
+.LINK
+https://learn.microsoft.com/en-us/windows-server/get-started/kms-client-activation-keys
+
+.LINK
+https://learn.microsoft.com/en-us/windows-server/get-started/automatic-vm-activation
+
 #>
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
-Param(
+param(
 	[Parameter(Position = 0, Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToOriginalIsoImage,
-	[Parameter(Position = 1)]
-	[string]$DriveLetter,
+	[Parameter(Position = 1, Mandatory = $true)]
+	[string]$PathForUpdatedIsoImage,
 	[Parameter(Position = 2)]
-	[uint32]$Number,
-	[Parameter(Position = 3)][ValidateScript({ [System.IO.File]::Exists($_) })]
-	[string]$PathToAutounattendFile,
+	[string]$PathToBinaryFile = 'oscdimg.exe',
+	[Parameter(Position = 3)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[string]$PathToBinaryFolder = (Join-Path -Path ([System.Environment]::GetFolderPath('ProgramFilesx86')) -ChildPath '\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg'),
 	[Parameter(Position = 4)][ValidateScript({ [System.IO.File]::Exists($_) })]
-	[string]$PathToUnattendFile,
+	[string]$PathToAutounattendFile,
 	[Parameter(Position = 5)][ValidateScript({ [System.IO.File]::Exists($_) })]
-	[string]$PathToUpdateScript,
+	[string]$PathToUnattendFile,
 	[Parameter(Position = 6)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[string]$PathToUpdateScript,
+	[Parameter(Position = 7)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToInvokeScript,
-	[Parameter(Position = 7)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
-	[string]$PathToScriptFolder,
 	[Parameter(Position = 8)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
-	[string]$PathToResourcesFolder,
+	[string]$PathToScriptFolder,
 	[Parameter(Position = 9)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
-	[string]$PathToBinaryFolder,
+	[string]$PathToResourcesFolder,
 	[Parameter(Position = 10, ParameterSetName = 'StagingPath', Mandatory = $true)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$StagingPath,
 	[Parameter(Position = 11, ParameterSetName = 'StagingPath')]
@@ -111,98 +129,108 @@ Param(
 	[Parameter(Position = 14)]
 	[switch]$SkipExclude,
 	[Parameter(Position = 15)]
-	[string]$FileSystem = 'NTFS',
-	[Parameter(Position = 16)]
 	[pscredential]$AdministratorPassword,
+	[Parameter(Position = 16)]
+	[pscredential]$UnattendedJoinCredential,
 	[Parameter(Position = 17)]
-	[pscredential]$UnattendJoinCredential,
-	[Parameter(Position = 18)]
 	[hashtable]$UnattendExpandStrings = @{
-		'Index'      = 4
-		'ProductKey' = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF'
+		DiskID     = 0
+		Index      = 4
+		ProductKey = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF'
 	}
 )
 
-Begin {
-	Function New-TemporaryFolder {
-		Param(
+begin {
+	function New-TemporaryFolder {
+		param(
 			[switch]$ForMachine
 		)
 
 		# if temporary folder for machine requested...
-		If ($ForMachine) {
+		if ($ForMachine) {
 			# retrieve TEMP environment variable for machine
 			$PathForTEMP = [System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')
 		}
-		Else {
+		else {
 			# retrieve TEMP environment variable for user
 			$PathForTEMP = [System.Environment]::GetEnvironmentVariable('TEMP', 'User')
 		}
 
 		# define path for temporary folder
-		Do {
+		do {
 			# define temporary folder name
 			$NameForTemporaryFolder = [System.IO.Path]::GetRandomFileName().Replace('.', [System.String]::Empty)
 			# combine TEMP path and temporary folder name
 			$PathForTemporaryFolder = Join-Path -Path $PathForTEMP -ChildPath $NameForTemporaryFolder
 		}
-		Until (![System.IO.Directory]::Exists($PathForTemporaryFolder))
+		until (![System.IO.Directory]::Exists($PathForTemporaryFolder))
 
 		# create temporary folder
-		Try {
+		try {
 			$TemporaryFolder = New-Item -Force -ItemType Directory -Path $PathForTemporaryFolder
 		}
-		Catch {
+		catch {
 			$PSCmdlet.ThrowTerminatingError($_)
 		}
 
 		# return temporary folder
-		Return $TemporaryFolder
+		return $TemporaryFolder
+	}
+
+	# define path to required program
+	$FilePath = Join-Path -Path $PathToBinaryFolder -ChildPath $PathToBinaryFile
+
+	# validate application path
+	try {
+		$null = Get-Item -Path $FilePath
+	}
+	catch {
+		$PSCmdlet.ThrowTerminatingError($_)
 	}
 
 	# if administrator password provided...
-	If ($PSBoundParameters.ContainsKey('AdministratorPassword')) {
+	if ($PSBoundParameters.ContainsKey('AdministratorPassword')) {
 		# retrieve plaintext password from credential object
-		Try {
+		try {
 			$PlainText = $AdministratorPassword.GetNetworkCredential().Password
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# append required string to plaintext password
 		$AppendedPlainText = '{0}?AdministratorPassword' -f $PlainText
 
 		# encode appended password
-		Try {
+		try {
 			$EncodedAdministratorPassword = [System.Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($AppendedPlainText))
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# add encoded plaintext password to expand strings hashtable
 		$UnattendExpandStrings['AdministratorPassword'] = $EncodedAdministratorPassword
 	}
 
-	# if administrator password provided...
-	If ($PSBoundParameters.ContainsKey('UnattendJoinCredential')) {
+	# if unattended join credential provided...
+	if ($PSBoundParameters.ContainsKey('UnattendedJoinCredential')) {
 		# add plaintext unattended join password to expand strings hashtable
-		$UnattendExpandStrings['Username'] = $UnattendJoinCredential.GetNetworkCredential().Username
+		$UnattendExpandStrings['Username'] = $UnattendedJoinCredential.GetNetworkCredential().Username
 
 		# add plaintext unattended join password to expand strings hashtable
-		$UnattendExpandStrings['Password'] = $UnattendJoinCredential.GetNetworkCredential().Password
+		$UnattendExpandStrings['Password'] = $UnattendedJoinCredential.GetNetworkCredential().Password
 	}
 
 	# if staging path defined...
-	If ($PSBoundParameters.ContainsKey('StagingPath')) {
+	if ($PSBoundParameters.ContainsKey('StagingPath')) {
 		# if StagingPath is not an absolute path...
-		If (![System.IO.Path]::IsPathRooted($StagingPath)) {
+		if (![System.IO.Path]::IsPathRooted($StagingPath)) {
 			# get unresolved absolute path
-			Try {
+			try {
 				$StagingPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($StagingPath)
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not create absolute path from the provided Path parameter: $StagingPath"
 				$PSCmdlet.ThrowTerminatingError($_)
 			}
@@ -212,47 +240,47 @@ Begin {
 		}
 
 		# if staging path not found...
-		Try {
+		try {
 			$null = Get-Item -Path $StagingPath -ErrorAction 'Stop'
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not locate directory for provided StagingPath: $StagingPath"
 			$PSCmdlet.ThrowTerminatingError($_)
 		}
 
 		# retrieve child items in StagingPath
-		Try {
+		try {
 			$StagingPathItems = Get-ChildItem -Path $StagingPath -Force -Recurse
 		}
-		Catch {
+		catch {
 			Write-Warning -Message 'could not check StagingPath for existing files and folders'
 			$PSCmdlet.ThrowTerminatingError($_)
 		}
 
 		# if child items found in StagingPath...
-		If ($null -ne $StagingPathItems -and -not $ReuseStagingPath) {
+		if ($null -ne $StagingPathItems -and -not $ReuseStagingPath) {
 			# if EmptyStagingPath not requested...
-			If (!$EmptyStagingPath) {
+			if (!$EmptyStagingPath) {
 				# warn and inquire
 				Write-Warning -Message 'found existing files or folders in provided StagingPath. Continue to empty StagingPath.' -WarningAction Inquire
 			}
 
 			# remove child items in StagingPath
-			Try {
+			try {
 				Get-ChildItem -Path $StagingPath -Force | Remove-Item -Force -Recurse -ErrorAction 'Stop'
 			}
-			Catch {
+			catch {
 				$PSCmdlet.ThrowTerminatingError($_)
 			}
 		}
 	}
 	# if staging path not defined...
-	Else {
+	else {
 		# create temporary folder
-		Try {
+		try {
 			$TemporaryFolder = New-TemporaryFolder
 		}
-		Catch {
+		catch {
 			$PSCmdlet.ThrowTerminatingError($_)
 		}
 
@@ -261,43 +289,43 @@ Begin {
 	}
 
 	# create base temporary path
-	Try {
+	try {
 		$TemporaryPath = New-Item -Force -ItemType Directory -Path $StagingPath
 	}
-	Catch {
+	catch {
 		$PSCmdlet.ThrowTerminatingError($_)
 	}
 
 	# create temporary path for DISM scratch directory
-	Try {
+	try {
 		$TemporaryPathForDSD = New-Item -Force -ItemType Directory -Path $TemporaryPath -Name 'DSD'
 	}
-	Catch {
+	catch {
 		$PSCmdlet.ThrowTerminatingError($_)
 	}
 
 	# create temporary path for ISO contents
-	Try {
+	try {
 		$TemporaryPathForISO = New-Item -Force -ItemType Directory -Path $TemporaryPath -Name 'ISO'
 	}
-	Catch {
+	catch {
 		$PSCmdlet.ThrowTerminatingError($_)
 	}
 
 	# create temporary path for WIM file
-	Try {
+	try {
 		$TemporaryPathForWIM = New-Item -Force -ItemType Directory -Path $TemporaryPath -Name 'WIM'
 	}
-	Catch {
+	catch {
 		$PSCmdlet.ThrowTerminatingError($_)
 	}
 
 	# if Skip Exclude not requested...
-	If (!$SkipExclude) {
-		Try {
+	if (!$SkipExclude) {
+		try {
 			Add-MpPreference -ExclusionPath $StagingPath -ErrorAction Stop
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not create exclusion for temporary path: $StagingPath"
 			$PSCmdlet.ThrowTerminatingError($_)
 		}
@@ -312,116 +340,30 @@ Begin {
 	$InvokePs1OnWIM = "$TemporaryPathForWIM\Windows\Invoke-ScriptsFromRemovableMedia.ps1"
 }
 
-Process {
-	# retrieve removable volumes
-	$Volumes = Get-Volume | Where-Object { $_.DriveType -eq 'Removable' }
+process {
+	########################################
+	# prepare image
+	########################################
 
-	# retrieve USB disks
-	$Disks = Get-Disk | Where-Object { $_.BusType -eq 'USB' }
-
-	# if drive letter provided...
-	If ($DriveLetter) {
-		# retrieve removable volumes
-		$Volume = $Volumes | Where-Object { $_.DriveLetter -eq $DriveLetter }
-
-		# if volume with drive letter not found...
-		If ($null -eq $Volume) {
-			Write-Warning -Message 'no removable volumes found with '$DriveLetter' drive letter, exiting!'
-			Return
-		}
-
-		# retrieve disk from volume
-		$Disk = $Volume | Get-Partition | Get-Disk | Where-Object { $_.BusType -eq 'USB' }
-
-		# if disk count is greater than 1...
-		If ((Measure-Object -InputObject $Disk).Count -gt 1) {
-			Write-Warning -Message 'multiple Removable USB disks found for provided DriveLetter, use DiskNumber parameter to define specific disk, exiting!'
-			Return
-		}
-
-		# if disk not found...
-		If ($null -eq $Disk) {
-			Write-Warning -Message 'no removable volumes on USB disks found with '$DriveLetter' drive letter, exiting!'
-			Return
-		}
-	}
-	# if disk number provided...
-	ElseIf ($Number) {
-		# retrieve USB disk by disk number
-		$Disk = $Disks | Where-Object { $_.BusType -eq 'USB' -and $_.Number -eq $Number }
-
-		# if disk with disk number not found...
-		If ($null -eq $Disk) {
-			Write-Warning -Message 'no USB disks found with '$Number' disk number, exiting!'
-			Return
-		}
-	}
-	# if drive letter and disk number not provided...
-	Else {
-		# retrieve removable volumes
-		$Volume = Get-Volume | Where-Object { $_.DriveType -eq 'Removable' }
-
-		# if volume count is not zero...
-		If ((Measure-Object -InputObject $Volume).Count -gt 0) {
-			# retrieve volumes that are USB disks
-			$Disk = $Volume | Get-Partition | Get-Disk | Where-Object { $_.BusType -eq 'USB' }
-
-			# if disk count is greater than 1...
-			If ((Measure-Object -InputObject $Disk).Count -gt 1) {
-				Write-Warning -Message 'multiple removable volumes on USB disks found, use the DriveLetter or Number parameter to define a specific volume or disk, exiting!'
-				Return
-			}
-
-			# if disk count is less than 1...
-			If ((Measure-Object -InputObject $Disk).Count -lt 1) {
-				Write-Warning -Message 'no removable volumes on USB disks found, exiting!'
-				Return
-			}
-		}
-
-		# if disk not found from volumes...
-		If ($null -eq $Disk) {
-			# retrieve USB disks
-			$Disk = Get-Disk | Where-Object { $_.BusType -eq 'USB' }
-
-			# if disk count is greater than 1...
-			If ((Measure-Object -InputObject $Disk).Count -gt 1) {
-				Write-Warning -Message 'multiple USB disks found, use the Number parameter from the Get-Disk command to define a specific disk, exiting!'
-				Return
-			}
-
-			# if disk count is less than 1...
-			If ((Measure-Object -InputObject $Disk).Count -lt 1) {
-				Write-Warning -Message 'no USB disks found, exiting!'
-				Return
-			}
-		}
-	}
-
-	# report state
-	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Found USB disk', $Disk.Number
-
-	# test disk for multiple volumes or partitions
-
-	# if reuse staging path not set...
-	If (!$ReuseStagingPath) {
+	# if staging path provided and reuse staging path not set...
+	if ($StagingPath -and -not $ReuseStagingPath) {
 		# report state
 		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Mounting ISO image', $PathToOriginalIsoImage
 
 		# mount the original ISO image
-		Try {
+		try {
 			$DiskImage = Mount-DiskImage -ImagePath $PathToOriginalIsoImage
 		}
-		Catch {
-			Return $_
+		catch {
+			return $_
 		}
 
 		# retrieve volume for disk image
-		Try {
+		try {
 			$Volume = Get-Volume -DiskImage $DiskImage
 		}
-		Catch {
-			Return $_
+		catch {
+			return $_
 		}
 
 		# retrieve volume properties
@@ -432,53 +374,53 @@ Process {
 		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Copying ISO contents to path', $TemporaryPathForISO
 
 		# copy ISO contents to temporary path
-		Try {
+		try {
 			Copy-Item -Path ('{0}:\*' -f $ImageDriveLetter) -Destination $TemporaryPathForISO -Recurse -Force
 		}
-		Catch {
-			Return $_
+		catch {
+			return $_
 		}
 
 		# report state
 		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Dismounting ISO image...'
 
 		# dismount ISO image
-		Try {
+		try {
 			$null = $DiskImage | Dismount-DiskImage
 		}
-		Catch {
-			Return $_
+		catch {
+			return $_
 		}
 
 		# if scripts provided...
-		If ($PathToInvokeScript -or $PathToUpdateScript) {
+		if ($PathToInvokeScript -or $PathToUpdateScript) {
 			# clear readonly flag on windows image
-			Try {
+			try {
 				Set-ItemProperty -Path $ImagePathForWIM -Name 'IsReadOnly' -Value $false
 			}
-			Catch {
-				Return $_
+			catch {
+				return $_
 			}
 
 			# retrieve windows image
-			Try {
+			try {
 				$WindowsImage = Get-WindowsImage -ImagePath $ImagePathForWIM
 			}
-			Catch {
-				Return $_
+			catch {
+				return $_
 			}
 
 			# loop through indices
-			:NextIndex ForEach ($Index in $WindowsImage.ImageIndex) {
+			:NextIndex foreach ($Index in $WindowsImage.ImageIndex) {
 				# if index provided in unattend strings
-				If ($UnattendExpandStrings.ContainsKey('Index') -and -not $UpdateAllWindowsImages) {
+				if ($UnattendExpandStrings.ContainsKey('Index') -and -not $UpdateAllWindowsImages) {
 					# if current index does not provided index...
-					If ($Index -ne $UnattendExpandStrings['Index']) {
+					if ($Index -ne $UnattendExpandStrings['Index']) {
 						# report state
 						"{0}`t{1}: {2}:{3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Skipping WIM image and index', $ImagePathForWIM, $Index
 
 						# continue to next index
-						Continue NextIndex
+						continue NextIndex
 					}
 				}
 
@@ -486,38 +428,38 @@ Process {
 				"{0}`t{1}: {2}:{3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Mounting WIM image and index', $ImagePathForWIM, $Index
 
 				# mount windows image
-				Try {
+				try {
 					$null = Mount-WindowsImage -Path $TemporaryPathForWIM -ImagePath $ImagePathForWIM -Index $Index -ScratchDirectory $TemporaryPathForDSD
 				}
-				Catch {
-					Return $_
+				catch {
+					return $_
 				}
 
 				# if update script provided...
-				If ($PSBoundParameters.ContainsKey('PathToUpdateScript')) {
+				if ($PSBoundParameters.ContainsKey('PathToUpdateScript')) {
 					# report state
 					"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating WIM with "update" script', $UpdatePs1OnWIM
 
 					# add update script to windows image
-					Try {
+					try {
 						Copy-Item -Path $PathToUpdateScript -Destination $UpdatePs1OnWIM
 					}
-					Catch {
-						Return $_
+					catch {
+						return $_
 					}
 				}
 
 				# if invoke script provided...
-				If ($PSBoundParameters.ContainsKey('PathToInvokeScript')) {
+				if ($PSBoundParameters.ContainsKey('PathToInvokeScript')) {
 					# report state
 					"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating WIM with "invoke" script', $InvokePs1OnWIM
 
 					# add invoke script to windows image
-					Try {
+					try {
 						Copy-Item -Path $PathToInvokeScript -Destination $InvokePs1OnWIM
 					}
-					Catch {
-						Return $_
+					catch {
+						return $_
 					}
 				}
 
@@ -525,68 +467,68 @@ Process {
 				"{0}`t{1}: {2}:{3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Dismounting WIM image and index', $ImagePathForWIM, $Index
 
 				# dismount windows image
-				Try {
+				try {
 					$null = Dismount-WindowsImage -Path $TemporaryPathForWIM -Save -CheckIntegrity -ScratchDirectory $TemporaryPathForDSD
 				}
-				Catch {
-					Return $_
+				catch {
+					return $_
 				}
 			}
 		}
 
 		# if file system is FAT32...
-		If ($FileSystem -eq 'FAT32') {
+		if ($FileSystem -eq 'FAT32') {
 			# report state
 			"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Splitting WIM image...'
 
 			# split images into 4GB chunks
-			Try {
+			try {
 				$null = Split-WindowsImage -ImagePath $ImagePathForWIM -SplitImagePath $ImagePathForSWM -FileSize 4096 -ScratchDirectory $TemporaryPathForDSD
 			}
-			Catch {
-				Return $_
+			catch {
+				return $_
 			}
 
 			# remove original WIM image
-			Try {
+			try {
 				Remove-Item -Path $ImagePathForWIM -Force
 			}
-			Catch {
-				Return $_
+			catch {
+				return $_
 			}
 		}
 
 		# if autounattend file provided...
-		If ($PSBoundParameters.ContainsKey('PathToAutounattendFile')) {
+		if ($PSBoundParameters.ContainsKey('PathToAutounattendFile')) {
 			# report state
-			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating ISO contents with unattend file for sysprep', $AutounattendXmlOnISO
+			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating ISO contents with Autounattend file', $AutounattendXmlOnISO
 
-			# get contents of unattend file
-			Try {
+			# get contents of autounattend file
+			try {
 				$Content = Get-Content -Path $PathToAutounattendFile -Raw
 			}
-			Catch {
-				Return $_
+			catch {
+				return $_
 			}
 
 			# if administrator password provided...
-			If ($PSBoundParameters.ContainsKey('AdministratorPassword')) {
+			if ($PSBoundParameters.ContainsKey('AdministratorPassword')) {
 				$Content = $Content -replace '<!-- <AdministratorPassword>', '<AdministratorPassword>'
 				$Content = $Content -replace '</AdministratorPassword> -->', '</AdministratorPassword>'
 			}
 
 			# while content contains XML element with expand string as value...
-			While ($Content -match '<\w+>%(?<ExpandString>\w+)%</\w+>') {
+			while ($Content -match '<\w+>%(?<ExpandString>\w+)%</\w+>') {
 				# retrieve original XML element
 				$OriginalString = $Matches[0]
 				# retrieve expand string
 				$ExpandString = $Matches['ExpandString']
 				# if value for expand string provided...
-				If ($UnattendExpandStrings.ContainsKey($ExpandString)) {
+				if ($UnattendExpandStrings.ContainsKey($ExpandString)) {
 					# replace the expand string with the provided value
 					$ModifiedString = $OriginalString -replace "%$ExpandString%", $UnattendExpandStrings[$ExpandString]
 				}
-				Else {
+				else {
 					# comment out the original XML element
 					$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace '%')
 				}
@@ -594,46 +536,46 @@ Process {
 				$Content = $Content -replace $OriginalString, $ModifiedString
 			}
 
-			# add unattend file to ISO
-			Try {
+			# add autounattend file to ISO
+			try {
 				$Content | Set-Content -Path $AutounattendXmlOnISO
 			}
-			Catch {
-				Return $_
+			catch {
+				return $_
 			}
 		}
 
 		# if unattend file provided...
-		If ($PSBoundParameters.ContainsKey('PathToUnattendFile')) {
+		if ($PSBoundParameters.ContainsKey('PathToUnattendFile')) {
 			# report state
-			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating ISO contents with unattend file for install', $UnattendXmlOnISO
+			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating ISO contents with Unattend file', $UnattendXmlOnISO
 
 			# get contents of unattend file
-			Try {
+			try {
 				$Content = Get-Content -Path $PathToUnattendFile -Raw
 			}
-			Catch {
-				Return $_
+			catch {
+				return $_
 			}
 
 			# if administrator password provided...
-			If ($PSBoundParameters.ContainsKey('AdministratorPassword')) {
+			if ($PSBoundParameters.ContainsKey('AdministratorPassword')) {
 				$Content = $Content -replace '<!-- <AdministratorPassword>', '<AdministratorPassword>'
 				$Content = $Content -replace '</AdministratorPassword> -->', '</AdministratorPassword>'
 			}
 
 			# while content contains XML element with expand string as value...
-			While ($Content -match '<\w+>%(?<ExpandString>\w+)%</\w+>') {
+			while ($Content -match '<\w+>%(?<ExpandString>\w+)%</\w+>') {
 				# retrieve original XML element
 				$OriginalString = $Matches[0]
 				# retrieve expand string
 				$ExpandString = $Matches['ExpandString']
 				# if value for expand string provided...
-				If ($UnattendExpandStrings.ContainsKey($ExpandString)) {
+				if ($UnattendExpandStrings.ContainsKey($ExpandString)) {
 					# replace the expand string with the provided value
 					$ModifiedString = $OriginalString -replace "%$ExpandString%", $UnattendExpandStrings[$ExpandString]
 				}
-				Else {
+				else {
 					# comment out the original XML element
 					$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace '%')
 				}
@@ -642,228 +584,71 @@ Process {
 			}
 
 			# add unattend file to ISO
-			Try {
+			try {
 				$Content | Set-Content -Path $UnattendXmlOnISO
 			}
-			Catch {
-				Return $_
-			}
-		}
-
-		# if script folder provided...
-		If ($PSBoundParameters.ContainsKey('PathToScriptFolder')) {
-			# define scripts folder on ISO
-			$ScriptFolderForISO = Join-Path -Path $TemporaryPathForISO -ChildPath 'scripts'
-
-			# if script folder on ISO not found...
-			If (![System.IO.Directory]::Exists($ScriptFolderForISO)) {
-				# report state
-				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Creating ISO scripts folder', $ScriptFolderForISO
-
-				# create folder
-				Try {
-					$null = New-Item -ItemType Directory -Path $ScriptFolderForISO
-				}
-				Catch {
-					Return $_
-				}
-			}
-
-			# retrieve files in script folder
-			$Files = Get-ChildItem -Path $PathToScriptFolder -Filter '*.ps1'
-
-			# loop through files
-			ForEach ($File in $Files) {
-				# report state
-				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding script to ISO scripts folder', $File.Name
-
-				# copy item to folder
-				Try {
-					Copy-Item -Path $File -Destination $ScriptFolderForISO
-				}
-				Catch {
-					Return $_
-				}
-			}
-		}
-
-		# if resources folder provided...
-		If ($PSBoundParameters.ContainsKey('PathToResourcesFolder')) {
-			# define resources folder on ISO
-			$ResourcesFolderForISO = Join-Path -Path $TemporaryPathForISO -ChildPath 'resources'
-
-			# if resources folder on ISO not found...
-			If (![System.IO.Directory]::Exists($FilesFolderForISO)) {
-				# report state
-				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Creating ISO resources folder', $ResourcesFolderForISO
-
-				# create folder
-				Try {
-					$null = New-Item -ItemType Directory -Path $ResourcesFolderForISO
-				}
-				Catch {
-					Return $_
-				}
-			}
-
-			# retrieve resources folder
-			Try {
-				$ResourcesFolder = Get-Item -Path $PathToResourcesFolder
-			}
-			Catch {
-				Return $_
-			}
-
-			# retrieve folders in resources folder
-			Try {
-				$Folders = Get-ChildItem -Recurse -Path $PathToResourcesFolder -Directory
-			}
-			Catch {
-				Return $_
-			}
-
-			# loop through folders
-			ForEach ($Folder in $Folders) {
-				# define relative folder path
-				$RelativeFolderPath = $Folder.FullName.Replace($ResourcesFolder.FullName, '')
-
-				# report state
-				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding folder to ISO resources folder', $RelativeFolderPath
-
-				# file path in ISO
-				$FolderPath = Join-Path -Path $ResourcesFolderForISO -ChildPath $RelativeFolderPath
-
-				# copy item to folder
-				Try {
-					$null = New-Item -Path $FolderPath -ItemType Directory -Force
-				}
-				Catch {
-					Return $_
-				}
-			}
-
-			# retrieve files in resources folder
-			Try {
-				$Files = Get-ChildItem -Recurse -Path $PathToResourcesFolder -File
-			}
-			Catch {
-				Return $_
-			}
-
-			# loop through files
-			ForEach ($File in $Files) {
-				# define relative file path
-				$RelativeFilePath = $File.FullName.Replace($ResourcesFolder.FullName, '')
-
-				# report state
-				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding file to ISO resources folder', $RelativeFilePath
-
-				# file path in ISO
-				$FilePath = Join-Path -Path $ResourcesFolderForISO -ChildPath $RelativeFilePath
-
-				# copy item to folder
-				Try {
-					$null = Copy-Item -Path $File.FullName -Destination $FilePath -Force
-				}
-				Catch {
-					Return $_
-				}
+			catch {
+				return $_
 			}
 		}
 	}
 
 	# if stop requested...
-	If ($StopAfterPreparingImage) {
+	if ($StopAfterPreparingImage) {
 		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Image prepared in staging path', $TemporaryPathForISO
-		Return
+		return
 	}
+
+	########################################
+	# write prepared image to ISO image
+	########################################
 
 	# report state
-	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Clearing USB drive', $Disk.Number
+	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Creating ISO image', $PathForUpdatedIsoImage
 
-	# clear disk
-	$Disk = $Disk | Clear-Disk -RemoveData -Confirm:$false -PassThru
+	# define label for ISO image
+	$Label = '{0}-Unattend' -f $FileSystemLabel
 
-	# report state
-	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Partitioning USB drive', $Disk.Number
+	# define timestamp for files in ISO image
+	# $Timestamp = Get-Date -Format "MM/dd/yyyy,HH:mm:ss"
 
-	# configure disk
-	Try {
-		$Disk | Set-Disk -PartitionStyle GPT
-	}
-	Catch {
-		Return $_
-	}
+	# define bootdata for ISO image
+	$Bootdata = "2#p0,e,b$TemporaryPathForISO\boot\etfsboot.com#pEF,e,b$TemporaryPathForISO\efi\microsoft\boot\efisys_noprompt.bin"
 
-	# define empty parameters for New-Partition
-	$NewPartition = @{}
+	# define arguments
+	$ArgumentList = "-l$Label -bootdata:$Bootdata -u2 -udfver102 -o $TemporaryPathForISO $PathForUpdatedIsoImage"
+	# $ArgumentList = "-l$Label -t$Timestamp -bootdata:$Bootdata -u2 -udfver102 -o $TemporaryPathForISO $PathForUpdatedIsoImage"
 
-	# if disk is larger than 32GB...
-	If ($Disk.Size -gt 32GB) {
-		$NewPartition['Size'] = 32GB
+	# if no new window requested...
+	if ($NoNewWindow) {
+		# start process to write updated ISO in current window
+		Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -Wait -NoNewWindow -ErrorAction Stop
 	}
-	Else {
-		$NewPartition['UseMaximumSize'] = $true
-	}
-
-	# if drive letter provided...
-	If ($DriveLetter) {
-		$NewPartition['DriveLetter'] = $DriveLetter
-	}
-	Else {
-		$NewPartition['AssignDriveLetter'] = $true
-	}
-
-	# create partition
-	Try {
-		$Partition = $Disk | New-Partition @NewPartition
-	}
-	Catch {
-		Return $_
-	}
-
-	# report state
-	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Formatting USB drive with file system', $FileSystem
-
-	# partition and format disk
-	Try {
-		$Volume = $Partition | Format-Volume -FileSystem $FileSystem -NewFileSystemLabel $FileSystemLabel
-	}
-	Catch {
-		Return $_
-	}
-
-	# report state
-	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Copying ISO contents to USB drive', $Volume.DriveLetter
-
-	# copy ISO contents to USB drive
-	Try {
-		Copy-Item -Path ('{0}\*' -f $TemporaryPathForISO) -Destination ('{0}:\' -f $Volume.DriveLetter) -Recurse -Force
-	}
-	Catch {
-		Return $_
+	else {
+		# start process to write updated ISO in new window
+		Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -Wait -Window Normal -ErrorAction Stop
 	}
 }
 
-End {
+end {
 	# if Skip Exclude not requested...
-	If (!$SkipExclude) {
-		Try {
+	if (!$SkipExclude) {
+		try {
 			Remove-MpPreference -ExclusionPath $StagingPath -ErrorAction Stop
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not remove exclusion for temporary path: $StagingPath"
 		}
 	}
-
+	
 	# if TemporaryFolder created...
-	If ([System.IO.Directory]::Exists($script:TemporaryFolder)) {
+	if ([System.IO.Directory]::Exists($script:TemporaryFolder)) {
 		# remove temporary folder and all child items
-		Try {
+		try {
 			Remove-Item -Path $TemporaryFolder -Recurse -Force
 		}
-		Catch {
-			Return $_
+		catch {
+			return $_
 		}
 	}
 }
