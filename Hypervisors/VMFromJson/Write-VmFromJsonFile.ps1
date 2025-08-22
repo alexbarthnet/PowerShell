@@ -850,8 +850,10 @@ Process {
 					JsonNestedValue  = "$Path\$VMName\$VMName.vhdx"
 					# define value for default entries
 					JsonNestedParams = [ordered]@{
-						Path      = "$Path\$VMName\Virtual Hard Disks\$VMName.vhdx"
-						SizeBytes = 128GB
+						Path               = "$Path\$VMName\Virtual Hard Disks\$VMName.vhdx"
+						SizeBytes          = 128GB
+						ControllerNumber   = 0
+						ControllerLocation = 0
 					}
 				}
 
