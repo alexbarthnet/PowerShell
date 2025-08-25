@@ -3995,128 +3995,130 @@ Process {
 
 		# if VM has OS deployment...
 		If ($null -ne $VM -and $null -ne $JsonData.$Name.OSDeployment) {
-			# loop through VM network adapter
-			ForEach ($OSDeployment in $JsonData.$Name.OSDeployment) {
-				# ...retrieve OS deployment method
-				$Method = $OSDeployment.Method.ToUpper()
-
-				# ...configure OS deployment
-				If ([string]::IsNullOrEmpty($Method)) {
-					Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, no provisioning method provided")
-				}
-				ElseIf ($SkipProvisioning) {
-					Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, SkipProvisioning set")
-				}
-				Else {
-					switch ($Method) {
-						'ISO' {
-							# define parameters for Add-IsoToVM
-							$AddIsoToVM = @{
-								VM   = $VM
-								Path = $OSDeployment.FilePath
-							}
-
-							# mount ISO file on VM
-							Try {
-								Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via ISO file")
-								Add-IsoToVM @AddIsoToVM
-							}
-							Catch {
-								Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add ISO to VM")
-								Throw $_
-							}
-						}
-						'SCCM' {
-							# if device variables provided...
-							If ($OSDeployment.DeviceVariables) {
-								# convert property from JSON to hashtable
-								try {
-									$DeviceVariablesHashtable = ConvertTo-Collection -InputObject $OSDeployment.DeviceVariables
+			# if SkipProvisioning set...
+			If ($SkipProvisioning) {
+				# declare and continue
+				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, SkipProvisioning set")
+			}
+			# if SkipProvisioning not set...
+			Else {
+				# loop through OS deployments
+				ForEach ($OSDeployment in $JsonData.$Name.OSDeployment) {
+					# if Method is not present...
+					If ([string]::IsNullOrEmpty($OSDeployment.Method)) {
+						Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, no provisioning method present")
+					}
+					# if Method is present...
+					Else {
+						# swithc on Method
+						switch ($OSDeployment.Method) {
+							'ISO' {
+								# define parameters for Add-IsoToVM
+								$AddIsoToVM = @{
+									VM   = $VM
+									Path = $OSDeployment.FilePath
 								}
-								catch {
-									Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create hashtable from DeviceVariables in OS Deployment")
+
+								# mount ISO file on VM
+								Try {
+									Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via ISO file")
+									Add-IsoToVM @AddIsoToVM
+								}
+								Catch {
+									Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add ISO to VM")
 									Throw $_
 								}
 							}
-							Else {
-								# create empty hashtable
-								$DeviceVariablesHashtable = @{}
-							}
-
-							# define parameters for Add-DeviceToSccm
-							$AddDeviceToSccm = @{
-								VM              = $VM
-								Server          = $OSDeployment.Server
-								Collections     = $OSDeployment.Collections
-								DeviceVariables = $DeviceVariablesHashtable
-							}
-
-							# add VM to SCCM
-							Try {
-								Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via PXE boot and SCCM")
-								Add-DeviceToSccm @AddDeviceToSccm
-							}
-							Catch {
-								Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VM to SCCM")
-								Throw $_
-							}
-						}
-						'VHD' {
-							# if device variables provided...
-							If ($OSDeployment.ExpandStrings) {
-								# convert property from JSON to hashtable
-								try {
-									$ExpandStringsHashtable = ConvertTo-Collection -InputObject $OSDeployment.ExpandStrings
+							'SCCM' {
+								# if device variables provided...
+								If ($OSDeployment.DeviceVariables) {
+									# convert property from JSON to hashtable
+									try {
+										$DeviceVariablesHashtable = ConvertTo-Collection -InputObject $OSDeployment.DeviceVariables
+									}
+									catch {
+										Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create hashtable from DeviceVariables in OS Deployment")
+										Throw $_
+									}
 								}
-								catch {
-									Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create hashtable from ExpandStrings in OS Deployment")
+								Else {
+									# create empty hashtable
+									$DeviceVariablesHashtable = @{}
+								}
+
+								# define parameters for Add-DeviceToSccm
+								$AddDeviceToSccm = @{
+									VM              = $VM
+									Server          = $OSDeployment.Server
+									Collections     = $OSDeployment.Collections
+									DeviceVariables = $DeviceVariablesHashtable
+								}
+
+								# add VM to SCCM
+								Try {
+									Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via PXE boot and SCCM")
+									Add-DeviceToSccm @AddDeviceToSccm
+								}
+								Catch {
+									Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VM to SCCM")
 									Throw $_
 								}
 							}
-							Else {
-								# create empty hashtable
-								$ExpandStringsHashtable = @{}
-							}
+							'VHD' {
+								# if device variables provided...
+								If ($OSDeployment.ExpandStrings) {
+									# convert property from JSON to hashtable
+									try {
+										$ExpandStringsHashtable = ConvertTo-Collection -InputObject $OSDeployment.ExpandStrings
+									}
+									catch {
+										Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create hashtable from ExpandStrings in OS Deployment")
+										Throw $_
+									}
+								}
+								Else {
+									# create empty hashtable
+									$ExpandStringsHashtable = @{}
+								}
 
-							# define parameters for Copy-VHDFromParams
-							$CopyVHDFromParams = @{
-								VM            = $VM
-								Path          = $OSDeployment.FilePath
-								ExpandStrings = $ExpandStringsHashtable
-							}
+								# define parameters for Copy-VHDFromParams
+								$CopyVHDFromParams = @{
+									VM            = $VM
+									Path          = $OSDeployment.FilePath
+									ExpandStrings = $ExpandStringsHashtable
+								}
 
-							# define optional parameters
-							If (![string]::IsNullOrEmpty($OSDeployment.DestinationPath)) {
-								$CopyVHDFromParams['DestinationPath'] = $OSDeployment.DestinationPath
-							}
-							If (![string]::IsNullOrEmpty($OSDeployment.UnattendFile)) {
-								$CopyVHDFromParams['UnattendFile'] = $OSDeployment.UnattendFile
-							}
-							# If (![string]::IsNullOrEmpty($OSDeployment.ControllerNumber)) {
-							# 	 $CopyVHDFromParams['ControllerNumber'] = $OSDeployment.ControllerNumber
-							# }
-							# If (![string]::IsNullOrEmpty($OSDeployment.ControllerLocation)) {
-							# 	 $CopyVHDFromParams['ControllerLocation'] = $OSDeployment.ControllerLocation
-							# }
+								# define optional parameters
+								If (![string]::IsNullOrEmpty($OSDeployment.DestinationPath)) {
+									$CopyVHDFromParams['DestinationPath'] = $OSDeployment.DestinationPath
+								}
+								If (![string]::IsNullOrEmpty($OSDeployment.UnattendFile)) {
+									$CopyVHDFromParams['UnattendFile'] = $OSDeployment.UnattendFile
+								}
+								# If (![string]::IsNullOrEmpty($OSDeployment.ControllerNumber)) {
+								# 	 $CopyVHDFromParams['ControllerNumber'] = $OSDeployment.ControllerNumber
+								# }
+								# If (![string]::IsNullOrEmpty($OSDeployment.ControllerLocation)) {
+								# 	 $CopyVHDFromParams['ControllerLocation'] = $OSDeployment.ControllerLocation
+								# }
 
-							# mount ISO file on VM
-							Try {
-								Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via VHD file")
-								Copy-VHDFromParams @CopyVHDFromParams
+								# mount ISO file on VM
+								Try {
+									Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via VHD file")
+									Copy-VHDFromParams @CopyVHDFromParams
+								}
+								Catch {
+									Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VHD to VM")
+									Throw $_
+								}
 							}
-							Catch {
-								Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VHD to VM")
-								Throw $_
+							default {
+								Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, unknown provisioning method present: '$($OSDeployment.Method)'")
 							}
-						}
-						default {
-							Write-Host ("$Hostname,$ComputerName,$Name - ...skipping deployment, unknown provisioning method provided: '$Method'")
 						}
 					}
 				}
-
 			}
-
 		}
 
 		# if VM is on a cluster...
