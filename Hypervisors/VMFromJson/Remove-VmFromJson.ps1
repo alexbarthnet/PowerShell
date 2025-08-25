@@ -1686,9 +1686,6 @@ Process {
 
 		# if VM has OS deployment...
 		If ($null -ne $VM -and $null -ne $JsonData.$Name.OSDeployment) {
-			# ...retrieve OS deployment method
-			$DeploymentMethod = $JsonData.$Name.OSDeployment.DeploymentMethod
-
 			# if SkipProvisioning set...
 			If ($SkipProvisioning) {
 				# declare and continue
@@ -1696,36 +1693,43 @@ Process {
 			}
 			# if SkipProvisioning not set...
 			Else {
-				# retrieve OS deployment method
-				$DeploymentMethod = $JsonData.$Name.OSDeployment.DeploymentMethod
-				# if DeploymentMethod is not present...
-				If ([string]::IsNullOrEmpty($DeploymentMethod)) {
-					Write-Host ("$Hostname,$ComputerName,$Name - ...skipping OSD cleanup, no method found")
-				}
-				# if DeploymentMethod is present...
-				Else {
-					# check deployment method
-					switch ($DeploymentMethod) {
-						'SCCM' {
-							# declare and begin
-							Write-Host ("$Hostname,$ComputerName,$Name - removing VM from SCCM...")
+				# loop through OS deployments
+				ForEach ($OSDeployment in $JsonData.$Name.OSDeployment) {
+					# if Method is not present...
+					If ([string]::IsNullOrEmpty($OSDeployment.Method)) {
+						Write-Host ("$Hostname,$ComputerName,$Name - ...skipping OSD cleanup, no provisioning method present")
+					}
+					# if Method is present...
+					Else {
+						# check deployment method
+						switch ($OSDeployment.Method) {
+							'ISO' {
+								Write-Host ("$Hostname,$ComputerName,$Name - ...skipping OSD cleanup for ISO provisioning method")
+							}
+							'SCCM' {
+								# declare and begin
+								Write-Host ("$Hostname,$ComputerName,$Name - removing VM from SCCM...")
 
-							# define parameters for Remove-DeviceFromSccm
-							$RemoveDeviceFromSccm = @{
-								VM               = $VM
-								DeploymentServer = $JsonData.$Name.OSDeployment.DeploymentServer
-							}
+								# define parameters for Remove-DeviceFromSccm
+								$RemoveDeviceFromSccm = @{
+									VM               = $VM
+									DeploymentServer = $JsonData.$Name.OSDeployment.DeploymentServer
+								}
 
-							# remove VM from SCCM
-							Try {
-								Remove-DeviceFromSccm @RemoveDeviceFromSccm
+								# remove VM from SCCM
+								Try {
+									Remove-DeviceFromSccm @RemoveDeviceFromSccm
+								}
+								Catch {
+									Throw $_
+								}
 							}
-							Catch {
-								Throw $_
+							'VHD' {
+								Write-Host ("$Hostname,$ComputerName,$Name - ...skipping OSD cleanup for VHD provisioning method")
 							}
-						}
-						Default {
-							Write-Host ("$Hostname,$ComputerName,$Name - ...skipping OSD cleanup, unknown method provided: '$DeploymentMethod'")
+							Default {
+								Write-Host ("$Hostname,$ComputerName,$Name - ...skipping OSD cleanup, unknown provisioning method present: '$($OSDeployment.Method)'")
+							}
 						}
 					}
 				}
