@@ -1162,6 +1162,32 @@ Begin {
 			Return
 		}
 
+		# create FileInfo for path to extract file extension
+		Try {
+			$FileInfo = [System.IO.FileInfo]::new($Path)
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD remove, could not construct FileInfo object for path: '$Path'")
+			Return
+		}
+
+		# define storage type from file extension
+		switch ($FileInfo.Extension) {
+			'.vhd' {
+				$StorageType = 'VHD'
+			}
+			'.vhdx' {
+				$StorageType = 'VHDX'
+			}
+			Default {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD remove, found unsupported '$($FileInfo.Extension)' file extension on file: '$Path'")
+				Return
+			}
+		}
+
+		# update argument list for removing files
+		$InvokeCommand['ArgumentList']['StorageType'] = $StorageType
+
 		# dismount VHD from system before removal
 		Try {
 			Invoke-Command @InvokeCommand -ScriptBlock {
@@ -1169,17 +1195,9 @@ Begin {
 				# define parameters for Dismount-DiskImage
 				$DismountDiskImage = @{
 					ImagePath   = $ArgumentList['Path']
+					StorageType = $ArgumentList['StorageType']
 					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 				}
-				# define parameters for VHD files
-				If ($ArgumentList['Path'].EndsWith('.VHD', [System.StringComparison]::InvariantCultureIgnoreCase)) {
-					$DismountDiskImage['StorageType'] = 'VHD'
-				}
-				# define parameters for VHDX files
-				If ($ArgumentList['Path'].EndsWith('.VHDX', [System.StringComparison]::InvariantCultureIgnoreCase)) {
-					$DismountDiskImage['StorageType'] = 'VHDX'
-				}
-
 				# dismount disk image from system
 				$null = Dismount-DiskImage @DismountDiskImage
 			}
@@ -1190,7 +1208,7 @@ Begin {
 		}
 
 		# if VHD, rotate CSV
-		If ($Path.EndsWith('.VHD', [System.StringComparison]::InvariantCultureIgnoreCase)) {
+		If ($StorageType -eq 'VHD') {
 			Try {
 				# define parameters for Remove-Item
 				$MoveClusterSharedVolumeForPath = @{
