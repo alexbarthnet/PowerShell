@@ -904,6 +904,8 @@ Begin {
 		Try {
 			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
+				# import module to load TestPathType enum
+				Import-Module -Name 'Microsoft.PowerShell.Management'
 				# define parameters for Test-Path
 				$TestPath = @{
 					Path        = $ArgumentList['Path']
@@ -1013,6 +1015,8 @@ Begin {
 		Try {
 			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
+				# import module to load TestPathType enum
+				Import-Module -Name 'Microsoft.PowerShell.Management'
 				# define parameters for Test-Path
 				$TestPath = @{
 					Path        = $ArgumentList['Path']
@@ -1132,6 +1136,8 @@ Begin {
 		Try {
 			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
+				# import module to load TestPathType enum
+				Import-Module -Name 'Microsoft.PowerShell.Management'
 				# define parameters for Test-Path
 				$TestPath = @{
 					Path        = $ArgumentList['Path']

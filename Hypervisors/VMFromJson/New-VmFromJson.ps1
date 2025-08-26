@@ -1355,11 +1355,15 @@ Begin {
 		Try {
 			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
+				# import module to load TestPathType enum
+				Import-Module -Name 'Microsoft.PowerShell.Management'
+				# define parameters for Test-Path
 				$TestPath = @{
 					Path        = $ArgumentList['Path']
 					PathType    = [Microsoft.PowerShell.Commands.TestPathType]::Leaf
 					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 				}
+				# test path
 				Test-Path @TestPath
 			}
 		}
@@ -2904,11 +2908,15 @@ Begin {
 		Try {
 			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
+				# import module to load TestPathType enum
+				Import-Module -Name 'Microsoft.PowerShell.Management'
+				# define parameters for Test-Path
 				$TestPath = @{
 					Path        = $ArgumentList['Path']
 					PathType    = [Microsoft.PowerShell.Commands.TestPathType]::Leaf
 					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 				}
+				# test path
 				Test-Path @TestPath
 			}
 		}
@@ -3051,11 +3059,15 @@ Begin {
 		Try {
 			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
+				# import module to load TestPathType enum
+				Import-Module -Name 'Microsoft.PowerShell.Management'
+				# define parameters for Test-Path
 				$TestPath = @{
 					Path        = $ArgumentList['Path']
 					PathType    = [Microsoft.PowerShell.Commands.TestPathType]::Leaf
 					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 				}
+				# test path
 				Test-Path @TestPath
 			}
 		}
@@ -3289,11 +3301,20 @@ Begin {
 			Write-Verbose ("$Hostname,$ComputerName,$Name - testing parent path for VHD")
 			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
-				Test-Path -Path $ArgumentList['ParentPath'] -PathType Container -ErrorAction Stop
+				# import module to load TestPathType enum
+				Import-Module -Name 'Microsoft.PowerShell.Management'
+				# define parameters for Test-Path
+				$TestPath = @{
+					Path        = $ArgumentList['ParentPath']
+					PathType    = [Microsoft.PowerShell.Commands.TestPathType]::Container
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				# test path
+				Test-Path @TestPath
 			}
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not test parent path")
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not check provided parent path")
 			Throw $_
 		}
 
