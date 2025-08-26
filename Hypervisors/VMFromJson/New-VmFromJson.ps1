@@ -4,16 +4,27 @@ Param(
 	[string]$Json,
 	[Parameter(Position = 1, ValueFromPipeline)]
 	[string[]]$VMName,
+	[Parameter(Position = 2)]
 	[string]$ComputerName,
+	[Parameter(Position = 3)]
 	[string]$Path,
+	[Parameter()]
 	[switch]$UseDefaultPathOnHost,
+	[Parameter()]
 	[switch]$UseExistingDisks,
+	[Parameter()]
 	[switch]$SkipProvisioning,
+	[Parameter()]
 	[switch]$SkipStart,
+	[Parameter()]
 	[switch]$SkipClustering,
+	[Parameter()]
 	[switch]$ChooseBestNode,
+	[Parameter()]
 	[switch]$ForceRestart,
+	[Parameter()]
 	[pscredential]$LocalAdminCredential,
+	[Parameter()]
 	[pscredential]$DomainJoinCredential,
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()

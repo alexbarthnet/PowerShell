@@ -4,14 +4,14 @@ Param(
 	[string]$Json,
 	[Parameter(Position = 1, ValueFromPipeline)]
 	[string[]]$VMName,
-	[Parameter()]
+	[Parameter(Position = 2)]
 	[string]$ComputerName,
+	[Parameter(Position = 3)]
+	[string]$Path,
 	[Parameter()]
-	[switch]$UseDefaultPathOnHost,
+	[switch]$PreserveVHDs,
 	[Parameter()]
-	[switch]$PreserveHardDrives,
-	[Parameter()]
-	[switch]$SkipProvisioning,
+	[switch]$PreserveOSD,
 	[Parameter()]
 	[switch]$Force,
 	[Parameter(DontShow)]
@@ -1593,12 +1593,12 @@ Process {
 
 		# if VM has OS deployment...
 		If ($null -ne $VM -and $null -ne $JsonData.$Name.OSDeployment) {
-			# if SkipProvisioning set...
-			If ($SkipProvisioning) {
+			# if PreserveOSD set...
+			If ($PreserveOSD) {
 				# declare and continue
-				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping OSD cleanup, SkipProvisioning set")
+				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping OSD cleanup, PreserveOSD set")
 			}
-			# if SkipProvisioning not set...
+			# if PreserveOSD not set...
 			Else {
 				# loop through OS deployments
 				ForEach ($OSDeployment in $JsonData.$Name.OSDeployment) {
@@ -1731,7 +1731,7 @@ Process {
 		}
 
 		# get VM storage paths
-		If ($null -ne $VM -and -not $PreserveHardDrives) {
+		If ($null -ne $VM -and -not $PreserveVHDs) {
 			# define lists
 			$VHDPaths = [System.Collections.Generic.List[string]]::new()
 
