@@ -11,7 +11,7 @@ Param(
 	[Parameter()]
 	[switch]$UseDefaultPathOnHost,
 	[Parameter()]
-	[switch]$UseExistingDisks,
+	[switch]$UseExistingVHDs,
 	[Parameter()]
 	[switch]$SkipProvisioning,
 	[Parameter()]
@@ -3369,7 +3369,7 @@ Begin {
 			# report VHD found
 			Write-Host ("$Hostname,$ComputerName,$Name - ...found existing VHD with Path: '$Path'")
 			# if use existing VHDs not provided...
-			If (!$UseExistingDisks) {
+			If (!$UseExistingVHDs) {
 				# warn and inquire
 				Write-Warning -Message ("$Hostname,$ComputerName,$Name - continue and use existing VHD?") -WarningAction Inquire
 			}
