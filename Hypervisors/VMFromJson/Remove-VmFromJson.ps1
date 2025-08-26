@@ -588,13 +588,13 @@ Begin {
 
 		# loop through cluster shared volumes
 		:NextClusterSharedVolume ForEach ($ClusterSharedVolume in $ClusterSharedVolumes) {
-			# if CSV already on current host...
-			If ($ClusterSharedVolume.OwnerNode.Name -eq $ComputerName) {
+			# if path not on CSV...
+			If (!$Path.StartsWith($ClusterSharedVolume.SharedVolumeInfo.FriendlyVolumeName, [System.StringComparison]::InvariantCultureIgnoreCase)) {
 				Continue NextClusterSharedVolume
 			}
 
-			# if path on CVS...
-			If (!$Path.StartsWith($ClusterSharedVolume.SharedVolumeInfo.FriendlyVolumeName, [System.StringComparison]::InvariantCultureIgnoreCase)) {
+			# if CSV already on current host...
+			If ($ClusterSharedVolume.OwnerNode.Name -eq $ComputerName) {
 				Continue NextClusterSharedVolume
 			}
 
