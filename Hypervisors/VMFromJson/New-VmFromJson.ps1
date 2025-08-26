@@ -3745,9 +3745,9 @@ Process {
 			}
 		}
 
-		# if VM has hard disk drives...
+		# if VM has hard drives...
 		If ($null -ne $VM -and $null -ne $JsonData.$Name.VMHardDiskDrives) {
-			# create hard drives
+			# loop through hard drives
 			ForEach ($VMHardDiskDrive in $JsonData.$Name.VMHardDiskDrives) {
 				# if path provided...
 				If ($PSBoundParameters.ContainsKey('Path')) {
@@ -3910,7 +3910,7 @@ Process {
 
 		# if VM has network adapters...
 		If ($null -ne $VM -and $null -ne $JsonData.$Name.VMNetworkAdapters) {
-			# loop through VM network adapter
+			# loop through VM network adapters
 			ForEach ($VMNetworkAdapterEntry in $JsonData.$Name.VMNetworkAdapters) {
 				# define required parameters for VMNetworkAdapter
 				$AddVMNetworkAdapterToVM = @{
