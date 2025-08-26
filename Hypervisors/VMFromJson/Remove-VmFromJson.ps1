@@ -11,8 +11,6 @@ Param(
 	[Parameter()]
 	[switch]$PreserveHardDrives,
 	[Parameter()]
-	[switch]$RemoveNetworkObjects,
-	[Parameter()]
 	[switch]$SkipProvisioning,
 	[Parameter()]
 	[switch]$Force,
@@ -1645,6 +1643,30 @@ Process {
 			}
 		}
 
+		# if VM has network adapters...
+		If ($null -ne $VM -and $null -ne $JsonData.$Name.VMNetworkAdapters) {
+			# loop through VM network adapters
+			ForEach ($VMNetworkAdapterEntry in $JsonData.$Name.VMNetworkAdapters) {
+				# if VM network adapter has DHCP server, DHCP scope, and IP address...
+				If ($null -ne $VMNetworkAdapterEntry.DhcpServer -and $null -ne $VMNetworkAdapterEntry.DhcpScope -and $null -ne $VMNetworkAdapterEntry.IPAddress) {
+					# define parameters for Remove-VMNetworkAdapterFromDHCP
+					$RemoveVMNetworkAdapterFromDHCP = @{
+						ComputerName = $VMNetworkAdapterEntry.DhcpServer
+						ScopeId      = $VMNetworkAdapterEntry.DhcpScope
+						IPAddress    = $VMNetworkAdapterEntry.IPAddress
+					}
+
+					# remove VMNetworkAdapter from DHCP
+					Try {
+						Remove-VMNetworkAdapterFromDHCP @RemoveVMNetworkAdapterFromDHCP
+					}
+					Catch {
+						Throw $_
+					}
+				}
+			}
+		}
+
 		# get VM snapshots...
 		If ($null -ne $VM) {
 			# get parent snapshots
@@ -1908,29 +1930,6 @@ Process {
 
 			# clear VM paths
 			$null = $VMPaths
-		}
-
-		# remove network objects
-		If ($RemoveNetworkObjects) {
-			# process each VMNetworkAdapter defined in JSON
-			ForEach ($VMNetworkAdapter in $JsonData.$Name.VMNetworkAdapters) {
-				If ($null -ne $VMNetworkAdapter.DhcpServer -and $null -ne $VMNetworkAdapter.DhcpScope -and $null -ne $VMNetworkAdapter.IPAddress) {
-					# define parameters for Remove-VMNetworkAdapterFromDHCP
-					$RemoveVMNetworkAdapterFromDHCP = @{
-						ComputerName = $VMNetworkAdapter.DhcpServer
-						ScopeId      = $VMNetworkAdapter.DhcpScope
-						IPAddress    = $VMNetworkAdapter.IPAddress
-					}
-
-					# remove VMNetworkAdapter from DHCP
-					Try {
-						Remove-VMNetworkAdapterFromDHCP @RemoveVMNetworkAdapterFromDHCP
-					}
-					Catch {
-						Throw $_
-					}
-				}
-			}
 		}
 	}
 }
