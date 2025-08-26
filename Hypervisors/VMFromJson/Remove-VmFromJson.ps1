@@ -1765,7 +1765,7 @@ Process {
 			# loop through VHDs
 			ForEach ($VHDPath in $VHDPathsFromJson) {
 				# if VHD path not in list...
-				If ($VHDPath -notin $VHDs) {
+				If ($VHDPath -notin $VHDPaths) {
 					# add VHD path to list
 					Write-Host ("$Hostname,$ComputerName,$Name - ...found VHD from JSON to remove: '$VHDPath'")
 					$VHDPaths.Add($VHDPath)
