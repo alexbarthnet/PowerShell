@@ -1155,7 +1155,7 @@ Begin {
 
 		# if path found...
 		If ($TestPath) {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...found source VHD: '$Path'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...found VHD to remove: '$Path'")
 		}
 		Else {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD remove, host did not find file: '$Path'")
