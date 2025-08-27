@@ -56,11 +56,23 @@ Switch parameter to skip creating Microsoft Defender path exclusion for the stag
 .PARAMETER UpdateAllWindowsImages
 Switch parameter to update all images in the WIM file regardless of Index value in the UnattendExpandStrings hashtable.
 
-.PARAMETER AdministratorPassword
-Credential containing the administrator password to add to unattend XML files.
+.PARAMETER OptionalFeaturesToDisable
+String array containing the names of Windows Optional Features to disable in the Windows image(s).
 
-.PARAMETER UnattendedJoinCredential
-Credential containing the unattended domain join username and password to add to unattend XML files.
+.PARAMETER OptionalFeaturesToEnable
+String array containing the names of Windows Optional Features to enable in the Windows image(s).
+
+.PARAMETER CapabilitiesToRemove
+String array containing the names of Windows Capabilities to remove from the Windows image(s).
+
+.PARAMETER CapabilitiesToAdd
+String array containing the names of Windows Capabilities to add to the Windows image(s).
+
+.PARAMETER LocalAdminCredential
+Credential containing the local administrator password to add to unattend XML files.
+
+.PARAMETER DomainJoinCredential
+Credential containing the domain join username and password to add to unattend XML files.
 
 .PARAMETER UnattendExpandStrings
 Hashtable of expand strings and values for autounattend and unattend XML files. The default values are as follows:
@@ -129,10 +141,20 @@ param(
 	[Parameter(Position = 14)]
 	[switch]$SkipExclude,
 	[Parameter(Position = 15)]
-	[pscredential]$AdministratorPassword,
+	[switch]$UpdateAllWindowsImages,
 	[Parameter(Position = 16)]
-	[pscredential]$UnattendedJoinCredential,
+	[string[]]$OptionalFeaturesToDisable,
 	[Parameter(Position = 17)]
+	[string[]]$OptionalFeaturesToEnable,
+	[Parameter(Position = 18)]
+	[string[]]$CapabilitiesToRemove,
+	[Parameter(Position = 19)]
+	[string[]]$CapabilitiesToAdd,
+	[Parameter(Position = 20)]
+	[pscredential]$LocalAdminCredential,
+	[Parameter(Position = 21)]
+	[pscredential]$DomainJoinCredential,
+	[Parameter(Position = 22)]
 	[hashtable]$UnattendExpandStrings = @{
 		DiskID     = 0
 		Index      = 4
@@ -189,10 +211,10 @@ begin {
 	}
 
 	# if administrator password provided...
-	if ($PSBoundParameters.ContainsKey('AdministratorPassword')) {
+	if ($PSBoundParameters.ContainsKey('LocalAdminCredential')) {
 		# retrieve plaintext password from credential object
 		try {
-			$PlainText = $AdministratorPassword.GetNetworkCredential().Password
+			$PlainText = $LocalAdminCredential.GetNetworkCredential().Password
 		}
 		catch {
 			throw $_
@@ -214,12 +236,12 @@ begin {
 	}
 
 	# if unattended join credential provided...
-	if ($PSBoundParameters.ContainsKey('UnattendedJoinCredential')) {
+	if ($PSBoundParameters.ContainsKey('DomainJoinCredential')) {
 		# add plaintext unattended join password to expand strings hashtable
-		$UnattendExpandStrings['Username'] = $UnattendedJoinCredential.GetNetworkCredential().Username
+		$UnattendExpandStrings['Username'] = $DomainJoinCredential.GetNetworkCredential().Username
 
 		# add plaintext unattended join password to expand strings hashtable
-		$UnattendExpandStrings['Password'] = $UnattendedJoinCredential.GetNetworkCredential().Password
+		$UnattendExpandStrings['Password'] = $DomainJoinCredential.GetNetworkCredential().Password
 	}
 
 	# if staging path defined...
