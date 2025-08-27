@@ -414,8 +414,30 @@ process {
 			return $_
 		}
 
-		# if scripts provided...
-		if ($PathToInvokeScript -or $PathToUpdateScript) {
+		# define boolean for updating the WIM
+		$WIMUpdateRequired = $false
+
+		# define parameters that require updating the WIM
+		$WIMUpdatingParameters = @(
+			'PathToUpdateScript'
+			'PathToInvokeScript'
+			'OptionalFeaturesToDisable'
+			'OptionalFeaturesToEnable'
+			'CapabilitiesToRemove'
+			'CapabilitiesToAdd'
+		)
+
+		# loop through parameters that require updating the WIM
+		foreach ($WIMUpdatingParameter in $WIMUpdatingParameters) {
+			# if bound parameters contains a parameter that requires updating the WIM...
+			if ($PSBoundParameters.ContainsKey($WIMUpdatingParameter)) {
+				# update boolean
+				$WIMUpdateRequired = $true
+			}
+		}
+
+		# if WIM update required...
+		if ($WIMUpdateRequired) {
 			# clear readonly flag on windows image
 			try {
 				Set-ItemProperty -Path $ImagePathForWIM -Name 'IsReadOnly' -Value $false
@@ -482,6 +504,164 @@ process {
 					}
 					catch {
 						return $_
+					}
+				}
+
+				# if optional features to disable or enable provided...
+				if ($PSBoundParameters.ContainsKey('OptionalFeaturesToDisable') -or $PSBoundParameters.ContainsKey('OptionalFeaturesToEnable')) { 
+					# retrieve optional features in windows image
+					try {
+						$WindowsOptionalFeatures = Get-WindowsOptionalFeature -Path $TemporaryPathForWIM -ErrorAction 'Stop'
+					}
+					catch {
+						return $_
+					}
+
+					# if optional features to disable provided...
+					if ($PSBoundParameters.ContainsKey('OptionalFeaturesToDisable')) {
+						# loop through optional features
+						:NextOptionalFeatureToDisable foreach ($FeatureName in $OptionalFeaturesToDisable) {
+							# retrieve optional feature by name
+							$WindowsOptionalFeature = $WindowsOptionalFeatures | Where-Object { $_.FeatureName -eq $FeatureName }
+
+							# if optional feature not found...
+							if (!$WindowsOptionalFeature) {
+								# report state and continue to next optional feature
+								"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Cannot disable unknown optional feature in WIM', $FeatureName
+								Continue NextOptionalFeatureToDisable
+							}
+
+							# if optional feature already disabled...
+							if ($WindowsOptionalFeature.State -eq 'Disabled') {
+								# report state and continue to next optional feature
+								"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Found optional feature already disabled in WIM', $FeatureName
+								Continue NextOptionalFeatureToDisable
+							}
+
+							# report state
+							"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Disabling optional feature in WIM', $FeatureName
+
+							# disable optional feature in windows image
+							try {
+								$null = Disable-WindowsOptionalFeature -Path $TemporaryPathForWIM -FeatureName $FeatureName -ErrorAction 'Stop'
+							}
+							catch {
+								return $_
+							}
+						}
+					}
+
+					# if optional features to enable provided...
+					if ($PSBoundParameters.ContainsKey('OptionalFeaturesToEnable')) {
+						# loop through optional features
+						:NextOptionalFeatureToEnable foreach ($FeatureName in $OptionalFeaturesToEnable) {
+							# retrieve optional feature by name
+							$WindowsOptionalFeature = $WindowsOptionalFeatures | Where-Object { $_.FeatureName -eq $FeatureName }
+
+							# if optional feature not found...
+							if (!$WindowsOptionalFeature) {
+								# report state and continue to next optional feature
+								"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Cannot enable unknown optional feature in WIM', $FeatureName
+								Continue NextOptionalFeatureToEnable
+							}
+
+							# if optional feature already enabled...
+							if ($WindowsOptionalFeature.State -eq 'Enabled') {
+								# report state and continue to next optional feature
+								"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Found optional feature already enabled in WIM', $FeatureName
+								Continue NextOptionalFeatureToEnable
+							}
+
+							# report state
+							"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Enabling optional feature in WIM', $FeatureName
+
+							# enable optional feature in windows image
+							try {
+								$null = Enable-WindowsOptionalFeature -Path $TemporaryPathForWIM -FeatureName $FeatureName -All -ErrorAction 'Stop'
+							}
+							catch {
+								return $_
+							}
+						}
+					}
+				}
+
+				# if capabilities to remove or add provided...
+				if ($PSBoundParameters.ContainsKey('CapabilitiesToRemove') -or $PSBoundParameters.ContainsKey('CapabilitiesToAdd')) { 
+					# retrieve capabilities in windows image
+					try {
+						$WindowsCapabilities = Get-WindowsCapability -Path $TemporaryPathForWIM -ErrorAction 'Stop'
+					}
+					catch {
+						return $_
+					}
+
+					# if capabilities to remove provided...
+					if ($PSBoundParameters.ContainsKey('CapabilitiesToRemove')) {
+						# loop through capabilities
+						:NextCapabilityToRemove foreach ($CapabilityName in $CapabilitiesToRemove) {
+							# retrieve capability by name
+							$WindowsCapability = $WindowsCapabilities | Where-Object { $_.Name -eq $CapabilityName }
+
+							# if capability not found...
+							if (!$WindowsCapability) {
+								# report state and continue to next capability
+								"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Cannot remove unknown capability from WIM', $CapabilityName
+								Continue NextCapabilityToRemove
+							}
+
+							# if capability already enabled...
+							if ($WindowsCapability.State -eq 'NotPresent') {
+								# report state and continue to next capability
+								"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Requested capability already removed from WIM', $CapabilityName
+								Continue NextCapabilityToRemove
+							}
+
+							# report state
+							"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Removing capability from WIM', $CapabilityName
+
+							# remove capability from windows image
+							try {
+								$null = Remove-WindowsCapability -Path $TemporaryPathForWIM -Name $CapabilityName -ErrorAction 'Stop'
+							}
+							catch {
+								return $_
+							}
+						}
+					}
+
+					# if capabilities to add provided...
+					if ($PSBoundParameters.ContainsKey('CapabilitiesToAdd')) {
+						# loop through capabilities
+						:NextCapabilityToAdd foreach ($CapabilityName in $CapabilitiesToAdd) {
+							# retrieve capability by name
+							$WindowsCapability = $WindowsCapabilities | Where-Object { $_.Name -eq $CapabilityName }
+
+							# if capability not found...
+							if (!$WindowsCapability) {
+								# report state and continue to next capability
+								"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Cannot add unknown capability to WIM', $CapabilityName
+								Continue NextCapabilityToAdd
+							}
+
+							# if capability already added...
+							if ($WindowsCapability.State -eq 'Installed') {
+								# report state and continue to next capability
+								"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Requested capability already added to WIM', $CapabilityName
+								Continue NextCapabilityToAdd
+							}
+
+							# report state
+							"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding capability to WIM', $CapabilityName
+
+							# add capability to windows image
+							try {
+								$null = Add-WindowsCapability -Path $TemporaryPathForWIM -Name $CapabilityName -ErrorAction 'Stop'
+							}
+							catch {
+								return $_
+							}
+						}
 					}
 				}
 
