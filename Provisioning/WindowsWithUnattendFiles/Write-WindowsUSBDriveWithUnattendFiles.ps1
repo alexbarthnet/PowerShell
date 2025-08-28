@@ -317,7 +317,7 @@ begin {
 	}
 
 	# if Skip Exclude not requested...
-	if (!$SkipExclude) {
+	if ($SkipExclude.IsPresent -eq $false) {
 		try {
 			Add-MpPreference -ExclusionPath $StagingPath -ErrorAction Stop
 		}
