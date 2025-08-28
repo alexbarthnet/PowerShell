@@ -973,6 +973,28 @@ process {
 	# write prepared image to ISO image
 	########################################
 
+	# if ISO image exists...
+	if ([System.IO.File]::Exists($PathForUpdatedIsoImage)) {
+		# report state
+		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Removing ISO image', $PathForUpdatedIsoImage
+
+		# retrieve existing ISO image
+		try {
+			$Item = Get-Item -Path $PathForUpdatedIsoImage -ErrorAction 'Stop'
+		}
+		catch {
+			return $_
+		}
+
+		# remove existing ISO image
+		try {
+			$Item | Remove-Item -Force -ErrorAction 'Stop'
+		}
+		catch {
+			return $_
+		}
+	}
+
 	# report state
 	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Creating ISO image', $PathForUpdatedIsoImage
 
