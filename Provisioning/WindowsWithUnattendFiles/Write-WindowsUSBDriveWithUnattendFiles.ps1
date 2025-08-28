@@ -597,14 +597,14 @@ process {
 							if (!$WindowsOptionalFeature) {
 								# report state and continue to next optional feature
 								"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Cannot disable unknown optional feature in WIM', $FeatureName
-								Continue NextOptionalFeatureToDisable
+								continue NextOptionalFeatureToDisable
 							}
 
 							# if optional feature already disabled...
 							if ($WindowsOptionalFeature.State -eq 'Disabled') {
 								# report state and continue to next optional feature
 								"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Found optional feature already disabled in WIM', $FeatureName
-								Continue NextOptionalFeatureToDisable
+								continue NextOptionalFeatureToDisable
 							}
 
 							# report state
@@ -631,14 +631,14 @@ process {
 							if (!$WindowsOptionalFeature) {
 								# report state and continue to next optional feature
 								"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Cannot enable unknown optional feature in WIM', $FeatureName
-								Continue NextOptionalFeatureToEnable
+								continue NextOptionalFeatureToEnable
 							}
 
 							# if optional feature already enabled...
 							if ($WindowsOptionalFeature.State -eq 'Enabled') {
 								# report state and continue to next optional feature
 								"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Found optional feature already enabled in WIM', $FeatureName
-								Continue NextOptionalFeatureToEnable
+								continue NextOptionalFeatureToEnable
 							}
 
 							# report state
@@ -676,14 +676,14 @@ process {
 							if (!$WindowsCapability) {
 								# report state and continue to next capability
 								"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Cannot remove unknown capability from WIM', $CapabilityName
-								Continue NextCapabilityToRemove
+								continue NextCapabilityToRemove
 							}
 
 							# if capability already enabled...
 							if ($WindowsCapability.State -eq 'NotPresent') {
 								# report state and continue to next capability
 								"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Requested capability already removed from WIM', $CapabilityName
-								Continue NextCapabilityToRemove
+								continue NextCapabilityToRemove
 							}
 
 							# report state
@@ -710,14 +710,14 @@ process {
 							if (!$WindowsCapability) {
 								# report state and continue to next capability
 								"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Cannot add unknown capability to WIM', $CapabilityName
-								Continue NextCapabilityToAdd
+								continue NextCapabilityToAdd
 							}
 
 							# if capability already added...
 							if ($WindowsCapability.State -eq 'Installed') {
 								# report state and continue to next capability
 								"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Requested capability already added to WIM', $CapabilityName
-								Continue NextCapabilityToAdd
+								continue NextCapabilityToAdd
 							}
 
 							# report state
