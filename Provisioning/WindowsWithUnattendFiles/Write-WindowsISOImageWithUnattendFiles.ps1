@@ -204,7 +204,7 @@ begin {
 
 	# validate application path
 	try {
-		$null = Get-Item -Path $FilePath
+		$null = Get-Item -Path $FilePath -ErrorAction 'Stop'
 	}
 	catch {
 		$PSCmdlet.ThrowTerminatingError($_)
