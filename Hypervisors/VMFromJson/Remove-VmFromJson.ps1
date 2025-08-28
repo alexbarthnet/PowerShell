@@ -1,3 +1,5 @@
+#requires -Modules 'Hyper-V', FailoverClusters, DhcpServer
+
 [CmdletBinding()]
 Param(
 	[Parameter(Position = 0, Mandatory)][ValidateScript({ Test-Path -Path $_ })]
