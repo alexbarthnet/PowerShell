@@ -912,9 +912,23 @@ process {
 				# report state
 				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding script to ISO scripts folder', $File.Name
 
-				# copy item to folder
+				# create path for file on ISO
+				$FileOnISO = Join-Path -Path $ScriptFolderForISO -ChildPath $File.Name
+
+				# if file on ISO exists...
+				if ([System.IO.File]::Exists($FileOnISO)) {
+					# remove readonly flag from file on ISO
+					try {
+						Set-ItemProperty -Path $FileOnISO -Name 'IsReadOnly' -Value $false
+					}
+					catch {
+						return $_
+					}
+				}
+
+				# copy file to ISO
 				try {
-					Copy-Item -Path $File -Destination $ScriptFolderForISO
+					Copy-Item -Path $File.FullName -Destination $FileOnISO -Force
 				}
 				catch {
 					return $_
@@ -993,12 +1007,23 @@ process {
 				# report state
 				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding file to ISO resources folder', $RelativeFilePath
 
-				# file path in ISO
-				$FilePath = Join-Path -Path $ResourcesFolderForISO -ChildPath $RelativeFilePath
+				# define destination file path in ISO
+				$FileOnISO = Join-Path -Path $ResourcesFolderForISO -ChildPath $RelativeFilePath
 
-				# copy item to folder
+				# if file on ISO exists...
+				if ([System.IO.File]::Exists($FileOnISO)) {
+					# remove readonly flag from file on ISO
+					try {
+						Set-ItemProperty -Path $FileOnISO -Name 'IsReadOnly' -Value $false
+					}
+					catch {
+						return $_
+					}
+				}
+
+				# copy file to ISO
 				try {
-					$null = Copy-Item -Path $File.FullName -Destination $FilePath -Force
+					$null = Copy-Item -Path $File.FullName -Destination $FileOnISO -Force
 				}
 				catch {
 					return $_
