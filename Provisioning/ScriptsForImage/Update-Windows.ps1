@@ -250,8 +250,16 @@ Process {
 		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'All updates have been previously applied; exiting early'
 		# stop transcript before exit
 		$null = Stop-Transcript
-		# exit with the "The command was successful. No reboot is required." code
-		Exit 0
+		# if audit mode...
+		if ($AuditMode) {
+			# exit with the "The command was successful. No reboot is required." code
+			exit 0
+		}
+		# if not audit mode...
+		else {
+			# return exception
+			return
+		}
 	}
 
 	# report state
