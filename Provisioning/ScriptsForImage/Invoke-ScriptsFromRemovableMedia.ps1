@@ -31,130 +31,210 @@ https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/mi
 
 #>
 
-# define transcript path
-$BaseName = Get-Item -Path $PSCommandPath | Select-Object -ExpandProperty BaseName
-$TranscriptPath = Join-Path -Path ([System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')) -ChildPath "$BaseName.txt"
-$ScriptStateXML = Join-Path -Path ([System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')) -ChildPath "$BaseName.xml"
+[CmdletBinding()]
+param(
+	[Parameter(DontShow)]
+	[string]$SystemRoot = [System.Environment]::GetEnvironmentVariable('SystemRoot')
+)
 
-# start transcript
-$null = Start-Transcript -Path $TranscriptPath -Force -Append
+begin {
+	# define error preference
+	$ErrorActionPreference = [System.Management.Automation.ActionPreference]::Stop
 
-# if state file found...
-If ([System.IO.File]::Exists($ScriptStateXML)) {
-	# retrieve state
-	Try {
-		$ScriptStates = Import-Clixml -Path $ScriptStateXML
-	}
-	Catch {
-		Exit 101
-	}
-}
-# if state file not found...
-Else {
-	# create empty array for script states
-	$ScriptStates = @()
-}
+	# define path for audit process
+	$PathForAuditProcess = Join-Path -Path $SystemRoot -ChildPath 'System32\oobe\audit.exe'
 
-# get volumes with recognized file systems on non-fixed drives
-$Volumes = (Get-Volume).Where({ $_.DriveType -ne 'Fixed' -and $_.FileSystemType -ne 'Unknown' -and $_.OperationalStatus -eq 'OK' -and $_.Size -gt 0 }) | Sort-Object -Property DriveLetter
+	# retrieve processes
+	$Processes = Get-Process
 
-# if no optional drive volumes found...
-If ((Measure-Object -InputObject $Volumes).Count -eq 0) {
-	Write-Host "No volumes found with drive type of 'CD-ROM'"
-	Exit 0
-}
-
-# define overall exit code
-[int]$ExitCode = 0
-
-# loop through volume
-:NextVolume ForEach ($Volume in $Volumes) {
-	# define path from drive letter
-	$Path = '{0}:\scripts' -f $Volume.DriveLetter
-
-	# if path not found...
-	If (![System.IO.Directory]::Exists($Path)) {
-		# report and continue to next volume
-		Write-Host "No 'scripts' path found on '$($Volume.DriveLetter)' drive with '$($Volume.FriendlyName)' label"
-		Continue NextVolume
+	# if audit process found...
+	if ($Processes.Where({ $_.Path -eq $PathForAuditProcess })) {
+		# set audit mode to true
+		$AuditMode = $true
 	}
 
-	# retrieve scripts in path
-	Try {
-		$Scripts = Get-ChildItem -Path $Path | Where-Object { $_.Extension -eq '.ps1' } | Select-Object -ExpandProperty FullName | Sort-Object
+	# define path for transcript
+	$PathForTranscript = Join-Path -Path $SystemRoot -ChildPath 'Invoke-ScriptsFromRemovableMedia.log'
+
+	# start transcript
+	try {
+		$null = Start-Transcript -Path $PathForTranscript -Append
 	}
-	Catch {
-		Write-Warning -Message "could not retrieve scripts from '$Path' path: $($_.Exception.Message)"
-		$ExitCodeFromScript = $_.Exception.HResult
+	catch {
+		# if audit mode...
+		if ($AuditMode) {
+			# exit with a "The command failed" code
+			exit 101
+		}
+		# if not audit mode...
+		else {
+			# return exception
+			return $_
+		}
 	}
 
-	# loop through scripts in path
-	:NextScript ForEach ($Script in $Scripts.FullName) {
-		# retrieve script state from previous run
-		$ScriptState = $ScriptStates.Where({ $_.Script -eq $Script })
+	# define script state XML file
+	$ScriptStateXML = Join-Path -Path ([System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')) -ChildPath "$BaseName.xml"
 
-		# process exit code from previous run
-		If ($ScriptState.ExitCode -in 0, 1) {
-			Write-Verbose -Message "Skipping completed '$Script' with existing exit code: $($ScriptState.ExitCode)"
-			Continue NextScript
+	# if script state XML file found...
+	if ([System.IO.File]::Exists($ScriptStateXML)) {
+		# retrieve state
+		try {
+			$ScriptStates = Import-Clixml -Path $ScriptStateXML
 		}
-
-		# clear exit code
-		$ExitCodeFromScript = $null
-
-		# report state
-		Write-Host "Running script: $Script"
-
-		# run script
-		Try {
-			& $Script
-		}
-		Catch {
-			Write-Warning -Message "could not run '$Script' script: $($_.Exception.Message)"
-			$ExitCodeFromScript = $_.Exception.HResult
-		}
-
-		# record exit code from script
-		If ($null -ne $ExitCodeFromScript) {
-			$ExitCodeFromScript = $LASTEXITCODE
-		}
-
-		# if script state exists...
-		If ($ScriptState.Script) {
-			# update exit code for script state
-			$ScriptState.ExitCode = $ExitCodeFromScript
-		}
-		# if script state does not exist...
-		Else {
-			# add entry to script states
-			$ScriptStates += [pscustomobject]@{
-				Script   = $Script
-				ExitCode = $ExitCodeFromScript
+		catch {
+			# if audit mode...
+			if ($AuditMode) {
+				# exit with a "The command failed" code
+				exit 102
+			}
+			# if not audit mode...
+			else {
+				# return exception
+				return $_
 			}
 		}
+	}
+	# if state file not found...
+	else {
+		# create empty array for script states
+		$ScriptStates = @()
+	}
 
-		# update script state file
-		Try {
-			Export-Clixml -Path $ScriptStateXML -InputObject $ScriptStates
+	# retrieve volumes
+	try {
+		$Volumes = Get-Volume
+	}
+	catch {
+		# if audit mode...
+		if ($AuditMode) {
+			# exit with a "The command failed" code
+			exit 103
 		}
-		Catch {
-			Write-Warning -Message "could not write script state to '$ScriptStateXML' file: $($_.Exception.Message)"
-			$ExitCodeFromScript = $_.Exception.HResult
-		}
-
-		# if exit code from script is an error...
-		If ($ExitCodeFromScript -ne 0) {
-			# immediately exit with exit code from script
-			Exit $ExitCodeFromScript
-		}
-
-		# if exit code from script is greater than overall exit code...
-		If ($ExitCodeFromScript -gt $ExitCode) {
-			# update overall exit code
-			$ExitCode = $ExitCodeFromScript
+		# if not audit mode...
+		else {
+			# return exception
+			return $_
 		}
 	}
 }
 
-# return overall exit code
-Exit $ExitCode
+process {
+	# get volumes with recognized file systems on non-fixed drives
+	$RemoveableVolumes = $Volumes | Where-Object { $_.DriveType -ne 'Fixed' -and $_.OperationalStatus -eq 'OK' -and $_.Size -gt 0 } | Sort-Object -Property DriveLetter
+
+	# if no optional drive volumes found...
+	if ((Measure-Object -InputObject $RemoveableVolumes).Count -eq 0) {
+		Write-Host 'No removeable volumes found'
+		# if audit mode...
+		if ($AuditMode) {
+			# exit with a "The command completed" code
+			exit 0
+		}
+		# if not audit mode...
+		else {
+			# return
+			return
+		}
+	}
+
+	# loop through volume
+	:NextVolume foreach ($Volume in $RemoveableVolumes) {
+		# define path from drive letter
+		$Path = '{0}:\scripts' -f $Volume.DriveLetter
+
+		# if path not found...
+		if (![System.IO.Directory]::Exists($Path)) {
+			# report and continue to next volume
+			Write-Host "No 'scripts' path found on '$($Volume.DriveLetter)' drive with '$($Volume.FriendlyName)' label"
+			continue NextVolume
+		}
+
+		# report state
+		Write-Host "Checking for scripts in '$Path' path..."
+
+		# retrieve scripts in path
+		try {
+			$Scripts = Get-ChildItem -Path $Path | Where-Object { $_.Extension -eq '.ps1' } | Select-Object -ExpandProperty FullName | Sort-Object
+		}
+		catch {
+			Write-Warning -Message "could not retrieve scripts from '$Path' path: $($_.Exception.Message)"
+			$ExitCodeFromScript = $_.Exception.HResult
+		}
+
+		# loop through scripts in path
+		:NextScript foreach ($Script in $Scripts) {
+			# retrieve script state from previous run
+			$ScriptState = $ScriptStates | Where-Object { $_.Script -eq $Script }
+
+			# process exit code from previous run
+			if ($ScriptState.ExitCode -in 0, 1) {
+				Write-Verbose -Message "Skipping completed '$Script' with existing exit code: $($ScriptState.ExitCode)"
+				continue NextScript
+			}
+
+			# clear exit code
+			$ExitCodeFromScript = $null
+
+			# report state
+			Write-Host "Running script: $Script"
+
+			# run script
+			try {
+				& $Script
+			}
+			catch {
+				Write-Warning -Message "could not run '$Script' script: $($_.Exception.Message)"
+				$ExitCodeFromScript = $_.Exception.HResult
+			}
+
+			# record exit code from script
+			if ($null -ne $ExitCodeFromScript) {
+				$ExitCodeFromScript = $LASTEXITCODE
+			}
+
+			# if script state exists...
+			if ($ScriptState.Script) {
+				# update exit code for script state
+				$ScriptState.ExitCode = $ExitCodeFromScript
+			}
+			# if script state does not exist...
+			else {
+				# add entry to script states
+				$ScriptStates += [pscustomobject]@{
+					Script   = $Script
+					ExitCode = $ExitCodeFromScript
+				}
+			}
+
+			# update script state file
+			try {
+				Export-Clixml -Path $ScriptStateXML -InputObject $ScriptStates
+			}
+			catch {
+				Write-Warning -Message "could not write script state to '$ScriptStateXML' file: $($_.Exception.Message)"
+				$ExitCodeFromScript = $_.Exception.HResult
+			}
+
+			# if audit mode and exit code from script is not "completed without error, no reboot required"...
+			if ($AuditMode -and $ExitCodeFromScript -ne 0) {
+				# immediately exit with exit code from script
+				exit $ExitCodeFromScript
+			}
+		}
+	}
+
+	# stop transcript before exit
+	$null = Stop-Transcript
+
+	# if audit mode...
+	if ($AuditMode) {
+		# exit with the "The command was successful. No reboot is required." code
+		exit 0
+	}
+	# if not audit mode...
+	else {
+		# return
+		return
+	}
+}
