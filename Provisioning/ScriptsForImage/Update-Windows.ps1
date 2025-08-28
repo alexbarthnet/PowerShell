@@ -45,7 +45,7 @@ https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/mi
 #>
 
 [CmdletBinding()]
-Param(
+param(
 	[Parameter(Position = 0)]
 	[switch]$Reboot,
 	[Parameter(Position = 1)]
@@ -56,7 +56,7 @@ Param(
 	[string]$SystemRoot = [System.Environment]::GetEnvironmentVariable('SystemRoot')
 )
 
-Begin {
+begin {
 	# define error preference
 	$ErrorActionPreference = [System.Management.Automation.ActionPreference]::Stop
 
@@ -67,7 +67,7 @@ Begin {
 	$Processes = Get-Process
 
 	# if audit process found...
-	If ($Processes.Where({ $_.Path -eq $PathForAuditProcess })) {
+	if ($Processes.Where({ $_.Path -eq $PathForAuditProcess })) {
 		# set audit mode to true
 		$AuditMode = $true
 	}
@@ -76,19 +76,19 @@ Begin {
 	$PathForTranscript = Join-Path -Path $SystemRoot -ChildPath 'Update-Windows.log'
 
 	# start transcript
-	Try {
+	try {
 		$null = Start-Transcript -Path $PathForTranscript -Append
 	}
-	Catch {
+	catch {
 		# if audit mode...
-		If ($AuditMode) {
+		if ($AuditMode) {
 			# exit with a "The command failed" code
-			Exit 101
+			exit 101
 		}
 		# if not audit mode...
-		Else {
+		else {
 			# return exception
-			Return $_
+			return $_
 		}
 	}
 
@@ -96,19 +96,19 @@ Begin {
 	$PathForAppliedUpdatesFile = Join-Path -Path $SystemRoot -ChildPath 'Update-Windows.txt'
 
 	# if applied updates file not found...
-	If (![System.IO.File]::Exists($PathForAppliedUpdatesFile)) {
+	if (![System.IO.File]::Exists($PathForAppliedUpdatesFile)) {
 		# create applied
-		Try {
+		try {
 			$null = New-Item -ItemType File -Path $PathForAppliedUpdatesFile
 		}
-		Catch {
+		catch {
 			# if audit mode...
-			If ($AuditMode) {
+			if ($AuditMode) {
 				# exit with a "The command failed" code
-				Exit 102
+				exit 102
 			}
 			# if not audit mode...
-			Else {
+			else {
 				# throw exception
 				$PSCmdlet.ThrowTerminatingError($_)
 			}
@@ -116,41 +116,41 @@ Begin {
 	}
 
 	# retrieve contents of applied updates file
-	Try {
+	try {
 		$UpdatesApplied = Get-Content -Path $PathForAppliedUpdatesFile
 	}
-	Catch {
+	catch {
 		# if audit mode...
-		If ($AuditMode) {
+		if ($AuditMode) {
 			# exit with a "The command failed" code
-			Exit 103
+			exit 103
 		}
 		# if not audit mode...
-		Else {
+		else {
 			# throw exception
 			$PSCmdlet.ThrowTerminatingError($_)
 		}
 	}
 }
 
-Process {
+process {
 	# report state
 	"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Finding updates...'
 
 	# define searcher object
-	Try {
+	try {
 		$Searcher = New-Object -ComObject 'Microsoft.Update.Searcher'
 	}
-	Catch {
+	catch {
 		# if audit mode...
-		If ($AuditMode) {
+		if ($AuditMode) {
 			# exit with a "The command failed" code
-			Exit 201
+			exit 201
 		}
 		# if not audit mode...
-		Else {
+		else {
 			# return exception
-			Return $_
+			return $_
 		}
 	}
 
@@ -158,75 +158,75 @@ Process {
 	$Criteria = 'IsInstalled = 0 AND IsHidden = 0'
 
 	# if preview updates not requested...
-	If (!$IncludePreview) {
+	if (!$IncludePreview) {
 		# update criteria to exclude preview updates
 		$Criteria = "$Criteria AND AutoSelectOnWebSites = 1"
 	}
 
 	# if driver updates not requested...
-	If (!$IncludeDrivers) {
+	if (!$IncludeDrivers) {
 		# update criteria to exclude drivers
 		$Criteria = "$Criteria AND Type='software'"
 	}
 
 	# search for updates
-	Try {
+	try {
 		$SearcherResults = $Searcher.Search($Criteria)
 	}
-	Catch {
+	catch {
 		# if audit mode...
-		If ($AuditMode) {
+		if ($AuditMode) {
 			# exit with a "The command failed" code
-			Exit 202
+			exit 202
 		}
 		# if not audit mode...
-		Else {
+		else {
 			# return exception
-			Return $_
+			return $_
 		}
 	}
 
 	# if no updates found...
-	If ($SearcherResults.Updates.Count -eq 0) {
+	if ($SearcherResults.Updates.Count -eq 0) {
 		# report state
 		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'No updates found'
 		# stop transcript before exit
 		$null = Stop-Transcript
 		# if audit mode...
-		If ($AuditMode) {
+		if ($AuditMode) {
 			# exit with the "The command was successful. No reboot is required." code
-			Exit 0
+			exit 0
 		}
 		# if not audit mode...
-		Else {
+		else {
 			# return
-			Return
+			return
 		}
 	}
 	# if updates found...
-	Else {
+	else {
 		# report state
 		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Found updates:'
 		# loop through updates and report each update
-		ForEach ($Update in $SearcherResults.Updates) {
+		foreach ($Update in $SearcherResults.Updates) {
 			"`t{0}`t{1}" -f $Update.Identity.UpdateID, $Update.Title
 		}
 	}
 
 	# define update collection object
-	Try {
+	try {
 		$Updates = New-Object -ComObject 'Microsoft.Update.UpdateColl'
 	}
-	Catch {
+	catch {
 		# if audit mode...
-		If ($AuditMode) {
+		if ($AuditMode) {
 			# exit with a "The command failed" code
-			Exit 203
+			exit 203
 		}
 		# if not audit mode...
-		Else {
+		else {
 			# return exception
-			Return $_
+			return $_
 		}
 	}
 
@@ -234,9 +234,9 @@ Process {
 	$UpdatesRequired = $false
 
 	# loop through updates
-	ForEach ($Update in $SearcherResults.Updates) {
+	foreach ($Update in $SearcherResults.Updates) {
 		# if updated already applied...
-		If ($Update.Identity.UpdateID -notin $UpdatesApplied) {
+		if ($Update.Identity.UpdateID -notin $UpdatesApplied) {
 			# set updates required boolean
 			$UpdatesRequired = $true
 		}
@@ -244,8 +244,8 @@ Process {
 		$null = $Updates.Add($Update)
 	}
 
-	# if audit mode and no updates required...
-	If ($AuditMode -and -not $UpdatesRequired) {
+	# if no updates required...
+	if ($UpdatesRequired) {
 		# report state
 		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'All updates have been previously applied; exiting early'
 		# stop transcript before exit
@@ -266,70 +266,70 @@ Process {
 	"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Downloading updates...'
 
 	# define session object
-	Try {
+	try {
 		$Session = New-Object -ComObject 'Microsoft.Update.Session'
 	}
-	Catch {
+	catch {
 		# if audit mode...
-		If ($AuditMode) {
+		if ($AuditMode) {
 			# exit with a "The command failed" code
-			Exit 204
+			exit 204
 		}
 		# if not audit mode...
-		Else {
+		else {
 			# return exception
-			Return $_
+			return $_
 		}
 	}
 
 	# create update downloader object
-	Try {
+	try {
 		$Downloader = $Session.CreateUpdateDownloader()
 	}
-	Catch {
+	catch {
 		# if audit mode...
-		If ($AuditMode) {
+		if ($AuditMode) {
 			# exit with a "The command failed" code
-			Exit 205
+			exit 205
 		}
 		# if not audit mode...
-		Else {
+		else {
 			# return exception
-			Return $_
+			return $_
 		}
 	}
 
 	# add update collection to downloader object
-	Try {
+	try {
 		$Downloader.Updates = $Updates
 	}
-	Catch {
+	catch {
 		# if audit mode...
-		If ($AuditMode) {
+		if ($AuditMode) {
 			# exit with a "The command failed" code
-			Exit 206
+			exit 206
 		}
 		# if not audit mode...
-		Else {
+		else {
 			# return exception
-			Return $_
+			return $_
 		}
 	}
 
 	# download updates
-	Try {
+	try {
 		$DownloaderResults = $Downloader.Download()
 	}
-	Catch {
+	catch {
 		# if audit mode...
-		If ($AuditMode) {
+		if ($AuditMode) {
 			# exit with a "The command failed" code
-			Exit 207
+			exit 207
 		}
 		# if not audit mode...
-		Else {
+		else {
 			# return exception
-			Return $_
+			return $_
 		}
 	}
 
@@ -337,20 +337,20 @@ Process {
 	"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Downloaded updates'
 
 	# if download result code is not "completed successfully"...
-	If ($DownloaderResults.ResultCode -ne 2) {
+	if ($DownloaderResults.ResultCode -ne 2) {
 		# report state
 		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Error downloading updates', $DownloaderResults.HResult
 		# stop transcript before exit
 		$null = Stop-Transcript
 		# if audit mode...
-		If ($AuditMode) {
+		if ($AuditMode) {
 			# exit with a "The command failed" code
-			Exit 208
+			exit 208
 		}
 		# if not audit mode...
-		Else {
+		else {
 			# return exception
-			Return $_
+			return $_
 		}
 	}
 
@@ -358,53 +358,53 @@ Process {
 	"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Installing updates...'
 
 	# create update installer object
-	Try {
+	try {
 		$Installer = New-Object -ComObject 'Microsoft.Update.Installer'
 	}
-	Catch {
+	catch {
 		# if audit mode...
-		If ($AuditMode) {
+		if ($AuditMode) {
 			# exit with a "The command failed" code
-			Exit 209
+			exit 209
 		}
 		# if not audit mode...
-		Else {
+		else {
 			# return exception
-			Return $_
+			return $_
 		}
 	}
 
 	# add update collection to installer object
-	Try {
+	try {
 		$Installer.Updates = $Updates
 	}
-	Catch {
+	catch {
 		# if audit mode...
-		If ($AuditMode) {
+		if ($AuditMode) {
 			# exit with a "The command failed" code
-			Exit 210
+			exit 210
 		}
 		# if not audit mode...
-		Else {
+		else {
 			# return exception
-			Return $_
+			return $_
 		}
 	}
 
 	# install updates
-	Try {
+	try {
 		$InstallerResults = $Installer.Install()
 	}
-	Catch {
+	catch {
 		# if audit mode...
-		If ($AuditMode) {
+		if ($AuditMode) {
 			# exit with a "The command failed" code
-			Exit 211
+			exit 211
 		}
 		# if not audit mode...
-		Else {
+		else {
 			# return exception
-			Return $_
+			return $_
 		}
 	}
 
@@ -412,63 +412,63 @@ Process {
 	"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Installed updates'
 
 	# if install result code is not "completed successfully"...
-	If ($InstallerResults.ResultCode -ne 2) {
+	if ($InstallerResults.ResultCode -ne 2) {
 		# report state
 		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Error installing updates', $InstallerResults.HResult
 		# stop transcript before exit
 		$null = Stop-Transcript
 		# if audit mode...
-		If ($AuditMode) {
+		if ($AuditMode) {
 			# exit with a "The command failed" code
-			Exit 212
+			exit 212
 		}
 		# if not audit mode...
-		Else {
+		else {
 			# return exception
-			Return $_
+			return $_
 		}
 	}
 
 	# loop through updates and...
-	ForEach ($Update in $Updates) {
+	foreach ($Update in $Updates) {
 		# if update not listed in applied updates...
-		If ($Update.Identity.UpdateID -notin $UpdatesApplied) {
+		if ($Update.Identity.UpdateID -notin $UpdatesApplied) {
 			# add update to applied updates file
-			Try {
+			try {
 				Add-Content -Path $PathForAppliedUpdatesFile -Value $Update.Identity.UpdateID
 			}
-			Catch {
+			catch {
 				# report state
 				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Error updating applied updates file', $_.Exception.Message
 				# stop transcript before exit
 				$null = Stop-Transcript
 				# if audit mode...
-				If ($AuditMode) {
+				if ($AuditMode) {
 					# exit with a "The command failed" code
-					Exit 213
+					exit 213
 				}
 				# if not audit mode...
-				Else {
+				else {
 					# return exception
-					Return $_
+					return $_
 				}
 			}
 		}
 	}
 
 	# if install results includes reboot required...
-	If ($InstallerResults.RebootRequired) {
+	if ($InstallerResults.RebootRequired) {
 		# report state
 		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Reboot required after installing updates'
 		# if reboot requested and not in audit mode...
-		If ($PSBoundParameters['Reboot'] -and -not $AuditMode) {
+		if ($PSBoundParameters['Reboot'] -and -not $AuditMode) {
 			# restart the computer
-			Try {
+			try {
 				Restart-Computer -Force
 			}
-			Catch {
+			catch {
 				# return exception
-				Return $_
+				return $_
 			}
 		}
 	}
@@ -477,13 +477,13 @@ Process {
 	$null = Stop-Transcript
 
 	# if audit mode...
-	If ($AuditMode) {
+	if ($AuditMode) {
 		# exit with "The command is still in process" code to force another pass
-		Exit 2
+		exit 2
 	}
 	# if not audit mode...
-	Else {
+	else {
 		# return
-		Return
+		return
 	}
 }
