@@ -8,6 +8,9 @@ Create a bootable USB drive from a Windows ISO image.
 .PARAMETER PathToOriginalIsoImage
 Path to the original Windows ISO image.
 
+.PARAMETER PathToFeaturesIsoImage
+Path to the Features on Demand ISO image.
+
 .PARAMETER DriveLetter
 Character for the drive letter of an existing volume on the USB drive.
 
@@ -97,6 +100,8 @@ None. The function does not generate any output.
 param(
 	[Parameter(Position = 0, Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToOriginalIsoImage,
+	[Parameter(Position = 1)] 
+	[string]$PathToFeaturesIsoImage,
 	[Parameter(Position = 1)]
 	[string]$DriveLetter,
 	[Parameter(Position = 2)]
@@ -295,6 +300,14 @@ begin {
 	# create temporary path for DISM scratch directory
 	try {
 		$TemporaryPathForDSD = New-Item -Force -ItemType Directory -Path $TemporaryPath -Name 'DSD'
+	}
+	catch {
+		$PSCmdlet.ThrowTerminatingError($_)
+	}
+
+	# create temporary path for FOD contents
+	try {
+		$TemporaryPathForFOD = New-Item -Force -ItemType Directory -Path $TemporaryPath -Name 'FOD'
 	}
 	catch {
 		$PSCmdlet.ThrowTerminatingError($_)

@@ -5,11 +5,14 @@ Create a Windows ISO image with unattend files from a Windows ISO image.
 .DESCRIPTION
 Create a Windows ISO image with unattend files from a Windows ISO image.
 
+.PARAMETER PathForUpdatedIsoImage
+Path for the updated Windows ISO image.
+
 .PARAMETER PathToOriginalIsoImage
 Path to the original Windows ISO image.
 
-.PARAMETER PathForUpdatedIsoImage
-Path for the updated Windows ISO image.
+.PARAMETER PathToFeaturesIsoImage
+Path to the Features on Demand ISO image.
 
 .PARAMETER PathToAutounattendFile
 Path to autounattend XML file to add to the ISO image. The file will be saved as 'Autounattend.xml' at the root of the USB file system and will be executed by Windows Setup after booting from the USB drive. The file should include the following passes and components:
@@ -110,10 +113,12 @@ https://learn.microsoft.com/en-us/windows-server/get-started/automatic-vm-activa
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 param(
-	[Parameter(Position = 0, Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
-	[string]$PathToOriginalIsoImage,
-	[Parameter(Position = 1, Mandatory = $true)]
+	[Parameter(Position = 0, Mandatory = $true)]
 	[string]$PathForUpdatedIsoImage,
+	[Parameter(Position = 1, Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[string]$PathToOriginalIsoImage,
+	[Parameter(Position = 2)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[string]$PathToFeaturesIsoImage,
 	[Parameter(Position = 2)]
 	[string]$PathToBinaryFile = 'oscdimg.exe',
 	[Parameter(Position = 3)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
@@ -310,6 +315,14 @@ begin {
 	# create temporary path for DISM scratch directory
 	try {
 		$TemporaryPathForDSD = New-Item -Force -ItemType Directory -Path $TemporaryPath -Name 'DSD'
+	}
+	catch {
+		$PSCmdlet.ThrowTerminatingError($_)
+	}
+
+	# create temporary path for FOD contents
+	try {
+		$TemporaryPathForFOD = New-Item -Force -ItemType Directory -Path $TemporaryPath -Name 'FOD'
 	}
 	catch {
 		$PSCmdlet.ThrowTerminatingError($_)
