@@ -231,22 +231,21 @@ process {
 		}
 	}
 
-	# define updates required boolean
-	$UpdatesRequired = $false
-
 	# loop through updates
 	foreach ($Update in $SearcherResults.Updates) {
 		# if updated already applied...
-		if ($Update.Identity.UpdateID -notin $UpdatesApplied) {
-			# set updates required boolean
-			$UpdatesRequired = $true
+		if ($Update.Identity.UpdateID -in $UpdatesApplied) {
+			# report already applied
+			"{0}`t{1} {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Skipping update already applied:', $Update.Identity.UpdateID
 		}
-		# add update to collection
-		$null = $Updates.Add($Update)
+		else {
+			# add update to collection
+			$null = $Updates.Add($Update)
+		}
 	}
 
 	# if no updates required...
-	if ($UpdatesRequired) {
+	if ($Updates.Count -eq 0) {
 		# report state
 		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'All updates have been previously applied; exiting early'
 		# stop transcript before exit
