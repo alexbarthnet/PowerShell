@@ -98,77 +98,61 @@ None.
 None. The function does not generate any output.
 
 .LINK
-https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nn-wuapi-iinstallationresult
-
-.LINK
-https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatesearcher-search
-
-.LINK
-https://learn.microsoft.com/en-us/windows/win32/api/wuapi/ne-wuapi-operationresultcode
-
-.LINK
-https://learn.microsoft.com/en-us/windows/win32/wua_sdk/searching--downloading--and-installing-updates
-
-.LINK
-https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-deployment-runsynchronous-runsynchronouscommand-willreboot
-
-.LINK
-https://learn.microsoft.com/en-us/windows-server/get-started/kms-client-activation-keys
-
-.LINK
-https://learn.microsoft.com/en-us/windows-server/get-started/automatic-vm-activation
+https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/oscdimg-command-line-options?view=windows-11
 
 #>
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 param(
-	[Parameter(Position = 0, Mandatory = $true)]
+	[Parameter(Mandatory = $true)]
 	[string]$PathForUpdatedIsoImage,
-	[Parameter(Position = 1, Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter(Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToOriginalIsoImage,
-	[Parameter(Position = 2)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToFeaturesIsoImage,
-	[Parameter(Position = 2)]
-	[string]$PathToBinaryFile = 'oscdimg.exe',
-	[Parameter(Position = 3)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
-	[string]$PathToBinaryFolder = (Join-Path -Path ([System.Environment]::GetFolderPath('ProgramFilesx86')) -ChildPath '\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg'),
-	[Parameter(Position = 4)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter()]
+	[string]$FilePathToRequiredProgram = '{0}\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe' -f [System.Environment]::GetFolderPath('ProgramFilesx86'),
+	[Parameter()]
+	[string]$FileSystemLabelSuffix = 'UNATTENDED',
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToAutounattendFile,
-	[Parameter(Position = 5)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToUnattendFile,
-	[Parameter(Position = 6)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToUpdateScript,
-	[Parameter(Position = 7)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToInvokeScript,
-	[Parameter(Position = 8)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$PathToScriptFolder,
-	[Parameter(Position = 9)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$PathToResourcesFolder,
-	[Parameter(Position = 10, ParameterSetName = 'StagingPath', Mandatory = $true)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[Parameter()]
+	[string]$RelativePathToFeaturesFolder = 'LanguagesAndOptionalFeatures',
+	[Parameter(ParameterSetName = 'StagingPath', Mandatory = $true)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$StagingPath,
-	[Parameter(Position = 11, ParameterSetName = 'StagingPath')]
+	[Parameter(ParameterSetName = 'StagingPath')]
 	[switch]$EmptyStagingPath,
-	[Parameter(Position = 12, ParameterSetName = 'StagingPath')]
+	[Parameter(ParameterSetName = 'StagingPath')]
 	[switch]$ReuseStagingPath,
-	[Parameter(Position = 13, ParameterSetName = 'StagingPath')]
+	[Parameter(ParameterSetName = 'StagingPath')]
 	[switch]$StopAfterPreparingImage,
-	[Parameter(Position = 14)]
+	[Parameter()]
 	[switch]$SkipExclude,
-	[Parameter(Position = 15)]
+	[Parameter()]
 	[switch]$UpdateAllWindowsImages,
-	[Parameter(Position = 16)]
+	[Parameter()]
 	[string[]]$OptionalFeaturesToDisable,
-	[Parameter(Position = 17)]
+	[Parameter()]
 	[string[]]$OptionalFeaturesToEnable,
-	[Parameter(Position = 18)]
+	[Parameter()]
 	[string[]]$CapabilitiesToRemove,
-	[Parameter(Position = 19)]
+	[Parameter()]
 	[string[]]$CapabilitiesToAdd,
-	[Parameter(Position = 20)]
+	[Parameter()]
 	[pscredential]$LocalAdminCredential,
-	[Parameter(Position = 21)]
+	[Parameter()]
 	[pscredential]$DomainJoinCredential,
-	[Parameter(Position = 22)]
+	[Parameter()]
 	[hashtable]$UnattendExpandStrings = @{
 		DiskID     = 0
 		Index      = 4

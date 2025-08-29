@@ -97,57 +97,62 @@ None.
 .OUTPUTS
 None. The function does not generate any output.
 
+.LINK
+https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/oscdimg-command-line-options?view=windows-11
+
 #>
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 param(
-	[Parameter(Position = 0, Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter(Mandatory = $true)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToOriginalIsoImage,
-	[Parameter(Position = 1)] 
+	[Parameter()]
 	[string]$PathToFeaturesIsoImage,
-	[Parameter(Position = 1)]
+	[Parameter()]
 	[string]$DriveLetter,
-	[Parameter(Position = 2)]
+	[Parameter()]
 	[uint32]$Number,
-	[Parameter(Position = 3)]
+	[Parameter()]
 	[string]$FileSystem = 'NTFS',
-	[Parameter(Position = 4)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToAutounattendFile,
-	[Parameter(Position = 5)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToUnattendFile,
-	[Parameter(Position = 6)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToUpdateScript,
-	[Parameter(Position = 7)][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToInvokeScript,
-	[Parameter(Position = 8)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$PathToScriptFolder,
-	[Parameter(Position = 9)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$PathToResourcesFolder,
-	[Parameter(Position = 10, ParameterSetName = 'StagingPath', Mandatory = $true)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[Parameter()]
+	[string]$RelativePathToFeaturesFolder = 'LanguagesAndOptionalFeatures',
+	[Parameter(ParameterSetName = 'StagingPath', Mandatory = $true)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$StagingPath,
-	[Parameter(Position = 11, ParameterSetName = 'StagingPath')]
+	[Parameter(ParameterSetName = 'StagingPath')]
 	[switch]$EmptyStagingPath,
-	[Parameter(Position = 12, ParameterSetName = 'StagingPath')]
+	[Parameter(ParameterSetName = 'StagingPath')]
 	[switch]$ReuseStagingPath,
-	[Parameter(Position = 13, ParameterSetName = 'StagingPath')]
+	[Parameter(ParameterSetName = 'StagingPath')]
 	[switch]$StopAfterPreparingImage,
-	[Parameter(Position = 14)]
+	[Parameter()]
 	[switch]$SkipExclude,
-	[Parameter(Position = 15)]
+	[Parameter()]
 	[switch]$UpdateAllWindowsImages,
-	[Parameter(Position = 16)]
+	[Parameter()]
 	[string[]]$OptionalFeaturesToDisable,
-	[Parameter(Position = 17)]
+	[Parameter()]
 	[string[]]$OptionalFeaturesToEnable,
-	[Parameter(Position = 18)]
+	[Parameter()]
 	[string[]]$CapabilitiesToRemove,
-	[Parameter(Position = 19)]
+	[Parameter()]
 	[string[]]$CapabilitiesToAdd,
-	[Parameter(Position = 20)]
+	[Parameter()]
 	[pscredential]$LocalAdminCredential,
-	[Parameter(Position = 21)]
+	[Parameter()]
 	[pscredential]$DomainJoinCredential,
-	[Parameter(Position = 22)]
+	[Parameter()]
 	[hashtable]$UnattendExpandStrings = @{
 		DiskID     = 0
 		Index      = 4
