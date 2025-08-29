@@ -9,7 +9,7 @@ Create a bootable USB drive from a Windows ISO image.
 Path to the original Windows ISO image.
 
 .PARAMETER PathToFeaturesIsoImage
-Path to the Features on Demand ISO image.
+Path to the Features on Demand (FOD) ISO image.
 
 .PARAMETER DriveLetter
 Character for the drive letter of an existing volume on the USB drive.
@@ -36,10 +36,10 @@ Path to unattend XML file to add to the USB drive. The file will be saved as 'Un
  - oobeSystem pass and Microsoft-Windows-Shell-Setup component with the administrator password settings
 
 .PARAMETER PathToUpdateScript
-Path to required "update" PowerShell file to add to WIM file. The file will be saved as 'Update-Windows.ps1' under the Windows directory in the WIM file.
+Path to required "update" PowerShell file to add to the Windows image(s). The file will be saved as 'Update-Windows.ps1' under the Windows directory in the Windows image(s).
 
 .PARAMETER PathToInvokeScript
-Path to required "invoke" PowerShell file to add to WIM file. The file will be saved as 'Invoke-ScriptsFromRemovableMedia.ps1' under the Windows directory in the WIM file.
+Path to required "invoke" PowerShell file to add to the Windows image(s). The file will be saved as 'Invoke-ScriptsFromRemovableMedia.ps1' under the Windows directory in the Windows image(s).
 
 .PARAMETER PathToScriptFolder
 Path to optional folder containing PS1 scripts to add to the USB drive.
@@ -47,8 +47,11 @@ Path to optional folder containing PS1 scripts to add to the USB drive.
 .PARAMETER PathToResourcesFolder
 Path to optional folder containing file resources to add to the USB drive.
 
+.PARAMETER RelativePathToFeaturesFolder
+Relative path to folder containing FOD resources on the FOD ISO image. The default value is "LanguagesAndOptionalFeatures"
+
 .PARAMETER StagingPath
-Path to folder for staging the ISO file contents and mounting the WIM file. The default staging path is a randomly named folder in the system temp directory.
+Path to folder for staging the ISO file contents and mounting the Windows image(s). The default staging path is a randomly named folder in the system temp directory.
 
 .PARAMETER EmptyStagingPath
 Switch parameter to remove any existing files and folders in the StagingPath folder.
@@ -63,7 +66,7 @@ Switch parameter to stop after preparing the contents for the USB drive. Require
 Switch parameter to skip creating Microsoft Defender path exclusion for the staging path.
 
 .PARAMETER UpdateAllWindowsImages
-Switch parameter to update all images in the WIM file regardless of Index value in the UnattendExpandStrings hashtable.
+Switch parameter to update all Windows images in the WIM file regardless of Index value in the UnattendExpandStrings hashtable.
 
 .PARAMETER OptionalFeaturesToDisable
 String array containing the names of Windows Optional Features to disable in the Windows image(s).

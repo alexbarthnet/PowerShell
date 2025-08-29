@@ -5,14 +5,20 @@ Create a Windows ISO image with unattend files from a Windows ISO image.
 .DESCRIPTION
 Create a Windows ISO image with unattend files from a Windows ISO image.
 
-.PARAMETER PathForUpdatedIsoImage
-Path for the updated Windows ISO image.
-
 .PARAMETER PathToOriginalIsoImage
 Path to the original Windows ISO image.
 
 .PARAMETER PathToFeaturesIsoImage
-Path to the Features on Demand ISO image.
+Path to the Features on Demand (FOD) ISO image.
+
+.PARAMETER PathForUpdatedIsoImage
+Path for the updated Windows ISO image.
+
+.PARAMETER FilePathToRequiredProgram
+Path to the required OS CD imaging program from the Windows ADK. The default value is 'C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe' and is constructed using the path of the 'ProgramFilesx86' special folder.
+
+.PARAMETER FileSystemLabelSuffix
+String containing a suffix to apply to the filesystem label from the original Windows ISO image. The default value is 'UNATTENDED' and is separated from the original file system label by an underscore.
 
 .PARAMETER PathToAutounattendFile
 Path to autounattend XML file to add to the ISO image. The file will be saved as 'Autounattend.xml' at the root of the USB file system and will be executed by Windows Setup after booting from the USB drive. The file should include the following passes and components:
@@ -30,10 +36,10 @@ Path to unattend XML file to add to the ISO image. The file will be saved as 'Un
  - oobeSystem pass and Microsoft-Windows-Shell-Setup component with the administrator password settings
 
 .PARAMETER PathToUpdateScript
-Path to required "update" PS1 file to add to WIM file. The file will be saved as 'Update-Windows.ps1' under the Windows directory in the WIM image.
+Path to required "update" PS1 file to add to the Windows image(s). The file will be saved as 'Update-Windows.ps1' under the Windows directory in the Windows image(s).
 
 .PARAMETER PathToInvokeScript
-Path to required "invoke" PS1 file to add to WIM file. The file will be saved as 'Invoke-ScriptsFromRemovableMedia.ps1' under the Windows directory in the WIM image.
+Path to required "invoke" PS1 file to add to the Windows image(s). The file will be saved as 'Invoke-ScriptsFromRemovableMedia.ps1' under the Windows directory in the Windows image(s).
 
 .PARAMETER PathToScriptFolder
 Path to optional folder containing PS1 scripts to add to the ISO image.
@@ -41,8 +47,11 @@ Path to optional folder containing PS1 scripts to add to the ISO image.
 .PARAMETER PathToResourcesFolder
 Path to optional folder containing file resources to add to the ISO image.
 
+.PARAMETER RelativePathToFeaturesFolder
+Relative path to folder containing FOD resources on the FOD ISO image. The default value is "LanguagesAndOptionalFeatures"
+
 .PARAMETER StagingPath
-Path to folder for staging the ISO file contents and mounting the WIM image. The default staging path is a randomly named folder in the system temp directory.
+Path to folder for staging the ISO file contents and mounting the Windows image(s). The default staging path is a randomly named folder in the system temp directory.
 
 .PARAMETER EmptyStagingPath
 Switch parameter to remove any existing files and folders in the StagingPath folder.
@@ -57,7 +66,7 @@ Switch parameter to stop after preparing the contents for the ISO image. Require
 Switch parameter to skip creating Microsoft Defender path exclusion for the staging path.
 
 .PARAMETER UpdateAllWindowsImages
-Switch parameter to update all images in the WIM file regardless of Index value in the UnattendExpandStrings hashtable.
+Switch parameter to update all Windows images in the WIM file regardless of Index value in the UnattendExpandStrings hashtable.
 
 .PARAMETER OptionalFeaturesToDisable
 String array containing the names of Windows Optional Features to disable in the Windows image(s).
