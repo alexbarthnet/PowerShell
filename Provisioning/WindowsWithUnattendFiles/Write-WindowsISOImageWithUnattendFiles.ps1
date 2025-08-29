@@ -1019,18 +1019,18 @@ process {
 	# report state
 	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Creating ISO image', $PathForUpdatedIsoImage
 
-	# define label for ISO image
-	$Label = '{0}-Unattend' -f $FileSystemLabel
-
-	# define timestamp for files in ISO image
-	# $Timestamp = Get-Date -Format "MM/dd/yyyy,HH:mm:ss"
+	# if filesystem label suffix exists...
+	if (![System.String]::IsNullOrEmpty($FileSystemLabelSuffix)) {
+		# append suffix to filesystem label
+		$FileSystemLabel = '{0}_{1}' -f $FileSystemLabel, $FileSystemLabelSuffix
+	}
 
 	# define bootdata for ISO image
 	$Bootdata = "2#p0,e,b$TemporaryPathForISO\boot\etfsboot.com#pEF,e,b$TemporaryPathForISO\efi\microsoft\boot\efisys_noprompt.bin"
 
 	# define arguments
-	$ArgumentList = "-l$Label -bootdata:$Bootdata -u2 -udfver102 -o $TemporaryPathForISO $PathForUpdatedIsoImage"
-	# $ArgumentList = "-l$Label -t$Timestamp -bootdata:$Bootdata -u2 -udfver102 -o $TemporaryPathForISO $PathForUpdatedIsoImage"
+	# reference: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/oscdimg-command-line-options?view=windows-11
+	$ArgumentList = "-l$FileSystemLabel -bootdata:$Bootdata -u2 -udfver102 -o $TemporaryPathForISO $PathForUpdatedIsoImage"
 
 	# if no new window requested...
 	if ($NoNewWindow) {
@@ -1053,7 +1053,7 @@ end {
 			Write-Warning -Message "could not remove exclusion for temporary path: $StagingPath"
 		}
 	}
-	
+
 	# if TemporaryFolder created...
 	if ([System.IO.Directory]::Exists($script:TemporaryFolder)) {
 		# remove temporary folder and all child items
