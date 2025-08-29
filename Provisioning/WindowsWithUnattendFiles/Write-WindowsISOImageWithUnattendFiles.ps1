@@ -199,17 +199,6 @@ begin {
 		return $TemporaryFolder
 	}
 
-	# define path to required program
-	$FilePath = Join-Path -Path $PathToBinaryFolder -ChildPath $PathToBinaryFile
-
-	# validate application path
-	try {
-		$null = Get-Item -Path $FilePath -ErrorAction 'Stop'
-	}
-	catch {
-		$PSCmdlet.ThrowTerminatingError($_)
-	}
-
 	# if administrator password provided...
 	if ($PSBoundParameters.ContainsKey('LocalAdminCredential')) {
 		# retrieve plaintext password from credential object
@@ -363,6 +352,22 @@ begin {
 }
 
 process {
+	########################################
+	# validate program
+	########################################
+
+	# define path to required program
+	$FilePath = Join-Path -Path $PathToBinaryFolder -ChildPath $PathToBinaryFile
+
+	# validate application path
+	try {
+		$null = Get-Item -Path $FilePath -ErrorAction 'Stop'
+	}
+	catch {
+		Write-Warning -Message "could not retrieve required file: $FilePath"
+		Return
+	}
+
 	########################################
 	# prepare image
 	########################################
