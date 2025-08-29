@@ -455,6 +455,54 @@ process {
 
 		# if WIM update required...
 		if ($WIMUpdateRequired) {
+			# if FOD image and capabilities to add provided...
+			if ($PSBoundParameters.ContainsKey('PathToFeaturesIsoImage') -and $CapabilitiesToAdd.Count) {
+				# report state
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Mounting FOD image', $PathToFeaturesIsoImage
+
+				# mount the original ISO image
+				try {
+					$DiskImage = Mount-DiskImage -ImagePath $PathToFeaturesIsoImage
+				}
+				catch {
+					return $_
+				}
+
+				# retrieve volume for disk image
+				try {
+					$Volume = Get-Volume -DiskImage $DiskImage
+				}
+				catch {
+					return $_
+				}
+
+				# retrieve volume properties
+				$ImageDriveLetter = $Volume.DriveLetter
+				$FileSystemLabel = $Volume.FileSystemLabel
+
+				# report state
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Copying FOD contents to path', $TemporaryPathForFOD
+
+				# copy ISO contents to temporary path
+				try {
+					Copy-Item -Path ('{0}:\*' -f $ImageDriveLetter) -Destination $TemporaryPathForFOD -Recurse -Force
+				}
+				catch {
+					return $_
+				}
+
+				# report state
+				"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Dismounting FOD image...'
+
+				# dismount ISO image
+				try {
+					$null = $DiskImage | Dismount-DiskImage
+				}
+				catch {
+					return $_
+				}
+			}
+
 			# clear readonly flag on windows image
 			try {
 				Set-ItemProperty -Path $ImagePathForWIM -Name 'IsReadOnly' -Value $false
