@@ -652,7 +652,7 @@ process {
 				}
 
 				# if optional features to disable or enable provided...
-				if ($PSBoundParameters.ContainsKey('OptionalFeaturesToDisable') -or $PSBoundParameters.ContainsKey('OptionalFeaturesToEnable')) { 
+				if ($PSBoundParameters.ContainsKey('OptionalFeaturesToDisable') -or $PSBoundParameters.ContainsKey('OptionalFeaturesToEnable')) {
 					# retrieve optional features in windows image
 					try {
 						$WindowsOptionalFeatures = Get-WindowsOptionalFeature -Path $TemporaryPathForWIM -ErrorAction 'Stop'
@@ -731,7 +731,7 @@ process {
 				}
 
 				# if capabilities to remove or add provided...
-				if ($PSBoundParameters.ContainsKey('CapabilitiesToRemove') -or $PSBoundParameters.ContainsKey('CapabilitiesToAdd')) { 
+				if ($PSBoundParameters.ContainsKey('CapabilitiesToRemove') -or $PSBoundParameters.ContainsKey('CapabilitiesToAdd')) {
 					# retrieve capabilities in windows image
 					try {
 						$WindowsCapabilities = Get-WindowsCapability -Path $TemporaryPathForWIM -ErrorAction 'Stop'
