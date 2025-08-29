@@ -28,15 +28,6 @@ The "applied updates" file contains the ID of any update that was passed to the 
 This script will return the "The command was successful. No reboot is required." return code when all updates found by the search operation have been passed to the install function in a previous run.
 
 .LINK
-https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nn-wuapi-iinstallationresult
-
-.LINK
-https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatesearcher-search
-
-.LINK
-https://learn.microsoft.com/en-us/windows/win32/api/wuapi/ne-wuapi-operationresultcode
-
-.LINK
 https://learn.microsoft.com/en-us/windows/win32/wua_sdk/searching--downloading--and-installing-updates
 
 .LINK
@@ -97,11 +88,14 @@ begin {
 
 	# if applied updates file not found...
 	if (![System.IO.File]::Exists($PathForAppliedUpdatesFile)) {
-		# create applied
+		# create applied updates file
 		try {
 			$null = New-Item -ItemType File -Path $PathForAppliedUpdatesFile
 		}
 		catch {
+			# warn before exiting or throwing exception
+			Write-Warning -Message "could not create '$PathForAppliedUpdates' applied updates file: $($_.Exception.Message)"
+
 			# if audit mode...
 			if ($AuditMode) {
 				# exit with a "The command failed" code
@@ -114,21 +108,26 @@ begin {
 			}
 		}
 	}
-
-	# retrieve contents of applied updates file
-	try {
-		$UpdatesApplied = Get-Content -Path $PathForAppliedUpdatesFile
-	}
-	catch {
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command failed" code
-			exit 103
+	# if applied updates file found...
+	else {
+		# retrieve contents of applied updates file
+		try {
+			$UpdatesApplied = Get-Content -Path $PathForAppliedUpdatesFile
 		}
-		# if not audit mode...
-		else {
-			# throw exception
-			$PSCmdlet.ThrowTerminatingError($_)
+		catch {
+			# warn before exiting or throwing exception
+			Write-Warning -Message "could not read '$PathForAppliedUpdates' applied updates file: $($_.Exception.Message)"
+
+			# if audit mode...
+			if ($AuditMode) {
+				# exit with a "The command failed" code
+				exit 103
+			}
+			# if not audit mode...
+			else {
+				# throw exception
+				$PSCmdlet.ThrowTerminatingError($_)
+			}
 		}
 	}
 }
@@ -142,6 +141,9 @@ process {
 		$Searcher = New-Object -ComObject 'Microsoft.Update.Searcher'
 	}
 	catch {
+		# warn before exiting or throwing exception
+		Write-Warning -Message "could not create Microsoft.Update.Searcher object: $($_.Exception.Message)"
+
 		# if audit mode...
 		if ($AuditMode) {
 			# exit with a "The command failed" code
@@ -175,6 +177,9 @@ process {
 		$SearcherResults = $Searcher.Search($Criteria)
 	}
 	catch {
+		# warn before exiting or throwing exception
+		Write-Warning -Message "could not call Search method with '$Criteria' criteria: $($_.Exception.Message)"
+
 		# if audit mode...
 		if ($AuditMode) {
 			# exit with a "The command failed" code
@@ -191,8 +196,6 @@ process {
 	if ($SearcherResults.Updates.Count -eq 0) {
 		# report state
 		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'No updates found'
-		# stop transcript before exit
-		$null = Stop-Transcript
 		# if audit mode...
 		if ($AuditMode) {
 			# exit with the "The command was successful. No reboot is required." code
@@ -200,7 +203,7 @@ process {
 		}
 		# if not audit mode...
 		else {
-			# return
+			# return to end script
 			return
 		}
 	}
@@ -219,6 +222,9 @@ process {
 		$Updates = New-Object -ComObject 'Microsoft.Update.UpdateColl'
 	}
 	catch {
+		# warn before exiting or throwing exception
+		Write-Warning -Message "could not create Microsoft.Update.UpdateColl object: $($_.Exception.Message)"
+
 		# if audit mode...
 		if ($AuditMode) {
 			# exit with a "The command failed" code
@@ -248,8 +254,6 @@ process {
 	if ($Updates.Count -eq 0) {
 		# report state
 		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'All updates have been previously applied; exiting early'
-		# stop transcript before exit
-		$null = Stop-Transcript
 		# if audit mode...
 		if ($AuditMode) {
 			# exit with the "The command was successful. No reboot is required." code
@@ -257,7 +261,7 @@ process {
 		}
 		# if not audit mode...
 		else {
-			# return exception
+			# return to end script
 			return
 		}
 	}
@@ -270,6 +274,9 @@ process {
 		$Session = New-Object -ComObject 'Microsoft.Update.Session'
 	}
 	catch {
+		# warn before exiting or throwing exception
+		Write-Warning -Message "could not create Microsoft.Update.Session object: $($_.Exception.Message)"
+
 		# if audit mode...
 		if ($AuditMode) {
 			# exit with a "The command failed" code
@@ -288,6 +295,9 @@ process {
 		$Downloader = $Session.CreateUpdateDownloader()
 	}
 	catch {
+		# warn before exiting or throwing exception
+		Write-Warning -Message "could not call CreateUpdateDownloader method: $($_.Exception.Message)"
+
 		# if audit mode...
 		if ($AuditMode) {
 			# exit with a "The command failed" code
@@ -305,6 +315,9 @@ process {
 		$Downloader.Updates = $Updates
 	}
 	catch {
+		# warn before exiting or throwing exception
+		Write-Warning -Message "could not add update collection to Downloader object: $($_.Exception.Message)"
+
 		# if audit mode...
 		if ($AuditMode) {
 			# exit with a "The command failed" code
@@ -323,6 +336,9 @@ process {
 		$DownloaderResults = $Downloader.Download()
 	}
 	catch {
+		# warn before exiting or throwing exception
+		Write-Warning -Message "could not call Download() method: $($_.Exception.Message)"
+
 		# if audit mode...
 		if ($AuditMode) {
 			# exit with a "The command failed" code
@@ -342,10 +358,12 @@ process {
 	# reference: https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-idownloadresult-get_resultcode
 	# reference: https://learn.microsoft.com/en-us/windows/win32/api/wuapi/ne-wuapi-operationresultcode
 	if ($DownloaderResults.ResultCode -ne 2) {
-		# report state
-		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Error downloading updates', $DownloaderResults.HResult
-		# stop transcript before exit
-		$null = Stop-Transcript
+		# define error message
+		$Message = "calling Download method returned '{1}' result code and HRESULT: 0x{0:x} ({0})" -f $DownloaderResults.HResult, $DownloaderResults.ResultCode
+
+		# warn before exiting or throwing exception
+		Write-Warning -Message "could not download updates: $Message"
+
 		# if audit mode...
 		if ($AuditMode) {
 			# exit with a "The command failed" code
@@ -353,8 +371,8 @@ process {
 		}
 		# if not audit mode...
 		else {
-			# return exception
-			return $_
+			# return message as exception
+			return [System.Exception]::new($Message)
 		}
 	}
 
@@ -366,6 +384,9 @@ process {
 		$Installer = New-Object -ComObject 'Microsoft.Update.Installer'
 	}
 	catch {
+		# warn before exiting or throwing exception
+		Write-Warning -Message "could not create Microsoft.Update.Installer object: $($_.Exception.Message)"
+
 		# if audit mode...
 		if ($AuditMode) {
 			# exit with a "The command failed" code
@@ -383,6 +404,9 @@ process {
 		$Installer.Updates = $Updates
 	}
 	catch {
+		# warn before exiting or throwing exception
+		Write-Warning -Message "could not add update collection to Installer object: $($_.Exception.Message)"
+
 		# if audit mode...
 		if ($AuditMode) {
 			# exit with a "The command failed" code
@@ -401,6 +425,9 @@ process {
 		$InstallerResults = $Installer.Install()
 	}
 	catch {
+		# warn before exiting or throwing exception
+		Write-Warning -Message "could not call Install() method: $($_.Exception.Message)"
+
 		# if audit mode...
 		if ($AuditMode) {
 			# exit with a "The command failed" code
@@ -420,10 +447,12 @@ process {
 	# reference: https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iinstallationresult-get_resultcode
 	# reference: https://learn.microsoft.com/en-us/windows/win32/api/wuapi/ne-wuapi-operationresultcode
 	if ($InstallerResults.ResultCode -ne 2) {
-		# report state
-		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Error installing updates', $InstallerResults.HResult
-		# stop transcript before exit
-		$null = Stop-Transcript
+		# define error message
+		$Message = "calling Install method returned '{1}' result code and HRESULT: 0x{0:x} ({0})" -f $InstallerResults.HResult, $InstallerResults.ResultCode
+
+		# warn before exiting or throwing exception
+		Write-Warning -Message "could not install updates: $Message"
+
 		# if audit mode...
 		if ($AuditMode) {
 			# exit with a "The command failed" code
@@ -431,8 +460,8 @@ process {
 		}
 		# if not audit mode...
 		else {
-			# return exception
-			return $_
+			# return message as exception
+			return [System.Exception]::new($Message)
 		}
 	}
 
@@ -445,10 +474,9 @@ process {
 				Add-Content -Path $PathForAppliedUpdatesFile -Value $Update.Identity.UpdateID
 			}
 			catch {
-				# report state
-				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Error updating applied updates file', $_.Exception.Message
-				# stop transcript before exit
-				$null = Stop-Transcript
+				# warn before exiting or throwing exception
+				Write-Warning -Message "could not update '$PathForAppliedUpdates' applied updates file: $($_.Exception.Message)"
+
 				# if audit mode...
 				if ($AuditMode) {
 					# exit with a "The command failed" code
@@ -464,34 +492,33 @@ process {
 	}
 
 	# if install results includes reboot required...
-	# reference: https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nn-wuapi-iupdateinstallationresult
+	# reference: https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nn-wuapi-iinstallationresult
 	if ($InstallerResults.RebootRequired) {
 		# report state
 		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Reboot required after installing updates'
-		# if reboot requested and not in audit mode...
-		if ($PSBoundParameters['Reboot'] -and -not $AuditMode) {
+		# if audit mode...
+		if ($AuditMode) {
+			# exit with a "The command complete and must be run again after a reboot" code to force another pass
+			exit 2
+		}
+		# if not audit mode and reboot requested...
+		elseif ($PSBoundParameters['Reboot']) {
 			# restart the computer
 			try {
 				Restart-Computer -Force
 			}
 			catch {
+				# warn before exiting or throwing exception
+				Write-Warning -Message "could not restart computer after installing updates: $($_.Exception.Message)"
+
 				# return exception
 				return $_
 			}
 		}
 	}
+}
 
+end {
 	# stop transcript before exit
 	$null = Stop-Transcript
-
-	# if audit mode...
-	if ($AuditMode) {
-		# exit with "The command is still in process" code to force another pass
-		exit 2
-	}
-	# if not audit mode...
-	else {
-		# return
-		return
-	}
 }
