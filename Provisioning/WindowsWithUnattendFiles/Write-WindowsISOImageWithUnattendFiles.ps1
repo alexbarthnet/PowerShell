@@ -187,7 +187,7 @@ begin {
 
 		# create temporary folder
 		try {
-			$TemporaryFolder = New-Item -Force -ItemType Directory -Path $PathForTemporaryFolder
+			$TemporaryFolder = New-Item -ItemType Directory -Path $PathForTemporaryFolder -Force -ErrorAction 'Stop'
 		}
 		catch {
 			$PSCmdlet.ThrowTerminatingError($_)
@@ -299,7 +299,7 @@ begin {
 
 	# create base temporary path
 	try {
-		$TemporaryPath = New-Item -Force -ItemType Directory -Path $StagingPath
+		$TemporaryPath = New-Item -ItemType Directory -Path $StagingPath -Force -ErrorAction 'Stop'
 	}
 	catch {
 		$PSCmdlet.ThrowTerminatingError($_)
@@ -307,7 +307,7 @@ begin {
 
 	# create temporary path for DISM scratch directory
 	try {
-		$TemporaryPathForDSD = New-Item -Force -ItemType Directory -Path $TemporaryPath -Name 'DSD'
+		$TemporaryPathForDSD = New-Item -ItemType Directory -Path $TemporaryPath -Name 'DSD' -Force -ErrorAction 'Stop'
 	}
 	catch {
 		$PSCmdlet.ThrowTerminatingError($_)
@@ -315,7 +315,7 @@ begin {
 
 	# create temporary path for FOD contents
 	try {
-		$TemporaryPathForFOD = New-Item -Force -ItemType Directory -Path $TemporaryPath -Name 'FOD'
+		$TemporaryPathForFOD = New-Item -ItemType Directory -Path $TemporaryPath -Name 'FOD' -Force -ErrorAction 'Stop'
 	}
 	catch {
 		$PSCmdlet.ThrowTerminatingError($_)
@@ -323,7 +323,7 @@ begin {
 
 	# create temporary path for ISO contents
 	try {
-		$TemporaryPathForISO = New-Item -Force -ItemType Directory -Path $TemporaryPath -Name 'ISO'
+		$TemporaryPathForISO = New-Item -ItemType Directory -Path $TemporaryPath -Name 'ISO' -Force -ErrorAction 'Stop'
 	}
 	catch {
 		$PSCmdlet.ThrowTerminatingError($_)
@@ -331,7 +331,7 @@ begin {
 
 	# create temporary path for WIM file
 	try {
-		$TemporaryPathForWIM = New-Item -Force -ItemType Directory -Path $TemporaryPath -Name 'WIM'
+		$TemporaryPathForWIM = New-Item -ItemType Directory -Path $TemporaryPath -Name 'WIM' -Force -ErrorAction 'Stop'
 	}
 	catch {
 		$PSCmdlet.ThrowTerminatingError($_)
@@ -340,7 +340,7 @@ begin {
 	# if Skip Exclude not requested...
 	if ($SkipExclude.IsPresent -eq $false) {
 		try {
-			Add-MpPreference -ExclusionPath $StagingPath -ErrorAction Stop
+			Add-MpPreference -ExclusionPath $StagingPath -ErrorAction 'Stop'
 		}
 		catch {
 			Write-Warning -Message "could not create exclusion for temporary path: $StagingPath"
@@ -414,7 +414,7 @@ process {
 
 		# copy ISO contents to temporary path
 		try {
-			Copy-Item -Path ('{0}:\*' -f $ImageDriveLetter) -Destination $TemporaryPathForISO -Recurse -Force
+			Copy-Item -Path ('{0}:\*' -f $ImageDriveLetter) -Destination $TemporaryPathForISO -Recurse -Force -ErrorAction 'Stop'
 		}
 		catch {
 			return $_
@@ -485,7 +485,7 @@ process {
 
 				# copy ISO contents to temporary path
 				try {
-					Copy-Item -Path ('{0}:\*' -f $ImageDriveLetter) -Destination $TemporaryPathForFOD -Recurse -Force
+					Copy-Item -Path ('{0}:\*' -f $ImageDriveLetter) -Destination $TemporaryPathForFOD -Recurse -Force -ErrorAction 'Stop'
 				}
 				catch {
 					return $_
@@ -551,7 +551,7 @@ process {
 
 					# add update script to windows image
 					try {
-						Copy-Item -Path $PathToUpdateScript -Destination $UpdatePs1OnWIM
+						Copy-Item -Path $PathToUpdateScript -Destination $UpdatePs1OnWIM -Force -ErrorAction 'Stop'
 					}
 					catch {
 						return $_
@@ -565,7 +565,7 @@ process {
 
 					# add invoke script to windows image
 					try {
-						Copy-Item -Path $PathToInvokeScript -Destination $InvokePs1OnWIM
+						Copy-Item -Path $PathToInvokeScript -Destination $InvokePs1OnWIM -Force -ErrorAction 'Stop'
 					}
 					catch {
 						return $_
@@ -783,7 +783,7 @@ process {
 
 			# get contents of autounattend file
 			try {
-				$Content = Get-Content -Path $PathToAutounattendFile -Raw
+				$Content = Get-Content -Path $PathToAutounattendFile -Raw -ErrorAction 'Stop'
 			}
 			catch {
 				return $_
@@ -816,7 +816,7 @@ process {
 
 			# add autounattend file to ISO
 			try {
-				$Content | Set-Content -Path $AutounattendXmlOnISO
+				$Content | Set-Content -Path $AutounattendXmlOnISO -Force -ErrorAction 'Stop'
 			}
 			catch {
 				return $_
@@ -841,7 +841,7 @@ process {
 
 			# get contents of unattend file
 			try {
-				$Content = Get-Content -Path $PathToUnattendFile -Raw
+				$Content = Get-Content -Path $PathToUnattendFile -Raw -ErrorAction 'Stop'
 			}
 			catch {
 				return $_
@@ -874,7 +874,7 @@ process {
 
 			# add unattend file to ISO
 			try {
-				$Content | Set-Content -Path $UnattendXmlOnISO
+				$Content | Set-Content -Path $UnattendXmlOnISO -Force -ErrorAction 'Stop'
 			}
 			catch {
 				return $_
@@ -893,7 +893,7 @@ process {
 
 				# create folder
 				try {
-					$null = New-Item -ItemType Directory -Path $ScriptFolderForISO
+					$null = New-Item -ItemType Directory -Path $ScriptFolderForISO -Force -ErrorAction 'Stop'
 				}
 				catch {
 					return $_
@@ -924,7 +924,7 @@ process {
 
 				# copy file to ISO
 				try {
-					Copy-Item -Path $File.FullName -Destination $FileOnISO -Force
+					Copy-Item -Path $File.FullName -Destination $FileOnISO -Force -ErrorAction 'Stop'
 				}
 				catch {
 					return $_
@@ -944,7 +944,7 @@ process {
 
 				# create folder
 				try {
-					$null = New-Item -ItemType Directory -Path $ResourcesFolderForISO
+					$null = New-Item -ItemType Directory -Path $ResourcesFolderForISO -Force -ErrorAction 'Stop'
 				}
 				catch {
 					return $_
@@ -980,7 +980,7 @@ process {
 
 				# copy item to folder
 				try {
-					$null = New-Item -Path $FolderPath -ItemType Directory -Force
+					$null = New-Item -Path $FolderPath -ItemType Directory -Force -ErrorAction 'Stop'
 				}
 				catch {
 					return $_
@@ -989,7 +989,7 @@ process {
 
 			# retrieve files in resources folder
 			try {
-				$Files = Get-ChildItem -Recurse -Path $PathToResourcesFolder -File
+				$Files = Get-ChildItem -Recurse -Path $PathToResourcesFolder -File -ErrorAction 'Stop'
 			}
 			catch {
 				return $_
@@ -1019,7 +1019,7 @@ process {
 
 				# copy file to ISO
 				try {
-					$null = Copy-Item -Path $File.FullName -Destination $FileOnISO -Force
+					$null = Copy-Item -Path $File.FullName -Destination $FileOnISO -Force -ErrorAction 'Stop'
 				}
 				catch {
 					return $_
@@ -1091,7 +1091,7 @@ end {
 	# if Skip Exclude not requested...
 	if (!$SkipExclude) {
 		try {
-			Remove-MpPreference -ExclusionPath $StagingPath -ErrorAction Stop
+			Remove-MpPreference -ExclusionPath $StagingPath -ErrorAction 'Stop'
 		}
 		catch {
 			Write-Warning -Message "could not remove exclusion for temporary path: $StagingPath"
@@ -1102,7 +1102,7 @@ end {
 	if ([System.IO.Directory]::Exists($script:TemporaryFolder)) {
 		# remove temporary folder and all child items
 		try {
-			Remove-Item -Path $TemporaryFolder -Recurse -Force
+			Remove-Item -Path $TemporaryFolder -Recurse -Force -ErrorAction 'Stop'
 		}
 		catch {
 			return $_
