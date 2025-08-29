@@ -387,6 +387,12 @@ process {
 
 	# if staging path provided and reuse staging path not set...
 	if ($StagingPath -and -not $ReuseStagingPath) {
+		# if capabilities to add provided but FOD image not provided...
+		If ($PSBoundParameters.ContainsKey('CapabilitiesToAdd') -and -not $PSBoundParameters.ContainsKey('PathToFeaturesImage')) {
+			Write-Warning -Message "The 'CapabilitiesToAdd' parameter requires the 'PathToFeaturesIsoImage' parameter"
+			Return
+		}
+
 		# report state
 		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Mounting ISO image', $PathToOriginalIsoImage
 
