@@ -608,7 +608,7 @@ process {
 								$null = Disable-WindowsOptionalFeature -Path $TemporaryPathForWIM -FeatureName $FeatureName -ErrorAction 'Stop'
 							}
 							catch {
-								return $_
+								Write-Warning -Message "could not disable '$FeatureName' feature in WIM image: $($_.Exception.Message)"
 							}
 						}
 					}
@@ -642,7 +642,7 @@ process {
 								$null = Enable-WindowsOptionalFeature -Path $TemporaryPathForWIM -FeatureName $FeatureName -All -ErrorAction 'Stop'
 							}
 							catch {
-								return $_
+								Write-Warning -Message "could not enable '$FeatureName' feature in WIM image: $($_.Exception.Message)"
 							}
 						}
 					}
@@ -687,7 +687,7 @@ process {
 								$null = Remove-WindowsCapability -Path $TemporaryPathForWIM -Name $CapabilityName -ErrorAction 'Stop'
 							}
 							catch {
-								return $_
+								Write-Warning -Message "could not remove '$CapabilityName' capability from image: $($_.Exception.Message)"
 							}
 						}
 					}
@@ -724,7 +724,7 @@ process {
 								$null = Add-WindowsCapability -Path $TemporaryPathForWIM -Name $CapabilityName -Source $Source -ErrorAction 'Stop'
 							}
 							catch {
-								return $_
+								Write-Warning -Message "could not add '$CapabilityName' capability to image: $($_.Exception.Message)"
 							}
 						}
 					}
