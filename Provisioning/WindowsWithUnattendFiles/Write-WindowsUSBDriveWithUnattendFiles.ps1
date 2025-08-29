@@ -460,9 +460,9 @@ process {
 	# if staging path provided and reuse staging path not set...
 	if ($StagingPath -and -not $ReuseStagingPath) {
 		# if capabilities to add provided but FOD image not provided...
-		If ($PSBoundParameters.ContainsKey('CapabilitiesToAdd') -and -not $PSBoundParameters.ContainsKey('PathToFeaturesImage')) {
+		if ($PSBoundParameters.ContainsKey('CapabilitiesToAdd') -and -not $PSBoundParameters.ContainsKey('PathToFeaturesIsoImage')) {
 			Write-Warning -Message "The 'CapabilitiesToAdd' parameter requires the 'PathToFeaturesIsoImage' parameter"
-			Return
+			return
 		}
 
 		# report state
