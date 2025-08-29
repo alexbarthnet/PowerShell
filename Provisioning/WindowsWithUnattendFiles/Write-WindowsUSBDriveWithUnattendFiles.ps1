@@ -849,17 +849,6 @@ process {
 			# report state
 			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating ISO contents with Autounattend file', $AutounattendXmlOnISO
 
-			# if autounattend file already present on ISO...
-			if ([System.IO.File]::Exists($AutounattendXmlOnISO)) {
-				# remove readonly flag from autounattend file on ISO
-				try {
-					Set-ItemProperty -Path $AutounattendXmlOnISO -Name 'IsReadOnly' -Value $false
-				}
-				catch {
-					return $_
-				}
-			}
-
 			# get contents of autounattend file
 			try {
 				$Content = Get-Content -Path $PathToAutounattendFile -Raw -ErrorAction 'Stop'
@@ -906,17 +895,6 @@ process {
 		if ($PSBoundParameters.ContainsKey('PathToUnattendFile')) {
 			# report state
 			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating ISO contents with Unattend file', $UnattendXmlOnISO
-
-			# if unattend file already present on ISO...
-			if ([System.IO.File]::Exists($UnattendXmlOnISO)) {
-				# remove readonly flag from unattend file on ISO
-				try {
-					Set-ItemProperty -Path $UnattendXmlOnISO -Name 'IsReadOnly' -Value $false
-				}
-				catch {
-					return $_
-				}
-			}
 
 			# get contents of unattend file
 			try {
@@ -989,17 +967,6 @@ process {
 
 				# create path for file on ISO
 				$FileOnISO = Join-Path -Path $ScriptFolderForISO -ChildPath $File.Name
-
-				# if file on ISO exists...
-				if ([System.IO.File]::Exists($FileOnISO)) {
-					# remove readonly flag from file on ISO
-					try {
-						Set-ItemProperty -Path $FileOnISO -Name 'IsReadOnly' -Value $false
-					}
-					catch {
-						return $_
-					}
-				}
 
 				# copy file to ISO
 				try {
@@ -1084,17 +1051,6 @@ process {
 
 				# define destination file path in ISO
 				$FileOnISO = Join-Path -Path $ResourcesFolderForISO -ChildPath $RelativeFilePath
-
-				# if file on ISO exists...
-				if ([System.IO.File]::Exists($FileOnISO)) {
-					# remove readonly flag from file on ISO
-					try {
-						Set-ItemProperty -Path $FileOnISO -Name 'IsReadOnly' -Value $false
-					}
-					catch {
-						return $_
-					}
-				}
 
 				# copy file to ISO
 				try {
