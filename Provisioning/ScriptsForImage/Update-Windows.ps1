@@ -170,6 +170,7 @@ process {
 	}
 
 	# search for updates
+	# reference: https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatesearcher-search
 	try {
 		$SearcherResults = $Searcher.Search($Criteria)
 	}
@@ -283,6 +284,7 @@ process {
 	}
 
 	# create update downloader object
+	# reference: https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatesession-createupdatedownloader
 	try {
 		$Downloader = $Session.CreateUpdateDownloader()
 	}
@@ -317,6 +319,7 @@ process {
 	}
 
 	# download updates
+	# reference: https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatedownloader-download
 	try {
 		$DownloaderResults = $Downloader.Download()
 	}
@@ -337,6 +340,8 @@ process {
 	"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Downloaded updates'
 
 	# if download result code is not "completed successfully"...
+	# reference: https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-idownloadresult-get_resultcode
+	# reference: https://learn.microsoft.com/en-us/windows/win32/api/wuapi/ne-wuapi-operationresultcode
 	if ($DownloaderResults.ResultCode -ne 2) {
 		# report state
 		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Error downloading updates', $DownloaderResults.HResult
@@ -392,6 +397,7 @@ process {
 	}
 
 	# install updates
+	# reference: https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdateinstaller-install
 	try {
 		$InstallerResults = $Installer.Install()
 	}
@@ -412,6 +418,8 @@ process {
 	"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Installed updates'
 
 	# if install result code is not "completed successfully"...
+	# reference: https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iinstallationresult-get_resultcode
+	# reference: https://learn.microsoft.com/en-us/windows/win32/api/wuapi/ne-wuapi-operationresultcode
 	if ($InstallerResults.ResultCode -ne 2) {
 		# report state
 		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Error installing updates', $InstallerResults.HResult
@@ -457,6 +465,7 @@ process {
 	}
 
 	# if install results includes reboot required...
+	# reference: https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nn-wuapi-iupdateinstallationresult
 	if ($InstallerResults.RebootRequired) {
 		# report state
 		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Reboot required after installing updates'
