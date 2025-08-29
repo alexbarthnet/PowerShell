@@ -697,6 +697,9 @@ process {
 
 					# if capabilities to add provided...
 					if ($PSBoundParameters.ContainsKey('CapabilitiesToAdd')) {
+						# define source path
+						$Source = Join-Path -Path $TemporaryPathForFOD -ChildPath $RelativePathToFeaturesFolder
+
 						# loop through capabilities
 						:NextCapabilityToAdd foreach ($CapabilityName in $CapabilitiesToAdd) {
 							# retrieve capability by name
@@ -721,7 +724,7 @@ process {
 
 							# add capability to windows image
 							try {
-								$null = Add-WindowsCapability -Path $TemporaryPathForWIM -Name $CapabilityName -ErrorAction 'Stop'
+								$null = Add-WindowsCapability -Path $TemporaryPathForWIM -Name $CapabilityName -Source $Source -ErrorAction 'Stop'
 							}
 							catch {
 								return $_
