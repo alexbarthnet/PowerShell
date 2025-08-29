@@ -362,16 +362,13 @@ process {
 	# validate program
 	########################################
 
-	# define path to required program
-	$FilePath = Join-Path -Path $PathToBinaryFolder -ChildPath $PathToBinaryFile
-
-	# validate application path
+	# validate path to required program
 	try {
-		$null = Get-Item -Path $FilePath -ErrorAction 'Stop'
+		$null = Get-Item -Path $FilePathToRequiredProgram -ErrorAction 'Stop'
 	}
 	catch {
-		Write-Warning -Message "could not retrieve required file: $FilePath"
-		Return
+		Write-Warning -Message "could not retrieve required program: $FilePathToRequiredProgram"
+		throw $_
 	}
 
 	########################################
@@ -1038,11 +1035,11 @@ process {
 	# if no new window requested...
 	if ($NoNewWindow) {
 		# start process to write updated ISO in current window
-		Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -Wait -NoNewWindow -ErrorAction Stop
+		Start-Process -FilePath $FilePathToRequiredProgram -ArgumentList $ArgumentList -Wait -NoNewWindow -ErrorAction Stop
 	}
 	else {
 		# start process to write updated ISO in new window
-		Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -Wait -Window Normal -ErrorAction Stop
+		Start-Process -FilePath $FilePathToRequiredProgram -ArgumentList $ArgumentList -Wait -Window Normal -ErrorAction Stop
 	}
 }
 
