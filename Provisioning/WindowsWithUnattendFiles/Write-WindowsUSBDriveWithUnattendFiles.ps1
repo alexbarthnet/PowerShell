@@ -1182,7 +1182,7 @@ process {
 			}
 		}
 		# if file system is NTFS...
-		If ($FileSystem -eq 'NTFS') {
+		if ($FileSystem -eq 'NTFS') {
 			$Length = 32
 		}
 
