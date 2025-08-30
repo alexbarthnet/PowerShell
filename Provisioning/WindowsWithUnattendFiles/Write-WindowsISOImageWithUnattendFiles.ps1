@@ -1056,7 +1056,15 @@ process {
 	if (![System.String]::IsNullOrEmpty($FileSystemLabelSuffix)) {
 		# append suffix to filesystem label
 		$FileSystemLabel = '{0}_{1}' -f $FileSystemLabel, $FileSystemLabelSuffix
+
+		# if file system label is longer than 32 characters...
+		if ($FileSystemLabel.Length -gt 32) {
+			$FileSystemLabel = $FileSystemLabel.Substring(0, 32)
+		}
 	}
+
+	# report state
+	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Using file system label', $FileSystemLabel
 
 	# define bootdata for ISO image
 	$Bootdata = "2#p0,e,b$TemporaryPathForISO\boot\etfsboot.com#pEF,e,b$TemporaryPathForISO\efi\microsoft\boot\efisys_noprompt.bin"

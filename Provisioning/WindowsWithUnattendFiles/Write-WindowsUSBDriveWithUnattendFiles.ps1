@@ -1165,6 +1165,17 @@ process {
 	}
 
 	# report state
+	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Setting USB drive file system label', $FileSystemLabel
+
+	# partition and format disk
+	try {
+		$Volume | Set-Volume -NewFileSystemLabel $FileSystemLabel
+	}
+	catch {
+		return $_
+	}
+
+	# report state
 	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Copying ISO contents to USB drive', $Volume.DriveLetter
 
 	# copy ISO contents to USB drive
