@@ -71,63 +71,51 @@ begin {
 		$null = Start-Transcript -Path $PathForTranscript -Append
 	}
 	catch {
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command failed" code
-			exit 101
-		}
-		# if not audit mode...
-		else {
-			# return exception
-			return $_
-		}
+		# warn before setting exit code and throwing exception
+		Write-Warning -Message "could not create '$PathForTranscript' transcript file: $($_.Exception.Message)"
+
+		# set exit code to a "The command failed" code before throwing exception
+		$ExitCode = 101
+
+		# throw exception
+		throw $_
 	}
 
 	# define path for applied updates file
 	$PathForAppliedUpdatesFile = Join-Path -Path $SystemRoot -ChildPath 'Update-Windows.txt'
 
-	# if applied updates file not found...
-	if (![System.IO.File]::Exists($PathForAppliedUpdatesFile)) {
-		# create applied updates file
-		try {
-			$null = New-Item -ItemType File -Path $PathForAppliedUpdatesFile
-		}
-		catch {
-			# warn before exiting or throwing exception
-			Write-Warning -Message "could not create '$PathForAppliedUpdates' applied updates file: $($_.Exception.Message)"
-
-			# if audit mode...
-			if ($AuditMode) {
-				# exit with a "The command failed" code
-				exit 102
-			}
-			# if not audit mode...
-			else {
-				# throw exception
-				$PSCmdlet.ThrowTerminatingError($_)
-			}
-		}
-	}
-	# if applied updates file found...
-	else {
+	# if applied updates file exists...
+	if ([System.IO.File]::Exists($PathForAppliedUpdatesFile)) {
 		# retrieve contents of applied updates file
 		try {
 			$UpdatesApplied = Get-Content -Path $PathForAppliedUpdatesFile
 		}
 		catch {
-			# warn before exiting or throwing exception
+			# warn before setting exit code and throwing exception
 			Write-Warning -Message "could not read '$PathForAppliedUpdates' applied updates file: $($_.Exception.Message)"
 
-			# if audit mode...
-			if ($AuditMode) {
-				# exit with a "The command failed" code
-				exit 103
-			}
-			# if not audit mode...
-			else {
-				# throw exception
-				$PSCmdlet.ThrowTerminatingError($_)
-			}
+			# set exit code to a "The command failed" code before throwing exception
+			$ExitCode = 102
+
+			# throw exception
+			throw $_
+		}
+	}
+	# if applied updates file not found...
+	else {
+		# create applied updates file
+		try {
+			$null = New-Item -ItemType File -Path $PathForAppliedUpdatesFile
+		}
+		catch {
+			# warn before setting exit code and throwing exception
+			Write-Warning -Message "could not create '$PathForAppliedUpdates' applied updates file: $($_.Exception.Message)"
+
+			# set exit code to a "The command failed" code before returning
+			$ExitCode = 103
+
+			# throw exception
+			throw $_
 		}
 	}
 }
@@ -141,19 +129,14 @@ process {
 		$Searcher = New-Object -ComObject 'Microsoft.Update.Searcher'
 	}
 	catch {
-		# warn before exiting or throwing exception
+		# warn before setting exit code and throwing exception
 		Write-Warning -Message "could not create Microsoft.Update.Searcher object: $($_.Exception.Message)"
 
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command failed" code
-			exit 201
-		}
-		# if not audit mode...
-		else {
-			# return exception
-			return $_
-		}
+		# set exit code to a "The command failed" code before returning
+		$ExitCode = 201
+
+		# return exception
+		return $_
 	}
 
 	# define base criteria
@@ -177,35 +160,26 @@ process {
 		$SearcherResults = $Searcher.Search($Criteria)
 	}
 	catch {
-		# warn before exiting or throwing exception
+		# warn before setting exit code and throwing exception
 		Write-Warning -Message "could not call Search method with '$Criteria' criteria: $($_.Exception.Message)"
 
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command failed" code
-			exit 202
-		}
-		# if not audit mode...
-		else {
-			# return exception
-			return $_
-		}
+		# set exit code to a "The command failed" code before returning
+		$ExitCode = 202
+
+		# return exception
+		return $_
 	}
 
 	# if no updates found...
 	if ($SearcherResults.Updates.Count -eq 0) {
 		# report state
 		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'No updates found'
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with the "The command was successful. No reboot is required." code
-			exit 0
-		}
-		# if not audit mode...
-		else {
-			# return to end script
-			return
-		}
+
+		# set exit code to a "The command was successful. No reboot is required." code before returning
+		$ExitCode = 0
+
+		# return to end script
+		return
 	}
 	# if updates found...
 	else {
@@ -222,19 +196,14 @@ process {
 		$Updates = New-Object -ComObject 'Microsoft.Update.UpdateColl'
 	}
 	catch {
-		# warn before exiting or throwing exception
+		# warn before setting exit code and throwing exception
 		Write-Warning -Message "could not create Microsoft.Update.UpdateColl object: $($_.Exception.Message)"
 
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command failed" code
-			exit 203
-		}
-		# if not audit mode...
-		else {
-			# return exception
-			return $_
-		}
+		# set exit code to a "The command failed" code before returning
+		$ExitCode = 203
+
+		# return exception
+		return $_
 	}
 
 	# loop through updates
@@ -254,16 +223,12 @@ process {
 	if ($Updates.Count -eq 0) {
 		# report state
 		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'All updates have been previously applied; exiting early'
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with the "The command was successful. No reboot is required." code
-			exit 0
-		}
-		# if not audit mode...
-		else {
-			# return to end script
-			return
-		}
+
+		# exit with the "The command was successful. No reboot is required." code
+		$ExitCode = 0
+
+		# return to end script
+		return
 	}
 
 	# report state
@@ -274,19 +239,14 @@ process {
 		$Session = New-Object -ComObject 'Microsoft.Update.Session'
 	}
 	catch {
-		# warn before exiting or throwing exception
+		# warn before setting exit code and throwing exception
 		Write-Warning -Message "could not create Microsoft.Update.Session object: $($_.Exception.Message)"
 
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command failed" code
-			exit 204
-		}
-		# if not audit mode...
-		else {
-			# return exception
-			return $_
-		}
+		# set exit code to a "The command failed" code before returning
+		$ExitCode = 204
+
+		# return exception
+		return $_
 	}
 
 	# create update downloader object
@@ -295,19 +255,14 @@ process {
 		$Downloader = $Session.CreateUpdateDownloader()
 	}
 	catch {
-		# warn before exiting or throwing exception
+		# warn before setting exit code and throwing exception
 		Write-Warning -Message "could not call CreateUpdateDownloader method: $($_.Exception.Message)"
 
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command failed" code
-			exit 205
-		}
-		# if not audit mode...
-		else {
-			# return exception
-			return $_
-		}
+		# set exit code to a "The command failed" code before returning
+		$ExitCode = 205
+
+		# return exception
+		return $_
 	}
 
 	# add update collection to downloader object
@@ -315,19 +270,14 @@ process {
 		$Downloader.Updates = $Updates
 	}
 	catch {
-		# warn before exiting or throwing exception
+		# warn before setting exit code and throwing exception
 		Write-Warning -Message "could not add update collection to Downloader object: $($_.Exception.Message)"
 
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command failed" code
-			exit 206
-		}
-		# if not audit mode...
-		else {
-			# return exception
-			return $_
-		}
+		# set exit code to a "The command failed" code before returning
+		$ExitCode = 206
+
+		# return exception for transcript
+		return $_
 	}
 
 	# download updates
@@ -336,19 +286,14 @@ process {
 		$DownloaderResults = $Downloader.Download()
 	}
 	catch {
-		# warn before exiting or throwing exception
+		# warn before setting exit code and throwing exception
 		Write-Warning -Message "could not call Download() method: $($_.Exception.Message)"
 
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command failed" code
-			exit 207
-		}
-		# if not audit mode...
-		else {
-			# return exception
-			return $_
-		}
+		# set exit code to a "The command failed" code before returning
+		$ExitCode = 207
+
+		# return exception for transcript
+		return $_
 	}
 
 	# report state
@@ -361,19 +306,14 @@ process {
 		# define error message
 		$Message = "calling Download method returned '{1}' result code and HRESULT: 0x{0:x} ({0})" -f $DownloaderResults.HResult, $DownloaderResults.ResultCode
 
-		# warn before exiting or throwing exception
+		# warn before setting exit code and throwing exception
 		Write-Warning -Message "could not download updates: $Message"
 
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command failed" code
-			exit 208
-		}
-		# if not audit mode...
-		else {
-			# return message as exception
-			return [System.Exception]::new($Message)
-		}
+		# set exit code to a "The command failed" code before returning
+		$ExitCode = 208
+
+		# return message as exception for transcript
+		return [System.Exception]::new($Message)
 	}
 
 	# report state
@@ -384,19 +324,14 @@ process {
 		$Installer = New-Object -ComObject 'Microsoft.Update.Installer'
 	}
 	catch {
-		# warn before exiting or throwing exception
+		# warn before setting exit code and throwing exception
 		Write-Warning -Message "could not create Microsoft.Update.Installer object: $($_.Exception.Message)"
 
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command failed" code
-			exit 209
-		}
-		# if not audit mode...
-		else {
-			# return exception
-			return $_
-		}
+		# set exit code to a "The command failed" code before returning
+		$ExitCode = 209
+
+		# return exception for transcript
+		return $_
 	}
 
 	# add update collection to installer object
@@ -404,19 +339,14 @@ process {
 		$Installer.Updates = $Updates
 	}
 	catch {
-		# warn before exiting or throwing exception
+		# warn before setting exit code and throwing exception
 		Write-Warning -Message "could not add update collection to Installer object: $($_.Exception.Message)"
 
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command failed" code
-			exit 210
-		}
-		# if not audit mode...
-		else {
-			# return exception
-			return $_
-		}
+		# set exit code to a "The command failed" code before returning
+		$ExitCode = 210
+
+		# return exception for transcript
+		return $_
 	}
 
 	# install updates
@@ -425,19 +355,14 @@ process {
 		$InstallerResults = $Installer.Install()
 	}
 	catch {
-		# warn before exiting or throwing exception
+		# warn before setting exit code and throwing exception
 		Write-Warning -Message "could not call Install() method: $($_.Exception.Message)"
 
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command failed" code
-			exit 211
-		}
-		# if not audit mode...
-		else {
-			# return exception
-			return $_
-		}
+		# set exit code to a "The command failed" code before returning
+		$ExitCode = 211
+
+		# return exception for transcript
+		return $_
 	}
 
 	# report state
@@ -450,19 +375,14 @@ process {
 		# define error message
 		$Message = "calling Install method returned '{1}' result code and HRESULT: 0x{0:x} ({0})" -f $InstallerResults.HResult, $InstallerResults.ResultCode
 
-		# warn before exiting or throwing exception
+		# warn before setting exit code and throwing exception
 		Write-Warning -Message "could not install updates: $Message"
 
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command failed" code
-			exit 212
-		}
-		# if not audit mode...
-		else {
-			# return message as exception
-			return [System.Exception]::new($Message)
-		}
+		# set exit code to a "The command failed" code before returning
+		$ExitCode = 212
+
+		# return message as exception for transcript
+		return [System.Exception]::new($Message)
 	}
 
 	# loop through updates and...
@@ -474,19 +394,14 @@ process {
 				Add-Content -Path $PathForAppliedUpdatesFile -Value $Update.Identity.UpdateID
 			}
 			catch {
-				# warn before exiting or throwing exception
+				# warn before setting exit code and throwing exception
 				Write-Warning -Message "could not update '$PathForAppliedUpdates' applied updates file: $($_.Exception.Message)"
 
-				# if audit mode...
-				if ($AuditMode) {
-					# exit with a "The command failed" code
-					exit 213
-				}
-				# if not audit mode...
-				else {
-					# return exception
-					return $_
-				}
+				# set exit code to a "The command failed" code before returning
+				$ExitCode = 213
+
+				# return exception for transcript
+				return $_
 			}
 		}
 	}
@@ -496,29 +411,36 @@ process {
 	if ($InstallerResults.RebootRequired) {
 		# report state
 		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Reboot required after installing updates'
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command complete and must be run again after a reboot" code to force another pass
-			exit 2
-		}
-		# if not audit mode and reboot requested...
-		elseif ($PSBoundParameters['Reboot']) {
+
+		# if reboot requested and not audit mode...
+		if ($PSBoundParameters['Reboot'] -and -not $AuditMode) {
 			# restart the computer
 			try {
 				Restart-Computer -Force
 			}
 			catch {
-				# warn before exiting or throwing exception
+				# warn before setting exit code and throwing exception
 				Write-Warning -Message "could not restart computer after installing updates: $($_.Exception.Message)"
 
 				# return exception
 				return $_
 			}
 		}
+
+		# set exit code to "The command complete and must be run again after a reboot" to force another pass before returning
+		$ExitCode = 2
+
+		# return
+		return
 	}
 }
 
 end {
 	# stop transcript before exit
 	$null = Stop-Transcript
+
+	# exit with exit code
+	if ($AuditMode) {
+		exit $ExitCode
+	}
 }

@@ -21,6 +21,8 @@ https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/mi
 
 [CmdletBinding()]
 param(
+	[parameter(DontShow)]
+	[switch]$SkipAuditModeCheck,
 	[Parameter(DontShow)]
 	[string]$SystemRoot = [System.Environment]::GetEnvironmentVariable('SystemRoot')
 )
@@ -49,44 +51,55 @@ begin {
 		$null = Start-Transcript -Path $PathForTranscript -Append
 	}
 	catch {
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command failed" code
-			exit 101
-		}
-		# if not audit mode...
-		else {
-			# return exception
-			return $_
-		}
+		# warn before setting exit code and throwing exception
+		Write-Warning -Message "could not create '$PathForTranscript' transcript file: $($_.Exception.Message)"
+
+		# set exit code to a "The command failed" code before throwing exception
+		$ExitCode = 101
+
+		# throw exception
+		throw $_
 	}
 
-	# define script state XML file
-	$ScriptStateXML = Join-Path -Path ([System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')) -ChildPath "$BaseName.xml"
+	# define script states file
+	$PathForScriptStates = Join-Path -Path $SystemRoot -ChildPath 'Invoke-ScriptsFromRemovableMedia.xml'
 
-	# if script state XML file found...
-	if ([System.IO.File]::Exists($ScriptStateXML)) {
-		# retrieve state
+	# if script states file found...
+	if ([System.IO.File]::Exists($PathForScriptStates)) {
+		# import script states object from file
 		try {
-			$ScriptStates = Import-Clixml -Path $ScriptStateXML
+			$ScriptStates = Import-Clixml -Path $PathForScriptStates
 		}
 		catch {
-			# if audit mode...
-			if ($AuditMode) {
-				# exit with a "The command failed" code
-				exit 102
-			}
-			# if not audit mode...
-			else {
-				# return exception
-				return $_
-			}
+			# warn before setting exit code and throwing exception
+			Write-Warning -Message "could not read '$PathForScriptStates' script states file: $($_.Exception.Message)"
+
+			# set exit code to a "The command failed" code before throwing exception
+			$ExitCode = 102
+
+			# throw exception
+			throw $_
 		}
 	}
 	# if state file not found...
 	else {
-		# create empty array for script states
+		# create initial script states object as empty array
 		$ScriptStates = @()
+
+		# export initial script states object to file
+		try {
+			$ScriptStates | Export-Clixml -Path $PathForScriptStates -Force
+		}
+		catch {
+			# warn before setting exit code and throwing exception
+			Write-Warning -Message "could not create '$PathForScriptStates' script states file: $($_.Exception.Message)"
+
+			# set exit code to a "The command failed" code before throwing exception
+			$ExitCode = 103
+
+			# throw exception
+			throw $_
+		}
 	}
 
 	# retrieve volumes
@@ -94,36 +107,34 @@ begin {
 		$Volumes = Get-Volume
 	}
 	catch {
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command failed" code
-			exit 103
-		}
-		# if not audit mode...
-		else {
-			# return exception
-			return $_
-		}
+		# warn before setting exit code and throwing exception
+		Write-Warning -Message "could not read volumes on system: $($_.Exception.Message)"
+
+		# set exit code to a "The command failed" code before throwing exception
+		$ExitCode = 104
+
+		# throw exception
+		throw $_
 	}
 }
 
 process {
-	# get volumes with recognized file systems on non-fixed drives
-	$RemoveableVolumes = $Volumes | Where-Object { $_.DriveType -ne 'Fixed' -and $_.OperationalStatus -eq 'OK' -and $_.Size -gt 0 } | Sort-Object -Property DriveLetter
+	# define char array of drive letters
+	$DriveLetters = [char]'A'..[char]'Z'
+
+	# get volumes on removable (not fixed) drives that are not empty and have a valid drive letters
+	$RemoveableVolumes = $Volumes | Where-Object { $_.DriveType -ne 'Fixed' -and $_.Size -gt 0 -and $_.DriveLetter -in $DriveLetters } | Sort-Object -Property DriveLetter
 
 	# if no optional drive volumes found...
 	if ((Measure-Object -InputObject $RemoveableVolumes).Count -eq 0) {
+		# report state before setting exit code and throwing exception
 		Write-Host 'No removeable volumes found'
-		# if audit mode...
-		if ($AuditMode) {
-			# exit with a "The command completed" code
-			exit 0
-		}
-		# if not audit mode...
-		else {
-			# return
-			return
-		}
+
+		# set exit code to the "The command was successful. No reboot is required." code before returning
+		$ExitCode = 0
+
+		# return
+		return
 	}
 
 	# loop through volume
@@ -133,8 +144,10 @@ process {
 
 		# if path not found...
 		if (![System.IO.Directory]::Exists($Path)) {
-			# report and continue to next volume
+			# report state before continuing to next volume
 			Write-Host "No 'scripts' path found on '$($Volume.DriveLetter)' drive with '$($Volume.FriendlyName)' label"
+
+			# continue to next volume
 			continue NextVolume
 		}
 
@@ -143,86 +156,159 @@ process {
 
 		# retrieve scripts in path
 		try {
-			$Scripts = Get-ChildItem -Path $Path | Where-Object { $_.Extension -eq '.ps1' } | Select-Object -ExpandProperty FullName | Sort-Object
+			$Scripts = Get-ChildItem -Path $Path | Where-Object { $_.Extension -eq '.ps1' } | Sort-Object -Property 'FullName'
 		}
 		catch {
+			# warn before setting exit code and returning exception
 			Write-Warning -Message "could not retrieve scripts from '$Path' path: $($_.Exception.Message)"
-			$ExitCodeFromScript = $_.Exception.HResult
+
+			# set exit code to a "The command failed" code before returning
+			$ExitCode = 201
+
+			# return exception
+			return $_
+		}
+
+		# if no scripts found in path...
+		if ((Measure-Object -InputObject $Scripts).Count -eq 0) {
+			# report state before continuing to next volume
+			Write-Host 'No scripts found in '$Path' path'
+
+			# continue to next volume
+			continue NextVolume
 		}
 
 		# loop through scripts in path
 		:NextScript foreach ($Script in $Scripts) {
-			# retrieve script state from previous run
-			$ScriptState = $ScriptStates | Where-Object { $_.Script -eq $Script }
+			# retrieve name and full name from script object
+			$ScriptName = $Script.Name
+			$ScriptPath = $Script.FullName
 
-			# process exit code from previous run
-			if ($ScriptState.ExitCode -in 0, 1) {
-				Write-Verbose -Message "Skipping completed '$Script' with existing exit code: $($ScriptState.ExitCode)"
-				continue NextScript
-			}
+			# retrieve any script state from previous run by script name
+			$ScriptState = $ScriptStates | Where-Object { $_.ScriptName -eq $ScriptName }
 
-			# clear exit code
-			$ExitCodeFromScript = $null
+			# if script state found...
+			if ($ScriptState) {
+				# if audit mode and exit code is 2...
+				if ($AuditMode -and $ScriptState.ExitCode -eq 2) {
+					# report state before running script again
+					Write-Host "Running '$ScriptPath' script in audit mode again; found existing exit code from previous run: $($ScriptState.ExitCode)"
+				}
+				# if not audit mode and exit code is not 2...
+				else {
+					# if audit mode...
+					if ($AuditMode) {
+						# report state before continuing to next script
+						Write-Host "Skipping '$ScriptPath' script in audit mode; found existing exit code from previous run: $($ScriptState.ExitCode)"
+					}
+					# if not audit mode...
+					else {
+						# report state before continuing to next script
+						Write-Host "Skipping '$ScriptPath' script in normal mode; found existing exit code from previous run: $($ScriptState.ExitCode)"
+					}
 
-			# report state
-			Write-Host "Running script: $Script"
-
-			# run script
-			try {
-				& $Script
-			}
-			catch {
-				Write-Warning -Message "could not run '$Script' script: $($_.Exception.Message)"
-				$ExitCodeFromScript = $_.Exception.HResult
-			}
-
-			# record exit code from script
-			if ($null -ne $ExitCodeFromScript) {
-				$ExitCodeFromScript = $LASTEXITCODE
-			}
-
-			# if script state exists...
-			if ($ScriptState.Script) {
-				# update exit code for script state
-				$ScriptState.ExitCode = $ExitCodeFromScript
-			}
-			# if script state does not exist...
-			else {
-				# add entry to script states
-				$ScriptStates += [pscustomobject]@{
-					Script   = $Script
-					ExitCode = $ExitCodeFromScript
+					# continue to next script
+					continue NextScript
 				}
 			}
 
-			# update script state file
-			try {
-				Export-Clixml -Path $ScriptStateXML -InputObject $ScriptStates
+			# if audit mode...
+			if ($AuditMode) {
+				# report state
+				Write-Host "Running script in audit mode: $ScriptPath"
 			}
-			catch {
-				Write-Warning -Message "could not write script state to '$ScriptStateXML' file: $($_.Exception.Message)"
-				$ExitCodeFromScript = $_.Exception.HResult
+			# if not audit mode...
+			else {
+				# report state
+				Write-Host "Running script in normal mode: $ScriptPath"
 			}
 
-			# if audit mode and exit code from script is not "completed without error, no reboot required"...
-			if ($AuditMode -and $ExitCodeFromScript -ne 0) {
-				# immediately exit with exit code from script
-				exit $ExitCodeFromScript
+			# define parameters for Start-Process
+			$StartProcess = @{
+				PassThru     = $true # returns process object with the exit code
+				Wait         = $true # wait so the script returns the exit code
+				FilePath     = Join-Path -Path $SystemRoot -ChildPath 'System32\WindowsPowerShell\v1.0\powershell.exe'
+				ArgumentList = '-NonInteractive -ExecutionPolicy Bypass -File "{0}"' -f $ScriptPath
+			}
+
+			# run script
+			try {
+				$Process = Start-Process @StartProcess
+			}
+			catch {
+				# warn before setting exit code and throwing exception
+				Write-Warning -Message "could not run '$ScriptPath' script: $($_.Exception.Message)"
+
+				# set exit code to a "The command failed" code before returning
+				$ExitCode = 202
+
+				# return exception
+				return $_
+			}
+
+			# set exit code to exit code from process object
+			$ExitCode = $Process.ExitCode
+
+			# if audit mode...
+			if ($AuditMode) {
+				# report state
+				Write-Host "Completed running '$ScriptPath' script in audit mode and received exit code: $ExitCode"
+			}
+			# if not audit mode...
+			else {
+				# report state
+				Write-Host "Completed running '$ScriptPath' script in normal mode and received exit code: $ExitCode"
+			}
+
+			# if script state found...
+			if ($ScriptState) {
+				# update script state with exit code
+				$ScriptState.ExitCode = $ExitCode
+			}
+			else {
+				# add script state to script states
+				$ScriptStates += [pscustomobject]@{
+					ScriptName = $ScriptName
+					ExitCode   = $ExitCode
+				}
+			}
+
+			# update script states file
+			try {
+				$ScriptStates | Export-Clixml -Path $PathForScriptStates -Force
+			}
+			catch {
+				# warn before setting exit code and returning exception
+				Write-Warning -Message "could not write script state to '$PathForScriptStates' file: $($_.Exception.Message)"
+
+				# set exit code to a "The command failed" code before returning
+				$ExitCode = 203
+
+				# return exception
+				return $_
+			}
+
+			# if exit code is not "The command was successful. No reboot is required." exit code...
+			if ($ExitCode -ne 0) {
+				# if audit mode and exit code is "The command was successful. An immediate reboot is required." or "The command is still in process. An immediate reboot is required." for specialize pass and in audit mode...
+				if ($AuditMode -and $ExitCode -in 1,2) {
+					# report state before returning
+					Write-Host "Rebooting after running '$ScriptName' script in audit mode and receiving '$ExitCode' exit code"
+				}
+
+				# return
+				return
 			}
 		}
 	}
+}
 
+end {
 	# stop transcript before exit
 	$null = Stop-Transcript
 
-	# if audit mode...
+	# exit with exit code
 	if ($AuditMode) {
-		# exit with the "The command was successful. No reboot is required." code
-		exit 0
-	}
-	# if not audit mode...
-	else {
-		# return
-		return
+		exit $ExitCode
 	}
 }
