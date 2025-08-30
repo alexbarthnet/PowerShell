@@ -15,18 +15,6 @@ None. The function does not generate any output.
 This script will search for scripts in a 'Scripts' folder on mounted volumes of removable media. The scripts are run in alphabetical order from the volumes
 
 .LINK
-https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nn-wuapi-iinstallationresult
-
-.LINK
-https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatesearcher-search
-
-.LINK
-https://learn.microsoft.com/en-us/windows/win32/api/wuapi/ne-wuapi-operationresultcode
-
-.LINK
-https://learn.microsoft.com/en-us/windows/win32/wua_sdk/searching--downloading--and-installing-updates
-
-.LINK
 https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-deployment-runsynchronous-runsynchronouscommand-willreboot
 
 #>
