@@ -1057,9 +1057,13 @@ process {
 		# append suffix to filesystem label
 		$FileSystemLabel = '{0}_{1}' -f $FileSystemLabel, $FileSystemLabelSuffix
 
-		# if file system label is longer than 32 characters...
-		if ($FileSystemLabel.Length -gt 32) {
-			$FileSystemLabel = $FileSystemLabel.Substring(0, 32)
+		# define file system label length for ISO file system
+		$Length = 32
+
+		# if file system label is longer than permitted length...
+		if ($FileSystemLabel.Length -gt $Length) {
+			# trim file system label to permitted length
+			$FileSystemLabel = $FileSystemLabel.Substring(0, $Length)
 		}
 	}
 

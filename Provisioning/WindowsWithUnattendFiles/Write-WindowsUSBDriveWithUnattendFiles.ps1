@@ -20,6 +20,9 @@ Integer for the disk number of the USB drive.
 .PARAMETER FileSystem
 String with file system to apply to USB drive. The default value is "NTFS" and the value must be "NTFS" or "FAT32".
 
+.PARAMETER FileSystemLabelSuffix
+String containing a suffix to apply to the filesystem label from the original Windows ISO image. The default value is 'UNATTENDED' and is separated from the original file system label by an underscore.
+
 .PARAMETER PathToAutounattendFile
 Path to autounattend XML file to add to the USB drive. The file will be saved as 'Autounattend.xml' at the root of the USB file system and will be executed by Windows Setup after booting from the USB drive. The file should include the following passes and components:
  - windowsPE pass and Microsoft-Windows-International-Core-WinPE component with the language settings for setup
@@ -1162,6 +1165,32 @@ process {
 	}
 	catch {
 		return $_
+	}
+
+	# if filesystem label suffix exists...
+	if (![System.String]::IsNullOrEmpty($FileSystemLabelSuffix)) {
+		# append suffix to filesystem label
+		$FileSystemLabel = '{0}_{1}' -f $FileSystemLabel, $FileSystemLabelSuffix
+
+		# switch on file system
+		switch ($FileSystem) {
+			'FAT32' {
+				$Length = 11
+			}
+			'NTFS' {
+				$Length = 32
+			}
+		}
+		# if file system is NTFS...
+		If ($FileSystem -eq 'NTFS') {
+			$Length = 32
+		}
+
+		# if file system label is longer than permitted length...
+		if ($FileSystemLabel.Length -gt $Length) {
+			# trim file system label to permitted length
+			$FileSystemLabel = $FileSystemLabel.Substring(0, $Length)
+		}
 	}
 
 	# report state
