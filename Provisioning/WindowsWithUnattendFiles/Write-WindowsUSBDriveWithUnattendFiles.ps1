@@ -316,14 +316,6 @@ begin {
 		$PSCmdlet.ThrowTerminatingError($_)
 	}
 
-	# create temporary path for FOD contents
-	try {
-		$TemporaryPathForFOD = New-Item -ItemType Directory -Path $TemporaryPath -Name 'FOD' -Force -ErrorAction 'Stop'
-	}
-	catch {
-		$PSCmdlet.ThrowTerminatingError($_)
-	}
-
 	# create temporary path for ISO contents
 	try {
 		$TemporaryPathForISO = New-Item -ItemType Directory -Path $TemporaryPath -Name 'ISO' -Force -ErrorAction 'Stop'
@@ -576,42 +568,25 @@ process {
 				# report state
 				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Mounting FOD image', $PathToFeaturesIsoImage
 
-				# mount the original ISO image
+				# mount the Feature on Demand ISO image
 				try {
-					$DiskImage = Mount-DiskImage -ImagePath $PathToFeaturesIsoImage
+					$FeaturesDiskImage = Mount-DiskImage -ImagePath $PathToFeaturesIsoImage
 				}
 				catch {
 					return $_
 				}
 
-				# retrieve volume for disk image
+				# retrieve volume for Feature on Demand disk image
 				try {
-					$Volume = Get-Volume -DiskImage $DiskImage
+					$FeaturesVolume = Get-Volume -DiskImage $FeaturesDiskImage
 				}
 				catch {
 					return $_
 				}
 
-				# retrieve volume properties
-				$ImageDriveLetter = $Volume.DriveLetter
-
-				# report state
-				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Copying FOD contents to path', $TemporaryPathForFOD
-
-				# copy ISO contents to temporary path
+				# retrieve drive for Feature on Demand volume
 				try {
-					Copy-Item -Path ('{0}:\*' -f $ImageDriveLetter) -Destination $TemporaryPathForFOD -Recurse -Force -ErrorAction 'Stop'
-				}
-				catch {
-					return $_
-				}
-
-				# report state
-				"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Dismounting FOD image...'
-
-				# dismount ISO image
-				try {
-					$null = $DiskImage | Dismount-DiskImage
+					$FeaturesDrive = Get-PSDrive -PSProvider 'FileSystem' -Name $FeaturesVolume.DriveLetter
 				}
 				catch {
 					return $_
@@ -813,7 +788,7 @@ process {
 					# if capabilities to add provided...
 					if ($PSBoundParameters.ContainsKey('CapabilitiesToAdd')) {
 						# define source path
-						$Source = Join-Path -Path $TemporaryPathForFOD -ChildPath $RelativePathToFeaturesFolder
+						$Source = Join-Path -Path $FeaturesDrive.Root -ChildPath $RelativePathToFeaturesFolder
 
 						# loop through capabilities
 						:NextCapabilityToAdd foreach ($CapabilityName in $CapabilitiesToAdd) {
@@ -854,6 +829,20 @@ process {
 				# dismount windows image
 				try {
 					$null = Dismount-WindowsImage -Path $TemporaryPathForWIM -Save -CheckIntegrity -ScratchDirectory $TemporaryPathForDSD
+				}
+				catch {
+					return $_
+				}
+			}
+
+			# if FOD image and capabilities to add provided...
+			if ($PSBoundParameters.ContainsKey('PathToFeaturesIsoImage') -and $CapabilitiesToAdd.Count) {
+				# report state
+				"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Dismounting FOD image...'
+
+				# dismount Feature on Demand ISO image
+				try {
+					$null = $FeaturesDiskImage | Dismount-DiskImage
 				}
 				catch {
 					return $_
