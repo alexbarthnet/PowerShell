@@ -27,24 +27,27 @@ if ($Asset) {
     $Source = $Asset.browser_download_url
 
     # define destination for asset
-    $Destination = Join-Path -Path $Path -ChildPath $Asset.Name
+    $FilePath = Join-Path -Path $Path -ChildPath $Asset.Name
 
     # download asset
     try {
-        Start-BitsTransfer -Source $Source -Destination $Destination
+        Start-BitsTransfer -Source $Source -Destination $FilePath
     }
     catch {
         return $_
     }
 
     # report state
-    Write-Host "Downloaded latest file with '$Suffix' suffix: $Destination"
+    Write-Host "Downloaded MSI for latest release of PowerShell for 64-bit Windows: $FilePath"
 }
 # if asset not found...
 else {
-    Write-Warning -Message "could not locate latest file with '$Suffix' suffix"
+    Write-Warning -Message "could not locate MSI for latest release of PowerShell for 64-bit Windows"
     return
 }
+
+# report state
+Write-Host "Installed latest release of PowerShell for 64-bit Windows: $($Asset.Name)"
 
 # define parameters
 $StartProcess = @{
@@ -52,7 +55,7 @@ $StartProcess = @{
     Wait         = $true 
     FilePath     = 'msiexec.exe'
     ArgumentList = @(
-        "/package $Destination"
+        "/package $FilePath"
         '/passive'
     )
 }
@@ -64,3 +67,17 @@ try {
 catch {
     return $_
 }
+
+# report state
+Write-Host "Installed latest release of PowerShell for 64-bit Windows"
+
+# rmeove MSI file
+try {
+    Remove-Item -Path $FilePath -Force
+}
+catch {
+    return $_
+}
+
+# report state
+Write-Host "Removed MSI for latest release of PowerShell for 64-bit Windows: $FilePath"
