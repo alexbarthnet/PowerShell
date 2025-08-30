@@ -17,6 +17,9 @@ Path for the updated Windows ISO image.
 .PARAMETER FilePathToRequiredProgram
 Path to the required OS CD imaging program from the Windows ADK. The default value is 'C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe' and is constructed using the path of the 'ProgramFilesx86' special folder.
 
+.PARAMETER ShowProgramOutputInline
+Switch parameter to display output from OS CD imaging program inline rather than in a new window.
+
 .PARAMETER FileSystemLabelSuffix
 String containing a suffix to apply to the filesystem label from the original Windows ISO image. The default value is 'UNATTENDED' and is separated from the original file system label by an underscore.
 
@@ -112,6 +115,8 @@ param(
 	[string]$PathToFeaturesIsoImage,
 	[Parameter()]
 	[string]$FilePathToRequiredProgram = '{0}\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe' -f [System.Environment]::GetFolderPath('ProgramFilesx86'),
+	[Parameter()]
+	[switch]$ShowProgramOutputInline,
 	[Parameter()]
 	[string]$FileSystemLabelSuffix = 'UNATTENDED',
 	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
@@ -1077,8 +1082,8 @@ process {
 	# reference: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/oscdimg-command-line-options?view=windows-11
 	$ArgumentList = "-l$FileSystemLabel -bootdata:$Bootdata -u2 -udfver102 -o $TemporaryPathForISO $PathForUpdatedIsoImage"
 
-	# if no new window requested...
-	if ($NoNewWindow) {
+	# if program output should be shown...
+	if ($ShowProgramOutputInline) {
 		# start process to write updated ISO in current window
 		Start-Process -FilePath $FilePathToRequiredProgram -ArgumentList $ArgumentList -Wait -NoNewWindow -ErrorAction Stop
 	}
