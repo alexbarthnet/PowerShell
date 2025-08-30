@@ -375,8 +375,40 @@ process {
 	# prepare image
 	########################################
 
-	# if staging path provided and reuse staging path not set...
-	if ($StagingPath -and -not $ReuseStagingPath) {
+	# if reuse staging path requested...
+	if ($ReuseStagingPath) {
+		# mount the original ISO image
+		try {
+			$DiskImage = Mount-DiskImage -ImagePath $PathToOriginalIsoImage
+		}
+		catch {
+			return $_
+		}
+
+		# retrieve volume for disk image
+		try {
+			$Volume = Get-Volume -DiskImage $DiskImage
+		}
+		catch {
+			return $_
+		}
+
+		# retrieve file system label
+		$FileSystemLabel = $Volume.FileSystemLabel
+
+		# report state
+		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Dismounting ISO image...'
+
+		# dismount ISO image
+		try {
+			$null = $DiskImage | Dismount-DiskImage
+		}
+		catch {
+			return $_
+		}
+	}
+	# if reuse staging path not set...
+	else {
 		# if capabilities to add provided but FOD image not provided...
 		if ($PSBoundParameters.ContainsKey('CapabilitiesToAdd') -and -not $PSBoundParameters.ContainsKey('PathToFeaturesIsoImage')) {
 			Write-Warning -Message "The 'CapabilitiesToAdd' parameter requires the 'PathToFeaturesIsoImage' parameter"
@@ -402,9 +434,11 @@ process {
 			return $_
 		}
 
-		# retrieve volume properties
-		$ImageDriveLetter = $Volume.DriveLetter
+		# retrieve file system label
 		$FileSystemLabel = $Volume.FileSystemLabel
+
+		# retrieve volume drive letter
+		$ImageDriveLetter = $Volume.DriveLetter
 
 		# report state
 		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Copying ISO contents to path', $TemporaryPathForISO
@@ -475,7 +509,6 @@ process {
 
 				# retrieve volume properties
 				$ImageDriveLetter = $Volume.DriveLetter
-				$FileSystemLabel = $Volume.FileSystemLabel
 
 				# report state
 				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Copying FOD contents to path', $TemporaryPathForFOD
