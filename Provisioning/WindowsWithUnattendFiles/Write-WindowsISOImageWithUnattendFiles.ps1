@@ -583,7 +583,7 @@ process {
 				}
 
 				# if optional features to disable or enable provided...
-				if ($PSBoundParameters.ContainsKey('OptionalFeaturesToDisable') -or $PSBoundParameters.ContainsKey('OptionalFeaturesToEnable')) {
+				if ($OptionalFeaturesToDisable.Count -or $OptionalFeaturesToEnable.Count) {
 					# retrieve optional features in windows image
 					try {
 						$WindowsOptionalFeatures = Get-WindowsOptionalFeature -Path $TemporaryPathForWIM -ErrorAction 'Stop'
@@ -593,7 +593,7 @@ process {
 					}
 
 					# if optional features to disable provided...
-					if ($PSBoundParameters.ContainsKey('OptionalFeaturesToDisable')) {
+					if ($OptionalFeaturesToDisable.Count) {
 						# loop through optional features
 						:NextOptionalFeatureToDisable foreach ($FeatureName in $OptionalFeaturesToDisable) {
 							# retrieve optional feature by name
@@ -627,7 +627,7 @@ process {
 					}
 
 					# if optional features to enable provided...
-					if ($PSBoundParameters.ContainsKey('OptionalFeaturesToEnable')) {
+					if ($OptionalFeaturesToEnable.Count) {
 						# loop through optional features
 						:NextOptionalFeatureToEnable foreach ($FeatureName in $OptionalFeaturesToEnable) {
 							# retrieve optional feature by name
@@ -662,7 +662,7 @@ process {
 				}
 
 				# if capabilities to remove or add provided...
-				if ($PSBoundParameters.ContainsKey('CapabilitiesToRemove') -or $PSBoundParameters.ContainsKey('CapabilitiesToAdd')) {
+				if ($CapabilitiesToRemove.Count -or $CapabilitiesToAdd.Count) {
 					# retrieve capabilities in windows image
 					try {
 						$WindowsCapabilities = Get-WindowsCapability -Path $TemporaryPathForWIM -ErrorAction 'Stop'
@@ -672,7 +672,7 @@ process {
 					}
 
 					# if capabilities to remove provided...
-					if ($PSBoundParameters.ContainsKey('CapabilitiesToRemove')) {
+					if ($CapabilitiesToRemove.Count) {
 						# loop through capabilities
 						:NextCapabilityToRemove foreach ($CapabilityName in $CapabilitiesToRemove) {
 							# retrieve capability by name
@@ -706,7 +706,7 @@ process {
 					}
 
 					# if capabilities to add provided...
-					if ($PSBoundParameters.ContainsKey('CapabilitiesToAdd')) {
+					if ($CapabilitiesToAdd.Count) {
 						# define source path
 						$Source = Join-Path -Path $FeaturesDrive.Root -ChildPath $RelativePathToFeaturesFolder
 
