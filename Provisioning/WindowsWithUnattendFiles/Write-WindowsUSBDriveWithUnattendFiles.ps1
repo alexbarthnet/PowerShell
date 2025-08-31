@@ -698,7 +698,7 @@ process {
 
 							# disable optional feature in windows image
 							try {
-								Disable-WindowsOptionalFeature -Path $TemporaryPathForWIM -FeatureName $FeatureName -ErrorAction 'Stop'
+								$null = Disable-WindowsOptionalFeature -Path $TemporaryPathForWIM -FeatureName $FeatureName -ErrorAction 'Stop'
 							}
 							catch {
 								Write-Warning -Message "could not disable '$FeatureName' feature in image: $($_.Exception.Message)"
@@ -732,7 +732,7 @@ process {
 
 							# enable optional feature in windows image
 							try {
-								Enable-WindowsOptionalFeature -Path $TemporaryPathForWIM -FeatureName $FeatureName -All -ErrorAction 'Stop'
+								$null = Enable-WindowsOptionalFeature -Path $TemporaryPathForWIM -FeatureName $FeatureName -All -ErrorAction 'Stop'
 							}
 							catch {
 								Write-Warning -Message "could not enable '$FeatureName' feature in image: $($_.Exception.Message)"
@@ -777,7 +777,7 @@ process {
 
 							# remove capability from windows image
 							try {
-								Remove-WindowsCapability -Path $TemporaryPathForWIM -Name $CapabilityName -ErrorAction 'Stop'
+								$null = Remove-WindowsCapability -Path $TemporaryPathForWIM -Name $CapabilityName -ErrorAction 'Stop'
 							}
 							catch {
 								Write-Warning -Message "could not remove '$CapabilityName' capability from image: $($_.Exception.Message)"
@@ -814,7 +814,7 @@ process {
 
 							# add capability to windows image
 							try {
-								Add-WindowsCapability -Path $TemporaryPathForWIM -Name $CapabilityName -Source $Source -ErrorAction 'Stop'
+								$null = Add-WindowsCapability -Path $TemporaryPathForWIM -Name $CapabilityName -Source $Source -ErrorAction 'Stop'
 							}
 							catch {
 								Write-Warning -Message "could not add '$CapabilityName' capability to image: $($_.Exception.Message)"
