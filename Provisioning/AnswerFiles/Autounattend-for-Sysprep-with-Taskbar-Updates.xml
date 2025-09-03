@@ -150,13 +150,13 @@
             <RunSynchronous>
                 <RunSynchronousCommand wcm:action="add">
                     <Description>Update Windows</Description>
-                    <Order>2</Order>
+                    <Order>1</Order>
                     <Path>%WINDIR%\System32\WindowsPowerShell\v1.0\PowerShell.exe -ExecutionPolicy Bypass -File "%SystemRoot%\Update-Windows.ps1"</Path>
                     <WillReboot>OnRequest</WillReboot>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                     <Description>Invoke Scripts from Removable Media</Description>
-                    <Order>3</Order>
+                    <Order>2</Order>
                     <Path>%WINDIR%\System32\WindowsPowerShell\v1.0\PowerShell.exe -ExecutionPolicy Bypass -File "%SystemRoot%\Invoke-ScriptsFromRemovableMedia.ps1"</Path>
                     <WillReboot>OnRequest</WillReboot>
                 </RunSynchronousCommand>
