@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+    <settings pass="specialize">
+        <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <SystemLocale>en-US</SystemLocale>
+            <InputLocale>en-US</InputLocale>
+            <UserLocale>en-US</UserLocale>
+            <UILanguage>en-US</UILanguage>
+        </component>
+        <component name="Microsoft-Windows-ServerManager-SvrMgrNc" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <DoNotOpenServerManagerAtLogon>true</DoNotOpenServerManagerAtLogon>
+        </component>
+        <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <ComputerName>%COMPUTERNAME%</ComputerName>
+            <ProductKey>%PRODUCTKEY%</ProductKey>
+            <Themes>
+                <DefaultThemesOff>false</DefaultThemesOff>
+                <DesktopBackground>%WINDIR%\Web\Wallpaper\Windows\img19.jpg</DesktopBackground>
+                <SystemUsesLightTheme>false</SystemUsesLightTheme>
+                <ThemeName>Windows (overcast)</ThemeName>
+                <UWPAppsUseLightTheme>true</UWPAppsUseLightTheme>
+                <WindowColor>0xff767676</WindowColor>
+            </Themes>
+            <TimeZone>%TIMEZONE%</TimeZone>
+        </component>
+        <component name="Microsoft-Windows-TerminalServices-LocalSessionManager" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <fDenyTSConnections>false</fDenyTSConnections>
+        </component>
+        <component name="Microsoft-Windows-UnattendedJoin" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <identification>
+                <Credentials>
+                    <Username>%USERNAME%</Username>
+                    <Password>%PASSWORD%</Password>
+                </Credentials>
+                <JoinDomain>%DOMAINNAME%</JoinDomain>
+                <MachineObjectOU>%ORGANIZATIONALUNIT%</MachineObjectOU>
+            </identification>
+        </component>
+        <component name="Networking-MPSSVC-Svc" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <FirewallGroups>
+                <FirewallGroup wcm:action="add" wcm:keyValue="@FirewallAPI.dll,-28752">
+                    <Active>true</Active>
+                    <Group>@FirewallAPI.dll,-28752</Group>
+                    <Profile>all</Profile>
+                </FirewallGroup>
+            </FirewallGroups>
+        </component>
+    </settings>
+    <settings pass="oobeSystem">
+        <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <SystemLocale>en-US</SystemLocale>
+            <InputLocale>en-US</InputLocale>
+            <UserLocale>en-US</UserLocale>
+            <UILanguage>en-US</UILanguage>
+        </component>
+        <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <OOBE>
+                <HideEULAPage>true</HideEULAPage>
+                <HideLocalAccountScreen>true</HideLocalAccountScreen>
+                <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+                <ProtectYourPC>3</ProtectYourPC>
+                <VMModeOptimizations>
+                    <SkipAdministratorProfileRemoval>true</SkipAdministratorProfileRemoval>
+                    <SkipNotifyUILanguageChange>true</SkipNotifyUILanguageChange>
+                    <SkipWinREInitialization>true</SkipWinREInitialization>
+                </VMModeOptimizations>
+            </OOBE>
+            <UserAccounts>
+                <!-- <AdministratorPassword>
+                    <Value>%ADMINISTRATORPASSWORD%</Value>
+                    <PlainText>false</PlainText>
+                </AdministratorPassword> -->
+                <DomainAccounts>
+                    <DomainAccountList wcm:action="add">
+                        <DomainAccount wcm:action="add">
+                            <Name>Guest</Name>
+                            <Group>Guests</Group>
+                        </DomainAccount>
+                        <Domain>%DOMAINNAME%</Domain>
+                    </DomainAccountList>
+                </DomainAccounts>
+            </UserAccounts>
+        </component>
+    </settings>
+</unattend>
