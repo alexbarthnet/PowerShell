@@ -294,6 +294,9 @@ process {
 				if ($AuditMode -and $ExitCode -in 1,2) {
 					# report state before returning
 					Write-Host "Rebooting after running '$ScriptName' script in audit mode and receiving '$ExitCode' exit code"
+
+					# set exit code to "The command is still in process. An immediate reboot is required." to force another pass of this script after a reboot
+					$ExitCode = 2
 				}
 
 				# return
