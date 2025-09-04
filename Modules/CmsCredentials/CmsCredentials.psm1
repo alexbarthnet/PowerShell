@@ -1677,7 +1677,7 @@ Function Import-CmsCredential {
 	}
 	# if certificate not found or force requested...
 	Else {
-		# define parameters
+		# define required parameters for Find-CmsCertificate
 		$ImportPfxCertificate = @{
 			FilePath          = $PfxFile
 			Exportable        = $Exportable
@@ -1685,9 +1685,14 @@ Function Import-CmsCredential {
 			ErrorAction       = [System.Management.Automation.ActionPreference]::Stop
 		}
 
+		# define optional parameters for Find-CmsCertificate
+		If ($PSBoundParameters.ContainsKey('Password')) {
+			$FindCmsCertificate.Add('Password', $local:Password)
+		}
+
 		# import CMS certificate from PFX file
 		Try {
-			Import-PfxCertificate @ImportPfxCertificate
+			$null = Import-PfxCertificate @ImportPfxCertificate
 		}
 		Catch {
 			Throw $_
