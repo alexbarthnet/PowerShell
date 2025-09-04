@@ -770,28 +770,6 @@ process {
 			}
 		}
 
-		# if file system is FAT32...
-		if ($FileSystem -eq 'FAT32') {
-			# report state
-			"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Splitting WIM image...'
-
-			# split images into 4GB chunks
-			try {
-				$null = Split-WindowsImage -ImagePath $ImagePathForWIM -SplitImagePath $ImagePathForSWM -FileSize 4096 -ScratchDirectory $TemporaryPathForDSD
-			}
-			catch {
-				return $_
-			}
-
-			# remove original WIM image
-			try {
-				Remove-Item -Path $ImagePathForWIM -Force
-			}
-			catch {
-				return $_
-			}
-		}
-
 		# if autounattend file provided...
 		if ($PSBoundParameters.ContainsKey('PathToAutounattendFile')) {
 			# report state
@@ -1007,6 +985,28 @@ process {
 				catch {
 					return $_
 				}
+			}
+		}
+
+		# if file system is FAT32...
+		if ($FileSystem -eq 'FAT32') {
+			# report state
+			"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Splitting WIM image...'
+
+			# split images into 4GB chunks
+			try {
+				$null = Split-WindowsImage -ImagePath $ImagePathForWIM -SplitImagePath $ImagePathForSWM -FileSize 4096 -ScratchDirectory $TemporaryPathForDSD
+			}
+			catch {
+				return $_
+			}
+
+			# remove original WIM image
+			try {
+				Remove-Item -Path $ImagePathForWIM -Force
+			}
+			catch {
+				return $_
 			}
 		}
 	}
