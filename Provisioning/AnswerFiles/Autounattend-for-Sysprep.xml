@@ -90,12 +90,6 @@
                     <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
-                    <Description>Disable Automatic Downloads for Microsoft Store</Description>
-                    <Order>3</Order>
-                    <Path>%WINDIR%\System32\reg.exe add HKLM\SOFTWARE\Policies\Microsoft\WindowsStore /v AutoDownload /t REG_DWORD /d 2</Path>
-                    <WillReboot>Never</WillReboot>
-                </RunSynchronousCommand>
-                <RunSynchronousCommand wcm:action="add">
                     <Description>Load Default User Registry</Description>
                     <Order>100</Order>
                     <Path>%WINDIR%\System32\reg.exe load HKLM\DEFAULT C:\Users\Default\ntuser.dat</Path>
@@ -147,6 +141,12 @@
                     <Order>2</Order>
                     <Path>%WINDIR%\System32\WindowsPowerShell\v1.0\PowerShell.exe -ExecutionPolicy Bypass -File "%SystemRoot%\Invoke-ScriptsFromRemovableMedia.ps1"</Path>
                     <WillReboot>OnRequest</WillReboot>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Description>Release DHCP IP Addresses</Description>
+                    <Order>500</Order>
+                    <Path>%WINDIR%\System32\WindowsPowerShell\v1.0\PowerShell.exe -ExecutionPolicy Bypass -Command "Remove-NetIPAddress -PrefixOrigin Dhcp -Confirm:$false"</Path>
+                    <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>
             </RunSynchronous>
             <Generalize>
