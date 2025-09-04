@@ -86,18 +86,24 @@
                 <RunSynchronousCommand wcm:action="add">
                     <Description>Disable Privacy Experience Prompt</Description>
                     <Order>2</Order>
-                    <Path>%WINDIR%\System32\reg.exe ADD HKLM\SOFTWARE\Policies\Microsoft\Windows\OOBE /v DisablePrivacyExperience /t REG_DWORD /d 1</Path>
+                    <Path>%WINDIR%\System32\reg.exe add HKLM\SOFTWARE\Policies\Microsoft\Windows\OOBE /v DisablePrivacyExperience /t REG_DWORD /d 1</Path>
+                    <WillReboot>Never</WillReboot>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Description>Disable Automatic Downloads for Microsoft Store</Description>
+                    <Order>3</Order>
+                    <Path>%WINDIR%\System32\reg.exe add HKLM\SOFTWARE\Policies\Microsoft\WindowsStore /v AutoDownload /t REG_DWORD /d 2</Path>
                     <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                     <Description>Load Default User Registry</Description>
-                    <Order>3</Order>
+                    <Order>100</Order>
                     <Path>%WINDIR%\System32\reg.exe load HKLM\DEFAULT C:\Users\Default\ntuser.dat</Path>
                     <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                     <Description>Disable StartShownOnUpgrade</Description>
-                    <Order>4</Order>
+                    <Order>101</Order>
                     <Path>%WINDIR%\System32\reg.exe add HKLM\DEFAULT\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced /v StartShownOnUpgrade /t REG_DWORD /d 0 /f</Path>
                     <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>

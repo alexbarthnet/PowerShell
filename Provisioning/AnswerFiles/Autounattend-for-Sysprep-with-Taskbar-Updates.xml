@@ -90,32 +90,38 @@
                     <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
-                    <Description>Load Default User Registry</Description>
+                    <Description>Disable Automatic Downloads for Microsoft Store</Description>
                     <Order>3</Order>
+                    <Path>%WINDIR%\System32\reg.exe add HKLM\SOFTWARE\Policies\Microsoft\WindowsStore /v AutoDownload /t REG_DWORD /d 2</Path>
+                    <WillReboot>Never</WillReboot>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Description>Load Default User Registry</Description>
+                    <Order>100</Order>
                     <Path>%WINDIR%\System32\reg.exe load HKLM\DEFAULT C:\Users\Default\ntuser.dat</Path>
                     <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                     <Description>Disable StartShownOnUpgrade</Description>
-                    <Order>4</Order>
+                    <Order>101</Order>
                     <Path>%WINDIR%\System32\reg.exe add HKLM\DEFAULT\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced /v StartShownOnUpgrade /t REG_DWORD /d 0 /f</Path>
                     <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                     <Description>Align Taskbar</Description>
-                    <Order>5</Order>
+                    <Order>102</Order>
                     <Path>%WINDIR%\System32\reg.exe add HKLM\DEFAULT\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced /v TaskbarAl /t REG_DWORD /d 0 /f</Path>
                     <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                     <Description>Hide Searchbox</Description>
-                    <Order>6</Order>
+                    <Order>103</Order>
                     <Path>%WINDIR%\System32\reg.exe add HKLM\DEFAULT\Software\Microsoft\Windows\CurrentVersion\Search /v SearchboxTaskbarMode /t REG_DWORD /d 0 /f</Path>
                     <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                     <Description>Cache Searchbox Taskbar Mode</Description>
-                    <Order>7</Order>
+                    <Order>104</Order>
                     <Path>%WINDIR%\System32\reg.exe add HKLM\DEFAULT\Software\Microsoft\Windows\CurrentVersion\Search /v SearchboxTaskbarModeCache /t REG_DWORD /d 1 /f</Path>
                     <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>
