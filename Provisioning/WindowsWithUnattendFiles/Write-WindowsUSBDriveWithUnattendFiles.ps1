@@ -117,6 +117,8 @@ param(
 	[uint32]$Number,
 	[Parameter()]
 	[string]$FileSystem = 'NTFS',
+	[Parameter()]
+	[string]$FileSystemLabelSuffix = 'UNATTENDED',
 	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToAutounattendFile,
 	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
