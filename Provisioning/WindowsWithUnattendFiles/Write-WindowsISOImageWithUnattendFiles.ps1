@@ -44,6 +44,9 @@ Path to required "update" PowerShell file to add to the Windows image(s). The fi
 .PARAMETER PathToInvokeScript
 Path to required "invoke" PowerShell file to add to the Windows image(s). The file will be saved as 'Invoke-ScriptsFromRemovableMedia.ps1' under the Windows directory in the Windows image(s).
 
+.PARAMETER PathToDriverFolder
+Path to optional folder containing drivers to add to the Windows image(s).
+
 .PARAMETER PathToScriptFolder
 Path to optional folder containing PS1 scripts to add to the ISO image.
 
@@ -127,6 +130,8 @@ param(
 	[string]$PathToUpdateScript,
 	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToInvokeScript,
+	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[string]$PathToDriverFolder,
 	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$PathToScriptFolder,
 	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
@@ -469,6 +474,7 @@ process {
 		$WIMUpdatingParameters = @(
 			'PathToUpdateScript'
 			'PathToInvokeScript'
+			'PathToDriverFolder'
 			'OptionalFeaturesToDisable'
 			'OptionalFeaturesToEnable'
 			'CapabilitiesToRemove'
@@ -582,6 +588,34 @@ process {
 					}
 					catch {
 						return $_
+					}
+				}
+
+				# if drivers folder provided...
+				if ($PSBoundParameters.ContainsKey('PathToDriverFolder')) {
+					# report state
+					"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating WIM with drivers from folder', $PathToDriverFolder
+
+					# retrieve INF files in drivers folder
+					try {
+						$InfFiles = Get-ChildItem -Path $PathToDriverFolder -Filter '*.inf' -Recurse
+					}
+					catch {
+						return $_
+					}
+
+					# loop through INF files
+					foreach ($InfFile in $InfFiles) {
+						# report state
+						"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating WIM with driver', $InfFile.Name
+
+						# add driver to windows image
+						try {
+							$null = Add-WindowsDriver -Path $TemporaryPathForWIM -Driver $InfFile.FullName
+						}
+						catch {
+							return $_
+						}
 					}
 				}
 
