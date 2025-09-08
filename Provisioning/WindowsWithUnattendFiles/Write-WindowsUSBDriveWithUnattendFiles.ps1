@@ -456,6 +456,9 @@ process {
 
 	# if reuse staging path requested...
 	if ($ReuseStagingPath) {
+		# report state
+		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Mounting ISO image', $PathToOriginalIsoImage
+
 		# mount the original ISO image
 		try {
 			$DiskImage = Mount-DiskImage -ImagePath $PathToOriginalIsoImage
