@@ -39,10 +39,10 @@ Path to unattend XML file to add to the ISO image. The file will be saved as 'Un
  - oobeSystem pass and Microsoft-Windows-Shell-Setup component with the administrator password settings
 
 .PARAMETER PathToUpdateScript
-Path to required "update" PS1 file to add to the Windows image(s). The file will be saved as 'Update-Windows.ps1' under the Windows directory in the Windows image(s).
+Path to required "update" PowerShell file to add to the Windows image(s). The file will be saved as 'Update-Windows.ps1' under the Windows directory in the Windows image(s).
 
 .PARAMETER PathToInvokeScript
-Path to required "invoke" PS1 file to add to the Windows image(s). The file will be saved as 'Invoke-ScriptsFromRemovableMedia.ps1' under the Windows directory in the Windows image(s).
+Path to required "invoke" PowerShell file to add to the Windows image(s). The file will be saved as 'Invoke-ScriptsFromRemovableMedia.ps1' under the Windows directory in the Windows image(s).
 
 .PARAMETER PathToScriptFolder
 Path to optional folder containing PS1 scripts to add to the ISO image.
