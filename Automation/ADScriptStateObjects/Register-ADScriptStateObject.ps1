@@ -28,7 +28,7 @@ param(
 try {
     $null = Get-ADObject -Server $Server -Identity $ScriptsContainer -ErrorAction 'Stop'
 }
-catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
+catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
     # create container for all scripts
     try {
         New-ADObject -Server $Server -Name 'Scripts' -Path $ProgramDataContainer -Type 'Container'
@@ -49,7 +49,7 @@ catch {
 try {
     $null = Get-ADObject -Server $Server -Identity $Identity -Properties 'nTSecurityDescriptor'
 }
-catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
+catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
     # create container for named script
     try {
         New-ADObject -Server $Server -Name $ScriptName -Path $ScriptsContainer -Type 'Container' -ErrorAction 'Stop'
