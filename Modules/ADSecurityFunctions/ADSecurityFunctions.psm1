@@ -1030,6 +1030,33 @@ Function New-ADAccessRule {
 				# create ACE and add to array
 				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
+			'Contact' {
+				# define ACE: allow 'CreateChild','DeleteChild' of 'group' objects on 'this object and all child objects'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'CreateChild', 'DeleteChild'
+					type                = 'Allow'
+					objectType          = [guid]'5cb41ed0-0e4c-11d0-a286-00aa003049e2' # GUID for 'group' objects
+					inheritanceType     = 'All'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'GenericAll' on all descendent 'group' objects
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'GenericAll'
+					type                = 'Allow'
+					objectType          = [guid]::empty
+					inheritanceType     = 'Descendents'
+					inheritedObjectType = [guid]'5cb41ed0-0e4c-11d0-a286-00aa003049e2' # GUID for 'group' objects
+				}
+
+				# create ACE and add to array
+				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+			}
 			'Group' {
 				# define ACE: allow 'CreateChild','DeleteChild' of 'group' objects on 'this object and all child objects'
 				$Ace = @{
