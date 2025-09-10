@@ -107,7 +107,7 @@ if ($AccountName) {
             return $_
         }
         # report state
-        Write-Host "Created '$GroupName' DFS-R delegation to '$AccountName' account on '$GroupName' DFS-R group"
+        Write-Host "Granted '$GroupName' DFS-R delegation to '$AccountName' account on '$GroupName' DFS-R group"
     }
     else {
         # report state
