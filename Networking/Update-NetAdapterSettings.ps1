@@ -1,5 +1,5 @@
 [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Default')]
-Param(
+param(
 	[Parameter(ParameterSetName = 'InputObject', ValueFromPipeline)][ValidateScript({ $_.CimClass.CimClassName -eq 'MSFT_NetAdapter' })]
 	[Microsoft.Management.Infrastructure.CimInstance[]]$InputObject,
 	[Parameter(ParameterSetName = 'InterfaceAlias')][Alias('ifAlias', 'Name')]
@@ -14,9 +14,42 @@ Param(
 	[switch]$ConvertFromDhcpToStatic
 )
 
-Begin {
-	Function Convert-NetAdapterFromDhcpToStatic {
-		Param(
+begin {
+	function Disable-LMHosts {
+		# define path and name for LMHOSTS lookup setting
+		$Path = 'HKLM:SYSTEM\CurrentControlSet\Services\NetBT\Parameters'
+		$Name = 'EnableLMHOSTS'
+
+		# retrieve current value
+		try {
+			$Value = Get-ItemPropertyValue -Path $Path -Name $Name -ErrorAction 'Stop'
+		}
+		catch {
+			Write-Error -Message "Could not retrieve LMHOSTS lookup setting on system: $($_.Exception.Message)"
+			return
+		}
+
+		# if LMHOSTS lookup already disabled...
+		if ($Value -eq 0) {
+			Write-Host 'Found LMHOSTS lookup already disabled on system'
+			return
+		}
+
+		# disable LMHOSTS lookup
+		try {
+			Set-ItemProperty -Path $Path -Name $Name -Value 0 -ErrorAction 'Stop'
+		}
+		catch {
+			Write-Warning -Message "could not disable LMHOSTS lookup on system: $($_.Exception.Message)"
+			return
+		}
+
+		# report state
+		Write-Host 'Disabled LMHOSTS lookup on system'
+	}
+
+	function Convert-NetAdapterFromDhcpToStatic {
+		param(
 			[Microsoft.Management.Infrastructure.CimInstance]$NetAdapter
 		)
 
@@ -28,86 +61,86 @@ Begin {
 		$NetAdapterBinding = $NetAdapterBindings | Where-Object { $_.InterfaceDescription -eq $NetAdapter.InterfaceDescription } | Where-Object { $_.ComponentID -eq 'ms_tcpip' }
 
 		# if IPv4 not bound to adapter...
-		If (!$NetAdapterBinding.Enabled) {
+		if (!$NetAdapterBinding.Enabled) {
 			Write-Host "$InterfaceGuid; $InterfaceName; Could not locate enabled TCP/IP binding on adapter"
-			Return
+			return
 		}
 
 		# retrieve IP interface
-		Try {
+		try {
 			$NetIPInterface = $NetAdapter | Get-NetIPInterface -AddressFamily IPv4
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not retrieve IP interface for adapter: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# if DHCP not enabled...
-		If ($NetIPInterface.Dhcp -ne 'Enabled') {
+		if ($NetIPInterface.Dhcp -ne 'Enabled') {
 			Write-Host "$InterfaceGuid; $InterfaceName; Skipping adapter: DHCP not enabled"
-			Return
+			return
 		}
 
 		# retrieve IP addresses
-		Try {
+		try {
 			$NetIPAddresses = $NetAdapter | Get-NetIPAddress -AddressFamily IPv4
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not retrieve IP addresses for adapter: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# if no IP addresses assigned by DHCP...
 		if (($NetIPAddresses | Where-Object { $_.PrefixOrigin -eq 'DHCP' -and $_.SuffixOrigin -eq 'DHCP' } | Measure-Object).Count -eq 0) {
 			Write-Host "$InterfaceGuid; $InterfaceName; Could not locate any IP addresses assigned by DHCP on adapter"
-			Return
+			return
 		}
 
 		# retrieve default IPv4 route on adapter assigned by DHCP
-		Try {
+		try {
 			$NetRoute = $NetAdapter | Get-NetRoute -AddressFamily IPv4 | Where-Object { $_.DestinationPrefix -eq '0.0.0.0/0' -and $_.PreferredLifetime -lt [System.TimeSpan]::MaxValue }
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not retrieve network routes for adapter: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# retrieve DNS client server addresses
-		Try {
+		try {
 			$DnsClientServerAddress = $NetAdapter | Get-DnsClientServerAddress -AddressFamily IPv4
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not retrieve DNS servers for adapter: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# disable DHCP on adapter
-		Try {
+		try {
 			$NetAdapter | Set-NetIPInterface -Dhcp Disabled
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not disable DHCP on adapter: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# loop through IP addresses
-		:NextNetIPAddress ForEach ($NetIPAddress in $NetIPAddresses) {
+		:NextNetIPAddress foreach ($NetIPAddress in $NetIPAddresses) {
 			# if either origin is not DHCP...
-			If ($NetIPAddress.PrefixOrigin -ne 'DHCP' -or $NetIPAddress.SuffixOrigin -ne 'DHCP') {
+			if ($NetIPAddress.PrefixOrigin -ne 'DHCP' -or $NetIPAddress.SuffixOrigin -ne 'DHCP') {
 				# continue to next IP address
-				Continue NextNetIPAddress
+				continue NextNetIPAddress
 			}
 
 			# report state
 			Write-Host "$InterfaceGuid; $InterfaceName; Will assign '$($NetIPAddress.IPv4Address)/$($NetIPAddress.PrefixLength)' as address for adapter"
 
 			# assign IP address
-			Try {
+			try {
 				$null = $NetAdapter | New-NetIPAddress -IPAddress $NetIPAddress.IPv4Address -PrefixLength $NetIPAddress.PrefixLength
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not assign IP address to adapter: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# report state
@@ -115,17 +148,17 @@ Begin {
 		}
 
 		# if default IPv4 route was on adapter and assigned by DHCP
-		If ($NetRoute) {
+		if ($NetRoute) {
 			# report state
 			Write-Host "$InterfaceGuid; $InterfaceName; Will add '$($NetRoute.NextHop)' as default gateway for adapter"
 
 			# assign default route to adapter statically 
-			Try {
+			try {
 				$null = $NetAdapter | New-NetRoute -DestinationPrefix '0.0.0.0/0' -NextHop $NetRoute.NextHop
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not add default gateway for adapter: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# report state
@@ -133,17 +166,17 @@ Begin {
 		}
 
 		# if DNS client server addresses were assigned by DHCP...
-		If ($DnsClientServerAddress) {
+		if ($DnsClientServerAddress) {
 			# report state
 			Write-Host "$InterfaceGuid; $InterfaceName; Will assign '$($DnsClientServerAddress.ServerAddresses)' as DNS servers for adapter"
 
 			# assign DNS client server addresses
-			Try {
+			try {
 				$NetAdapter | Set-DnsClientServerAddress -ServerAddresses $DnsClientServerAddress.ServerAddresses
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not assign DNS servers to adapter: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# report state
@@ -151,8 +184,8 @@ Begin {
 		}
 	}
 
-	Function Disable-NetAdapterNetbios {
-		Param(
+	function Disable-NetAdapterNetbios {
+		param(
 			[Microsoft.Management.Infrastructure.CimInstance]$NetAdapter
 		)
 
@@ -165,35 +198,35 @@ Begin {
 		$Name = 'NetbiosOptions'
 
 		# retrieve current value
-		Try {
+		try {
 			$Value = Get-ItemPropertyValue -Path $Path -Name $Name -ErrorAction 'Stop'
 		}
-		Catch {
+		catch {
 			Write-Error -Message "$InterfaceGuid; $InterfaceName; Could not retrieve NetBT setting for adapter: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# if NetBIOS transport already disabled...
-		If ($Value -eq 2) {
+		if ($Value -eq 2) {
 			Write-Host "$InterfaceGuid; $InterfaceName; Found NetBT already disabled on adapter"
-			Return
+			return
 		}
 
 		# disable NetBIOS transport
-		Try {
+		try {
 			Set-ItemProperty -Path $Path -Name $Name -Value 2 -ErrorAction 'Stop'
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not disable NetBT on adapter: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# report state
 		Write-Host "$InterfaceGuid; $InterfaceName; Disabled NetBT on adapter"
 	}
 
-	Function Rename-NetAdapterViaProperties {
-		Param(
+	function Rename-NetAdapterViaProperties {
+		param(
 			[Microsoft.Management.Infrastructure.CimInstance]$NetAdapter,
 			[System.String]$NewName = [System.String]::Empty,
 			[System.String]$SlotLabel = 'Slot',
@@ -214,52 +247,52 @@ Begin {
 		$HyperVNetworkAdapterName = $NetAdapterAdvancedProperty | Where-Object { $_.RegistryKeyword -eq 'HyperVNetworkAdapterName' } | Select-Object -ExpandProperty 'RegistryValue'
 
 		# if port number found...
-		If (![System.String]::IsNullOrEmpty($NetAdapterHardwareInfo.FunctionNumber)) {
+		if (![System.String]::IsNullOrEmpty($NetAdapterHardwareInfo.FunctionNumber)) {
 			# build the new name from port information
 			$NewName = '{0} {1}' -f $FunctionLabel, ($NetAdapterHardwareInfo.FunctionNumber + 1)
 			$RenameSource = 'function number'
 		}
 
 		# if slot number found...
-		If (![System.String]::IsNullOrEmpty($NetAdapterHardwareInfo.SlotNumber)) {
+		if (![System.String]::IsNullOrEmpty($NetAdapterHardwareInfo.SlotNumber)) {
 			# build the new name from slot and port information
 			$NewName = '{0} {1} {2} {3}' -f $SlotLabel, $NetAdapterHardwareInfo.SlotNumber, $FunctionLabel, ($NetAdapterHardwareInfo.FunctionNumber + 1)
 			$RenameSource = 'slot and function numbers'
 		}
 
 		# if PCI device label found
-		If (![System.String]::IsNullOrEmpty($NetAdapterHardwareInfo.PciDeviceLabelString)) {
+		if (![System.String]::IsNullOrEmpty($NetAdapterHardwareInfo.PciDeviceLabelString)) {
 			# build the new name from PCI device label
 			$NewName = $NetAdapterHardwareInfo.PciDeviceLabelString
 			$RenameSource = 'PCI device label'
 		}
 
 		# if Hyper-V network adapter name found...
-		If (![System.String]::IsNullOrEmpty($HyperVNetworkAdapterName)) {
+		if (![System.String]::IsNullOrEmpty($HyperVNetworkAdapterName)) {
 			# build the name from Hyper-V network adapter name
 			$NewName = $HyperVNetworkAdapterName
 			$RenameSource = 'Hyper-V'
 		}
 
 		# if new name not generated...
-		If ([System.String]::IsNullOrEmpty($NewName)) {
+		if ([System.String]::IsNullOrEmpty($NewName)) {
 			Write-Host "$InterfaceGuid; $InterfaceName; Skipped renaming adapter: could not generate name"
-			Return
+			return
 		}
 
 		# if new name matches current name...
-		If ($NewName -eq $NetAdapter.Name) {
+		if ($NewName -eq $NetAdapter.Name) {
 			Write-Host "$InterfaceGuid; $InterfaceName; Skipped renaming adapter: generated name matches current name"
-			Return
+			return
 		}
 
 		# rename network adapter
-		Try {
+		try {
 			Rename-NetAdapter -InputObject $NetAdapter -NewName $NewName
 		}
-		Catch {
+		catch {
 			Write-Error -Message "$InterfaceGuid; $InterfaceName; Could not rename adapter: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# report state
@@ -267,27 +300,27 @@ Begin {
 	}
 
 	# retrieve advanced properties
-	Try {
+	try {
 		$NetAdapterAdvancedProperties = Get-NetAdapterAdvancedProperty
 	}
-	Catch {
-		Throw $_
+	catch {
+		throw $_
 	}
 
 	# retrieve bindings
-	Try {
+	try {
 		$NetAdapterBindings = Get-NetAdapterBinding
 	}
-	Catch {
-		Throw $_
+	catch {
+		throw $_
 	}
 
 	# retrieve advanced properties
-	Try {
+	try {
 		$NetAdapterHardwareInfos = Get-NetAdapterHardwareInfo
 	}
-	Catch {
-		Throw $_
+	catch {
+		throw $_
 	}
 
 	# switch on parameter set name
@@ -297,111 +330,102 @@ Begin {
 		}
 		'InterfaceAlias' {
 			# retrieve network adapter by index
-			Try {
+			try {
 				$NetAdapters = Get-NetAdapter -InterfaceAlias $script:InterfaceAlias
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 		}
 		'InterfaceIndex' {
 			# retrieve network adapter by index
-			Try {
+			try {
 				$NetAdapters = Get-NetAdapter -InterfaceIndex $script:InterfaceIndex
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 		}
 		'Physical' {
 			# retrieve physical network adapters
-			Try {
+			try {
 				$NetAdapters = Get-NetAdapter -Physical
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 		}
 		Default {
 			# retrieve all network adapters
-			Try {
+			try {
 				$NetAdapters = Get-NetAdapter
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 		}
 	}
 }
 
-Process {
+process {
 	# if disable LMHOSTS requested...
-	If ($PSBoundParameters.ContainsKey('DisableLMHosts')) {
-		# define path and name for LMHOSTS lookup setting
-		$Path = 'HKLM:SYSTEM\CurrentControlSet\Services\NetBT\Parameters'
-		$Name = 'EnableLMHOSTS'
-
-		# retrieve current value
-		Try {
-			$Value = Get-ItemPropertyValue -Path $Path -Name $Name -ErrorAction 'Stop'
+	if ($PSBoundParameters.ContainsKey('DisableLMHosts')) {
+		try {
+			Disable-LMHosts
 		}
-		Catch {
-			Write-Error -Message "Could not retrieve LMHOSTS lookup setting on system: $($_.Exception.Message)"
-			Continue NextParameter
+		catch {
+			return $_
 		}
-
-		# if LMHOSTS lookup already disabled...
-		If ($Value -eq 0) {
-			Write-Host "Found LMHOSTS lookup already disabled on system"
-			Continue NextParameter
-		}
-
-		# disable LMHOSTS lookup
-		Try {
-			Set-ItemProperty -Path $Path -Name $Name -Value 0 -ErrorAction 'Stop'
-		}
-		Catch {
-			Write-Warning -Message "could not disable LMHOSTS lookup on system: $($_.Exception.Message)"
-			Continue NextParameter
-		}
-
-		# report state
-		Write-Host 'Disabled LMHOSTS lookup on system'
 	}
 
 	# retrieve count of netadapters
 	$NetAdaptersCount = $NetAdapters | Measure-Object | Select-Object -ExpandProperty 'Count'
 
 	# if disable Netbios requested...
-	If ($PSBoundParameters.ContainsKey('DisableNetbios')) {
+	if ($PSBoundParameters.ContainsKey('DisableNetbios')) {
 		# report state
 		Write-Host "Disabling Netbios on '$NetAdaptersCount' adapters"
 
 		# loop through network adapters
-		ForEach ($NetAdapter in $NetAdapters ) {
-			Disable-NetAdapterNetbios -NetAdapter $NetAdapter
+		foreach ($NetAdapter in $NetAdapters ) {
+			try {
+				Disable-NetAdapterNetbios -NetAdapter $NetAdapter
+			}
+			catch {
+				return $_
+			}
 		}
 	}
 
 	# if static requested...
-	If ($PSBoundParameters.ContainsKey('ConvertFromDhcpToStatic')) {
+	if ($PSBoundParameters.ContainsKey('ConvertFromDhcpToStatic')) {
 		# report state
 		Write-Host "Converting IP addresses from DHCP to static on '$NetAdaptersCount' adapters"
 
 		# loop through network adapters
-		ForEach ($NetAdapter in $NetAdapters) {
-			Convert-NetAdapterFromDhcpToStatic -NetAdapter $NetAdapter
+		foreach ($NetAdapter in $NetAdapters) {
+			try {
+				Convert-NetAdapterFromDhcpToStatic -NetAdapter $NetAdapter
+			}
+			catch {
+				return $_
+			}
 		}
 	}
 
 	# if rename requested...
-	If ($PSBoundParameters.ContainsKey('Rename')) {
+	if ($PSBoundParameters.ContainsKey('Rename')) {
 		# report state
 		Write-Host "Renaming '$NetAdaptersCount' adapters"
 
 		# loop through network adapters
-		ForEach ($NetAdapter in $NetAdapters ) {
-			Rename-NetAdapterViaProperties -NetAdapter $NetAdapter
+		foreach ($NetAdapter in $NetAdapters ) {
+			try {
+				Rename-NetAdapterViaProperties -NetAdapter $NetAdapter
+			}
+			catch {
+				return $_
+			}
 		}
 	}
 }
