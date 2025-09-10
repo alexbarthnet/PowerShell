@@ -352,7 +352,7 @@ Process {
 
 		# if LMHOSTS lookup already disabled...
 		If ($Value -eq 0) {
-			Write-Host "$InterfaceGuid; $InterfaceName; Found LMHOSTS lookup already disabled on system"
+			Write-Host "Found LMHOSTS lookup already disabled on system"
 			Continue NextParameter
 		}
 
@@ -361,7 +361,7 @@ Process {
 			Set-ItemProperty -Path $Path -Name $Name -Value 0 -ErrorAction 'Stop'
 		}
 		Catch {
-			Write-Warning -Message "$InterfaceGuid; $InterfaceName; Could not disable LMHOSTS lookup on system: $($_.Exception.Message)"
+			Write-Warning -Message "could not disable LMHOSTS lookup on system: $($_.Exception.Message)"
 			Continue NextParameter
 		}
 
@@ -369,8 +369,14 @@ Process {
 		Write-Host 'Disabled LMHOSTS lookup on system'
 	}
 
+	# retrieve count of netadapters
+	$NetAdaptersCount = $NetAdapters | Measure-Object | Select-Object -ExpandProperty 'Count'
+
 	# if disable Netbios requested...
 	If ($PSBoundParameters.ContainsKey('DisableNetbios')) {
+		# report state
+		Write-Host "Disabling Netbios on '$NetAdaptersCount' adapters"
+
 		# loop through network adapters
 		ForEach ($NetAdapter in $NetAdapters ) {
 			Disable-NetAdapterNetbios -NetAdapter $NetAdapter
@@ -379,6 +385,9 @@ Process {
 
 	# if static requested...
 	If ($PSBoundParameters.ContainsKey('ConvertFromDhcpToStatic')) {
+		# report state
+		Write-Host "Converting IP addresses from DHCP to static on '$NetAdaptersCount' adapters"
+
 		# loop through network adapters
 		ForEach ($NetAdapter in $NetAdapters) {
 			Convert-NetAdapterFromDhcpToStatic -NetAdapter $NetAdapter
@@ -387,6 +396,9 @@ Process {
 
 	# if rename requested...
 	If ($PSBoundParameters.ContainsKey('Rename')) {
+		# report state
+		Write-Host "Renaming '$NetAdaptersCount' adapters"
+
 		# loop through network adapters
 		ForEach ($NetAdapter in $NetAdapters ) {
 			Rename-NetAdapterViaProperties -NetAdapter $NetAdapter
