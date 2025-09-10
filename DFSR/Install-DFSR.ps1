@@ -233,7 +233,7 @@ $DfsrLocalConnections = $DfsrConnections | Where-Object { $_.SourceComputerName 
 $DestinationComputers = $DfsrCurrentMembers | Where-Object { $_.ComputerName -ne $ComputerName -and $_.ComputerName -notin $DfsrLocalConnections.DestinationComputerName }
 
 # loop through destination computers
-foreach ($DestinationComputerName in $DestinationComputers.Name) { 
+foreach ($DestinationComputerName in $DestinationComputers.ComputerName) { 
     # create connection with current computer
     try {
         $null = Add-DfsrConnection @Dfsr -SourceComputerName $ComputerName -DestinationComputerName $DestinationComputerName
@@ -260,7 +260,7 @@ Write-Host 'Pausing 30 seconds for AD replication of new connections'
 Start-Sleep -Seconds 30
 
 # loop through destination computers
-foreach ($ComputerName in $DestinationComputers.Name) {
+foreach ($ComputerName in $DestinationComputers.ComputerName) {
     # update configuration on remote computers
     try {
         Update-DfsrConfigurationFromAD -ComputerName $ComputerName
