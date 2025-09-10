@@ -14,6 +14,9 @@ param(
     [switch]$ForcePrimaryMember
 )
 
+# define error preference
+$ErrorActionPreference = [System.Management.Automation.ActionPreference]::Stop
+
 # import module
 try {
     Import-Module -Name ServerManager
