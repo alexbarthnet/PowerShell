@@ -1070,14 +1070,27 @@ process {
 		catch {
 			return $_
 		}
+	}
+	# if ISO image exists...
+	else {
+		# report state
+		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Verifying ISO image page', $PathForUpdatedIsoImage
 
-		# remove existing ISO image
+		# create temporary file for ISO image to create path
 		try {
-			$Item | Remove-Item -Force -ErrorAction 'Stop'
+			$Item = New-Item -ItemType File -Path $PathForUpdatedIsoImage -Force -ErrorAction 'Stop'
 		}
 		catch {
 			return $_
 		}
+	}
+
+	# remove existing ISO image
+	try {
+		$Item | Remove-Item -Force -ErrorAction 'Stop'
+	}
+	catch {
+		return $_
 	}
 
 	# report state
