@@ -25,6 +25,8 @@ Param(
 	[Parameter()]
 	[switch]$ForceRestart,
 	[Parameter()]
+	[hashtable]$ExpandStrings,
+	[Parameter()]
 	[pscredential]$LocalAdminCredential,
 	[Parameter()]
 	[pscredential]$DomainJoinCredential,
@@ -4114,6 +4116,19 @@ Process {
 								Else {
 									# create empty hashtable
 									$ExpandStringsHashtable = @{}
+								}
+
+								# if expand strings provided...
+								If ($PSBoundParameters.ContainsKey('ExpandStrings')) {
+									# loop through expand strings
+									ForEach ($ExpandString in $ExpandStrings.Keys) {
+										# if expand string already present in hashtable...
+										if ($ExpandStringsHashtable.ContainsKey($ExpandString)) {
+											Write-Host ("$Hostname,$ComputerName,$Name - replacing value of '$ExpandString' from ExpandStrings in JSON file with value from ExpandStrings parameter")
+										}
+										# update expand strings hashtable with provided value
+										$ExpandStringsHashtable[$ExpandString] = $ExpandStrings[$ExpandString]
+									}
 								}
 
 								# define parameters for Copy-VHDFromParams
