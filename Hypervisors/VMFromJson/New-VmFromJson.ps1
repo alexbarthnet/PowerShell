@@ -3206,12 +3206,14 @@ Begin {
 
 				# if administrator password provided...
 				If ($ExpandStrings.ContainsKey('AdministratorPassword')) {
-					$Content = $Content -replace '<!-- <AdministratorPassword>', '<AdministratorPassword>'
-					$Content = $Content -replace '</AdministratorPassword> -->', '</AdministratorPassword>'
+					# uncomment administrator password section in unattend file
+					$Content = $Content.Replace('<!-- <AdministratorPassword>', '<AdministratorPassword>')
+					$Content = $Content.Replace('</AdministratorPassword> -->', '</AdministratorPassword>')
 				}
 				# if administrator password not provided...
 				Else {
-					$Content = $Content -replace '%AdministratorPassword%', '<%>AdministratorPassword<%>'
+					# hide administrator password expand string from the expand strings loop
+					$Content = $Content -replace '%ADMINISTRATORPASSWORD%', '<%>ADMINISTRATORPASSWORD<%>'
 				}
 
 				# while content contains XML element with expand string as value...
