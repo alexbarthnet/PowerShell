@@ -3216,6 +3216,24 @@ Begin {
 					$Content = $Content -replace '%ADMINISTRATORPASSWORD%', '<%>ADMINISTRATORPASSWORD<%>'
 				}
 
+				# if domain join username and password provided...
+				If ($ExpandStrings.ContainsKey('Username') -and $ExpandStrings.ContainsKey('Password')) {
+					# uncomment domain join section in unattend file
+					$Content = $Content.Replace('<!-- <identification>', '<identification>')
+					$Content = $Content.Replace('</identification> -->', '</identification>')
+					# uncomment domain accounts section in unattend file
+					$Content = $Content.Replace('<!-- <DomainAccounts>', '<DomainAccounts>')
+					$Content = $Content.Replace('</DomainAccounts> -->', '</DomainAccounts>')
+				}
+				# if domain join username and password not provided...
+				Else {
+					# hide domain join expand strings from the expand strings loop
+					$Content = $Content.Replace('%USERNAME%', '<%>USERNAME<%>')
+					$Content = $Content.Replace('%PASSWORD%', '<%>PASSWORD<%>')
+					$Content = $Content.Replace('%DOMAINNAME%', '<%>DOMAINNAME<%>')
+					$Content = $Content.Replace('%ORGANIZATIONALUNIT%', '<%>ORGANIZATIONALUNIT<%>')
+				}
+
 				# while content contains XML element with expand string as value...
 				While ($Content -match '<\w+>%(?<ExpandString>\w+)%</\w+>') {
 					# retrieve original XML element
