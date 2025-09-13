@@ -3250,7 +3250,7 @@ Begin {
 					}
 					Else {
 						# comment out the original XML element
-						$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace '%')
+						$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace '%', '<%>')
 
 						# report state
 						Write-Warning ("$Hostname,$ComputerName,$Name - ...disabled value in unattend file: '$ExpandString'")
