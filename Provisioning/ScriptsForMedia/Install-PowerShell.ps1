@@ -47,7 +47,7 @@ else {
 }
 
 # report state
-Write-Host "Installed latest release of PowerShell for 64-bit Windows: $($Asset.Name)"
+Write-Host "Installing latest release of PowerShell for 64-bit Windows: $($Asset.Name)"
 
 # define parameters
 $StartProcess = @{
