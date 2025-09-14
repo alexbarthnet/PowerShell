@@ -25,11 +25,11 @@ Param(
 	[Parameter()]
 	[switch]$ForceRestart,
 	[Parameter()]
-	[hashtable]$ExpandStrings,
-	[Parameter()]
 	[pscredential]$LocalAdminCredential,
 	[Parameter()]
 	[pscredential]$DomainJoinCredential,
+	[Parameter()][ValidateNotNull()]
+	[hashtable]$ExpandStrings = @{},
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 )
