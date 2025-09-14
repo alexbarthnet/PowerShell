@@ -3222,119 +3222,48 @@ Begin {
 		# update argument list for Get-Content and Set-Content
 		$InvokeCommand['ArgumentList']['Path'] = $UnattendFileOnVHD
 
-		# add computer name to expand strings hashtable
-		$ExpandStrings['COMPUTERNAME'] = $VMName.Split('.')[0]
-
-		# if LocalAdminCredential provided...
-		If ($script:PSBoundParameters.ContainsKey('LocalAdminCredential')) {
-			# append required string to plaintext password
-			$AdministratorPasswordAppended = '{0}AdministratorPassword' -f $script:LocalAdminCredential.GetNetworkCredential().Password
-
-			# encode appended password to base64
-			$AdministratorPasswordAsBase64 = [System.Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($AdministratorPasswordAppended))
-
-			# add encoded password to expand strings hashtable
-			$ExpandStrings['ADMINISTRATORPASSWORD'] = $AdministratorPasswordAsBase64
-		}
-
-		# if DomainJoinCredential provided...
-		If ($script:PSBoundParameters.ContainsKey('DomainJoinCredential')) {
-			# add domain join username expand strings hashtable
-			$ExpandStrings['USERNAME'] = $script:DomainJoinCredential.GetNetworkCredential().Username
-
-			# add domain join password expand strings hashtable
-			$ExpandStrings['PASSWORD'] = $script:DomainJoinCredential.GetNetworkCredential().Password
-		}
-
-		# update argument list with expand strings
-		$InvokeCommand['ArgumentList']['Name'] = $Name
-		$InvokeCommand['ArgumentList']['Hostname'] = $HostName
-		$InvokeCommand['ArgumentList']['ComputerName'] = $ComputerName
-		$InvokeCommand['ArgumentList']['ExpandStrings'] = $ExpandStrings
-
-		# update file on VHD
+		# get content of file on VHD
 		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...replacing values in unattend file")
-			Invoke-Command @InvokeCommand -ScriptBlock {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...retrieving content from unattend file: '$UnattendFileOnVHD'")
+			$Content = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
+				$GetContent = @{
+					Path        = $ArgumentList['Path']
+					Raw         = $true
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				Get-Content @GetContent
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve content from unattend file: '$UnattendFileOnVHD'")
+			Throw $_
+		}
 
-				# get variables from arguments
-				$Path = $ArgumentList['Path']
-				$Name = $ArgumentList['Name']
-				$HostName = $ArgumentList['HostName']
-				$ComputerName = $ArgumentList['ComputerName']
-				$ExpandStrings = $ArgumentList['ExpandStrings']
+		# resolve expand strings in content
+		try {
+			$Content = Resolve-ExpandStringsInXML -String $Content -ExpandStrings $ExpandStrings
+		}
+		catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not resolve expand strings in content from unattend file: '$UnattendFileOnVHD'")
+			Throw $_
+		}
 
-				# get contents of unattend file
-				Try {
-					$Content = Get-Content -Path $Path -Raw
-				}
-				Catch {
-					Return $_
-				}
+		# update argument list for Set-Content
+		$InvokeCommand['ArgumentList']['Content'] = $Content
 
-				# if administrator password provided...
-				If ($ExpandStrings.ContainsKey('AdministratorPassword')) {
-					# uncomment administrator password section in unattend file
-					$Content = $Content.Replace('<!-- <AdministratorPassword>', '<AdministratorPassword>')
-					$Content = $Content.Replace('</AdministratorPassword> -->', '</AdministratorPassword>')
+		# set content of file on VHD
+		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...writing content to unattend file: '$UnattendFileOnVHD'")
+			$Content = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				$GetContent = @{
+					Path        = $ArgumentList['Path']
+					Content     = $ArgumentList['Content']
+					NoNewline   = $true
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 				}
-				# if administrator password not provided...
-				Else {
-					# hide administrator password expand string from the expand strings loop
-					$Content = $Content -replace '%ADMINISTRATORPASSWORD%', '<%>ADMINISTRATORPASSWORD<%>'
-				}
-
-				# if domain join username and password provided...
-				If ($ExpandStrings.ContainsKey('Username') -and $ExpandStrings.ContainsKey('Password')) {
-					# uncomment domain join section in unattend file
-					$Content = $Content.Replace('<!-- <identification>', '<identification>')
-					$Content = $Content.Replace('</identification> -->', '</identification>')
-					# uncomment domain accounts section in unattend file
-					$Content = $Content.Replace('<!-- <DomainAccounts>', '<DomainAccounts>')
-					$Content = $Content.Replace('</DomainAccounts> -->', '</DomainAccounts>')
-				}
-				# if domain join username and password not provided...
-				Else {
-					# hide domain join expand strings from the expand strings loop
-					$Content = $Content.Replace('%USERNAME%', '<%>USERNAME<%>')
-					$Content = $Content.Replace('%PASSWORD%', '<%>PASSWORD<%>')
-					$Content = $Content.Replace('%DOMAINNAME%', '<%>DOMAINNAME<%>')
-					$Content = $Content.Replace('%ORGANIZATIONALUNIT%', '<%>ORGANIZATIONALUNIT<%>')
-				}
-
-				# while content contains XML element with expand string as value...
-				While ($Content -match '<\w+>%(?<ExpandString>\w+)%</\w+>') {
-					# retrieve original XML element
-					$OriginalString = $Matches[0]
-					# retrieve expand string
-					$ExpandString = $Matches['ExpandString']
-					# if value for expand string provided...
-					If ($ExpandStrings.ContainsKey($ExpandString)) {
-						# replace the expand string with the provided value
-						$ModifiedString = $OriginalString -replace "%$ExpandString%", $ExpandStrings[$ExpandString]
-
-						# report state
-						Write-Host ("$Hostname,$ComputerName,$Name - ...replaced value in unattend file: '$ExpandString'")
-					}
-					Else {
-						# comment out the original XML element
-						$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace '%', '<%>')
-
-						# report state
-						Write-Warning ("$Hostname,$ComputerName,$Name - ...disabled value in unattend file: '$ExpandString'")
-					}
-					# replace original XML element with modified XML element
-					$Content = $Content -replace $OriginalString, $ModifiedString
-				}
-
-				# add unattend file to ISO
-				Try {
-					$Content | Set-Content -Path $Path
-				}
-				Catch {
-					Return $_
-				}
+				Set-Content @GetContent
 			}
 		}
 		Catch {
