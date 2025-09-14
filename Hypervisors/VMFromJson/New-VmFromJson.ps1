@@ -2890,13 +2890,10 @@ Begin {
 			[Parameter(Mandatory = $true)]
 			[object]$VM,
 			[string]$ComputerName = $VM.ComputerName.ToLower(),
-			[string]$VMName = $VM.Name.ToLower(),
-			# define OSD parameters
+			# define VHD parameters
 			[Parameter(Mandatory)]
 			[string]$Path,
-			[string]$DestinationPath,
-			[string]$UnattendFile,
-			[hashtable]$ExpandStrings = @{}
+			[string]$DestinationPath
 		)
 
 		# get hashtable for InvokeCommand splat
@@ -3061,10 +3058,28 @@ Begin {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not update ACL for VHD: '$DestinationPath'")
 			Throw $_
 		}
+	}
 
-		# if deployment file not provided...
-		If (!$PSBoundParameters.ContainsKey('UnattendFile')) {
-			Return
+	Function Edit-VHDFromParams {
+		Param (
+			# define VM parameters
+			[Parameter(Mandatory = $true)]
+			[object]$VM,
+			[string]$ComputerName = $VM.ComputerName.ToLower(),
+			# define VHD parameters
+			[string]$DestinationPath,
+			# define unattend file parameters
+			[Parameter(Mandatory)]
+			[string]$UnattendFile,
+			[hashtable]$ExpandStrings = @{}
+		)
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
 		}
 
 		# update argument list for Test-Path
@@ -3095,6 +3110,60 @@ Begin {
 		If (!$TestPath) {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD edit, host did not find unattend file: '$UnattendFile'")
 			Return
+		}
+
+		# get VM from parameters
+		Try {
+			$VM = Get-VMFromParameters -ComputerName $ComputerName -VM $VM
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
+			Throw $_
+		}
+
+		# if DestinationPath provided...
+		If ($PSBoundParameters.ContainsKey('DestinationPath')) {
+			# if hard drives do not contain VHD with provided destination path...
+			If (!$VM.HardDrives.Where({ $_.Path -eq $DestinationPath })) {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD edit, could not locate target VHD on VM with path: $DestinationPath")
+				Return
+			}
+			Else {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...found target VHD: $DestinationPath")
+			}
+		}
+		# if DestinationPath not provided...
+		Else {
+			# select path of first hard drive by controller number then controller location
+			$DestinationPath = $VM.HardDrives | Sort-Object -Property 'ControllerNumber', 'ControllerLocation' | Select-Object -First 1 -ExpandProperty 'Path'
+
+			# if destination path is null or empty...
+			If ([System.String]::IsNullOrEmpty($DestinationPath)) {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD edit, could not locate the first VHD on VM")
+				Return
+			}
+			Else {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...located first VHD: $DestinationPath")
+			}
+		}
+
+		# update argument list for Get-Item
+		$InvokeCommand['ArgumentList']['Path'] = $DestinationPath
+
+		# retrieve target VHD
+		Try {
+			$GetItem = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				$GetItem = @{
+					Path        = $ArgumentList['Path']
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				Get-Item @GetItem
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve target VHD: '$DestinationPath'")
+			Throw $_
 		}
 
 		# update argument list for Mount-VHD
@@ -4183,48 +4252,16 @@ Process {
 								}
 							}
 							'VHD' {
-								# if device variables provided...
-								If ($OSDeployment.ExpandStrings) {
-									# convert property from JSON to hashtable
-									try {
-										$ExpandStringsHashtable = ConvertTo-Collection -InputObject $OSDeployment.ExpandStrings
-									}
-									catch {
-										Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create hashtable from ExpandStrings in OS Deployment")
-										Throw $_
-									}
-								}
-								Else {
-									# create empty hashtable
-									$ExpandStringsHashtable = @{}
-								}
-
-								# if expand strings provided...
-								If ($PSBoundParameters.ContainsKey('ExpandStrings')) {
-									# loop through expand strings
-									ForEach ($ExpandString in $ExpandStrings.Keys) {
-										# if expand string already present in hashtable...
-										if ($ExpandStringsHashtable.ContainsKey($ExpandString)) {
-											Write-Host ("$Hostname,$ComputerName,$Name - replacing value of '$ExpandString' from ExpandStrings in JSON file with value from ExpandStrings parameter")
-										}
-										# update expand strings hashtable with provided value
-										$ExpandStringsHashtable[$ExpandString] = $ExpandStrings[$ExpandString]
-									}
-								}
-
-								# define parameters for Copy-VHDFromParams
+								# define required parameters for Copy-VHDFromParams
 								$CopyVHDFromParams = @{
 									VM            = $VM
 									Path          = $OSDeployment.FilePath
-									ExpandStrings = $ExpandStringsHashtable
+									ExpandStrings = $ExpandStrings
 								}
 
-								# define optional parameters
+								# define optional parameters for Copy-VHDFromParams
 								If (![string]::IsNullOrEmpty($OSDeployment.DestinationPath)) {
 									$CopyVHDFromParams['DestinationPath'] = $OSDeployment.DestinationPath
-								}
-								If (![string]::IsNullOrEmpty($OSDeployment.UnattendFile)) {
-									$CopyVHDFromParams['UnattendFile'] = $OSDeployment.UnattendFile
 								}
 								# If (![string]::IsNullOrEmpty($OSDeployment.ControllerNumber)) {
 								# 	 $CopyVHDFromParams['ControllerNumber'] = $OSDeployment.ControllerNumber
@@ -4233,14 +4270,171 @@ Process {
 								# 	 $CopyVHDFromParams['ControllerLocation'] = $OSDeployment.ControllerLocation
 								# }
 
-								# mount ISO file on VM
+								# replace new VM disk with existing VHD file
 								Try {
 									Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via VHD file")
 									Copy-VHDFromParams @CopyVHDFromParams
 								}
 								Catch {
-									Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VHD to VM")
+									Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not copy VHD to VM")
 									Throw $_
+								}
+
+								# if unattend file defined...
+								If (![string]::IsNullOrEmpty($OSDeployment.UnattendFile)) {
+									# if expand strings defined in JSON file...
+									If ($null -ne $OSDeployment.ExpandStrings) {
+										# create hashtable from expand strings property
+										try {
+											$ExpandStringsHashtable = ConvertTo-Collection -InputObject $OSDeployment.ExpandStrings
+										}
+										catch {
+											Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create hashtable from ExpandStrings in OS Deployment")
+											Throw $_
+										}
+
+										# define expand string source
+										$ExpandSource = 'ExpandStrings in OS Deployment'
+
+										# loop through expand strings from JSON file
+										ForEach ($ExpandString in $ExpandStringsHashtable.Keys) {
+											# if expand string from JSON file already present in hashtable...
+											If ($ExpandStrings.ContainsKey($ExpandString)) {
+												# report state
+												Write-Host ("$Hostname,$ComputerName,$Name - skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
+											}
+											Else {
+												# add expand string from JSON file to hashtable
+												$ExpandStrings[$ExpandString] = $ExpandStringsHashtable[$ExpandString]
+											}
+										}
+									}
+
+									# if AD Computer object defined in JSON file...
+									If ($null -ne $Json.$Name.ADComputer) {
+										# create hashtable from AD Computer object
+										try {
+											$ADComputerHashtable = ConvertTo-Collection -InputObject $Json.$Name.ADComputer
+										}
+										catch {
+											Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create hashtable from ADComputer")
+											Throw $_
+										}
+
+										# define expand string source
+										$ExpandSource = 'properties in AD Computer'
+
+										# loop through AD Computer properties defined in JSON file
+										ForEach ($ExpandString in $ADComputerHashtable.Keys) {
+											# if AD Computer property from JSON file already present in hashtable...
+											If ($ExpandStrings.ContainsKey($ExpandString)) {
+												# report state
+												Write-Host ("$Hostname,$ComputerName,$Name - skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
+											}
+											Else {
+												# add AD Computer property from JSON file to hashtable
+												$ExpandStrings[$ExpandString] = $ADComputerHashtable[$ExpandString]
+											}
+										}
+									}
+
+									# if administrator password provided...
+									If ($PSBoundParameters.ContainsKey('LocalAdminCredential')) {
+										# define epxand string source
+										$ExpandSource = 'LocalAdminCredential parameter'
+
+										# define expand string
+										$ExpandString = 'AdministratorPassword'
+										
+										# if expand string already present in hashtable...
+										If ($ExpandStrings.ContainsKey($ExpandString)) {
+											# report state
+											Write-Host ("$Hostname,$ComputerName,$Name - skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
+										}
+										Else {
+											# retrieve plaintext password from credential object
+											try {
+												$PlainText = $LocalAdminCredential.GetNetworkCredential().Password
+											}
+											catch {
+												throw $_
+											}
+
+											# append required string to plaintext password
+											$AppendedPlainText = '{0}?AdministratorPassword' -f $PlainText
+
+											# encode appended password
+											try {
+												$EncodedAdministratorPassword = [System.Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($AppendedPlainText))
+											}
+											catch {
+												throw $_
+											}
+
+											# add encoded plaintext password to expand strings hashtable
+											$ExpandStrings['AdministratorPassword'] = $EncodedAdministratorPassword
+										}
+									}
+
+									# if domain join credential provided...
+									If ($PSBoundParameters.ContainsKey('DomainJoinCredential')) {
+										# define epxand string source
+										$ExpandSource = 'DomainJoinCredential parameter'
+
+										# define expand string
+										$ExpandString = 'Username'
+
+										# if expand string already present in hashtable...
+										If ($ExpandStrings.ContainsKey($ExpandString)) {
+											# report state
+											Write-Host ("$Hostname,$ComputerName,$Name - skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
+										}
+										Else {
+											# add plaintext unattended join password to expand strings hashtable
+											$ExpandStrings['Username'] = $DomainJoinCredential.GetNetworkCredential().Username
+										}
+
+										# define expand string
+										$ExpandString = 'Password'
+
+										# if expand string already present in hashtable...
+										If ($ExpandStrings.ContainsKey($ExpandString)) {
+											# report state
+											Write-Host ("$Hostname,$ComputerName,$Name - skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
+										}
+										Else {
+											# add plaintext unattended join password to expand strings hashtable
+											$ExpandStrings['Password'] = $DomainJoinCredential.GetNetworkCredential().Password
+										}
+									}
+
+									# if expand strings does not contain computer name...
+									If (!$ExpandStrings.ContainsKey('ComputerName')) {
+										# add VM name as computer name to expand strings hashtable
+										$ExpandStrings['ComputerName'] = $Name.Split('.')[0]
+									}
+
+									# define required parameters for Edit-VHDFromParams
+									$EditVHDFromParams = @{
+										VM            = $VM
+										UnattendFile  = $OSDeployment.UnattendFile
+										ExpandStrings = $ExpandStrings
+									}
+
+									# define optional parameters for Edit-VHDFromParams
+									If (![string]::IsNullOrEmpty($OSDeployment.DestinationPath)) {
+										$EditVHDFromParams['DestinationPath'] = $OSDeployment.DestinationPath
+									}
+
+									# edit VHD file to include unattend file
+									Try {
+										Write-Host ("$Hostname,$ComputerName,$Name - VM will be configured via XML file")
+										Edit-VHDFromParams @EditVHDFromParams
+									}
+									Catch {
+										Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not edit VHD for VM")
+										Throw $_
+									}
 								}
 							}
 							default {
