@@ -3606,6 +3606,67 @@ Begin {
 		# return VM object
 		Return $VM
 	}
+
+	Function Resolve-ExpandStringsInXML {
+		param(
+			[Parameter(Mandatory)]
+			[string]$String,
+			[Parameter(Mandatory)]
+			[hashtable]$ExpandStrings
+		)
+
+		# if administrator password provided...
+		if ($ExpandStrings.ContainsKey('AdministratorPassword')) {
+			# uncomment administrator password section in unattend file
+			$String = $String.Replace('<!-- <AdministratorPassword>', '<AdministratorPassword>')
+			$String = $String.Replace('</AdministratorPassword> -->', '</AdministratorPassword>')
+		}
+		# if administrator password not provided...
+		else {
+			# hide administrator password expand string from the expand strings loop
+			$String = $String -replace '%ADMINISTRATORPASSWORD%', '<%>ADMINISTRATORPASSWORD<%>'
+		}
+
+		# if domain join username and password provided...
+		if ($ExpandStrings.ContainsKey('Username') -and $ExpandStrings.ContainsKey('Password')) {
+			# uncomment domain join section in unattend file
+			$String = $String.Replace('<!-- <identification>', '<identification>')
+			$String = $String.Replace('</identification> -->', '</identification>')
+			# uncomment domain accounts section in unattend file
+			$String = $String.Replace('<!-- <DomainAccounts>', '<DomainAccounts>')
+			$String = $String.Replace('</DomainAccounts> -->', '</DomainAccounts>')
+		}
+		# if domain join username and password not provided...
+		else {
+			# hide domain join expand strings from the expand strings loop
+			$String = $String.Replace('%USERNAME%', '<%>USERNAME<%>')
+			$String = $String.Replace('%PASSWORD%', '<%>PASSWORD<%>')
+			$String = $String.Replace('%DOMAINNAME%', '<%>DOMAINNAME<%>')
+			$String = $String.Replace('%ORGANIZATIONALUNIT%', '<%>ORGANIZATIONALUNIT<%>')
+		}
+
+		# while content contains XML element with expand string as value...
+		while ($String -match '<\w+>%(?<ExpandString>\w+)%</\w+>') {
+			# retrieve original XML element
+			$OriginalString = $Matches[0]
+			# retrieve expand string
+			$ExpandString = $Matches['ExpandString']
+			# if value for expand string provided...
+			if ($ExpandStrings.ContainsKey($ExpandString)) {
+				# replace the expand string with the provided value
+				$ModifiedString = $OriginalString -replace "%$ExpandString%", $ExpandStrings[$ExpandString]
+			}
+			else {
+				# comment out the original XML element
+				$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace '%', '<%>')
+			}
+			# replace original XML element with modified XML element
+			$String = $String -replace $OriginalString, $ModifiedString
+		}
+
+		# return updated string
+		return $String
+	}
 }
 
 Process {
