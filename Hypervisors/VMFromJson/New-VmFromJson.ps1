@@ -3018,7 +3018,7 @@ Begin {
 			}
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not copy VHD from provided path to destination: '$Destination'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not copy VHD from provided path to destination: '$DestinationPath'")
 			Throw $_
 		}
 
