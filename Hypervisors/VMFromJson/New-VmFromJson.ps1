@@ -3070,7 +3070,7 @@ Begin {
 		# update argument list for Test-Path
 		$InvokeCommand['ArgumentList']['Path'] = $UnattendFile
 
-		# test deployment file
+		# test unattend file
 		Try {
 			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
@@ -3091,9 +3091,9 @@ Begin {
 			Throw $_
 		}
 
-		# evaluate deployment file
+		# evaluate unattend file
 		If (!$TestPath) {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping target VHD update, host did not find unattend file: '$UnattendFile'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD edit, host did not find unattend file: '$UnattendFile'")
 			Return
 		}
 
@@ -3118,9 +3118,9 @@ Begin {
 			Throw $_
 		}
 
-		# evaluate deployment path
+		# evaluate drive letter
 		If (!$DriveLetter) {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD attach, could not mount target VHD: '$Destination'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD edit, could not mount target VHD: '$DestinationPath'")
 			Return
 		}
 
@@ -3269,7 +3269,7 @@ Begin {
 			}
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not update file: '$UnattendFile'")
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not write content to unattend file: '$UnattendFileOnVHD'")
 			Throw $_
 		}
 
