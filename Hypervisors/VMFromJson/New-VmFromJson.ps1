@@ -4238,9 +4238,17 @@ Process {
 											# if expand string from JSON file already present in hashtable...
 											If ($ExpandStrings.ContainsKey($ExpandString)) {
 												# report state
-												Write-Host ("$Hostname,$ComputerName,$Name - skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
+												Write-Host ("$Hostname,$ComputerName,$Name - ...skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
+											}
+											# if expand string from JSON file is not a string or value type...
+											ElseIf ($ExpandStringsHashtable[$ExpandString] -isnot [string] -and -not $ExpandStringsHashtable[$ExpandString].GetType().IsValueType) {
+												# report state
+												Write-Host ("$Hostname,$ComputerName,$Name - ...skipping value of '$ExpandString' expand string from $ExpandSource; value is not string or value type")
 											}
 											Else {
+												# report state
+												Write-Host ("$Hostname,$ComputerName,$Name - ...adding value of '$ExpandString' expand string from $ExpandSource")
+
 												# add expand string from JSON file to hashtable
 												$ExpandStrings[$ExpandString] = $ExpandStringsHashtable[$ExpandString]
 											}
@@ -4266,9 +4274,17 @@ Process {
 											# if AD Computer property from JSON file already present in hashtable...
 											If ($ExpandStrings.ContainsKey($ExpandString)) {
 												# report state
-												Write-Host ("$Hostname,$ComputerName,$Name - skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
+												Write-Host ("$Hostname,$ComputerName,$Name - ...skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
+											}
+											# if AD Computer property from JSON file is not a string or value type...
+											ElseIf ($ADComputerHashtable[$ExpandString] -isnot [string] -and -not $ADComputerHashtable[$ExpandString].GetType().IsValueType) {
+												# report state
+												Write-Host ("$Hostname,$ComputerName,$Name - ...skipping value of '$ExpandString' expand string from $ExpandSource; value is not string or value type")
 											}
 											Else {
+												# report state
+												Write-Host ("$Hostname,$ComputerName,$Name - ...adding value of '$ExpandString' expand string from $ExpandSource")
+
 												# add AD Computer property from JSON file to hashtable
 												$ExpandStrings[$ExpandString] = $ADComputerHashtable[$ExpandString]
 											}
@@ -4286,7 +4302,7 @@ Process {
 										# if expand string already present in hashtable...
 										If ($ExpandStrings.ContainsKey($ExpandString)) {
 											# report state
-											Write-Host ("$Hostname,$ComputerName,$Name - skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
+											Write-Host ("$Hostname,$ComputerName,$Name - ...skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
 										}
 										Else {
 											# retrieve plaintext password from credential object
@@ -4308,6 +4324,9 @@ Process {
 												throw $_
 											}
 
+											# report state
+											Write-Host ("$Hostname,$ComputerName,$Name - ...adding value of '$ExpandString' expand string from $ExpandSource")
+
 											# add encoded plaintext password to expand strings hashtable
 											$ExpandStrings['AdministratorPassword'] = $EncodedAdministratorPassword
 										}
@@ -4324,9 +4343,12 @@ Process {
 										# if expand string already present in hashtable...
 										If ($ExpandStrings.ContainsKey($ExpandString)) {
 											# report state
-											Write-Host ("$Hostname,$ComputerName,$Name - skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
+											Write-Host ("$Hostname,$ComputerName,$Name - ...skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
 										}
 										Else {
+											# report state
+											Write-Host ("$Hostname,$ComputerName,$Name - ...adding value of '$ExpandString' expand string from $ExpandSource")
+
 											# add plaintext unattended join password to expand strings hashtable
 											$ExpandStrings['Username'] = $DomainJoinCredential.GetNetworkCredential().Username
 										}
@@ -4337,9 +4359,12 @@ Process {
 										# if expand string already present in hashtable...
 										If ($ExpandStrings.ContainsKey($ExpandString)) {
 											# report state
-											Write-Host ("$Hostname,$ComputerName,$Name - skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
+											Write-Host ("$Hostname,$ComputerName,$Name - ...skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
 										}
 										Else {
+											# report state
+											Write-Host ("$Hostname,$ComputerName,$Name - ...adding value of '$ExpandString' expand string from $ExpandSource")
+
 											# add plaintext unattended join password to expand strings hashtable
 											$ExpandStrings['Password'] = $DomainJoinCredential.GetNetworkCredential().Password
 										}
