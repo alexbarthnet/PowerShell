@@ -44,6 +44,9 @@ Relative path to folder containing FOD resources on the FOD ISO image. The defau
 .PARAMETER UpdateAllWindowsImages
 Switch parameter to update all Windows images in the WIM file regardless of Index value in the ExpandStrings hashtable.
 
+.PARAMETER AddVerboseStatusToSetup
+Switch parameter to add the Verbose Status to the offline registry in the Windows image(s)
+
 .PARAMETER OptionalFeaturesToDisable
 String array containing the names of Windows Optional Features to disable in the Windows image(s).
 
@@ -104,6 +107,8 @@ param(
 	[string]$RelativePathToFeaturesFolder = 'LanguagesAndOptionalFeatures',
 	[Parameter()]
 	[switch]$UpdateAllWindowsImages,
+	[Parameter()]
+	[switch]$AddVerboseStatusToSetup,
 	[Parameter()]
 	[string[]]$OptionalFeaturesToDisable,
 	[Parameter()]
@@ -314,6 +319,7 @@ begin {
 	$ImagePathForSWM = "$TemporaryPathForISO\sources\install.swm"
 	$UpdatePs1OnWIM = "$TemporaryPathForWIM\Windows\Update-Windows.ps1"
 	$InvokePs1OnWIM = "$TemporaryPathForWIM\Windows\Invoke-ScriptsFromRemovableMedia.ps1"
+	$SoftwareHiveOnWIM = "$TemporaryPathForWIM\Windows\System32\Config\Software"
 }
 
 process {
@@ -332,6 +338,7 @@ process {
 		'PathToUpdateScript'
 		'PathToInvokeScript'
 		'PathToDriverFolder'
+		'AddVerboseStatusToSetup'
 		'OptionalFeaturesToDisable'
 		'OptionalFeaturesToEnable'
 		'CapabilitiesToRemove'
@@ -649,6 +656,60 @@ process {
 							Write-Warning -Message "could not add '$CapabilityName' capability to WIM: $($_.Exception.Message)"
 						}
 					}
+				}
+			}
+
+			# if verbose status in setup requested...
+			if ($AddVerboseStatusToSetup) {
+				# report state
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Loading SOFTWARE registry hive in WIM', $SoftwareHiveOnWIM
+
+				# load software hive
+				try {
+					$Process = Start-Process -PassThru -Wait -WindowStyle Hidden -FilePath 'reg.exe' -ArgumentList "load HKLM\OFFLINE $SoftwareHiveOnWIM"
+				}
+				catch {
+					return $_
+				}
+
+				# if process exit is not 0...
+				if ($Process.ExitCode -ne 0) {
+					Write-Warning -Message "could not load SOFTWARE registry hive in WIM: $SoftwareHiveOnWIM"
+					return
+				}
+
+				# report state
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating SOFTWARE registry hive in WIM', $SoftwareHiveOnWIM
+
+				# load software hive
+				try {
+					$Process = Start-Process -PassThru -Wait -WindowStyle Hidden -FilePath 'reg.exe' -ArgumentList "add HKLM\OFFLINE\Microsoft\Windows\CurrentVersion\Policies\System /v VerboseStatus /t REG_DWORD /d 1 /f"
+				}
+				catch {
+					return $_
+				}
+
+				# if process exit is not 0...
+				if ($Process.ExitCode -ne 0) {
+					Write-Warning -Message "could not update SOFTWARE registry hive in WIM: $SoftwareHiveOnWIM"
+					return
+				}
+
+				# report state
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Unloading SOFTWARE registry hive in WIM', $SoftwareHiveOnWIM
+
+				# load software hive
+				try {
+					$Process = Start-Process -PassThru -Wait -WindowStyle Hidden -FilePath 'reg.exe' -ArgumentList "unload HKLM\OFFLINE"
+				}
+				catch {
+					return $_
+				}
+
+				# if process exit is not 0...
+				if ($Process.ExitCode -ne 0) {
+					Write-Warning -Message "could not unload SOFTWARE registry hive in WIM: $SoftwareHiveOnWIM"
+					return
 				}
 			}
 
