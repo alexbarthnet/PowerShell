@@ -1,4 +1,4 @@
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = 'Relative')]
 param(
     [Parameter(DontShow)]
     [string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -6,11 +6,13 @@ param(
     [string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
     [Parameter(DontShow)]
     [string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.'),
-    [Parameter(Position = 0, Mandatory)]
+    [Parameter(Position = 0, Mandatory, ParameterSetName = 'Relative')]
+    [string]$RelativePath,
+    [Parameter(Position = 0, Mandatory, ParameterSetName = 'Explicit')]
     [string]$Path,
-    [Parameter(Position = 1, Mandatory)]
+    [Parameter(Position = 1, Mandatory, ParameterSetName = 'Explicit')]
     [string]$TargetPath,
-    [Parameter(Position = 2)]
+    [Parameter()]
     [string]$AdminAccounts
 )
 
@@ -39,6 +41,15 @@ catch {
 if ($WindowsFeature.ExitCode -eq 'Success') {
     # restart DFS-N service to address WMI issues
     Restart-Service -Name 'DFS'
+}
+
+# if relative path provided...
+If ($PSBoundParameters.ContainsKey('RelativePath')) {
+    # define path from domain name and relative path
+    $Path = '\\{0}\{1}' -f $DomainName, $RelativePath
+
+    # define target path from DNS host name and relative path
+    $TargetPath = '\\{0}\{1}' -f $DnsHostName, $RelativePath
 }
 
 # check for existing DFS-N root 
