@@ -4185,7 +4185,6 @@ Process {
 								$CopyVHDFromParams = @{
 									VM            = $VM
 									Path          = $OSDeployment.FilePath
-									ExpandStrings = $ExpandStrings
 								}
 
 								# define optional parameters for Copy-VHDFromParams
