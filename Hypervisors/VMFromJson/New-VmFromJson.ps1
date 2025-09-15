@@ -4129,6 +4129,9 @@ Process {
 						# swithc on Method
 						switch ($OSDeployment.Method) {
 							'ISO' {
+								# report state
+								Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via ISO file")
+
 								# define parameters for Add-IsoToVM
 								$AddIsoToVM = @{
 									VM   = $VM
@@ -4137,7 +4140,6 @@ Process {
 
 								# mount ISO file on VM
 								Try {
-									Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via ISO file")
 									Add-IsoToVM @AddIsoToVM
 								}
 								Catch {
@@ -4146,6 +4148,9 @@ Process {
 								}
 							}
 							'SCCM' {
+								# report state
+								Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via PXE boot and SCCM")
+
 								# if device variables provided...
 								If ($OSDeployment.DeviceVariables) {
 									# convert property from JSON to hashtable
@@ -4172,7 +4177,6 @@ Process {
 
 								# add VM to SCCM
 								Try {
-									Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via PXE boot and SCCM")
 									Add-DeviceToSccm @AddDeviceToSccm
 								}
 								Catch {
@@ -4181,6 +4185,9 @@ Process {
 								}
 							}
 							'VHD' {
+								# report state
+								Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via VHD file")
+
 								# define required parameters for Copy-VHDFromParams
 								$CopyVHDFromParams = @{
 									VM            = $VM
@@ -4200,7 +4207,6 @@ Process {
 
 								# replace new VM disk with existing VHD file
 								Try {
-									Write-Host ("$Hostname,$ComputerName,$Name - VM will be provisioned via VHD file")
 									Copy-VHDFromParams @CopyVHDFromParams
 								}
 								Catch {
@@ -4210,6 +4216,9 @@ Process {
 
 								# if unattend file defined...
 								If (![string]::IsNullOrEmpty($OSDeployment.UnattendFile)) {
+									# report state
+									Write-Host ("$Hostname,$ComputerName,$Name - VM will be configured via XML file")
+
 									# if expand strings defined in JSON file...
 									If ($null -ne $OSDeployment.ExpandStrings) {
 										# create hashtable from expand strings property
@@ -4356,7 +4365,6 @@ Process {
 
 									# edit VHD file to include unattend file
 									Try {
-										Write-Host ("$Hostname,$ComputerName,$Name - VM will be configured via XML file")
 										Edit-VHDFromParams @EditVHDFromParams
 									}
 									Catch {
