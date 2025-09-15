@@ -4256,10 +4256,13 @@ Process {
 									}
 
 									# if AD Computer object defined in JSON file...
-									If ($null -ne $Json.$Name.ADComputer) {
+									If ($null -ne $JsonData.$Name.ADComputer) {
+										# retrieve first entry from ADComputer collection
+										$ADComputer = $JsonData.$Name.ADComputer | Select-Object -First 1
+
 										# create hashtable from AD Computer object
 										try {
-											$ADComputerHashtable = ConvertTo-Collection -InputObject $Json.$Name.ADComputer
+											$ADComputerHashtable = ConvertTo-Collection -InputObject $ADComputer
 										}
 										catch {
 											Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create hashtable from ADComputer")
