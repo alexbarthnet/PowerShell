@@ -3250,7 +3250,7 @@ Begin {
 		}
 
 		# update argument list for Set-Content
-		$InvokeCommand['ArgumentList']['Content'] = $Content
+		$InvokeCommand['ArgumentList']['Value'] = $Content
 
 		# set content of file on VHD
 		Try {
@@ -3259,7 +3259,7 @@ Begin {
 				Param($ArgumentList)
 				$GetContent = @{
 					Path        = $ArgumentList['Path']
-					Content     = $ArgumentList['Content']
+					Value       = $ArgumentList['Value']
 					NoNewline   = $true
 					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 				}
