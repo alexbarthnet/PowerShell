@@ -4331,7 +4331,7 @@ Process {
 											Write-Host ("$Hostname,$ComputerName,$Name - ...adding value of '$ExpandString' expand string from $ExpandSource")
 
 											# add encoded plaintext password to expand strings hashtable
-											$ExpandStrings['AdministratorPassword'] = $EncodedAdministratorPassword
+											$ExpandStrings[$ExpandString] = $EncodedAdministratorPassword
 										}
 									}
 
@@ -4353,7 +4353,7 @@ Process {
 											Write-Host ("$Hostname,$ComputerName,$Name - ...adding value of '$ExpandString' expand string from $ExpandSource")
 
 											# add plaintext unattended join password to expand strings hashtable
-											$ExpandStrings['Username'] = $DomainJoinCredential.GetNetworkCredential().Username
+											$ExpandStrings[$ExpandString] = $DomainJoinCredential.GetNetworkCredential().Username
 										}
 
 										# define expand string
@@ -4369,7 +4369,7 @@ Process {
 											Write-Host ("$Hostname,$ComputerName,$Name - ...adding value of '$ExpandString' expand string from $ExpandSource")
 
 											# add plaintext unattended join password to expand strings hashtable
-											$ExpandStrings['Password'] = $DomainJoinCredential.GetNetworkCredential().Password
+											$ExpandStrings[$ExpandString] = $DomainJoinCredential.GetNetworkCredential().Password
 										}
 									}
 
