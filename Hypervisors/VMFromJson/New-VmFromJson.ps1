@@ -3259,7 +3259,7 @@ Begin {
 				Param($ArgumentList)
 				$GetContent = @{
 					Path        = $ArgumentList['Path']
-					Content     = $ArgumentList['Content']
+					Value       = $ArgumentList['Value']
 					NoNewline   = $true
 					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 				}
