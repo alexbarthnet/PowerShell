@@ -10,17 +10,17 @@ Param(
 # if identity provided...
 If ($PSBoundParameters.ContainsKey('Identity')) {
 	# report state
-	Write-Host 'Searching for OneDrive container where name matches the Identity parameter...'
+	Write-Host 'Searching for mounted OneDrive container where name matches the Identity parameter...'
 
 	# define filter script
-	$FilterScript = { $_.Name -match '^OneDrive - ' -and $_.Name -match $Identity }
+	$FilterScript = { $_.Name -match '^OneDrive' -and $_.Attributes -band [System.IO.FileAttributes]::ReparsePoint -and $_.Name -match $Identity }
 }
 Else {
 	# report state
-	Write-Host 'Searching for OneDrive container...'
+	Write-Host 'Searching for mounted OneDrive container...'
 
 	# define filter script
-	$FilterScript = { $_.Name -match '^OneDrive' }
+	$FilterScript = { $_.Name -match '^OneDrive' -and $_.Attributes -band [System.IO.FileAttributes]::ReparsePoint }
 }
 
 # retrieve OneDrice container(s) matching filterscript
