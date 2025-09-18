@@ -360,7 +360,7 @@ begin {
 
     # assert script state object exists
     try {
-        $ScriptState = Assert-ADScriptState -Identity $ScriptObjectIdentity -Attribute $Attribute -Reset:$Reset
+        Assert-ADScriptStateObject -Reset:$Reset
     }
     catch {
         throw $_
@@ -375,7 +375,7 @@ begin {
 process {
     # get script state
     try {
-        $ScriptState = Get-ADScriptState -Identity $ScriptObjectIdentity -Attribute $Attribute
+        $ScriptState = Get-ADScriptStateObject
     }
     catch {
         Write-Warning "could not retrieve script state object: $($_.Exception.Message)"
@@ -464,7 +464,7 @@ process {
 
     # set script state
     try {
-        Set-ADScriptState -Identity $ScriptObjectIdentity -Attribute $Attribute -ScriptState $ScriptState
+        $ScriptState | Set-ADScriptStateObject
     }
     catch {
         Write-Warning "could not update script state object: $($_.Exception.Message)"
