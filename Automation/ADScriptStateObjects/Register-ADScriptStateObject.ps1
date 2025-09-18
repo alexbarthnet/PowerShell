@@ -68,7 +68,7 @@ catch {
 
 # retrieve security identifier
 try {
-    $SecurityIdentifier = Get-ADSecurityIdentifier -Principal $Principal -ErrorAction 'Stop'
+    $SecurityIdentifier = Get-ADSecurityIdentifier -Server $Server -Principal $Principal -ErrorAction 'Stop'
 }
 catch {
     Write-Warning -Message "could not retrieve security identifier for principal: $($_.Exception.Message)"
@@ -86,7 +86,7 @@ catch {
 
 # update container security
 try {
-    Update-ADSecurity -Identity $Identity -AccessRule $AccessRule -ErrorAction 'Stop'
+    Update-ADSecurity -Server $Server -Identity $Identity -AccessRule $AccessRule -ErrorAction 'Stop'
 }
 catch {
     Write-Warning -Message "could not update access rules on container: $($_.Exception.Message)"
