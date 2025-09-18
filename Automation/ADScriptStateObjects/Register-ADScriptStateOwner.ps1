@@ -13,29 +13,29 @@ param(
     # container for program data
     [Parameter(DontShow)]
     [string]$ProgramDataContainer = "CN=Program Data,$DomainPath",
-    # name for script state container
+    # name for script states container
     [Parameter(DontShow)]
-    [string]$ScriptStateContainerName = 'ScriptState',
+    [string]$ScriptStatesContainerName = 'ScriptStates',
     # container for script states
     [Parameter(DontShow)]
-    [string]$ScriptStateContainer = "CN=$ScriptStateContainerName,$ProgramDataContainer"
+    [string]$ScriptStatesContainer = "CN=$ScriptStatesContainerName,$ProgramDataContainer"
 )
 
 # retrieve script state container
 try {
-    $null = Get-ADObject -Server $Server -Identity $ScriptStateContainer -ErrorAction 'Stop'
+    $null = Get-ADObject -Server $Server -Identity $ScriptStatesContainer -ErrorAction 'Stop'
 }
 catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
     # create script state container
     try {
-        New-ADObject -Server $Server -Name $ScriptStateContainerName -Path $ProgramDataContainer -Type 'Container'
+        New-ADObject -Server $Server -Name $ScriptStatesContainerName -Path $ProgramDataContainer -Type 'Container'
     }
     catch {
         Write-Warning -Message "could not create script state container: $($_.Exception.Message)"
         throw $_
     }
     # report state
-    Write-Host "created script state container: $ScriptStateContainer"
+    Write-Host "created script state container: $ScriptStatesContainer"
 }
 catch {
     Write-Warning -Message "could not retrieve script state container: $($_.Exception.Message)"
@@ -62,7 +62,7 @@ catch {
 
 # update container security
 try {
-    Update-ADSecurity -Server $Server -Identity $ScriptStateContainer -AccessRule $AccessRule -ErrorAction 'Stop'
+    Update-ADSecurity -Server $Server -Identity $ScriptStatesContainer -AccessRule $AccessRule -ErrorAction 'Stop'
 }
 catch {
     Write-Warning -Message "could not update access rules on container: $($_.Exception.Message)"
@@ -70,4 +70,4 @@ catch {
 }
 
 # report state
-Write-Host "granted '$Principal' principal rights to manage script state container: $ScriptStateContainer"
+Write-Host "granted '$Principal' principal rights to manage script state container: $ScriptStatesContainer"

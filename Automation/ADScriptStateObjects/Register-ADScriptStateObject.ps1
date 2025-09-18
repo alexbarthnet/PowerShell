@@ -16,32 +16,32 @@ param(
     # container for program data
     [Parameter(DontShow)]
     [string]$ProgramDataContainer = "CN=Program Data,$DomainPath",
-    # name for script state container
+    # name for script states container
     [Parameter(DontShow)]
-    [string]$ScriptStateContainerName = 'ScriptState',
+    [string]$ScriptStatesContainerName = 'ScriptStates',
     # container for script states
     [Parameter(DontShow)]
-    [string]$ScriptStateContainer = "CN=$ScriptStateContainerName,$ProgramDataContainer",
+    [string]$ScriptStatesContainer = "CN=$ScriptStatesContainerName,$ProgramDataContainer",
     # container for named script
     [Parameter(DontShow)]
-    [string]$Identity = "CN=$ScriptName,$ScriptStateContainer"
+    [string]$Identity = "CN=$ScriptName,$ScriptStatesContainer"
 )
 
 # retrieve script state container
 try {
-    $null = Get-ADObject -Server $Server -Identity $ScriptStateContainer -ErrorAction 'Stop'
+    $null = Get-ADObject -Server $Server -Identity $ScriptStatesContainer -ErrorAction 'Stop'
 }
 catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
     # create script state container
     try {
-        New-ADObject -Server $Server -Name $ScriptStateContainerName -Path $ProgramDataContainer -Type 'Container' -ErrorAction 'Stop'
+        New-ADObject -Server $Server -Name $ScriptStatesContainerName -Path $ProgramDataContainer -Type 'Container' -ErrorAction 'Stop'
     }
     catch {
         Write-Warning -Message "could not create script state container: $($_.Exception.Message)"
         throw $_
     }
     # report state
-    Write-Host "created script state container: $ScriptStateContainer"
+    Write-Host "created script state container: $ScriptStatesContainer"
 }
 catch {
     Write-Warning -Message "could not retrieve script state container: $($_.Exception.Message)"
@@ -55,7 +55,7 @@ try {
 catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
     # create container for named script
     try {
-        New-ADObject -Server $Server -Name $ScriptName -Path $ScriptStateContainer -Type 'Container' -ErrorAction 'Stop'
+        New-ADObject -Server $Server -Name $ScriptName -Path $ScriptStatesContainer -Type 'Container' -ErrorAction 'Stop'
     }
     catch {
         Write-Warning -Message "could not create container for provided script name: $($_.Exception.Message)"
