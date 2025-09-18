@@ -24,27 +24,6 @@ param(
     [string]$Identity = "CN=$ScriptName,$ScriptStateContainer"
 )
 
-# retrieve container for all scripts
-try {
-    $null = Get-ADObject -Server $Server -Identity $ScriptStateContainer -ErrorAction 'Stop'
-}
-catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
-    # create container for all scripts
-    try {
-        New-ADObject -Server $Server -Name 'Scripts' -Path $ProgramDataContainer -Type 'Container'
-    }
-    catch {
-        Write-Warning -Message "could not create container for all scripts: $($_.Exception.Message)"
-        throw $_
-    }
-    # report state
-    Write-Host "created container for all scripts: $ScriptStateContainer"
-}
-catch {
-    Write-Warning -Message "could not retrieve container for all scripts: $($_.Exception.Message)"
-    throw $_
-}
-
 # retrieve container for named script
 try {
     $null = Get-ADObject -Server $Server -Identity $Identity -Properties 'nTSecurityDescriptor'
