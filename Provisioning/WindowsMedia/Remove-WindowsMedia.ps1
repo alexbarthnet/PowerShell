@@ -91,9 +91,62 @@ begin {
 			$PSCmdlet.ThrowTerminatingError($_)
 		}
 	}
+
+	# create base temporary path
+	try {
+		$TemporaryPath = New-Item -ItemType Directory -Path $global:WindowsMediaStagingPath -Force -ErrorAction 'Stop'
+	}
+	catch {
+		$PSCmdlet.ThrowTerminatingError($_)
+	}
+
+	# create temporary path for DISM scratch directory
+	try {
+		$TemporaryPathForDSD = New-Item -ItemType Directory -Path $TemporaryPath -Name 'DSD' -Force -ErrorAction 'Stop'
+	}
+	catch {
+		$PSCmdlet.ThrowTerminatingError($_)
+	}
 }
 
 process {
+	# report state
+	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Checking for mounted Windows images in staging path', $global:WindowsMediaStagingPath
+
+	# retrieve mounted Windows images
+	try {
+		$MountedWindowsImages = Get-WindowsImage -Mounted -ErrorAction 'Stop'
+	}
+	catch {
+		Write-Warning -Message 'could not retrieve mounted Windows images'
+		$PSCmdlet.ThrowTerminatingError($_)
+	}
+
+	# loop through mounted Windows images
+	foreach ($MountedWindowsImage in $MountedWindowsImages) {
+		# define booleans
+		$MountPathInStagingPath = $MountedWindowsImage.Path.StartsWith($global:WindowsMediaStagingPath, [System.StringComparison]::InvariantCultureIgnoreCase)
+		$ImagePathInStagingPath = $MountedWindowsImage.ImagePath.StartsWith($global:WindowsMediaStagingPath, [System.StringComparison]::InvariantCultureIgnoreCase)
+
+		# if mount path or image path are in staging path...
+		if ($MountPathInStagingPath -or $ImagePathInStagingPath) {
+			# report state
+			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Dismounting Windows images in staging path', $MountedWindowsImage.Path
+
+			# dismount windows image discarding changes
+			try {
+				Dismount-WindowsImage -Path $MountedWindowsImage.Path -Discard -ScratchDirectory $TemporaryPathForDSD -ErrorAction 'Stop'
+			}
+			catch {
+				Write-Warning -Message 'could not check staging path for existing files and folders'
+				$PSCmdlet.ThrowTerminatingError($_)
+			}
+
+			# report state
+			"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Dismounted Windows media in staging path'
+		}
+	}
+
 	# report state
 	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Checking for Windows media in staging path', $global:WindowsMediaStagingPath
 
