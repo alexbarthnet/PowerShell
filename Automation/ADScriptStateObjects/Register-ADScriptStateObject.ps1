@@ -47,7 +47,7 @@ catch {
 
 # retrieve container for named script
 try {
-    $null = Get-ADObject -Server $Server -Identity $Identity -Properties 'nTSecurityDescriptor'
+    $null = Get-ADObject -Server $Server -Identity $Identity -ErrorAction 'Stop'
 }
 catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
     # create container for named script

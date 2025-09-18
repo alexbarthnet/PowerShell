@@ -26,7 +26,7 @@ param(
 
 # retrieve container for named script
 try {
-    $null = Get-ADObject -Server $Server -Identity $Identity -Properties 'nTSecurityDescriptor'
+    $null = Get-ADObject -Server $Server -Identity $Identity -ErrorAction 'Stop'
 }
 catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
     Write-Warning -Message "could not locate container for provided script name"
@@ -39,7 +39,7 @@ catch {
 
 # remove container
 try {
-    Remove-ADObject -Server $Server -Identity $Identity -Recursive -Confirm:$false
+    Remove-ADObject -Server $Server -Identity $Identity -Recursive -Confirm:$false -ErrorAction 'Stop'
 }
 catch {
     Write-Warning -Message "could not remove containerfor provided script name: $($_.Exception.Message)"
