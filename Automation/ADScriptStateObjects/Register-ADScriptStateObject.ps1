@@ -16,32 +16,35 @@ param(
     # container for program data
     [Parameter(DontShow)]
     [string]$ProgramDataContainer = "CN=Program Data,$DomainPath",
-    # container for all scripts
+    # name for script state container
     [Parameter(DontShow)]
-    [string]$ScriptStateContainer = "CN=ScriptState,$ProgramDataContainer",
+    [string]$ScriptStateContainerName = 'ScriptState',
+    # container for script states
+    [Parameter(DontShow)]
+    [string]$ScriptStateContainer = "CN=$ScriptStateContainerName,$ProgramDataContainer",
     # container for named script
     [Parameter(DontShow)]
     [string]$Identity = "CN=$ScriptName,$ScriptStateContainer"
 )
 
-# retrieve container for all scripts
+# retrieve script state container
 try {
     $null = Get-ADObject -Server $Server -Identity $ScriptStateContainer -ErrorAction 'Stop'
 }
 catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
-    # create container for all scripts
+    # create script state container
     try {
-        New-ADObject -Server $Server -Name 'Scripts' -Path $ProgramDataContainer -Type 'Container'
+        New-ADObject -Server $Server -Name $ScriptStateContainerName -Path $ProgramDataContainer -Type 'Container' -ErrorAction 'Stop'
     }
     catch {
-        Write-Warning -Message "could not create container for all scripts: $($_.Exception.Message)"
+        Write-Warning -Message "could not create script state container: $($_.Exception.Message)"
         throw $_
     }
     # report state
-    Write-Host "created container for all scripts: $ScriptStateContainer"
+    Write-Host "created script state container: $ScriptStateContainer"
 }
 catch {
-    Write-Warning -Message "could not retrieve container for all scripts: $($_.Exception.Message)"
+    Write-Warning -Message "could not retrieve script state container: $($_.Exception.Message)"
     throw $_
 }
 

@@ -16,9 +16,12 @@ param(
     # container for program data
     [Parameter(DontShow)]
     [string]$ProgramDataContainer = "CN=Program Data,$DomainPath",
-    # container for all scripts
+    # name for script state container
     [Parameter(DontShow)]
-    [string]$ScriptStateContainer = "CN=ScriptState,$ProgramDataContainer",
+    [string]$ScriptStateContainerName = 'ScriptState',
+    # container for script states
+    [Parameter(DontShow)]
+    [string]$ScriptStateContainer = "CN=$ScriptStateContainerName,$ProgramDataContainer",
     # container for named script
     [Parameter(DontShow)]
     [string]$Identity = "CN=$ScriptName,$ScriptStateContainer"
