@@ -33,24 +33,24 @@ Catch {
 
 # if multiple OneDrive containers found with Identity...
 If ($OneDrive.Count -gt 1 -and $PSBoundParameters.ContainsKey('Identity')) {
-	Write-Warning -Message 'multiple OneDrive containers found in the user profile folder; the Identity parameter did not limit scope to single container'
+	Write-Warning -Message 'multiple mounted OneDrive containers found in the user profile folder; the Identity parameter did not limit scope to single container'
 	Return
 }
 
 # if multiple OneDrive containers found without Identity...
 If ($OneDrive.Count -gt 1) {
-	Write-Warning -Message 'multiple OneDrive containers found in the user profile folder; the Identity parameter was not provided to limit scope to single container'
+	Write-Warning -Message 'multiple mounted OneDrive containers found in the user profile folder; the Identity parameter was not provided to limit scope to single container'
 	Return
 }
 
 # if no OneDrive containers found....
 If ($OneDrive.Count -eq 0) {
-	Write-Warning -Message 'a OneDrive container was not found in the user profile folder'
+	Write-Warning -Message 'a mounted OneDrive container was not found in the user profile folder'
 	Return
 }
 
 # report OneDrive container:
-Write-Host "...found OneDrive container: $($OneDrive.FullName)"
+Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 
 # retrieve folders in OneDrive container
 Try {
