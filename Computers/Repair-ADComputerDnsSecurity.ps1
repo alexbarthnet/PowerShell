@@ -311,15 +311,11 @@ begin {
 
         # retrieve script state object from JSON
         try {
-            $ScriptState = ConvertFrom-Json -InputObject $ScriptStateAsJson
+            ConvertFrom-Json -InputObject $ScriptStateAsJson -ErrorAction 'Stop'
         }
         catch {
-            # create script state object from default object
-            $ScriptState = $ScriptStateDefaultObject
+            return $_
         }
-
-        # return script state
-        return $ScriptState
     }
 
     function Set-ADScriptStateObject {
@@ -350,7 +346,7 @@ begin {
         }
     }
 
-    # assert script state parameters
+    # assert script state base objects exist
     try {
         Assert-ADScriptStateBaseObjects
     }
