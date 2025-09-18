@@ -335,7 +335,7 @@ begin {
 
         # convert script state to JSON
         try {
-            $ScriptStateAsJson = ConvertTo-Json -InputObject $ScriptState
+            $ScriptStateAsJson = ConvertTo-Json -InputObject $ScriptState -Depth 100 -ErrorAction 'Stop'
         }
         catch {
             return $_
