@@ -253,9 +253,8 @@ begin {
         param (
             [Parameter(DontShow)]
             [string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
-            [switch]$Reset,
-            [string]$Identity,
-            [string]$Attribute = 'notes'
+            [string]$Identity = $script:ScriptObjectIdentity,
+            [switch]$Reset
         )
 
         # retrieve AD script object
@@ -284,7 +283,7 @@ begin {
         if ($Reset.IsPresent -or $NewADObject) {
             # update AD script object with default state
             try {
-                Set-ADScriptState -Server $Server -Identity $Identity -Attribute $Attribute -ScriptState $ScriptStateDefaultObject
+                $ScriptStateDefaultObject | Set-ADScriptStateObject -Server $Server -Identity $Identity
             }
             catch {
                 Write-Warning -Message "could not update '$Identity' object for '$script:MyCommandPathBaseName' script: $($_.Exception.Message)"
@@ -299,13 +298,12 @@ begin {
             # PDC of the domain
             [Parameter(DontShow)]
             [string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
-            [string]$Identity = $script:ScriptObjectIdentity,
-            [string]$Attribute = 'notes'
+            [string]$Identity = $script:ScriptObjectIdentity
         )
 
         # retrieve script state as JSON from attribute on AD object
         try {
-            $ScriptStateAsJson = Get-ADObject -Server $Server -Identity $Identity -Properties $Attribute | Select-Object -ExpandProperty $Attribute
+            $ScriptStateAsJson = Get-ADObject -Server $Server -Identity $Identity -Properties 'notes' | Select-Object -ExpandProperty 'notes'
         }
         catch {
             return $_
@@ -330,9 +328,9 @@ begin {
             # PDC of the domain
             [Parameter(DontShow)]
             [string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
-            [object]$ScriptState,
             [string]$Identity = $script:ScriptObjectIdentity,
-            [string]$Attribute = 'notes'
+            [Parameter(ValueFromPipeline)]
+            [object]$ScriptState
         )
 
         # convert script state to JSON
@@ -345,7 +343,7 @@ begin {
 
         # store script state as JSON in attribute on AD object
         try {
-            Set-ADObject -Server $Server -Identity $Identity -Replace @{ $Attribute = $ScriptStateAsJson }
+            Set-ADObject -Server $Server -Identity $Identity -Replace @{ 'notes' = $ScriptStateAsJson }
         }
         catch {
             return $_
