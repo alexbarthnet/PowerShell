@@ -4,7 +4,13 @@
 param (
     # active directory rights for DNS record
     [Parameter(DontShow)]
-    [System.DirectoryServices.ActiveDirectoryRights]$ActiveDirectoryRights = 'CreateChild, DeleteChild, ListChildren, ReadProperty, DeleteTree, ExtendedRight, Delete, GenericWrite, WriteDacl, WriteOwner',
+    [System.DirectoryServices.ActiveDirectoryRights]$PreferredActiveDirectoryRights = 'CreateChild, DeleteChild, ListChildren, ReadProperty, DeleteTree, ExtendedRight, Delete, GenericWrite, WriteDacl, WriteOwner',
+    # active directory rights for DNS record
+    [Parameter(DontShow)]
+    [System.DirectoryServices.ActiveDirectoryRights]$AlternateActiveDirectoryRights = 'GenericAll',
+    # active directory rights for DNS record
+    [Parameter(DontShow)]
+    [System.DirectoryServices.ActiveDirectoryRights[]]$ActiveDirectoryRights = @($PreferredActiveDirectoryRights, $AlternateActiveDirectoryRights),
     # name of the domain
     [Parameter(DontShow)]
     [string]$DomainName = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().Name,
@@ -124,7 +130,7 @@ begin {
         # loop through access rules
         foreach ($AccessRule in $AccessRules) {
             # if identity reference in access rule for computer has incorrect...
-            if ($AccessRule.IdentityReference -eq $Computer.SID -and $AccessRule.ActiveDirectoryRights -ne $ActiveDirectoryRights) {
+            if ($AccessRule.IdentityReference -eq $Computer.SID -and $AccessRule.ActiveDirectoryRights -notin $ActiveDirectoryRights) {
                 # remove access rule from NT security descriptor
                 $nTSecurityDescriptor.RemoveAccessRuleSpecific($AccessRule)
 
@@ -140,7 +146,7 @@ begin {
         # if computer SID not in identity references...
         if ($Computer.SID -notin $AccessRules.IdentityReference) {
             # create access rule
-            $NewAccessRule = [System.DirectoryServices.ActiveDirectoryAccessRule]::new($Computer.SID, $ActiveDirectoryRights, 'Allow')
+            $NewAccessRule = [System.DirectoryServices.ActiveDirectoryAccessRule]::new($Computer.SID, $PreferredActiveDirectoryRights, 'Allow')
 
             # add access rule
             $nTSecurityDescriptor.AddAccessRule($NewAccessRule)
