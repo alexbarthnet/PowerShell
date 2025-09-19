@@ -117,6 +117,15 @@ function Restart-OneDrive {
 		# get current window handle
 		$MainWindowHandle = [System.Diagnostics.Process]::GetCurrentProcess().MainWindowHandle
 
+		# if current window handle is 0...
+		If ([System.Diagnostics.Process]::GetCurrentProcess().MainWindowHandle -eq 0) {
+			# get parent process via Cim
+			$ParentProcess = Get-CimInstance -ClassName 'Win32_Process' -Filter "processid = $([System.Diagnostics.Process]::GetCurrentProcess().Id)"
+
+			# get parent window handle
+			$MainWindowHandle = [System.Diagnostics.Process]::GetProcessById($ParentProcess.Id).MainWindowHandle
+		}
+
 		# get current session id
 		$CurrentSessionId = [System.Diagnostics.Process]::GetCurrentProcess().SI
 
