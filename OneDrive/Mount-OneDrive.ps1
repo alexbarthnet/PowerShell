@@ -1,6 +1,7 @@
 [CmdletBinding(SupportsShouldProcess)]
 Param(
 	[string]$Identity,
+	[switch]$WaitForOneDrive,
 	[switch]$ClearHiddenItemsFromEmptyFolders,
 	[switch]$CreateMissingFolders,
 	[string[]]$ExcludeOneDriveFolders,
@@ -27,8 +28,28 @@ Else {
 Try {
 	$OneDrive = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object -FilterScript $FilterScript
 }
-Catch {
-	Return $_
+catch {
+	return $_
+}
+
+# if OneDrive containers not found and wait for OneDrive requested....
+if ($OneDrive.Count -eq 0 -and $WaitForOneDrive) {
+	# report state
+	Write-Host 'Waiting for OneDrive container...'
+
+	# while OneDrive containers not found
+	while ($OneDrive.Count -eq 0) {
+		# retrieve OneDrive container(s) matching filterscript
+		try {
+			$OneDrive = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object -FilterScript $FilterScript
+		}
+		catch {
+			return $_
+		}
+
+		# sleep 
+		Start-Sleep -Seconds 3
+	}
 }
 
 # if multiple OneDrive containers found with Identity...
