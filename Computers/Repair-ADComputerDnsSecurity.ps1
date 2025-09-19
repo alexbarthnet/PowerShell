@@ -81,7 +81,7 @@ begin {
 
         # retrieve DNS object
         try {
-            $ADObject = Get-ADObject -Server $Server -Identity $Identity -Properties 'dnsRecord', 'nTSecurityDescriptor'
+            $ADObject = Get-ADObject -Server $Server -Identity $Identity -Properties 'dnsRecord', 'nTSecurityDescriptor' -ErrorAction 'Stop'
         }
         catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
             Write-Host "$SamAccountName;dnsRecord;DNS record not found"
@@ -444,7 +444,7 @@ process {
         }
 
         # report state
-        Write-Host "$($ADComputer.SamAccountName);checking computer object"
+        Write-Host "$($ADComputer.SamAccountName);ADComputer;checking computer object"
 
         # repair security
         try {
