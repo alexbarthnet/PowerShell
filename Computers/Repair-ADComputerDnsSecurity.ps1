@@ -89,7 +89,7 @@ begin {
             $ADObject = Get-ADObject @GetADObject
         }
         catch {
-            Write-Host "$SamAccountName;dnsRecord;error retrieving DNS record: $($_.Exception.Message)"
+            Write-Host "$SamAccountName;dnsRecord;error retrieving DNS record object: $($_.Exception.Message)"
             return $_
         }
 		
