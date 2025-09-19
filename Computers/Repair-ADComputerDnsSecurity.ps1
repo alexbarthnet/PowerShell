@@ -453,9 +453,6 @@ process {
         else {
             $DnsRecordAcls_checked++
         }
-
-        # if errored or updated is 5 or more...
-        if ($DnsRecordAcls_errored -ge 5 -or $DnsRecordAcls_updated -ge 5) { return }
     }
 
     # set script state
