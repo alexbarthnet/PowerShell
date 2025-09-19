@@ -93,17 +93,33 @@ begin {
             return $_
         }
 		
-        # TODO: check DNS record length
-        # if DNS record length is not valid...
-        # If ($ADObject.dnsRecord[0].Length) {
-        #     Write-Host "$SamAccountName;dnsRecord;error retrieving DNS record: $($_.Exception.Message)"
-        #     return
-        # }
-
-        # if timestamp in DNS record is empty...
-        if ([System.BitConverter]::ToString($ADObject.dnsRecord[0][20..23]) -eq '00-00-00-00') {
-            Write-Host "$SamAccountName;dnsRecord;skipping static DNS record"
+        # if DNS object not found...
+        if ($null -eq $ADObject) {
+            Write-Host "$SamAccountName;dnsRecord;DNS record object not found"
+            $script:DnsRecordAcls_missing++
             return $false
+        }
+
+        # if DNS object not found...
+        if ($null -eq $ADObject.dnsRecord) {
+            Write-Host "$SamAccountName;dnsRecord;DNS record object with empty attribute"
+            throw "found empty dnsRecord attribute"
+        }
+
+        # loop through DNS records in object
+        foreach ($DnsRecord in $ADObject.dnsRecord) {
+            # if DNS record length is not valid...
+            if ($DnsRecord.Length -le 24) {
+                Write-Host "$SamAccountName;dnsRecord;DNS record object with an invalid attribute length: $($DnsRecord.Length)"
+                throw "found value in dnsRecord attribute less than 24 bytes"
+            }
+
+            # if timestamp in DNS record is empty...
+            if ([System.BitConverter]::ToString($DnsRecord[20..23]) -eq '00-00-00-00') {
+                Write-Host "$SamAccountName;dnsRecord;skipping static DNS record"
+                $script:DnsRecordAcls_skipped++
+                return $false
+            }
         }
 
         # retrieve NT security descriptor
