@@ -443,6 +443,9 @@ process {
             WhatIf   = $WhatIfPreference
         }
 
+        # report state
+        Write-Host "$($ADComputer.SamAccountName);checking computer object"
+
         # repair security
         try {
             $Repaired = Repair-ADComputerDnsRecordAcl @RepairADComputerDnsRecordAcl
