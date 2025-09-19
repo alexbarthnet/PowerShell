@@ -375,8 +375,10 @@ begin {
 
     # define counters
     $DnsRecordAcls_checked = 0
-    $DnsRecordAcls_errored = 0
     $DnsRecordAcls_updated = 0
+    $DnsRecordAcls_skipped = 0
+    $DnsRecordAcls_missing = 0
+    $DnsRecordAcls_errored = 0
 }
 
 process {
@@ -488,5 +490,7 @@ end {
     Write-Host "Stopped: $TimeStopped"
     Write-Host "DNS Records checked: $script:DnsRecordAcls_checked"
     Write-Host "DNS Records updated: $script:DnsRecordAcls_updated"
+    Write-Host "DNS Records skipped: $script:DnsRecordAcls_skipped"
+    Write-Host "DNS Records missing: $script:DnsRecordAcls_missing"
     Write-Host "DNS Records errored: $script:DnsRecordAcls_errored"
 }
