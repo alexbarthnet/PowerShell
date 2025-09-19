@@ -101,6 +101,7 @@ function Restore-ForegroundWindow {
 }
 
 function Restart-OneDrive {
+	[cmdletbinding()]
 	param(
 		[switch]$Force
 	)
@@ -123,19 +124,28 @@ function Restart-OneDrive {
 		$OneDriveProcess = [System.Diagnostics.Process]::GetProcessesByName('OneDrive').Where({ $_.Path -eq $OneDriveExe -and $_.SessionId -eq $CurrentSessionId })
 
 		# shutdown OneDrive via RunAs with the Basic User trust level
-		if ($OneDriveProcess) { Start-Process -WindowStyle Hidden -FilePath $RunAsExe -ArgumentList "/trustlevel:0x20000 `"$OneDriveExe /shutdown`"" }
+		if ($OneDriveProcess) {
+			Write-Verbose -Message 'Shutting down OneDrive'
+			Start-Process -WindowStyle Hidden -FilePath $RunAsExe -ArgumentList "/trustlevel:0x20000 `"$OneDriveExe /shutdown`""
+		}
 
 		# wait for OneDrive process in current session to close
 		do { $OneDriveProcess = [System.Diagnostics.Process]::GetProcessesByName('OneDrive').Where({ $_.Path -eq $OneDriveExe -and $_.SessionId -eq $CurrentSessionId }) } until (!$OneDriveProcess)
 
 		# start OneDrive in the background via RunAs with the Basic User trust level
-		if (!$OneDriveProcess) { Start-Process -WindowStyle Hidden -FilePath $RunAsExe -ArgumentList "/trustlevel:0x20000 `"$OneDriveExe /background`"" }
+		if (!$OneDriveProcess) {
+			Write-Verbose -Message 'Starting OneDrive'
+			Start-Process -WindowStyle Hidden -FilePath $RunAsExe -ArgumentList "/trustlevel:0x20000 `"$OneDriveExe /background`""
+		}
 
 		# wait for OneDrive process to start in current session
 		do { $OneDriveProcess = [System.Diagnostics.Process]::GetProcessesByName('OneDrive').Where({ $_.Path -eq $OneDriveExe -and $_.SessionId -eq $CurrentSessionId }) } until ($OneDriveProcess)
 
 		# wait for OneDrive to load initial window
 		Start-Sleep -Seconds 1
+
+		# report state
+		Write-Verbose -Message 'Restoring original foreground window'
 
 		# restore current foreground window to address bug with /background switch in OneDrive
 		Restore-ForegroundWindow -WindowHandleId $MainWindowHandle
