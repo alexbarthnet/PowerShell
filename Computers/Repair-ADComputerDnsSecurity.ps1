@@ -55,7 +55,6 @@ begin {
         )
 
         # define identity values
-        $Identity = $Computer.dnsHostName
         $SamAccountName = $Computer.SamAccountName
 
         # if DNS host name is empty...
@@ -76,12 +75,18 @@ begin {
             return $false
         }
 
-        # define identity
-        $Identity = 'DC={0},{1}' -f $ExtractedHostName, $DnsServerZone.DistinguishedName
+        # define parameters for Get-ADObject
+        $GetADObject = @{
+            Server      = $Server
+            SearchBase  = $DnsServerZone.DistinguishedName
+            Filter      = "name -eq '$ExtractedHostName'"
+            Properties  = 'dnsRecord', 'nTSecurityDescriptor'
+            ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+        }
 
         # retrieve DNS object
         try {
-            $ADObject = Get-ADObject -Server $Server -Identity $Identity -Properties 'dnsRecord', 'nTSecurityDescriptor' -ErrorAction 'Stop'
+            $ADObject = Get-ADObject @GetADObject
         }
         catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
             Write-Host "$SamAccountName;dnsRecord;DNS record not found"
