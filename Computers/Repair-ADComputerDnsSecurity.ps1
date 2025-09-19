@@ -417,10 +417,10 @@ process {
     # user account control to exclude disabled computer objects
     $Filter = 'primaryGroupId -eq "515" -and userAccountControl -eq "4096"'
 
-    # test when created
-    if ([System.DateTime]::TryParse($ScriptState.WhenCreated, [ref][System.Datetime]::UtcNow) -and -not $All) {
+    # if when created is not a datetime or cannot be parsed as a datetime...
+    if (($ScriptState.WhenCreated -isnot [System.Datetime] -or -not [System.DateTime]::TryParse($ScriptState.WhenCreated, [ref][System.Datetime]::UtcNow))) {
         # warn and set all
-        Write-Warning "forcing 'All' switch to true; could not parse '$($ScriptState.WhenCreated)' value in WhenCreated on ScriptState object as [System.DateTime]"
+        Write-Warning "forcing 'All' switch to true; the value of WhenCreated on the ScriptState object is not or could not be parsed as a [System.DateTime] object"
         $All = $true
     }
 
