@@ -88,10 +88,6 @@ begin {
         try {
             $ADObject = Get-ADObject @GetADObject
         }
-        catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
-            Write-Host "$SamAccountName;dnsRecord;DNS record not found"
-            return
-        }
         catch {
             Write-Host "$SamAccountName;dnsRecord;error retrieving DNS record: $($_.Exception.Message)"
             return $_
