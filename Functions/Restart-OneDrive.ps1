@@ -1,5 +1,5 @@
-function Restore-ForegroundWindow {
-	param(
+Function Restore-ForegroundWindow {
+	Param(
 		# integer of window handle
 		[Parameter(Position = 0, Mandatory = $true)]
 		[int32]$WindowHandleId,
@@ -41,15 +41,15 @@ function Restore-ForegroundWindow {
 	# start job
 	$Job = Start-Job -ScriptBlock {
 		# add type definition to session
-		try {
+		Try {
 			Add-Type -TypeDefinition $using:TypeDefinition -IgnoreWarnings
 		}
-		catch {
-			throw $_
+		Catch {
+			Throw $_
 		}
 
 		# get handle of foreground window until foreground window handle is not provided window handle
-		do { [int32]$ForegroundWindowsHandleId = [User32]::GetForegroundWindow() } until ( $ForegroundWindowsHandleId -ne $using:WindowHandleId )
+		Do { [int32]$ForegroundWindowsHandleId = [User32]::GetForegroundWindow() } Until ( $ForegroundWindowsHandleId -ne $using:WindowHandleId )
 
 		# get process id of new foreground window
 		[int32]$WindowThreadProcessId = [User32]::GetWindowThreadProcessId($ForegroundWindowsHandleId, 0)
@@ -58,13 +58,13 @@ function Restore-ForegroundWindow {
 		[int32]$CurrentThreadId = ([System.AppDomain]::GetCurrentThreadId())
 
 		# if current thread is not foreground window thread...
-		if ($CurrentThreadId -ne $WindowThreadProcessId) {
+		If ($CurrentThreadId -ne $WindowThreadProcessId) {
 			# attach current thread to foreground window process
 			$CallResult = [User32]::AttachThreadInput( $WindowThreadProcessId, $CurrentThreadId, $true )
 
 			# report any errors
-			if ($CallResult -eq $false) {
-				throw [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+			If ($CallResult -eq $false) {
+				Throw [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
 			}
 		}
 
@@ -72,26 +72,26 @@ function Restore-ForegroundWindow {
 		$CallResult = [User32]::BringWindowToTop( $using:WindowHandleId )
 
 		# report any errors
-		if ($CallResult -eq $false) {
-			throw [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+		If ($CallResult -eq $false) {
+			Throw [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
 		}
 
 		# show original window by handle
 		$CallResult = [User32]::ShowWindow( $using:WindowHandleId, $using:ShowCommand )
 
 		# report any errors
-		if ($CallResult -eq $false) {
-			throw [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+		If ($CallResult -eq $false) {
+			Throw [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
 		}
 
 		# if current thread is not foreground window thread...
-		if ($CurrentThreadId -ne $WindowThreadProcessId) {
+		If ($CurrentThreadId -ne $WindowThreadProcessId) {
 			# detach current thread from foreground window process
 			$CallResult = [User32]::AttachThreadInput( $WindowThreadProcessId, $CurrentThreadId, $false )
 
 			# report any errors
-			if ($CallResult -eq $false) {
-				throw [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+			If ($CallResult -eq $false) {
+				Throw [System.ComponentModel.Win32Exception][System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
 			}
 		}
 	}
@@ -100,132 +100,49 @@ function Restore-ForegroundWindow {
 	$Job | Receive-Job -Wait -AutoRemoveJob
 }
 
-function Restart-OneDrive {
-	[cmdletbinding()]
-	param(
-		[switch]$Force
-	)
-	
-	# if force requested...
-	if ($Force.IsPresent) {
-		# get path to OneDrive executable
-		$OneDriveExe = Join-Path -Path ([System.Environment]::GetFolderPath('LocalApplicationData')) -ChildPath 'Microsoft\OneDrive\OneDrive.exe'
+Function Restart-OneDrive {
+	# get path to OneDrive executable
+	$OneDriveExe = Join-Path -Path ([System.Environment]::GetFolderPath('LocalApplicationData')) -ChildPath 'Microsoft\OneDrive\OneDrive.exe'
 
-		# get path to RunAs executable
-		$RunAsExe = Join-Path -Path ([System.Environment]::GetFolderPath('System')) -ChildPath 'runas.exe'
+	# get path to RunAs executable
+	$RunAsExe = Join-Path -Path ([System.Environment]::GetFolderPath('System')) -ChildPath 'runas.exe'
 
-		# get current window handle
-		$MainWindowHandle = [System.Diagnostics.Process]::GetCurrentProcess().MainWindowHandle
+	# get current window handle
+	$MainWindowHandle = [System.Diagnostics.Process]::GetCurrentProcess().MainWindowHandle
 
-		# if current window handle is 0...
-		If ($MainWindowHandle -eq 0) {
-			# define filter to retrieve process via Cim
-			$Filter = 'ProcessId = {0}' -f $PID
+	# if current window handle is 0...
+	If ($MainWindowHandle -eq 0) {
+		# define filter to retrieve process via Cim
+		$Filter = 'ProcessId = {0}' -f $PID
 
-			# get current process via Cim
-			$ParentProcessId = (Get-CimInstance -ClassName 'Win32_Process' -Filter $Filter).ParentProcessId
+		# get current process via Cim
+		$ParentProcessId = (Get-CimInstance -ClassName 'Win32_Process' -Filter $Filter).ParentProcessId
 
-			# get parent window handle
-			$MainWindowHandle = [System.Diagnostics.Process]::GetProcessById($ParentProcessId).MainWindowHandle
-		}
-
-		# get current session id
-		$CurrentSessionId = [System.Diagnostics.Process]::GetCurrentProcess().SI
-
-		# get any OneDrive processes in current session
-		$OneDriveProcess = [System.Diagnostics.Process]::GetProcessesByName('OneDrive').Where({ $_.Path -eq $OneDriveExe -and $_.SessionId -eq $CurrentSessionId })
-
-		# shutdown OneDrive via RunAs with the Basic User trust level
-		if ($OneDriveProcess) {
-			Write-Verbose -Message 'Shutting down OneDrive'
-			Start-Process -WindowStyle Hidden -FilePath $RunAsExe -ArgumentList "/trustlevel:0x20000 `"$OneDriveExe /shutdown`""
-		}
-
-		# wait for OneDrive process in current session to close
-		do { $OneDriveProcess = [System.Diagnostics.Process]::GetProcessesByName('OneDrive').Where({ $_.Path -eq $OneDriveExe -and $_.SessionId -eq $CurrentSessionId }) } until (!$OneDriveProcess)
-
-		# start OneDrive in the background via RunAs with the Basic User trust level
-		if (!$OneDriveProcess) {
-			Write-Verbose -Message 'Starting OneDrive'
-			Start-Process -WindowStyle Hidden -FilePath $RunAsExe -ArgumentList "/trustlevel:0x20000 `"$OneDriveExe /background`""
-		}
-
-		# wait for OneDrive process to start in current session
-		do { $OneDriveProcess = [System.Diagnostics.Process]::GetProcessesByName('OneDrive').Where({ $_.Path -eq $OneDriveExe -and $_.SessionId -eq $CurrentSessionId }) } until ($OneDriveProcess)
-
-		# wait for OneDrive to load initial window
-		Start-Sleep -Seconds 1
-
-		# report state
-		Write-Verbose -Message 'Restoring original foreground window'
-
-		# restore current foreground window to address bug with /background switch in OneDrive
-		Restore-ForegroundWindow -WindowHandleId $MainWindowHandle
+		# get parent window handle
+		$MainWindowHandle = [System.Diagnostics.Process]::GetProcessById($ParentProcessId).MainWindowHandle
 	}
-	else {
-		# define array for configured OneDrive user directories
-		$ConfiguredOneDriveUserDirectories = @()
 
-		# if consumer OneDrive defined...
-		if (![string]::IsNullOrEmpty($env:OneDriveConsumer)) {
-			# if consumer OneDrive mounted...
-			if (Test-Path -PathType 'Container' -Path $env:OneDriveConsumer) {
-				$ConfiguredOneDriveUserDirectories += $env:OneDriveConsumer
-			}
-		}
+	# get current session id
+	$CurrentSessionId = [System.Diagnostics.Process]::GetCurrentProcess().SI
 
-		# if commercial OneDrive defined...
-		if (![string]::IsNullOrEmpty($env:OneDriveCommercial)) {
-			# if commercial OneDrive mounted...
-			if (Test-Path -PathType 'Container' -Path $env:OneDriveCommercial) {
-				$ConfiguredOneDriveUserDirectories += $env:OneDriveCommercial
-			}
-		}
+	# get any OneDrive processes in current session
+	$OneDriveProcess = [System.Diagnostics.Process]::GetProcessesByName('OneDrive').Where({ $_.Path -eq $OneDriveExe -and $_.SessionId -eq $CurrentSessionId })
 
-		# loop through configured OneDrive user directories
-		foreach ($FolderPath in $ConfiguredOneDriveUserDirectories) {
-			# define item
-			$Path = Join-Path -Path $FolderPath -ChildPath 'ResumeOneDriveObject'
+	# shutdown OneDrive via RunAs with the Basic User trust level
+	If ($OneDriveProcess) { Start-Process -WindowStyle Hidden -FilePath $RunAsExe -ArgumentList "/trustlevel:0x20000 `"$OneDriveExe /shutdown`"" }
 
-			# if item found...
-			if ([System.IO.File]::Exists($Path)) {
-				# create item
-				try {
-					$Item = Get-Item -Path $Path
-				}
-				catch {
-					return $_
-				}
-			}
-			else {
-				# create item
-				try {
-					$Item = New-Item -Path $Path -ItemType File
-				}
-				catch {
-					return $_
-				}
-			}
+	# wait for OneDrive process in current session to close
+	Do { $OneDriveProcess = [System.Diagnostics.Process]::GetProcessesByName('OneDrive').Where({ $_.Path -eq $OneDriveExe -and $_.SessionId -eq $CurrentSessionId }) } Until (!$OneDriveProcess)
 
-			# set pinned attribute
-			attrib +P "$Path"
+	# start OneDrive in the background via RunAs with the Basic User trust level
+	If (!$OneDriveProcess) { Start-Process -WindowStyle Hidden -FilePath $RunAsExe -ArgumentList "/trustlevel:0x20000 `"$OneDriveExe /background`"" }
 
-			# remove pinned attribute
-			attrib -P "$Path"
+	# wait for OneDrive process to start in current session
+	Do { $OneDriveProcess = [System.Diagnostics.Process]::GetProcessesByName('OneDrive').Where({ $_.Path -eq $OneDriveExe -and $_.SessionId -eq $CurrentSessionId }) } Until ($OneDriveProcess)
 
-			# set unpinned attribute
-			attrib +U "$Path"
+	# wait for OneDrive to load initial window
+	Start-Sleep -Seconds 1
 
-			# sleep for 3 seconds
-			Start-Sleep -Seconds 3
-
-			# remove item
-			try {
-				$Item | Remove-Item -Force
-			}
-			catch {
-				return $_
-			}
-		}
-	}
+	# restore current foreground window to address bug with /background switch in OneDrive
+	Restore-ForegroundWindow -WindowHandleId $MainWindowHandle
 }
