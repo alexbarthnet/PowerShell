@@ -53,162 +53,167 @@ param(
 $ErrorActionPreference = [System.Management.Automation.ActionPreference]::Stop
 
 # if caveat defined...
-If ($PSBoundParameters.ContainsKey('Caveat')) {
+if ($PSBoundParameters.ContainsKey('Caveat')) {
 	switch ($Caveat) {
 		'DayAfterPatchTuesday' {
-			If ($Yesterday.DayOfWeek -ne 'Tuesday' -and $Yesterday.Day -notin 8..14) {
+			if ($Yesterday.DayOfWeek -ne 'Tuesday' -and $Yesterday.Day -notin 8..14) {
 				Write-Warning -Message "the 'DayAfterPatchTuesday' caveat was provided and yesterday is not the second Tuesday of the month (aka Patch Tuesday)"
-				Return
+				return
 			}
 		}
 		'Wednesday' {
-			If ($Today.DayOfWeek -ne 'Wednesday') {
+			if ($Today.DayOfWeek -ne 'Wednesday') {
 				Write-Warning -Message "the 'Wednesday' caveat was provided and today is not 'Wednesday' but '$($Today.DayOfWeek)'"
-				Return
+				return
 			}
 		}
 	}
 }
 
-:NextVM ForEach ($Name in $VMName) {
+# loop through VM names - start rebuild
+:NextNameForRebuild foreach ($Name in $VMName) {
+	# report state
+	Write-Host "Rebuilding VM from ISO: '$Name'"
+
 	# retrieve VMs on local system
-	Try {
+	try {
 		$VM = Get-VM | Where-Object { $_.Name -eq $Name }
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "could not retrieve local VMs: $($_.Exception.Message)"
-		Return $_
+		return $_
 	}
 
 	# if multiple VMs found...
-	If ($VM.Count -gt 1) {
+	if ($VM.Count -gt 1) {
 		Write-Warning -Message "multiple VMs found by name: '$Name'"
-		Continue NextVM
+		continue NextNameForRebuild
 	}
 
 	# if no VMs found...
-	If ($null -eq $VM) {
+	if ($null -eq $VM) {
 		Write-Warning -Message "could not locate VM by name: '$Name'"
-		Continue NextVM
+		continue NextNameForRebuild
 	}
 
 	# if VM is not powered off...
-	If ($VM.State -ne 'Off') {
+	if ($VM.State -ne 'Off') {
 		Write-Warning -Message "found VM in invalid state: '$($VM.State)'"
-		Continue NextVM
+		continue NextNameForRebuild
 	}
 
 	# if VM is missing a DVD drive...
-	If ($VM.DvdDrives.Count -eq 0) {
+	if ($VM.DvdDrives.Count -eq 0) {
 		Write-Warning -Message 'found VM without DVD drive'
-		Continue NextVM
+		continue NextNameForRebuild
 	}
 
 	# if VM is missing a hard drive...
-	If ($VM.HardDrives.Count -eq 0) {
+	if ($VM.HardDrives.Count -eq 0) {
 		Write-Warning -Message 'found VM without hard drive'
-		Continue NextVM
+		continue NextNameForRebuild
 	}
 
 	# retrieve first DVD drive
 	$VMDvdDrive = $VM.DvdDrives | Sort-Object -Property 'ControllerNumber', 'ControllerLocation' | Select-Object -First 1
 
 	# if first DVD drive does not have an ISO mounted...
-	If ([System.String]::IsNullOrEmpty($VMDvdDrive.Path)) {
+	if ([System.String]::IsNullOrEmpty($VMDvdDrive.Path)) {
 		Write-Warning -Message 'first DVD drive does not have an ISO mounted'
-		Continue NextVM
+		continue NextNameForRebuild
 	}
 
 	# update VM firmware to boot to first DVD drive
-	Try {
+	try {
 		Set-VMFirmware -VM $VM -FirstBootDevice $VMDvdDrive
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "could not set DVD drive as first boot device on VM: $($_.Exception.Message)"
-		Continue NextVM
+		continue NextNameForRebuild
 	}
 
 	# retrieve first hard drive
 	$Path = $VM.HardDrives | Sort-Object -Property 'ControllerNumber', 'ControllerLocation' | Select-Object -First 1 -ExpandProperty 'Path'
 
 	# get VHD
-	Try {
+	try {
 		$VHD = Get-VHD -Path $Path
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "could not retrieve VHD: $($_.Exception.Message)"
-		Continue NextVM
+		continue NextNameForRebuild
 	}
 
 	# remove VHD
-	Try {
+	try {
 		Remove-Item -Path $Path -Force
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "could not remove VHD: $($_.Exception.Message)"
-		Continue NextVM
+		continue NextNameForRebuild
 	}
 
 	# create VHD
-	Try {
+	try {
 		$null = New-VHD -Path $Path -Size $VHD.Size
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "could not create VHD: $($_.Exception.Message)"
-		Continue NextVM
+		continue NextNameForRebuild
 	}
 
 	# retrieve ACL
-	Try {
+	try {
 		$Acl = Get-Acl -Path $Path
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "could not retrieve ACL: $($_.Exception.Message)"
-		Continue NextVM
+		continue NextNameForRebuild
 	}
 
 	# define VM prinicpal
-	Try {
+	try {
 		$Principal = [System.Security.Principal.NTAccount]::new("NT VIRTUAL MACHINE\$($VM.Id)")
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "could not create principal: $($_.Exception.Message)"
-		Continue NextVM
+		continue NextNameForRebuild
 	}
 
 	# create access rule
-	Try {
+	try {
 		$AccessRule = [System.Security.AccessControl.FileSystemAccessRule]::new($Principal, @('Read', 'Write', 'Synchronize'), 'None', 'None', 'Allow')
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "could not create access rule: $($_.Exception.Message)"
-		Continue NextVM
+		continue NextNameForRebuild
 	}
 
 	# add access rule to ACL
-	Try {
+	try {
 		$Acl.AddAccessRule($AccessRule)
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "could not add access rule to ACL: $($_.Exception.Message)"
-		Continue NextVM
+		continue NextNameForRebuild
 	}
 
 	# update ACL
-	Try {
+	try {
 		$Acl | Set-Acl -Path $Path
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "could not save ACL: $($_.Exception.Message)"
-		Continue NextVM
+		continue NextNameForRebuild
 	}
 
 	# start VM
-	Try {
+	try {
 		$VM | Start-VM
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "could not start VM: $($_.Exception.Message)"
+		continue NextNameForRebuild
 	}
 }
 
