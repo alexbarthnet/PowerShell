@@ -684,7 +684,7 @@ process {
 			}
 
 			# if appx packages to remove or add provided...
-			if ($AppxPackagesToRemove.Count -or $AppxPackagesToAdd.Keys) {
+			if ($AppxPackagesToRemove.Count -or $AppxPackagesToAdd.Keys.Count) {
 				# report state
 				"{0}`t{1}: {2}:{3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Retrieving AppX packages in WIM', $ImagePathForWIM, $Index
 
@@ -735,7 +735,7 @@ process {
 				}
 
 				# if appx packages to add provided...
-				if ($AppxPackagesToAdd.Keys) {
+				if ($AppxPackagesToAdd.Keys.Count) {
 					# loop through appx packages
 					:NextAppxPackageToAdd foreach ($DisplayName in $AppxPackagesToAdd.Keys) {
 						# retrieve appx package by name
@@ -771,7 +771,7 @@ process {
 			}
 
 			# if packages to remove or add provided...
-			if ($PackagesToRemove.Count -or $PackagesToAdd.Keys) {
+			if ($PackagesToRemove.Count -or $PackagesToAdd.Keys.Count) {
 				# report state
 				"{0}`t{1}: {2}:{3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Retrieving Windows packages in WIM', $ImagePathForWIM, $Index
 
@@ -829,7 +829,7 @@ process {
 				}
 
 				# if packages to add provided...
-				if ($PackagesToAdd.Keys) {
+				if ($PackagesToAdd.Keys.Count) {
 					# loop through packages
 					:NextPackageToAdd foreach ($PackageName in $PackagesToAdd.Keys) {
 						# retrieve package by name
