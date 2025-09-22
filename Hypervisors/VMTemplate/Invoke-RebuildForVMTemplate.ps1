@@ -268,7 +268,7 @@ Write-Host "Waiting for VM(s) to rebuild before copy"
 Write-Host "Copying VHD(s) to '$RelativePath' folder in each CSV"
 
 # retrieve CSVs
-$CSVPaths = Get-CimInstance -ClassName Win32_Volume | Where-Object { $_.FileSystem.StartsWith('CSVFS') } | Select-Object -ExpandProperty Name
+$CSVPaths = Get-CimInstance -ClassName Win32_Volume | Where-Object { $_.FileSystem.StartsWith('CSVFS') } | Sort-Object -Property Name | Select-Object -ExpandProperty Name
 
 # loop through VM names - copy VHDs
 :NextNameForCopy foreach ($Name in $VMName) {
@@ -341,7 +341,7 @@ $CSVPaths = Get-CimInstance -ClassName Win32_Volume | Where-Object { $_.FileSyst
 		if (!(Test-Path -Path $FolderPath -PathType Container)) {
 			# get images path
 			try {
-				New-Item -Path $FolderPath -ItemType Directory -Force -ErrorAction 'Stop'
+				$null = New-Item -Path $FolderPath -ItemType Directory -Force -ErrorAction 'Stop'
 			}
 			catch {
 				Write-Warning -Message "could not create '$FolderPath' directory: $($_.Exception.Message)"
