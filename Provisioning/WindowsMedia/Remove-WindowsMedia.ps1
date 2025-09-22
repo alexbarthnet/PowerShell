@@ -31,6 +31,8 @@ param(
 	[Parameter(Mandatory = $false)]
 	[string]$Path,
 	[Parameter(Mandatory = $false)]
+	[switch]$Force,
+	[Parameter(Mandatory = $false)]
 	[switch]$SkipExclude
 )
 
@@ -110,6 +112,11 @@ begin {
 }
 
 process {
+	# if force set to false or not provided...
+	If ($Force -eq $false -or -not $Force.IsPresent) {
+		Write-Warning -Message "Continue to remove staging path: $global:WindowsMediaStagingPath" -WarningAction Inquire
+	}
+
 	# report state
 	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Checking for mounted Windows images in staging path', $global:WindowsMediaStagingPath
 
