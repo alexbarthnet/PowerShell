@@ -141,7 +141,21 @@ begin {
 		}
 		# if global staging defined...
 		else {
-			Write-Host "found existing global staging path: $global:WindowsMediaStagingPath"
+			# ...but not found...
+			if (![System.IO.Directory]::Exists($global:WindowsMediaStagingPath)) {
+				# create path WITHOUT the force parameter to create the path
+				try {
+					$null = New-Item -ItemType Directory -Path $global:WindowsMediaStagingPath -ErrorAction 'Stop'
+				}
+				catch {
+					Write-Warning -Message 'could not create staging path from global WindowsMediaStagingPath variable'
+					$PSCmdlet.ThrowTerminatingError($_)
+				}
+			}
+			else {
+				# report state
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Found existing staging path', $global:WindowsMediaStagingPath
+			}
 		}
 	}
 
