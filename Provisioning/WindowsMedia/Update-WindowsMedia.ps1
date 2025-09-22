@@ -59,18 +59,22 @@ String array containing the names of Windows Capabilities to remove from the Win
 .PARAMETER CapabilitiesToAdd
 String array containing the names of Windows Capabilities to add to the Windows image(s). Requires the PathToFeaturesIsoImage parameter.
 
-.PARAMETER PackagesToRemove
-String array containing the names of Windows Packages to remove from the Windows image(s).
-
-.PARAMETER PackagesToAdd
-Hashtable containing the names and paths of Windows Packages to add to the Windows image(s). Each entry in the hashtable must include the name of the package as the key and the path to the package as the value.
-
 .PARAMETER AppxPackagesToRemove
 String array containing the names of AppX Packages to remove from the Windows image(s).
 
 .PARAMETER AppxPackagesToAdd
-Hashtable containing the names and paths of AppX Packages to add to the Windows image(s). Each entry in the hashtable must include the name of the package as the key and the path to the package as the value.
+Hashtable containing the names and paths of AppX Packages to add to the Windows image(s). Each entry in the hashtable must be populated as follows:
+ - Key: the displayname of the AppX package
+ - Value: a hashtable of the parameters required for the Add-AppxProvisionedPackage command to install the AppX package but excluding the Path parameter
 
+.PARAMETER PackagesToRemove
+String array containing the names of Windows Packages to remove from the Windows image(s).
+
+.PARAMETER PackagesToAdd
+Hashtable containing the names and paths of Windows Packages to add to the Windows image(s). Each entry in the hashtable must be populated as follows:
+ - Key: the name of the Windows package
+ - Value: a hashtable of the parameters required for the Add-WindowsPackage command to install the Windows package but excluding the Path parameter
+ 
 .PARAMETER LocalAdminCredential
 Credential containing the local administrator password to add to unattend XML files.
 
@@ -130,13 +134,13 @@ param(
 	[Parameter()]
 	[string[]]$CapabilitiesToAdd,
 	[Parameter()]
-	[string[]]$PackagesToRemove,
-	[Parameter()]
-	[hashtable]$PackagesToAdd,
-	[Parameter()]
 	[string[]]$AppxPackagesToRemove,
 	[Parameter()]
 	[hashtable]$AppxPackagesToAdd,
+	[Parameter()]
+	[string[]]$PackagesToRemove,
+	[Parameter()]
+	[hashtable]$PackagesToAdd,
 	[Parameter()]
 	[pscredential]$LocalAdminCredential,
 	[Parameter()]
