@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-Rebuilds one or more "VM template" virtual machines.
+Rebuilds one or more "VM template" virtual machines using a mounted ISO image.
 
 .DESCRIPTION
-Rebuilds one or more "VM template" virtual machines. The existing VHD of the VM is replaced with a new VHD then booted to an ISO image.
+Rebuilds one or more "VM template" virtual machines using a mounted ISO image. The existing VHD of the VM is replaced with a new VHD then the VM boots and installs the OS from the mounted ISO image.
 
 .PARAMETER VMName
 The name(s) of the VM(s) that will be rebuilt.
@@ -13,11 +13,17 @@ String for the "Caveat" for running the script. The caveats allow the script to 
 - 'DayAfterPatchTuesday' - the script will not run if the previous day was not the second Tuesday of the month (aka Patch Tuesday)
 - 'Wednesday' - the script will not run if the current day is not Wednesday
 
+.PARAMETER Copy
+Switch parameter to copy the new VHD to a folder on each cluster shared volume. This allows new VMs to be created with a copy of VHD from the VM template and leveraging ReFS block cloning and deduplication to minimize storage consumption.
+
+.PARAMETER RelativePath
+String for the relative path of the directory on each cluster shared volume for the copy of the VHD. The default value is '.images'
+
 .INPUTS
 None.
 
 .OUTPUTS
-None. The function does not generate any output.
+None. The function does not generate any actionable output.
 
 .NOTES
 The "VM template" virtual machine must adhere to the following requirements for this script to function as expected:
@@ -28,15 +34,19 @@ The "VM template" virtual machine must adhere to the following requirements for 
 #>
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
-Param(
+param(
+	[Parameter(DontShow)]
+	[datetime]$Today = [System.DateTime]::Today,
+	[Parameter(DontShow)]
+	[datetime]$Yesterday = [System.DateTime]::Today.AddDays(-1),
 	[Parameter(Position = 0, Mandatory = $true)]
 	[string[]]$VMName,
 	[Parameter(Position = 1, Mandatory = $false)][ValidateSet('DayAfterPatchTuesday', 'Wednesday')]
 	[string]$Caveat,
-	[Parameter(DontShow)]
-	[datetime]$Today = [System.DateTime]::Today,
-	[Parameter(DontShow)]
-	[datetime]$Yesterday = [System.DateTime]::Today.AddDays(-1)
+	[Parameter(Position = 2, Mandatory = $false)]
+	[switch]$Copy,
+	[Parameter(Position = 3, Mandatory = $false)]
+	[string]$RelativePath = '.images'
 )
 
 # set error preference
