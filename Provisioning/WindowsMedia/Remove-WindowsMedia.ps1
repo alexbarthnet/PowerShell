@@ -79,7 +79,15 @@ begin {
 		}
 		# if global staging defined...
 		else {
-			Write-Host "found existing staging path: $global:WindowsMediaStagingPath"
+			# ...but not found...
+			if (![System.IO.Directory]::Exists($global:WindowsMediaStagingPath)) {
+				Write-Warning -Message 'could not locate folder for existing staging path: value of global WindowsMediaStagingPath variable is not a folder'
+				Write-Warning -Message 'create a staging path with the Import-WindowsMedia.ps1 script or provide the Path parameter to define the staging path'
+			}
+			else {
+				# report state
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Found existing staging path', $global:WindowsMediaStagingPath
+			}
 		}
 	}
 
