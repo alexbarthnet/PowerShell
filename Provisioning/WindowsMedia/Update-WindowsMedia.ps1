@@ -745,8 +745,8 @@ process {
 			}
 		}
 
-		# if capabilities to add provided...
-		if ($PSBoundParameters.ContainsKey('CapabilitiesToAdd') -and $CapabilitiesToAdd.Count) {
+		# if Feature on Demand ISO image mounted...
+		if ($FeaturesDiskImage) {
 			# report state
 			"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Dismounting FOD image...'
 
