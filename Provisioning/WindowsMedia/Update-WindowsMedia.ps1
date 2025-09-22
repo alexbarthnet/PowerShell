@@ -728,7 +728,7 @@ process {
 					}
 
 					# report state
-					"{0}`t{1}: {2}, {3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Removing AppX package from WIM', $DisplayName, $AppxPackage.PackageName
+					"{0}`t{1}: {2} ({3})" -f [System.Datetime]::UtcNow.ToString('o'), 'Removing AppX package from WIM', $DisplayName, $AppxPackage.PackageName
 
 					# remove appx package from windows image
 					try {
