@@ -803,61 +803,6 @@ process {
 			return $_
 		}
 
-		# # if administrator password provided...
-		# if ($ExpandStrings.ContainsKey('AdministratorPassword')) {
-		# 	$Content = $Content -replace '<!-- <AdministratorPassword>', '<AdministratorPassword>'
-		# 	$Content = $Content -replace '</AdministratorPassword> -->', '</AdministratorPassword>'
-		# }
-
-		# # if administrator password provided...
-		# if ($ExpandStrings.ContainsKey('AdministratorPassword')) {
-		# 	# uncomment administrator password section in unattend file
-		# 	$Content = $Content.Replace('<!-- <AdministratorPassword>', '<AdministratorPassword>')
-		# 	$Content = $Content.Replace('</AdministratorPassword> -->', '</AdministratorPassword>')
-		# }
-		# # if administrator password not provided...
-		# else {
-		# 	# hide administrator password expand string from the expand strings loop
-		# 	$Content = $Content -replace '%ADMINISTRATORPASSWORD%', '<%>ADMINISTRATORPASSWORD<%>'
-		# }
-
-		# # if domain join username and password provided...
-		# if ($ExpandStrings.ContainsKey('Username') -and $ExpandStrings.ContainsKey('Password')) {
-		# 	# uncomment domain join section in unattend file
-		# 	$Content = $Content.Replace('<!-- <identification>', '<identification>')
-		# 	$Content = $Content.Replace('</identification> -->', '</identification>')
-		# 	# uncomment domain accounts section in unattend file
-		# 	$Content = $Content.Replace('<!-- <DomainAccounts>', '<DomainAccounts>')
-		# 	$Content = $Content.Replace('</DomainAccounts> -->', '</DomainAccounts>')
-		# }
-		# # if domain join username and password not provided...
-		# else {
-		# 	# hide domain join expand strings from the expand strings loop
-		# 	$Content = $Content.Replace('%USERNAME%', '<%>USERNAME<%>')
-		# 	$Content = $Content.Replace('%PASSWORD%', '<%>PASSWORD<%>')
-		# 	$Content = $Content.Replace('%DOMAINNAME%', '<%>DOMAINNAME<%>')
-		# 	$Content = $Content.Replace('%ORGANIZATIONALUNIT%', '<%>ORGANIZATIONALUNIT<%>')
-		# }
-
-		# # while content contains XML element with expand string as value...
-		# while ($Content -match '<\w+>%(?<ExpandString>\w+)%</\w+>') {
-		# 	# retrieve original XML element
-		# 	$OriginalString = $Matches[0]
-		# 	# retrieve expand string
-		# 	$ExpandString = $Matches['ExpandString']
-		# 	# if value for expand string provided...
-		# 	if ($ExpandStrings.ContainsKey($ExpandString)) {
-		# 		# replace the expand string with the provided value
-		# 		$ModifiedString = $OriginalString -replace "%$ExpandString%", $ExpandStrings[$ExpandString]
-		# 	}
-		# 	else {
-		# 		# comment out the original XML element
-		# 		$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace '%', '<%>')
-		# 	}
-		# 	# replace original XML element with modified XML element
-		# 	$Content = $Content -replace $OriginalString, $ModifiedString
-		# }
-
 		# add autounattend file to ISO
 		try {
 			$Content | Set-Content -Path $AutounattendXmlOnISO -Force -ErrorAction 'Stop'
@@ -887,61 +832,6 @@ process {
 		catch {
 			return $_
 		}
-
-		# # if administrator password provided...
-		# if ($ExpandStrings.ContainsKey('AdministratorPassword')) {
-		# 	$Content = $Content -replace '<!-- <AdministratorPassword>', '<AdministratorPassword>'
-		# 	$Content = $Content -replace '</AdministratorPassword> -->', '</AdministratorPassword>'
-		# }
-
-		# # if administrator password provided...
-		# if ($ExpandStrings.ContainsKey('AdministratorPassword')) {
-		# 	# uncomment administrator password section in unattend file
-		# 	$Content = $Content.Replace('<!-- <AdministratorPassword>', '<AdministratorPassword>')
-		# 	$Content = $Content.Replace('</AdministratorPassword> -->', '</AdministratorPassword>')
-		# }
-		# # if administrator password not provided...
-		# else {
-		# 	# hide administrator password expand string from the expand strings loop
-		# 	$Content = $Content -replace '%ADMINISTRATORPASSWORD%', '<%>ADMINISTRATORPASSWORD<%>'
-		# }
-
-		# # if domain join username and password provided...
-		# if ($ExpandStrings.ContainsKey('Username') -and $ExpandStrings.ContainsKey('Password')) {
-		# 	# uncomment domain join section in unattend file
-		# 	$Content = $Content.Replace('<!-- <identification>', '<identification>')
-		# 	$Content = $Content.Replace('</identification> -->', '</identification>')
-		# 	# uncomment domain accounts section in unattend file
-		# 	$Content = $Content.Replace('<!-- <DomainAccounts>', '<DomainAccounts>')
-		# 	$Content = $Content.Replace('</DomainAccounts> -->', '</DomainAccounts>')
-		# }
-		# # if domain join username and password not provided...
-		# else {
-		# 	# hide domain join expand strings from the expand strings loop
-		# 	$Content = $Content.Replace('%USERNAME%', '<%>USERNAME<%>')
-		# 	$Content = $Content.Replace('%PASSWORD%', '<%>PASSWORD<%>')
-		# 	$Content = $Content.Replace('%DOMAINNAME%', '<%>DOMAINNAME<%>')
-		# 	$Content = $Content.Replace('%ORGANIZATIONALUNIT%', '<%>ORGANIZATIONALUNIT<%>')
-		# }
-
-		# # while content contains XML element with expand string as value...
-		# while ($Content -match '<\w+>%(?<ExpandString>\w+)%</\w+>') {
-		# 	# retrieve original XML element
-		# 	$OriginalString = $Matches[0]
-		# 	# retrieve expand string
-		# 	$ExpandString = $Matches['ExpandString']
-		# 	# if value for expand string provided...
-		# 	if ($ExpandStrings.ContainsKey($ExpandString)) {
-		# 		# replace the expand string with the provided value
-		# 		$ModifiedString = $OriginalString -replace "%$ExpandString%", $ExpandStrings[$ExpandString]
-		# 	}
-		# 	else {
-		# 		# comment out the original XML element
-		# 		$ModifiedString = '<!-- {0} -->' -f ($OriginalString -replace '%', '<%>')
-		# 	}
-		# 	# replace original XML element with modified XML element
-		# 	$Content = $Content -replace $OriginalString, $ModifiedString
-		# }
 
 		# add unattend file to ISO
 		try {
