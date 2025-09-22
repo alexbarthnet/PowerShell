@@ -74,7 +74,7 @@ String array containing the names of Windows Packages to remove from the Windows
 Hashtable containing the names and paths of Windows Packages to add to the Windows image(s). Each entry in the hashtable must be populated as follows:
  - Key: the name of the Windows package
  - Value: a hashtable of the parameters required for the Add-WindowsPackage command to install the Windows package but excluding the Path parameter
- 
+
 .PARAMETER LocalAdminCredential
 Credential containing the local administrator password to add to unattend XML files.
 
