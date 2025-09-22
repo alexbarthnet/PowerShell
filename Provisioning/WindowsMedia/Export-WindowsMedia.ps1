@@ -112,6 +112,7 @@ begin {
 	else {
 		# if global staging path not defined...
 		if ([System.String]::IsNullOrEmpty($global:WindowsMediaStagingPath)) {
+			# warn and return
 			Write-Warning -Message 'could not locate existing staging path: global WindowsMediaStagingPath variable is null or empty'
 			Write-Warning -Message 'create a staging path with the Import-WindowsMedia.ps1 script or provide the Path parameter to define the staging path'
 			return
@@ -120,8 +121,10 @@ begin {
 		else {
 			# ...but not found...
 			if (![System.IO.Directory]::Exists($global:WindowsMediaStagingPath)) {
+				# warn and return
 				Write-Warning -Message 'could not locate folder for existing staging path: value of global WindowsMediaStagingPath variable is not a folder'
 				Write-Warning -Message 'create a staging path with the Import-WindowsMedia.ps1 script or provide the Path parameter to define the staging path'
+				return
 			}
 			else {
 				# report state
