@@ -895,7 +895,7 @@ process {
 
 				# load software hive
 				try {
-					$Process = Start-Process -PassThru -Wait -WindowStyle Hidden -FilePath 'reg.exe' -ArgumentList "add HKLM\OFFLINE\Microsoft\Windows\CurrentVersion\Policies\System /v VerboseStatus /t REG_DWORD /d 1 /f"
+					$Process = Start-Process -PassThru -Wait -WindowStyle Hidden -FilePath 'reg.exe' -ArgumentList 'add HKLM\OFFLINE\Microsoft\Windows\CurrentVersion\Policies\System /v VerboseStatus /t REG_DWORD /d 1 /f'
 				}
 				catch {
 					return $_
@@ -912,7 +912,7 @@ process {
 
 				# load software hive
 				try {
-					$Process = Start-Process -PassThru -Wait -WindowStyle Hidden -FilePath 'reg.exe' -ArgumentList "unload HKLM\OFFLINE"
+					$Process = Start-Process -PassThru -Wait -WindowStyle Hidden -FilePath 'reg.exe' -ArgumentList 'unload HKLM\OFFLINE'
 				}
 				catch {
 					return $_
