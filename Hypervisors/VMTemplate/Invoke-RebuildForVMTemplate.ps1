@@ -209,6 +209,163 @@ If ($PSBoundParameters.ContainsKey('Caveat')) {
 	}
 	Catch {
 		Write-Warning -Message "could not start VM: $($_.Exception.Message)"
-		Continue NextVM
+	}
+}
+
+# if copy set to false or not requested...
+if ($Copy -eq $false -or -not $Copy.IsPresent ) {
+	return
+}
+
+# report state
+Write-Host "Waiting for VM(s) to rebuild before copy"
+
+# loop through VM names - wait for rebuild to complete
+:NextNameForWait foreach ($Name in $VMName) { 
+	# retrieve VMs on local system
+	try {
+		$VM = Get-VM | Where-Object { $_.Name -eq $Name }
+	}
+	catch {
+		Write-Warning -Message "could not retrieve local VMs: $($_.Exception.Message)"
+		return $_
+	}
+
+	# if multiple VMs found...
+	if ($VM.Count -gt 1) {
+		Write-Warning -Message "multiple VMs found by name: '$Name'"
+		continue NextNameForWait
+	}
+
+	# if no VMs found...
+	if ($null -eq $VM) {
+		Write-Warning -Message "could not locate VM by name: '$Name'"
+		continue NextNameForWait
+	}
+
+	# define counter
+	$Counter = 0
+
+	# if VM is not powered off...
+	while ($VM.State -ne 'Off') {
+		# wait 1 minute
+		Start-Sleep -Seconds 60
+
+		# increment counter
+		$Counter++
+
+		#report state
+		Write-Host "Waited $Counter minute(s) for VM to rebuild: '$Name'"
+	}
+}
+
+# report state
+Write-Host "Copying VHD(s) to '$RelativePath' folder in each CSV"
+
+# retrieve CSVs
+$CSVPaths = Get-CimInstance -ClassName Win32_Volume | Where-Object { $_.FileSystem.StartsWith('CSVFS') } | Select-Object -ExpandProperty Name
+
+# loop through VM names - copy VHDs
+:NextNameForCopy foreach ($Name in $VMName) {
+	# report state
+	Write-Host "Copying VHD from VM: '$Name'"
+
+	# retrieve VMs on local system
+	try {
+		$VM = Get-VM | Where-Object { $_.Name -eq $Name }
+	}
+	catch {
+		Write-Warning -Message "could not retrieve local VMs: $($_.Exception.Message)"
+		return $_
+	}
+
+	# if multiple VMs found...
+	if ($VM.Count -gt 1) {
+		Write-Warning -Message "multiple VMs found by name: '$Name'"
+		continue NextNameForCopy
+	}
+
+	# if no VMs found...
+	if ($null -eq $VM) {
+		Write-Warning -Message "could not locate VM by name: '$Name'"
+		continue NextNameForCopy
+	}
+
+	# if VM is not powered off...
+	if ($VM.State -ne 'Off') {
+		Write-Warning -Message "found VM in invalid state: '$($VM.State)'"
+		continue NextNameForCopy
+	}
+
+	# if VM is missing a hard drive...
+	if ($VM.HardDrives.Count -eq 0) {
+		Write-Warning -Message 'found VM without hard drive'
+		continue NextNameForCopy
+	}
+
+	# retrieve first hard drive
+	$Path = $VM.HardDrives | Sort-Object -Property 'ControllerNumber', 'ControllerLocation' | Select-Object -First 1 -ExpandProperty 'Path'
+
+	# get VHD
+	try {
+		$VHD = Get-VHD -Path $Path
+	}
+	catch {
+		Write-Warning -Message "could not retrieve VHD: $($_.Exception.Message)"
+		continue NextNameForCopy
+	}
+
+	# get VHD as item
+	try {
+		$Item = Get-Item -Path $Path
+	}
+	catch {
+		Write-Warning -Message "could not retrieve VHD: $($_.Exception.Message)"
+		continue NextNameForCopy
+	}
+
+	# loop through CSV paths
+	:NextCSVPath foreach ($CSVPath in $CSVPaths) { 
+		# report state
+		Write-Host "Copying '$Path' VHD to '$RelativePath' folder on CSV: '$CSVPath'"
+
+		# build path to images folder
+		$FolderPath = Join-Path -Path $CSVPath -ChildPath $RelativePath
+
+		# if images folder not found...
+		if (!(Test-Path -Path $FolderPath -PathType Container)) {
+			# get images path
+			try {
+				New-Item -Path $FolderPath -ItemType Directory -Force -ErrorAction 'Stop'
+			}
+			catch {
+				Write-Warning -Message "could not create '$FolderPath' directory: $($_.Exception.Message)"
+				continue NextCSVPath
+			}
+		}
+
+		# define path to VHD in images folder
+		$Destination = Join-Path -Path $FolderPath -ChildPath $Item.Name
+
+		# if VHD in images folder found...
+		if ((Test-Path -Path $Destination -PathType Leaf)) {
+			# remove VHD from images folder
+			try {
+				Remove-Item -Destination $Destination -Force
+			}
+			catch {
+				Write-Warning -Message "could not remove existing '$Destination' VHD: $($_.Exception.Message)"
+				continue NextCSVPath
+			}
+		}
+	
+		# copy VHD to images folder
+		try {
+			Copy-Item -Path $Path -Destination $Destination -Force
+		}
+		catch {
+			Write-Warning -Message "could not copy '$Path' source VHD to '$Destination' destination VHD: $($_.Exception.Message)"
+			continue NextCSVPath
+		}
 	}
 }
