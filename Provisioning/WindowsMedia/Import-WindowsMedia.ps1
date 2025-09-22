@@ -151,6 +151,9 @@ begin {
 					Write-Warning -Message 'could not create staging path from global WindowsMediaStagingPath variable'
 					$PSCmdlet.ThrowTerminatingError($_)
 				}
+
+				# report state
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Recreated previous staging path', $global:WindowsMediaStagingPath
 			}
 			else {
 				# report state
