@@ -597,7 +597,7 @@ process {
 			# if capabilities to remove or add provided...
 			if ($CapabilitiesToRemove.Count -or $CapabilitiesToAdd.Count) {
 				# report state
-				"{0}`t{1}: {2}:{3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Retrieving capabilities in WIM', $ImagePathForWIM, $Index
+				"{0}`t{1}: {2}:{3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Retrieving Windows capabilities in WIM', $ImagePathForWIM, $Index
 
 				# retrieve capabilities in windows image
 				try {
