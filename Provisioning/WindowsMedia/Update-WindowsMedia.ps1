@@ -683,6 +683,194 @@ process {
 				}
 			}
 
+			# if appx packages to remove or add provided...
+			if ($AppxPackagesToRemove.Count -or $AppxPackagesToAdd.Keys) {
+				# report state
+				"{0}`t{1}: {2}:{3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Retrieving AppX packages in WIM', $ImagePathForWIM, $Index
+
+				# retrieve appx packages in windows image
+				try {
+					$AppxPackages = Get-AppxProvisionedPackage -Path $TemporaryPathForWIM -ScratchDirectory $TemporaryPathForDSD -ErrorAction 'Stop'
+				}
+				catch {
+					return $_
+				}
+
+				# if appx packages to remove provided...
+				if ($AppxPackagesToRemove.Count) {
+					# loop through appx packages
+					:NextAppxPackageToRemove foreach ($DisplayName in $AppxPackagesToRemove) {
+						# retrieve appx package by name
+						$AppxPackage = $AppxPackages | Where-Object { $_.DisplayName -eq $DisplayName }
+
+						# if appx package not found...
+						if (!$AppxPackage) {
+							# report state and continue to next package
+							"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Cannot remove unknown AppX package from WIM', $DisplayName
+							continue NextAppxPackageToRemove
+						}
+
+						# report state
+						"{0}`t{1}: {2}, {3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Removing AppX package from WIM', $DisplayName, $AppxPackage.PackageName
+
+						# remove appx package from windows image
+						try {
+							$null = Remove-AppxProvisionedPackage -Path $TemporaryPathForWIM -PackageName $AppxPackage.PackageName -ScratchDirectory $TemporaryPathForDSD -ErrorAction 'Stop'
+						}
+						catch {
+							Write-Warning -Message "could not remove '$PackageName' AppX package from WIM: $($_.Exception.Message)"
+						}
+					}
+
+					# report state
+					"{0}`t{1}: {2}:{3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Retrieving AppX packages in WIM after remove', $ImagePathForWIM, $Index
+
+					# retrieve appx packages in windows image after remove
+					try {
+						$AppxPackages = Get-AppxProvisionedPackage -Path $TemporaryPathForWIM -ScratchDirectory $TemporaryPathForDSD -ErrorAction 'Stop'
+					}
+					catch {
+						return $_
+					}
+				}
+
+				# if appx packages to add provided...
+				if ($AppxPackagesToAdd.Keys) {
+					# loop through appx packages
+					:NextAppxPackageToAdd foreach ($DisplayName in $AppxPackagesToAdd.Keys) {
+						# retrieve appx package by name
+						$AppxPackage = $AppxPackages | Where-Object { $_.DisplayName -eq $DisplayName }
+
+						# if appx package already added...
+						if ($AppxPackage) {
+							# report state and continue to next appx package
+							"{0}`t{1}: {2}, {3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Requested AppX package already added to WIM', $DisplayName, $AppxPackage.PackageName
+							continue NextAppxPackageToAdd
+						}
+
+						# report state
+						"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding AppX package to WIM', $DisplayName
+
+						# define parameters hashtable from provided parameters
+						$AddAppxProvisionedPackage = $AppxPackagesToAdd[$DisplayName]
+
+						# update parameters hashtable with script values
+						$AddAppxProvisionedPackage['Path'] = $TemporaryPathForWIM
+						$AddAppxProvisionedPackage['ScratchDirectory'] = $TemporaryPathForDSD
+						$AddAppxProvisionedPackage['ErrorAction'] = [System.Management.Automation.ActionPreference]::Stop
+
+						# add appx package to windows image
+						try {
+							$null = Add-AppxProvisionedPackage @AddAppxProvisionedPackage
+						}
+						catch {
+							Write-Warning -Message "could not add '$DisplayName' AppX package to WIM: $($_.Exception.Message)"
+						}
+					}
+				}
+			}
+
+			# if packages to remove or add provided...
+			if ($PackagesToRemove.Count -or $PackagesToAdd.Keys) {
+				# report state
+				"{0}`t{1}: {2}:{3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Retrieving Windows packages in WIM', $ImagePathForWIM, $Index
+
+				# retrieve packages in windows image
+				try {
+					$WindowsPackages = Get-WindowsPackage -Path $TemporaryPathForWIM -ErrorAction 'Stop'
+				}
+				catch {
+					return $_
+				}
+
+				# if packages to remove provided...
+				if ($PackagesToRemove.Count) {
+					# loop through packages
+					:NextPackageToRemove foreach ($PackageName in $PackagesToRemove) {
+						# retrieve package by name
+						$WindowsPackage = $WindowsPackages | Where-Object { $_.PackageName -eq $PackageName }
+
+						# if package not found...
+						if (!$WindowsPackage) {
+							# report state and continue to next package
+							"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Cannot remove unknown package from WIM', $PackageName
+							continue NextPackageToRemove
+						}
+
+						# if package already enabled...
+						if ($WindowsPackage.PackageState -eq 'NotPresent') {
+							# report state and continue to next package
+							"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Requested package already removed from WIM', $PackageName
+							continue NextPackageToRemove
+						}
+
+						# report state
+						"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Removing package from WIM', $PackageName
+
+						# remove package from windows image
+						try {
+							$null = Remove-WindowsPackage -Path $TemporaryPathForWIM -PackageName $PackageName -ErrorAction 'Stop'
+						}
+						catch {
+							Write-Warning -Message "could not remove '$PackageName' package from WIM: $($_.Exception.Message)"
+						}
+					}
+
+					# report state
+					"{0}`t{1}: {2}:{3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Retrieving Windows packages in WIM after remove', $ImagePathForWIM, $Index
+
+					# retrieve packages in windows image
+					try {
+						$WindowsPackages = Get-WindowsPackage -Path $TemporaryPathForWIM -ErrorAction 'Stop'
+					}
+					catch {
+						return $_
+					}
+				}
+
+				# if packages to add provided...
+				if ($PackagesToAdd.Keys) {
+					# loop through packages
+					:NextPackageToAdd foreach ($PackageName in $PackagesToAdd.Keys) {
+						# retrieve package by name
+						$WindowsPackage = $WindowsPackages | Where-Object { $_.PackageName -eq $PackageName }
+
+						# if package not found...
+						if (!$WindowsPackage) {
+							# report state and continue to next package
+							"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Cannot add unknown package to WIM', $PackageName
+							continue NextPackageToAdd
+						}
+
+						# if package already added...
+						if ($WindowsPackage.PackageState -eq 'Installed') {
+							# report state and continue to next package
+							"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Requested package already added to WIM', $PackageName
+							continue NextPackageToAdd
+						}
+
+						# report state
+						"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding package to WIM', $PackageName
+
+						# define parameters hashtable from provided parameters
+						$AddWindowsPackage = $PackagesToAdd[$PackageName]
+
+						# update parameters hashtable with script values
+						$AddWindowsPackage['Path'] = $TemporaryPathForWIM
+						$AddWindowsPackage['ScratchDirectory'] = $TemporaryPathForDSD
+						$AddWindowsPackage['ErrorAction'] = [System.Management.Automation.ActionPreference]::Stop
+
+						# add package to windows image
+						try {
+							$null = Add-WindowsPackage @AddWindowsPackage
+						}
+						catch {
+							Write-Warning -Message "could not add '$PackageName' package to WIM: $($_.Exception.Message)"
+						}
+					}
+				}
+			}
+
 			# if verbose status in setup requested...
 			if ($AddVerboseStatusToSetup) {
 				# report state
