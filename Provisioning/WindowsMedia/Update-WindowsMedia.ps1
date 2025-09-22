@@ -738,17 +738,6 @@ process {
 						Write-Warning -Message "could not remove '$PackageName' AppX package from WIM: $($_.Exception.Message)"
 					}
 				}
-
-				# report state
-				"{0}`t{1}: {2}:{3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Retrieving AppX packages in WIM after remove', $ImagePathForWIM, $Index
-
-				# retrieve appx packages in windows image after remove
-				try {
-					$AppxPackages = Get-AppxProvisionedPackage -Path $TemporaryPathForWIM -ScratchDirectory $TemporaryPathForDSD -ErrorAction 'Stop'
-				}
-				catch {
-					return $_
-				}
 			}
 
 			# if appx packages to add provided...
@@ -839,17 +828,6 @@ process {
 					catch {
 						Write-Warning -Message "could not remove '$PackageName' package from WIM: $($_.Exception.Message)"
 					}
-				}
-
-				# report state
-				"{0}`t{1}: {2}:{3}" -f [System.Datetime]::UtcNow.ToString('o'), 'Retrieving Windows packages in WIM after remove', $ImagePathForWIM, $Index
-
-				# retrieve packages in windows image
-				try {
-					$WindowsPackages = Get-WindowsPackage -Path $TemporaryPathForWIM -ErrorAction 'Stop'
-				}
-				catch {
-					return $_
 				}
 			}
 
