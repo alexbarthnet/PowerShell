@@ -5,7 +5,8 @@ param(
 	[switch]$ClearHiddenItemsFromEmptyFolders,
 	[switch]$CreateMissingFolders,
 	[string[]]$ExcludeOneDriveFolders,
-	[string[]]$IncludeOneDriveFolders
+	[string[]]$IncludeOneDriveFolders,
+	[string[]]$WaitForOneDriveFolders
 )
 
 # if identity provided...
@@ -32,42 +33,61 @@ catch {
 	return $_
 }
 
-# if OneDrive containers not found and wait for OneDrive requested....
-if ($OneDrive.Count -eq 0 -and $WaitForOneDrive) {
-	# report state
-	Write-Host 'Waiting for OneDrive container...'
-
-	# while OneDrive containers not found
-	while ($OneDrive.Count -eq 0) {
-		# retrieve OneDrive container(s) matching filterscript
-		try {
-			$OneDrive = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object -FilterScript $FilterScript
-		}
-		catch {
-			return $_
-		}
-
-		# sleep 
-		Start-Sleep -Seconds 3
-	}
-}
-
 # if multiple OneDrive containers found with Identity...
 if ($OneDrive.Count -gt 1 -and $PSBoundParameters.ContainsKey('Identity')) {
+	# warn and return
 	Write-Warning -Message 'multiple mounted OneDrive containers found in the user profile folder; the Identity parameter did not limit scope to single container'
 	return
 }
 
 # if multiple OneDrive containers found without Identity...
 if ($OneDrive.Count -gt 1) {
+	# warn and return
 	Write-Warning -Message 'multiple mounted OneDrive containers found in the user profile folder; the Identity parameter was not provided to limit scope to single container'
 	return
 }
 
 # if no OneDrive containers found....
 if ($OneDrive.Count -eq 0) {
-	Write-Warning -Message 'a mounted OneDrive container was not found in the user profile folder'
-	return
+	# if wait for OneDrive requested...
+	if ($WaitForOneDrive) {
+		# report state
+		Write-Host 'Waiting for OneDrive container...'
+
+		# while OneDrive containers not found
+		while ($OneDrive.Count -eq 0) {
+			# retrieve OneDrive container(s) matching filterscript
+			try {
+				$OneDrive = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object -FilterScript $FilterScript
+			}
+			catch {
+				return $_
+			}
+
+			# sleep
+			Start-Sleep -Seconds 1
+		}
+
+		# loop through wait for OneDrive folders
+		foreach ($WaitForOneDriveFolder in $WaitForOneDriveFolders) {
+			# report state
+			Write-Host "Waiting for OneDrive folder: $WaitForOneDriveFolder"
+
+			# define full path to wait for OneDrive folder
+			$OneDriveFolderPath = Join-Path -Path $OneDrive.FullName -ChildPath $WaitForOneDriveFolder
+
+			# while wait for OneDrive folder not found...
+			while (!(Test-Path -Path $OneDriveFolderPath -PathType Container)) {
+				# sleep
+				Start-Sleep -Seconds 1
+			}
+		}
+	}
+	else {
+		# warn and return
+		Write-Warning -Message 'a mounted OneDrive container was not found in the user profile folder'
+		return
+	}
 }
 
 # report OneDrive container:
@@ -203,12 +223,12 @@ catch {
 			$Item = New-Item -ItemType Junction -Path $ExistingFolderFullName -Target $OneDriveFolderFullName -ErrorAction 'Stop'
 		}
 		catch [System.IO.IOException] {
-			# if HResult is "access denied" 
+			# if HResult is "access denied"
 			if ($_.Exception.HResult -eq -2146232800 -and $Item.LinkType -eq 'Junction') {
 				Write-Host "...junctioned '$OneDriveFolderBaseName' folder to '$ExistingFolderFullName' folder"
 				continue NextOneDriveFolder
 			}
-			else { 
+			else {
 				Write-Error "...skipped '$OneDriveFolderBaseName' folder; could not junction OneDrive folder to existing folder: $ExistingFolderFullName"
 				continue NextOneDriveFolder
 			}
