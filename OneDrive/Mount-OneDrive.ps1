@@ -220,7 +220,7 @@ catch {
 	# create junction
 	if ($PSCmdlet.ShouldProcess($ExistingFolderFullName, 'Junction folder')) {
 		try {
-			$Item = New-Item -ItemType Junction -Path $ExistingFolderFullName -Target $OneDriveFolderFullName -ErrorAction 'Stop'
+			$Item = New-Item -ItemType Junction -Path $ExistingFolderFullName -Target $OneDriveFolderFullName -Force -ErrorAction 'Stop'
 		}
 		catch [System.IO.IOException] {
 			# if HResult is "access denied"
