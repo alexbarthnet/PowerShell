@@ -219,21 +219,14 @@ catch {
 
 	# create junction
 	if ($PSCmdlet.ShouldProcess($ExistingFolderFullName, 'Junction folder')) {
-		try {
-			$Item = New-Item -ItemType Junction -Path $ExistingFolderFullName -Target $OneDriveFolderFullName -Force -ErrorAction 'Stop'
-		}
-		catch [System.IO.IOException] {
-			# if HResult is "access denied"
-			if ($_.Exception.HResult -eq -2146232800 -and $Item.LinkType -eq 'Junction') {
-				Write-Host "...junctioned '$OneDriveFolderBaseName' folder to '$ExistingFolderFullName' folder"
-				continue NextOneDriveFolder
-			}
-			else {
-				Write-Error "...skipped '$OneDriveFolderBaseName' folder; could not junction OneDrive folder to existing folder: $ExistingFolderFullName"
-				continue NextOneDriveFolder
-			}
-		}
-		catch {
+		# clear item object
+		$Item = $null
+
+		# create junction with silently continue
+		$Item = New-Item -ItemType Junction -Path $ExistingFolderFullName -Target $OneDriveFolderFullName -Force -ErrorAction 'SilentlyContinue'
+
+		# if item link type is not junction...
+		if ($Item.LinkType -ne 'Junction') {
 			Write-Error "...skipped '$OneDriveFolderBaseName' folder; could not junction OneDrive folder to existing folder: $ExistingFolderFullName"
 			continue NextOneDriveFolder
 		}
