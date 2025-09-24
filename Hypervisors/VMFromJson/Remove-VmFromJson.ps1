@@ -1713,6 +1713,20 @@ Process {
 					# add VHD path to list
 					Write-Host ("$Hostname,$ComputerName,$Name - ...found VHD from VM to remove: '$($VHD.Path)'")
 					$VHDPaths.Add($VHD.Path)
+
+					# report state
+					Write-Host ("$Hostname,$ComputerName,$Name - removing VHD from VM: '$($VHD.Path)'")
+
+					# remove VHD from VM
+					try {
+						Remove-VMHardDiskDrive -VMHardDiskDrive $VHD
+					}
+					catch {
+						Throw $_
+					}
+
+					# report state
+					Write-Host ("$Hostname,$ComputerName,$Name - ...VHD removed from VM")
 				}
 			}
 
