@@ -1,4 +1,3 @@
-
 [CmdletBinding(SupportsShouldProcess)]
 param(
 	[Parameter(Mandatory)][ValidateSet('Pin', 'Unpin', 'Reset')]
