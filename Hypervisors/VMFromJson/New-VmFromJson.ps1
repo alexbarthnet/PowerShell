@@ -1,6 +1,6 @@
 #requires -Modules 'Hyper-V', FailoverClusters, DhcpServer
 
-[CmdletBinding()]
+[CmdletBinding(SupportsShouldProcess)]
 Param(
 	[Parameter(Position = 0, Mandatory)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Json,
@@ -30,6 +30,10 @@ Param(
 	[pscredential]$DomainJoinCredential,
 	[Parameter()][ValidateNotNull()]
 	[hashtable]$ExpandStrings = @{},
+	[Parameter(DontShow)]
+	[bool]$YesToAll,
+	[Parameter(DontShow)]
+	[bool]$NoToAll,
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 )
@@ -3605,6 +3609,75 @@ Begin {
 		Return $VM
 	}
 
+	Function Remove-VMFromClusterName {
+		[CmdletBinding()]
+		Param(
+			# define VM parameters
+			[Parameter(Mandatory = $true)]
+			[object]$VM,
+			[string]$ComputerName = $VM.ComputerName.ToLower(),
+			# define cluster parameters
+			[Parameter(Mandatory = $true)]
+			[string]$ClusterName
+		)
+
+		# get VM from parameters
+		Try {
+			$VM = Get-VMFromParameters -ComputerName $ComputerName -VM $VM
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
+			Throw $_
+		}
+
+		# define parameters for Get-ClusterGroup
+		$GetClusterGroup = @{
+			Cluster     = $ClusterName
+			VMId        = $VM.Id
+			ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
+		}
+
+		# retrieve existing cluster group
+		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - checking cluster for VM...")
+			$ClusterGroup = Get-ClusterGroup @GetClusterGroup
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: getting cluster group for VM")
+			Throw $_
+		}
+
+		# if cluster group not found...
+		If ($null -eq $ClusterGroup) {
+			# declare and return
+			Write-Host ("$Hostname,$ComputerName,$Name - ...VM not found in cluster: $ClusterName")
+			Return
+		}
+
+		# define parameters for Remove-ClusterGroup
+		$RemoveClusterGroup = @{
+			Cluster         = $ClusterName
+			VMId            = $VM.Id
+			RemoveResources = $true
+			Force           = $true
+			ErrorAction     = [System.Management.Automation.ActionPreference]::SilentlyContinue
+		}
+
+		# remove cluster group
+		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...VM found in cluster, removing from cluster: $ClusterName")
+			Remove-ClusterGroup @RemoveClusterGroup
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: removing VM from cluster")
+			Throw $_
+		}
+
+		# declare and return
+		Write-Host ("$Hostname,$ComputerName,$Name - ...removed VM from cluster")
+		Return
+	}
+
 	Function Resolve-ExpandStringsInXML {
 		param(
 			[Parameter(Mandatory)]
@@ -3783,6 +3856,51 @@ Process {
 
 			# declare and continue
 			Write-Host ("$Hostname,$ComputerName,$Name - ....updated computer name")
+		}
+
+		# if VM is online requested...
+		If ($null -ne $VM -and $VM.State -ne 'Off') {
+			# if should continue prompt returns false...
+			If (!$PSCmdLet.ShouldContinue('VM is not offline! Power off and reconfigure VM?', $VM.Name, $true, [ref]$YesToAll, [ref]$NoToAll)) {
+				Continue VMName
+			}
+
+			# define parameters for Stop-VM
+			$StopVM = @{
+				VM      = $VM
+				TurnOff = $true
+				Confirm = $false
+			}
+
+			# stop VM
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - stopping VM on host...")
+				Stop-VM @StopVM
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: stopping VM")
+				Throw $_
+			}
+
+			# report
+			Write-Host ("$Hostname,$ComputerName,$Name - ...VM powered off")
+		}
+
+		# if VM is on a cluster...
+		If ($null -ne $VM -and -not [string]::IsNullOrEmpty($ClusterName)) {
+			# define required parameters for Add-VMToClusterName
+			$RemoveVMFromClusterName = @{
+				VM          = $VM
+				ClusterName = $ClusterName
+			}
+
+			# remove VM from cluster
+			Try {
+				Remove-VMFromClusterName @RemoveVMFromClusterName
+			}
+			Catch {
+				Throw $_
+			}
 		}
 
 		# if VM not found...
