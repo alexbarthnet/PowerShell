@@ -72,13 +72,13 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 			# report state
 			Write-Host "Waiting for OneDrive folder: $Path"
 
-			# define full path to wait for OneDrive folder
-			$TestPath = Test-Path -Path $Path -PathType Container
-
 			# while wait for OneDrive folder not found...
 			while (!$TestPath) {
 				# sleep
 				Start-Sleep -Seconds 1
+
+				# test path
+				$TestPath = Test-Path -Path $Path -PathType Container
 			}
 		}
 	}
