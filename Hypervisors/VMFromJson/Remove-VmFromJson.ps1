@@ -1,6 +1,6 @@
 #requires -Modules 'Hyper-V', FailoverClusters, DhcpServer
 
-[CmdletBinding()]
+[CmdletBinding(SupportsShouldProcess)]
 Param(
 	[Parameter(Position = 0, Mandatory)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Json,
@@ -14,6 +14,8 @@ Param(
 	[switch]$PreserveVHDs,
 	[Parameter()]
 	[switch]$PreserveOSD,
+	[Parameter()]
+	[switch]$RemoveVMStorageOnly,
 	[Parameter()]
 	[switch]$Force,
 	[Parameter(DontShow)]
@@ -1576,6 +1578,38 @@ Process {
 			Write-Host ("$Hostname,$ComputerName,$Name - ....updated computer name")
 		}
 
+		# if VM is online...
+		If ($null -ne $VM -and $VM.State -ne 'Off') {
+			# if Force requested...
+			If ($Force.IsPresent) {
+				Write-Warning 'VM is not offline! VM will be powered off'
+			}
+			# if should continue prompt returns false...
+			ElseIf (!$PSCmdLet.ShouldContinue('VM is not offline! Power off VM?', $VM.Name)) {
+				Continue VMName
+			}
+
+			# define parameters for Remove-VM
+			$StopVM = @{
+				VM      = $VM
+				TurnOff = $true
+				Confirm = $false
+			}
+
+			# stop VM
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - stopping VM on host...")
+				Stop-VM @StopVM
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: stopping VM")
+				Throw $_
+			}
+
+			# report
+			Write-Host ("$Hostname,$ComputerName,$Name - ...VM powered off")
+		}
+
 		# if VM is on a cluster...
 		If ($null -ne $VM -and -not [string]::IsNullOrEmpty($ClusterName)) {
 			# define required parameters for Add-VMToClusterName
@@ -1590,6 +1624,149 @@ Process {
 			}
 			Catch {
 				Throw $_
+			}
+		}
+
+		# remove VM snapshots...
+		If ($null -ne $VM -and $null -ne $VM.ParentSnapshotId) {
+			# get parent snapshots
+			Try {
+				$VMSnapshots = Get-VMSnapshot -VM $VM
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM snapshots")
+				Throw $_
+			}
+
+			# process snapshots
+			ForEach ($VMSnapshot in $VMSnapshots) {
+				# remove snapshot and child snapshots
+				Try {
+					Remove-VMSnapshot -VMSnapshot $VMSnapshot -IncludeAllChildSnapshots
+				}
+				Catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove VM snapshots")
+					Throw $_
+				}
+			}
+
+			# define values for while loop and reporting
+			$While = @{
+				Action     = 'disks to merge after snapshot removal' # action being waited for
+				Expression = '$VM.SecondaryStatus' # expression that evaluates true while action is in progress and false when action is complete
+				Multiplier = [int32]0 # counter for current loop
+				WaitTime   = [int32]0 # counter for total seconds in while loop
+				Seconds    = [int32]5 # sleep time for each pass of while loop; multiplied by loop counter to gradually add time to each loop
+				Limit      = [int32]8 # maximum passes to complete; default limit of 8 with 5 seconds allows 180 seconds for the action to complete
+			}
+
+			# wait for VM to return to normal operation
+			Write-Host ("$Hostname,$ComputerName,$Name - waiting for $($While.Action)...")
+			While ((Invoke-Expression -Command $While.Expression) -and $While.Multiplier -lt $While.Limit) {
+				# increment multiplier
+				$While.Multiplier++
+
+				# record total time
+				$While.WaitTime += ($While.Seconds * $While.Multiplier)
+
+				# declare updated wait time then sleep
+				Write-Host ("$Hostname,$ComputerName,$Name - ...waiting an additional '$($While.Seconds * $While.Multiplier)' seconds")
+				Start-Sleep -Seconds ($While.Seconds * $While.Multiplier)
+			}
+
+			# if VM still has a secondary status found...
+			If ($VM.SecondaryStatus) {
+				# ...declare wait time and return
+				Write-Host ("$Hostname,$ComputerName,$Name - WARNING: waited '$($While.WaitTime)' for $($While.Action)")
+				Write-Host ("$Hostname,$ComputerName,$Name - ...check Hyper-V before continuing")
+				Return $null
+			}
+			Else {
+				# ...declare wait time and continue
+				Write-Host ("$Hostname,$ComputerName,$Name - ...waited '$($While.WaitTime)' seconds for $($While.Action)")
+			}
+		}
+
+		# remove VM hard drives...
+		If ($null -ne $VM) {
+			# define lists
+			$VHDPaths = [System.Collections.Generic.List[string]]::new()
+
+			# retrieve VHDs attached to VM
+			Try {
+				Write-Host ("$Hostname,$ComputerName,$Name - retrieving VHDs attached to VM")
+				$VHDs = Get-VMHardDiskDrive -VM $VM
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VHDs from VM")
+				Throw $_
+			}
+
+			# loop through VHDs attached to VM
+			ForEach ($VHD in $VHDs) {
+				# if VHD is shared...
+				If ($VHD.SupportPersistentReservations) {
+					# declare warning
+					Write-Host ("$Hostname,$ComputerName,$Name - WARNING: found shared VHD: '$($VHD.Path)'")
+				}
+				Else {
+					# add VHD path to list
+					Write-Host ("$Hostname,$ComputerName,$Name - ...found VHD from VM to remove: '$($VHD.Path)'")
+					$VHDPaths.Add($VHD.Path)
+				}
+			}
+
+			# retrieve VHDs from JSON
+			$VHDPathsFromJson = $JsonData.$Name.VMHardDiskDrives.Path
+
+			# loop through VHDs from JSON
+			ForEach ($VHDPath in $VHDPathsFromJson) {
+				# if VHD path not in list...
+				If ($VHDPath -notin $VHDPaths) {
+					# add VHD path to list
+					Write-Host ("$Hostname,$ComputerName,$Name - ...found VHD from JSON to remove: '$VHDPath'")
+					$VHDPaths.Add($VHDPath)
+				}
+			}
+
+			# loop through VHDs found
+			ForEach ($Path in $VHDPaths) {
+				# if PreserveVHDs requested...
+				if ($PreserveVHDs.IsPresent) {
+					# report preservation
+					Write-Host ("$Hostname,$ComputerName,$Name - keeping VHD: '$Path'")
+				}
+				else {
+					# declare and begin
+					Write-Host ("$Hostname,$ComputerName,$Name - removing VHD: '$Path'")
+
+					# define parameters for Remove-VHD
+					$RemoveVHD = @{
+						Path         = $Path
+						ComputerName = $ComputerName
+					}
+
+					# remove VHD from host
+					Try {
+						Remove-VHD @RemoveVHD
+					}
+					Catch {
+						Throw $_
+					}
+
+					# retrieve VHD parent path
+					$VHDParentPath = Split-Path -Path $Path -Parent
+
+					# add VHD parent path to VMPaths
+					$VMPaths.Add($VHDParentPath)
+				}
+			}
+
+			# if RemoveVMStorageOnly requested...
+			if ($RemoveVMStorageOnly.IsPresent) {
+				# declare and continue
+				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VM removal, RemoveVMStorageOnly set")
+				Continue VMName
 			}
 		}
 
@@ -1669,112 +1846,6 @@ Process {
 			}
 		}
 
-		# get VM snapshots...
-		If ($null -ne $VM) {
-			# get parent snapshots
-			Try {
-				$VMSnapshots = Get-VMSnapshot -VM $VM
-			}
-			Catch {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM snapshots")
-				Throw $_
-			}
-		}
-
-		# if VM has snapshots...
-		If ($null -ne $VM -and $null -ne $VMSnapshots) {
-			# process snapshots
-			ForEach ($VMSnapshot in $VMSnapshots) {
-				# remove snapshot and child snapshots
-				Try {
-					Remove-VMSnapshot -VMSnapshot $VMSnapshot -IncludeAllChildSnapshots
-				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove VM snapshots")
-					Throw $_
-				}
-			}
-
-			# define values for while loop and reporting
-			$While = @{
-				Action     = 'disks to merge after snapshot removal' # action being waited for
-				Expression = '$VM.SecondaryStatus' # expression that evaluates true while action is in progress and false when action is complete
-				Multiplier = [int32]0 # counter for current loop
-				WaitTime   = [int32]0 # counter for total seconds in while loop
-				Seconds    = [int32]5 # sleep time for each pass of while loop; multiplied by loop counter to gradually add time to each loop
-				Limit      = [int32]8 # maximum passes to complete; default limit of 8 with 5 seconds allows 180 seconds for the action to complete
-			}
-
-			# wait for VM to return to normal operation
-			Write-Host ("$Hostname,$ComputerName,$Name - waiting for $($While.Action)...")
-			While ((Invoke-Expression -Command $While.Expression) -and $While.Multiplier -lt $While.Limit) {
-				# increment multiplier
-				$While.Multiplier++
-
-				# record total time
-				$While.WaitTime += ($While.Seconds * $While.Multiplier)
-
-				# declare updated wait time then sleep
-				Write-Host ("$Hostname,$ComputerName,$Name - ...waiting an additional '$($While.Seconds * $While.Multiplier)' seconds")
-				Start-Sleep -Seconds ($While.Seconds * $While.Multiplier)
-			}
-
-			# if VM still has a secondary status found...
-			If ($VM.SecondaryStatus) {
-				# ...declare wait time and return
-				Write-Host ("$Hostname,$ComputerName,$Name - WARNING: waited '$($While.WaitTime)' for $($While.Action)")
-				Write-Host ("$Hostname,$ComputerName,$Name - ...check Hyper-V before continuing")
-				Return $null
-			}
-			Else {
-				# ...declare wait time and continue
-				Write-Host ("$Hostname,$ComputerName,$Name - ...waited '$($While.WaitTime)' seconds for $($While.Action)")
-			}
-		}
-
-		# get VM storage paths
-		If ($null -ne $VM -and -not $PreserveVHDs) {
-			# define lists
-			$VHDPaths = [System.Collections.Generic.List[string]]::new()
-
-			# retrieve VHDs attached to VM
-			Try {
-				Write-Host ("$Hostname,$ComputerName,$Name - retrieving VHDs attached to VM")
-				$VHDs = Get-VMHardDiskDrive -VM $VM
-			}
-			Catch {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VHDs from VM")
-				Throw $_
-			}
-
-			# process VHDs
-			ForEach ($VHD in $VHDs) {
-				# if VHD is shared...
-				If ($VHD.SupportPersistentReservations) {
-					# declare warning
-					Write-Host ("$Hostname,$ComputerName,$Name - WARNING: found shared VHD: '$($VHD.Path)'")
-				}
-				Else {
-					# add VHD path to list
-					Write-Host ("$Hostname,$ComputerName,$Name - ...found VHD from VM to remove: '$($VHD.Path)'")
-					$VHDPaths.Add($VHD.Path)
-				}
-			}
-
-			# retrieve VHDs from JSON
-			$VHDPathsFromJson = $JsonData.$Name.VMHardDiskDrives.Path
-
-			# loop through VHDs
-			ForEach ($VHDPath in $VHDPathsFromJson) {
-				# if VHD path not in list...
-				If ($VHDPath -notin $VHDPaths) {
-					# add VHD path to list
-					Write-Host ("$Hostname,$ComputerName,$Name - ...found VHD from JSON to remove: '$VHDPath'")
-					$VHDPaths.Add($VHDPath)
-				}
-			}
-		}
-
 		# get VM paths
 		If ($null -ne $VM) {
 			# get path information
@@ -1842,35 +1913,6 @@ Process {
 
 			# report
 			Write-Host ("$Hostname,$ComputerName,$Name - ...VM removed")
-		}
-
-		# remove VHDs from host
-		If ($null -ne $VHDPaths) {
-			ForEach ($Path in $VHDPaths) {
-				# declare and begin
-				Write-Host ("$Hostname,$ComputerName,$Name - removing VHD: '$Path'")
-
-				# define parameters for Remove-VHD
-				$RemoveVHD = @{
-					Path         = $Path
-					ComputerName = $ComputerName
-				}
-
-				# remove VHD from host
-				Try {
-					Remove-VHD @RemoveVHD
-				}
-				Catch {
-					Throw $_
-				}
-
-				# add VHD parent path to VMPaths
-				$VHDPath = Split-Path -Path $Path -Parent
-				$VMPaths.Add($VHDPath)
-			}
-
-			# clear VHD paths
-			$null = $VHDPaths
 		}
 
 		# remove files and folders from VM paths
