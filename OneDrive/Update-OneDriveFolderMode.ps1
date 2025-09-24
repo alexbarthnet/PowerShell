@@ -90,7 +90,7 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 	switch ($Mode) {
 		'Pin' {
 			# if file is already pinned...
-			if ($Item.FileAttributes -band 0x80000) {
+			if ($Item.Attributes -band 0x80000) {
 				Write-Host "Found OneDrive folder already pinned: $Path"
 				continue NextOneDriveFolder
 			}
@@ -100,7 +100,7 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 		}
 		'Unpin' {
 			# if file is already unpinned...
-			if ($Item.FileAttributes -band 0x100000) {
+			if ($Item.Attributes -band 0x100000) {
 				Write-Host "Found OneDrive folder already unpinned: $Path"
 				continue NextOneDriveFolder
 			}
