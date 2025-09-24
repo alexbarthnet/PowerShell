@@ -2737,7 +2737,7 @@ Begin {
 					Return
 				}
 				# if controller number not valid...
-				If ($ControllerNumber -notin 0..1) {
+				If ($PSBoundParameters.ContainsKey('ControllerNumber') -and $ControllerNumber -notin 0..1) {
 					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: found unsupported '$ControllerNumber' controller number for '$ControllerType' controller type")
 					Return
 				}
