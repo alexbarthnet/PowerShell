@@ -1629,6 +1629,9 @@ Process {
 
 		# remove VM snapshots...
 		If ($null -ne $VM -and $null -ne $VM.ParentSnapshotId) {
+			# report state
+			Write-Host ("$Hostname,$ComputerName,$Name - removing VM snapshots")
+
 			# get parent snapshots
 			Try {
 				$VMSnapshots = Get-VMSnapshot -VM $VM
@@ -1685,6 +1688,9 @@ Process {
 				# ...declare wait time and continue
 				Write-Host ("$Hostname,$ComputerName,$Name - ...waited '$($While.WaitTime)' seconds for $($While.Action)")
 			}
+
+			# sleep an additional second to ensure VM hard drives update after snapshot removal
+			Start-Sleep -Seconds 1
 		}
 
 		# remove VM hard drives...
@@ -1748,11 +1754,11 @@ Process {
 				# if PreserveVHDs requested...
 				if ($PreserveVHDs.IsPresent) {
 					# report preservation
-					Write-Host ("$Hostname,$ComputerName,$Name - keeping VHD: '$Path'")
+					Write-Host ("$Hostname,$ComputerName,$Name - keeping VHD file: '$Path'")
 				}
 				else {
 					# declare and begin
-					Write-Host ("$Hostname,$ComputerName,$Name - removing VHD: '$Path'")
+					Write-Host ("$Hostname,$ComputerName,$Name - removing VHD file: '$Path'")
 
 					# define parameters for Remove-VHD
 					$RemoveVHD = @{
@@ -1779,7 +1785,7 @@ Process {
 			# if RemoveVMStorageOnly requested...
 			if ($RemoveVMStorageOnly.IsPresent) {
 				# declare and continue
-				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VM removal, RemoveVMStorageOnly set")
+				Write-Host ("$Hostname,$ComputerName,$Name - skipping VM removal: RemoveVMStorageOnly parameter provided")
 				Continue VMName
 			}
 		}
@@ -1925,7 +1931,7 @@ Process {
 				Throw $_
 			}
 
-			# report
+			# report state
 			Write-Host ("$Hostname,$ComputerName,$Name - ...VM removed")
 		}
 
