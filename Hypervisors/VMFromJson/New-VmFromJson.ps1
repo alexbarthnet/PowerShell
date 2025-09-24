@@ -1543,16 +1543,17 @@ Begin {
 		# define parameters for Get-ClusterGroup
 		$GetClusterGroup = @{
 			Cluster     = $ClusterName
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			VMId        = $VM.Id
+			ErrorAction = [System.Management.Automation.ActionPreference]::SilentlyContinue
 		}
 
 		# retrieve existing cluster group
 		Try {
 			Write-Host ("$Hostname,$ComputerName,$Name - checking cluster for VM...")
-			$ClusterGroup = Get-ClusterGroup @GetClusterGroup | Where-Object { $_.Name -eq $Name }
+			$ClusterGroup = Get-ClusterGroup @GetClusterGroup
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving cluster groups")
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: getting cluster group for VM")
 			Throw $_
 		}
 
