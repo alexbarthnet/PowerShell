@@ -1653,7 +1653,7 @@ Process {
 			# define values for while loop and reporting
 			$While = @{
 				Action     = 'disks to merge after snapshot removal' # action being waited for
-				Expression = '$VM.SecondaryStatus' # expression that evaluates true while action is in progress and false when action is complete
+				Expression = '$VM.SecondaryOperationalStatus' # expression that evaluates true while action is in progress and false when action is complete
 				Multiplier = [int32]0 # counter for current loop
 				WaitTime   = [int32]0 # counter for total seconds in while loop
 				Seconds    = [int32]5 # sleep time for each pass of while loop; multiplied by loop counter to gradually add time to each loop
@@ -1675,7 +1675,7 @@ Process {
 			}
 
 			# if VM still has a secondary status found...
-			If ($VM.SecondaryStatus) {
+			If ($VM.SecondaryOperationalStatus) {
 				# ...declare wait time and return
 				Write-Host ("$Hostname,$ComputerName,$Name - WARNING: waited '$($While.WaitTime)' for $($While.Action)")
 				Write-Host ("$Hostname,$ComputerName,$Name - ...check Hyper-V before continuing")
