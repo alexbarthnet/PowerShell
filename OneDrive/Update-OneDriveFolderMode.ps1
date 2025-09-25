@@ -1,5 +1,7 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
+	[Parameter(DontShow)][ValidateSet('OneDrive', 'OneDriveConsumer', 'OneDriveCommerical')]
+	[string]$Environment = 'OneDrive',
 	[Parameter(Mandatory)][ValidateSet('Pin', 'Unpin', 'Reset')]
 	[string]$Mode,
 	[Parameter(Mandatory)]
@@ -7,6 +9,32 @@ param(
 	[switch]$WaitForOneDrive,
 	[string]$Identity
 )
+
+# check user environment variable for the OneDrive path
+$OneDrivePath = [System.Environment]::GetEnvironmentVariable($Environment, 'User')
+
+# if OneDrive path is null...
+if ([System.String]::IsNullOrEmpty($OneDrivePath)) {
+	# if wait for OneDrive requested...
+	if ($WaitForOneDrive) {
+		# report state
+		Write-Host "Waiting for '$Environment' environment variable..."
+
+		# while OneDrive path is null...
+		while ([System.String]::IsNullOrEmpty($OneDrivePath)) {
+			# retrieve user environment variable for the OneDrive path
+			$OneDrivePath = [System.Environment]::GetEnvironmentVariable($Environment, 'User')
+
+			# sleep
+			Start-Sleep -Seconds 1
+		}
+	}
+	else {
+		# warn and return
+		Write-Warning -Message "the '$Environment' environment variable is empty"
+		return
+	}
+}
 
 # if identity provided...
 if ($PSBoundParameters.ContainsKey('Identity')) {
