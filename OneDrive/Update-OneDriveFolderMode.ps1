@@ -125,9 +125,6 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 
 	# loop through paths
 	:NextOneDriveItem foreach ($Path in $Paths) {
-		# report state
-		Write-Host "...checking OneDrive item: $Path"
-
 		# retrieve folder
 		$Item = Get-Item -Path $Path
 
@@ -136,27 +133,27 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 			'Pin' {
 				# if file is already pinned...
 				if ($Item.Attributes -band 0x80000 -and -not $Force.IsPresent) {
-					Write-Host '...found the OneDrive item already pinned'
+					Write-Host "...found pinned: $Path"
 					continue NextOneDriveItem
 				}
 				else {
-					Write-Host '...pinning the OneDrive item'
+					Write-Host "...pinning: $Path"
 					$ArgumentList = '+p -u "{0}"' -f $Path
 				}
 			}
 			'Unpin' {
 				# if file is already unpinned...
 				if ($Item.Attributes -band 0x100000 -and -not $Force.IsPresent) {
-					Write-Host '...found the OneDrive item already unpinned'
+					Write-Host "...found unpinned: $Path"
 					continue NextOneDriveItem
 				}
 				else {
-					Write-Host '...unpinning the OneDrive item'
+					Write-Host "...unpinning: $Path"
 					$ArgumentList = '-p +u "{0}"' -f $Path
 				}
 			}
 			'Reset' {
-				Write-Host '...resetting the OneDrive item'
+				Write-Host "...resetting: $Path"
 				$ArgumentList = '-p -u "{0}"' -f $Path
 			}
 			Default {
