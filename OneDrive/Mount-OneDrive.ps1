@@ -104,10 +104,16 @@ if ($OneDrive.Count -eq 0) {
 			# define full path to wait for OneDrive folder
 			$OneDriveFolderPath = Join-Path -Path $OneDrive.FullName -ChildPath $WaitForOneDriveFolder
 
+			# test path for wait for OneDrive folder
+			$TestPath = Test-Path -Path $OneDriveFolderPath -PathType Container
+
 			# while wait for OneDrive folder not found...
-			while (!(Test-Path -Path $OneDriveFolderPath -PathType Container)) {
+			while (!$TestPath) {
 				# sleep
 				Start-Sleep -Seconds 1
+
+				# test path for wait for OneDrive folder
+				$TestPath = Test-Path -Path $OneDriveFolderPath -PathType Container
 			}
 		}
 	}
