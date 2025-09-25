@@ -1,44 +1,128 @@
-[CmdletBinding(DefaultParameterSetName = 'Default')]
+[CmdletBinding(SupportsShouldProcess)]
 Param(
+	[Parameter(DontShow)][ValidateSet('OneDrive', 'OneDriveConsumer', 'OneDriveCommerical')]
+	[string]$Environment = 'OneDrive',
 	[string]$Identity,
+	[switch]$WaitForOneDrive,
 	[switch]$RestoreFolders,
 	[string[]]$FoldersToRestore
 )
 
-# buffer output
-Write-Output "`n"
+# check user environment variable for the OneDrive path
+$OneDrivePath = [System.Environment]::GetEnvironmentVariable($Environment, 'User')
 
-# get the OneDrive path(s) so we can filter which path(s) to restore
-$onedrive_directory = $null
-switch ($Identity) {
-	$null {
-		Write-Output ('Searching for OneDrive directory...')
-		$onedrive_directory = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object { $_.Name -match 'OneDrive' }
+# if OneDrive path is null...
+if ([System.String]::IsNullOrEmpty($OneDrivePath)) {
+	# if wait for OneDrive requested...
+	if ($WaitForOneDrive) {
+		# report state
+		Write-Host "Waiting for '$Environment' environment variable..."
+
+		# while OneDrive path is null...
+		while ([System.String]::IsNullOrEmpty($OneDrivePath)) {
+			# retrieve user environment variable for the OneDrive path
+			$OneDrivePath = [System.Environment]::GetEnvironmentVariable($Environment, 'User')
+
+			# sleep
+			Start-Sleep -Seconds 1
+		}
 	}
-	Default {
-		Write-Output ('Searching for OneDrive directory where name matches the Identity parameter...')
-		$onedrive_directory = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object { $_.Name -match 'OneDrive - ' -and $_.Name -match $Identity }	
+	else {
+		# warn and return
+		Write-Warning -Message "the '$Environment' environment variable is empty"
+		return
 	}
 }
 
-# test for 0 (can't junction) or 2+ (can't determine which to junction) OneDrive directories
-switch (($onedrive_directory).Count) {
-	1 { Write-Output ('...found the OneDrive directory: ' + $onedrive_directory.FullName) }
-	0 { Write-Output ('...found no OneDrive directories; exiting!'); Return }
-	Default {
-		If ([string]::IsNullOrEmpty($Identity)) {
-			Write-Output ('...found multiple OneDrive directories and no arguments were provided to limit scope to single directory, exiting!')
-			Return
+# if identity provided...
+if ($PSBoundParameters.ContainsKey('Identity')) {
+	# report state
+	Write-Host 'Searching for mounted OneDrive container where name matches the Identity parameter...'
+
+	# define filter script
+	$FilterScript = { $_.Name -match '^OneDrive' -and $_.Attributes -band [System.IO.FileAttributes]::ReparsePoint -and $_.Name -match $Identity }
+}
+else {
+	# report state
+	Write-Host 'Searching for mounted OneDrive container...'
+
+	# define filter script
+	$FilterScript = { $_.Name -match '^OneDrive' -and $_.Attributes -band [System.IO.FileAttributes]::ReparsePoint }
+}
+
+# retrieve OneDrive container(s) matching filterscript
+try {
+	$OneDrive = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object -FilterScript $FilterScript
+}
+catch {
+	return $_
+}
+
+# if multiple OneDrive containers found with Identity...
+if ($OneDrive.Count -gt 1 -and $PSBoundParameters.ContainsKey('Identity')) {
+	# warn and return
+	Write-Warning -Message 'multiple mounted OneDrive containers found in the user profile folder; the Identity parameter did not limit scope to single container'
+	return
+}
+
+# if multiple OneDrive containers found without Identity...
+if ($OneDrive.Count -gt 1) {
+	# warn and return
+	Write-Warning -Message 'multiple mounted OneDrive containers found in the user profile folder; the Identity parameter was not provided to limit scope to single container'
+	return
+}
+
+# if no OneDrive containers found....
+if ($OneDrive.Count -eq 0) {
+	# if wait for OneDrive requested...
+	if ($WaitForOneDrive) {
+		# report state
+		Write-Host 'Waiting for OneDrive container...'
+
+		# while OneDrive containers not found
+		while ($OneDrive.Count -eq 0) {
+			# retrieve OneDrive container(s) matching filterscript
+			try {
+				$OneDrive = Get-ChildItem -Directory -Path $env:USERPROFILE | Where-Object -FilterScript $FilterScript
+			}
+			catch {
+				return $_
+			}
+
+			# sleep
+			Start-Sleep -Seconds 1
 		}
-		Else {
-			Write-Output ('...found multiple OneDrive directories and the provided argument did not limit scope to single directory, exiting!')
-			Return
+
+		# loop through wait for OneDrive folders
+		foreach ($WaitForOneDriveFolder in $WaitForOneDriveFolders) {
+			# report state
+			Write-Host "Waiting for OneDrive folder: $WaitForOneDriveFolder"
+
+			# define full path to wait for OneDrive folder
+			$OneDriveFolderPath = Join-Path -Path $OneDrive.FullName -ChildPath $WaitForOneDriveFolder
+
+			# test path for wait for OneDrive folder
+			$TestPath = Test-Path -Path $OneDriveFolderPath -PathType Container
+
+			# while wait for OneDrive folder not found...
+			while (!$TestPath) {
+				# sleep
+				Start-Sleep -Seconds 1
+
+				# test path for wait for OneDrive folder
+				$TestPath = Test-Path -Path $OneDriveFolderPath -PathType Container
+			}
 		}
+	}
+	else {
+		# warn and return
+		Write-Warning -Message 'a mounted OneDrive container was not found in the user profile folder'
+		return
 	}
 }
 
-# buffer output
-Write-Output "`n"
+# report OneDrive container:
+Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 
 # define the default OneDrive excluded folders list
 $FoldersToRestore_default = @()
