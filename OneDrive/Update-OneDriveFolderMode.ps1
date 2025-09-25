@@ -126,7 +126,7 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 			}
 			else {
 				Write-Host '...pinning the OneDrive folder'
-				$ArgumentList = '+p -u "{0}"' -f $Path
+				$ArgumentList = '+p -u "{0}" /s /d' -f $Path
 			}
 		}
 		'Unpin' {
@@ -137,12 +137,12 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 			}
 			else {
 				Write-Host '...unpinning the OneDrive folder'
-				$ArgumentList = '-p +u "{0}"' -f $Path
+				$ArgumentList = '-p +u "{0}" /s /d' -f $Path
 			}
 		}
 		'Reset' {
 			Write-Host '...resetting the OneDrive folder'
-			$ArgumentList = '-p -u "{0}"' -f $Path
+			$ArgumentList = '-p -u "{0}" /s /d' -f $Path
 		}
 		Default {
 			continue NextOneDriveFolder
