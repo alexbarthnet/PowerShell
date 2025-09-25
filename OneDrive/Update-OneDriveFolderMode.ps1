@@ -87,16 +87,16 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 
 # loop through folders in OneDrive container
 :NextOneDriveFolder foreach ($ChildPath in $RelativePath) {
-	# define path
-	$Path = Join-Path -Path $OneDrive.FullName -ChildPath $ChildPath
+	# define OneDrive folder path
+	$OneDriveFolderPath = Join-Path -Path $OneDrive.FullName -ChildPath $ChildPath
 
 	# report state
-	Write-Host "Checking OneDrive folder: $Path"
+	Write-Host "Checking OneDrive folder: $OneDriveFolderPath"
 
-	# test path
-	$TestPath = Test-Path -Path $Path -PathType Container
+	# test OneDrive folder path
+	$TestPath = Test-Path -Path $OneDriveFolderPath -PathType Container
 
-	# if path not found...
+	# if OneDrive folder path not found...
 	if (!$TestPath) {
 		# if wait for one drive requested...
 		if ($WaitForOneDrive) {
@@ -108,48 +108,63 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 				# sleep
 				Start-Sleep -Seconds 1
 
-				# test path
-				$TestPath = Test-Path -Path $Path -PathType Container
+				# test OneDrive folder path
+				$TestPath = Test-Path -Path $OneDriveFolderPath -PathType Container
 			}
 		}
 	}
 
-	# retrieve folder
-	$Item = Get-Item -Path $Path
+	# define list of paths
+	$Paths = [System.Collections.Generic.List[string]]::new()
 
-	# switch on mode
-	switch ($Mode) {
-		'Pin' {
-			# if file is already pinned...
-			if ($Item.Attributes -band 0x80000 -and -not $Force.IsPresent) {
-				Write-Host '...found the OneDrive folder already pinned'
-				continue NextOneDriveFolder
+	# add OneDrive folder path to list
+	$Paths.Add($OneDriveFolderPath)
+
+	# add child items in OneDrive folder to list
+	Get-ChildItem -Path $OneDriveFolderPath -Recurse | ForEach-Object { $Paths.Add($_.FullName) }
+
+	# loop through paths
+	:NextOneDriveItem foreach ($Path in $Paths) {
+		# report state
+		Write-Host "...checking OneDrive item: $Path"
+
+		# retrieve folder
+		$Item = Get-Item -Path $Path
+
+		# switch on mode
+		switch ($Mode) {
+			'Pin' {
+				# if file is already pinned...
+				if ($Item.Attributes -band 0x80000 -and -not $Force.IsPresent) {
+					Write-Host '...found the OneDrive item already pinned'
+					continue NextOneDriveItem
+				}
+				else {
+					Write-Host '...pinning the OneDrive item'
+					$ArgumentList = '+p -u "{0}"' -f $Path
+				}
 			}
-			else {
-				Write-Host '...pinning the OneDrive folder'
-				$ArgumentList = '+p -u "{0}" /s /d' -f $Path
+			'Unpin' {
+				# if file is already unpinned...
+				if ($Item.Attributes -band 0x100000 -and -not $Force.IsPresent) {
+					Write-Host '...found the OneDrive item already unpinned'
+					continue NextOneDriveItem
+				}
+				else {
+					Write-Host '...unpinning the OneDrive item'
+					$ArgumentList = '-p +u "{0}"' -f $Path
+				}
+			}
+			'Reset' {
+				Write-Host '...resetting the OneDrive item'
+				$ArgumentList = '-p -u "{0}"' -f $Path
+			}
+			Default {
+				continue NextOneDriveItem
 			}
 		}
-		'Unpin' {
-			# if file is already unpinned...
-			if ($Item.Attributes -band 0x100000 -and -not $Force.IsPresent) {
-				Write-Host '...found the OneDrive folder already unpinned'
-				continue NextOneDriveFolder
-			}
-			else {
-				Write-Host '...unpinning the OneDrive folder'
-				$ArgumentList = '-p +u "{0}" /s /d' -f $Path
-			}
-		}
-		'Reset' {
-			Write-Host '...resetting the OneDrive folder'
-			$ArgumentList = '-p -u "{0}" /s /d' -f $Path
-		}
-		Default {
-			continue NextOneDriveFolder
-		}
+
+		# apply attributes to folder
+		Start-Process -Wait -NoNewWindow -FilePath 'attrib.exe' -ArgumentList $ArgumentList
 	}
-
-	# apply attributes to folder
-	Start-Process -Wait -NoNewWindow -FilePath 'attrib.exe' -ArgumentList $ArgumentList
 }
