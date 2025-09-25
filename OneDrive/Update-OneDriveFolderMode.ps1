@@ -101,7 +101,7 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 		# if wait for one drive requested...
 		if ($WaitForOneDrive) {
 			# report state
-			Write-Host "...waiting for OneDrive folder"
+			Write-Host '...waiting for OneDrive folder'
 
 			# while wait for OneDrive folder not found...
 			while (!$TestPath) {
