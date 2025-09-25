@@ -61,6 +61,9 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 	# define path
 	$Path = Join-Path -Path $OneDrive.FullName -ChildPath $ChildPath
 
+	# report state
+	Write-Host "Checking OneDrive folder: $Path"
+
 	# test path
 	$TestPath = Test-Path -Path $Path -PathType Container
 
@@ -69,7 +72,7 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 		# if wait for one drive requested...
 		if ($WaitForOneDrive) {
 			# report state
-			Write-Host "Waiting for OneDrive folder: $Path"
+			Write-Host "...waiting for OneDrive folder"
 
 			# while wait for OneDrive folder not found...
 			while (!$TestPath) {
@@ -82,9 +85,6 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 		}
 	}
 
-	# report state
-	Write-Host "Checking OneDrive folder: $Path"
-
 	# retrieve folder
 	$Item = Get-Item -Path $Path
 
@@ -93,27 +93,27 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 		'Pin' {
 			# if file is already pinned...
 			if ($Item.Attributes -band 0x80000) {
-				Write-Host '...found OneDrive folder already pinned'
+				Write-Host '...found the OneDrive folder already pinned'
 				continue NextOneDriveFolder
 			}
 			else {
-				Write-Host '...pinning OneDrive folder'
+				Write-Host '...pinning the OneDrive folder'
 				$ArgumentList = '+p -u "{0}"' -f $Path
 			}
 		}
 		'Unpin' {
 			# if file is already unpinned...
 			if ($Item.Attributes -band 0x100000) {
-				Write-Host '...found OneDrive folder already unpinned'
+				Write-Host '...found the OneDrive folder already unpinned'
 				continue NextOneDriveFolder
 			}
 			else {
-				Write-Host '...unpinning OneDrive folder'
+				Write-Host '...unpinning the OneDrive folder'
 				$ArgumentList = '-p +u "{0}"' -f $Path
 			}
 		}
 		'Reset' {
-			Write-Host '...resetting OneDrive folder'
+			Write-Host '...resetting the OneDrive folder'
 			$ArgumentList = '-p -u "{0}"' -f $Path
 		}
 		Default {
