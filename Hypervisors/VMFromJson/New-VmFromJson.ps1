@@ -2692,6 +2692,133 @@ Begin {
 		}
 	}
 
+	Function Set-VMFirstBootDevice {
+		[CmdletBinding()]
+		Param(
+			# define VM parameters
+			[Parameter(Mandatory = $true)]
+			[object]$VM,
+			[string]$ComputerName = $VM.ComputerName.ToLower(),
+			# define first boot device
+			[ValidateSet('VMHardDiskDrive', 'VMDvdDrive', 'VMNetworkAdapter')]
+			[string]$FirstBootDeviceType = 'HardDiskDrive',
+			[object]$FirstBootDevice
+		)
+
+		# get VM from parameters
+		Try {
+			# cast return as type to force terminating error
+			$VM = Get-VMFromParameters -ComputerName $ComputerName -VM $VM
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve VM")
+			Throw $_
+		}
+
+		# if first boot device not provided...
+		If ($null -eq $FirstBootDevice) {
+			# switch on first boot device type
+			switch ($FirstBootDeviceType) {
+				'VMDvdDrive' {
+					# define parameters for Get-VMDvdDrive
+					$GetVMDvdDrive = @{
+						VM          = $VM
+						ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+					}
+
+					# retrieve DVD drive
+					Try {
+						$VMDvdDrive = Get-VMDvdDrive @GetVMDvdDrive
+					}
+					Catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve DVD drives from VM")
+						Throw $_
+					}
+
+					# if multiple DVD drives found...
+					If ($VMDvdDrive.Count -gt 1) {
+						# sort drives by controller and LUN then select first drive
+						Write-Host ("$Hostname,$ComputerName,$Name - found multiple DVD drives on VM; selecting first drive")
+						$VMDvdDrive = $VMDvdDrive | Sort-Object -Property ControllerNumber, ControllerLocation | Select-Object -First 1
+					}
+
+					# define DVD drive as first boot device
+					$FirstBootDevice = $VMDvdDrive
+				}
+				'VMHardDiskDrive' {
+					# define parameters for Get-VMHardDiskDrive
+					$GetVMHardDiskDrive = @{
+						VM          = $VM
+						ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+					}
+
+					# retrieve hard disk drives
+					Try {
+						$VMHardDiskDrive = Get-VMHardDiskDrive @GetVMHardDiskDrive
+					}
+					Catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve hard disk drives from VM")
+						Throw $_
+					}
+
+					# if multiple hard disk drives found...
+					If ($VMHardDiskDrive.Count -gt 1) {
+						# sort drives by controller and LUN then select first drive
+						Write-Host ("$Hostname,$ComputerName,$Name - found multiple hard disk drives on VM; selecting first drive")
+						$VMHardDiskDrive = $VMHardDiskDrive | Sort-Object -Property ControllerNumber, ControllerLocation | Select-Object -First 1
+					}
+
+					# define hard disk drive as first boot device
+					$FirstBootDevice = $VMHardDiskDrive
+				}
+
+				'VMNetworkAdapter' {
+					# define parameters for Get-VMNetworkAdapter
+					$GetVMNetworkAdapter = @{
+						VM          = $VM
+						ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+					}
+
+					# retrieve network adapter
+					Try {
+						$VMNetworkAdapter = Get-VMNetworkAdapter @GetVMNetworkAdapter
+					}
+					Catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve hard disk drives from VM")
+						Throw $_
+					}
+
+					# if multiple hard disk drives found...
+					If ($VMNetworkAdapter.Count -gt 1) {
+						# sort drives by controller and LUN then select first drive
+						Write-Host ("$Hostname,$ComputerName,$Name - found multiple network adapters on VM; selecting first adapter alphabetically")
+						$VMNetworkAdapter = $VMNetworkAdapter | Sort-Object -Property Name | Select-Object -First 1
+					}
+
+					# define network adapter as first boot device
+					$FirstBootDevice = $VMNetworkAdapter
+				}
+			}
+		}
+
+		# define parameters for Set-VMFirmware
+		$SetVMFirmware = @{
+			VM          = $VM
+			BootOrder   = $FirstBootDevice
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# attach ISO to DVD drive
+		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...setting boot order in VM firmware")
+			Set-VMFirmware @SetVMFirmware
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not set boot order in VM firmware")
+			Throw $_
+		}
+	}
+
 	Function Add-VHDFromParams {
 		[CmdletBinding()]
 		Param(
