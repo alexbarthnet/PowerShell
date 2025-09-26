@@ -1496,23 +1496,6 @@ Begin {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not attach ISO file to DVD drive")
 			Throw $_
 		}
-
-		# define parameters for Set-VMFirmware
-		$SetVMFirmware = @{
-			VM              = $VM
-			FirstBootDevice = $VMDvdDrive
-			ErrorAction     = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# attach ISO to DVD drive
-		Try {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...updating first boot device in VM firmware")
-			Set-VMFirmware @SetVMFirmware
-		}
-		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not update VM firmware")
-			Throw $_
-		}
 	}
 
 	Function Add-VMToClusterName {
@@ -4390,6 +4373,21 @@ Process {
 								}
 								Catch {
 									Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add ISO to VM")
+									Throw $_
+								}
+
+								# define parameters for Set-VMFirstBootDevice
+								$SetVMFirstBootDevice = @{
+									VM                  = $VM
+									FirstBootDeviceType = 'VMDvdDrive'
+								}
+
+								# set DVD drive as first boot device
+								try {
+									Set-VMFirstBootDevice @SetVMFirstBootDevice
+								}
+								catch {
+									Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not set first boot device to DVD drive")
 									Throw $_
 								}
 							}
