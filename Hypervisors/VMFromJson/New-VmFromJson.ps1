@@ -4427,6 +4427,21 @@ Process {
 									Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not add VM to SCCM")
 									Throw $_
 								}
+
+								# define parameters for Set-VMFirstBootDevice
+								$SetVMFirstBootDevice = @{
+									VM                  = $VM
+									FirstBootDeviceType = 'VMNetworkAdapter'
+								}
+
+								# set DVD drive as first boot device
+								try {
+									Set-VMFirstBootDevice @SetVMFirstBootDevice
+								}
+								catch {
+									Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not set first boot device to network adapter")
+									Throw $_
+								}
 							}
 							'VHD' {
 								# report state
@@ -4643,6 +4658,21 @@ Process {
 										Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not edit VHD for VM")
 										Throw $_
 									}
+								}
+
+								# define parameters for Set-VMFirstBootDevice
+								$SetVMFirstBootDevice = @{
+									VM                  = $VM
+									FirstBootDeviceType = 'VMHardDiskDrive'
+								}
+
+								# set DVD drive as first boot device
+								try {
+									Set-VMFirstBootDevice @SetVMFirstBootDevice
+								}
+								catch {
+									Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not set first boot device to hard disk drive")
+									Throw $_
 								}
 							}
 							default {
