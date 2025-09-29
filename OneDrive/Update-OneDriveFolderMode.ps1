@@ -124,7 +124,7 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 			# if file is already pinned...
 			if ($Item.Attributes -band 0x80000 -and -not $Force.IsPresent) {
 				Write-Host "...found pinned: $OneDriveFolderPath"
-				continue NextOneDriveItem
+				continue NextOneDriveFolder
 			}
 			else {
 				Write-Host "...pinning: $OneDriveFolderPath"
@@ -135,7 +135,7 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 			# if file is already unpinned...
 			if ($Item.Attributes -band 0x100000 -and -not $Force.IsPresent) {
 				Write-Host "...found unpinned: $OneDriveFolderPath"
-				continue NextOneDriveItem
+				continue NextOneDriveFolder
 			}
 			else {
 				Write-Host "...unpinning: $OneDriveFolderPath"
@@ -147,7 +147,7 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 			$ArgumentList = '-p -u "{0}" /s /d' -f $OneDriveFolderPath
 		}
 		Default {
-			continue NextOneDriveItem
+			continue NextOneDriveFolder
 		}
 	}
 
