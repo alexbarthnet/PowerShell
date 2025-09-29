@@ -7,6 +7,7 @@ param(
 	[Parameter(Mandatory)]
 	[string[]]$RelativePath,
 	[switch]$WaitForOneDrive,
+	[switch]$FolderOnly,
 	[switch]$Force,
 	[string]$Identity
 )
@@ -114,19 +115,57 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 		}
 	}
 
-	# define list of paths
-	$Paths = [System.Collections.Generic.List[string]]::new()
+	# retrieve folder
+	$Item = Get-Item -Path $OneDriveFolderPath
 
-	# add OneDrive folder path to list
-	$Paths.Add($OneDriveFolderPath)
+	# switch on mode
+	switch ($Mode) {
+		'Pin' {
+			# if file is already pinned...
+			if ($Item.Attributes -band 0x80000 -and -not $Force.IsPresent) {
+				Write-Host "...found pinned: $OneDriveFolderPath"
+				continue NextOneDriveItem
+			}
+			else {
+				Write-Host "...pinning: $OneDriveFolderPath"
+				$ArgumentList = '+p -u "{0}" /s /d' -f $OneDriveFolderPath
+			}
+		}
+		'Unpin' {
+			# if file is already unpinned...
+			if ($Item.Attributes -band 0x100000 -and -not $Force.IsPresent) {
+				Write-Host "...found unpinned: $OneDriveFolderPath"
+				continue NextOneDriveItem
+			}
+			else {
+				Write-Host "...unpinning: $OneDriveFolderPath"
+				$ArgumentList = '-p +u "{0}" /s /d' -f $OneDriveFolderPath
+			}
+		}
+		'Reset' {
+			Write-Host "...resetting: $OneDriveFolderPath"
+			$ArgumentList = '-p -u "{0}" /s /d' -f $OneDriveFolderPath
+		}
+		Default {
+			continue NextOneDriveItem
+		}
+	}
 
-	# add child items in OneDrive folder to list
-	Get-ChildItem -Path $OneDriveFolderPath -Recurse | ForEach-Object { $Paths.Add($_.FullName) }
+	# apply attributes to folder
+	Start-Process -Wait -NoNewWindow -FilePath 'attrib.exe' -ArgumentList $ArgumentList -WorkingDirectory $OneDriveFolderPath
+
+	# if folder only...
+	if ($FolderOnly.IsPresent) {
+		continue NextOneDriveFolder 
+	}
+
+	# get child items in OneDrive folder to list
+	$Items = Get-ChildItem -Path $OneDriveFolderPath -Recurse
 
 	# loop through paths
-	:NextOneDriveItem foreach ($Path in $Paths) {
+	:NextOneDriveItem foreach ($Item in $Items) {
 		# retrieve folder
-		$Item = Get-Item -Path $Path
+		$Path = $Item.FullName
 
 		# switch on mode
 		switch ($Mode) {
@@ -162,6 +201,6 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 		}
 
 		# apply attributes to folder
-		Start-Process -Wait -NoNewWindow -FilePath 'attrib.exe' -ArgumentList $ArgumentList
+		Start-Process -Wait -NoNewWindow -FilePath 'attrib.exe' -ArgumentList $ArgumentList -
 	}
 }
