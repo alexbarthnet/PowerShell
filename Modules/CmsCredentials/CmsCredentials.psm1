@@ -1687,7 +1687,7 @@ Function Import-CmsCredential {
 
 		# define optional parameters for Find-CmsCertificate
 		If ($PSBoundParameters.ContainsKey('Password')) {
-			$FindCmsCertificate.Add('Password', $local:Password)
+			$ImportPfxCertificate.Add('Password', $local:Password)
 		}
 
 		# import CMS certificate from PFX file
