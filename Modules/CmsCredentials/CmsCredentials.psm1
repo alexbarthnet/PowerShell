@@ -232,7 +232,7 @@ Function Find-CmsCertificate {
 
 		# filter certificate by EKU
 		Try {
-			$local:MatchingCertificates = $local:PfxData.EndEntityCertificates.Where({ $_.EnhancedKeyUsageList.FriendlyName -contains 'Document Encryption' })
+			$local:MatchingCertificates = $local:PfxData.EndEntityCertificates.Where({ $_.Extensions.EnhancedKeyUsages.FriendlyName -contains 'Document Encryption' })
 		}
 		Catch {
 			Write-Warning -Message "could not filter for Document Encryption certificates in PFX data from file $local:WithParameters on host: $local:Hostname"
