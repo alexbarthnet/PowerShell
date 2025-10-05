@@ -1,20 +1,20 @@
 <#
 .SYNOPSIS
-Rebuilds one or more "VM template" virtual machines using a mounted ISO image then copy the VHD to a defined folder on each local cluster shared volume.
+Rebuilds one or more "VM template" virtual machines using a mounted ISO image then copies the VHD to a defined folder on each local cluster shared volume.
 
 .DESCRIPTION
-Rebuilds one or more "VM template" virtual machines using a mounted ISO image then copy the VHD to a defined folder on each local cluster shared volume. The existing VHD of the VM is replaced with a new VHD then the VM boots and installs the OS from the mounted ISO image.
+Rebuilds one or more "VM template" virtual machines using a mounted ISO image. The existing VHD of the VM is replaced with a new VHD then the VM boots and installs the OS from the mounted ISO image. The VHD is then copied to a defined folder on each local cluster shared volume
 
 .PARAMETER VMName
 The name(s) of the VM(s) that will be rebuilt.
 
 .PARAMETER Caveat
-String for the "Caveat" for running the script. The caveats allow the script to be run by Scheduled Tasks or similar automation daily but only rebuild the VM template when specific conditions are met. The follow caveats are supported:
+String for the "Caveat" for running the script. The caveats allow the script to be run by Scheduled Tasks or similar automation on a set schedule but only rebuild the VM template when specific conditions are met. The follow caveats are supported:
 - 'DayAfterPatchTuesday' - the script will not run if the previous day was not the second Tuesday of the month (aka Patch Tuesday)
 - 'Wednesday' - the script will not run if the current day is not Wednesday
 
 .PARAMETER SkipRebuild
-Switch parameter to skip rebuilding the VMs. This allows the first VHD of each VM tempalte to be copied to the cluster shared volume without rebuilding the VM.
+Switch parameter to skip rebuilding the VMs. This allows the first VHD of each VM template to be copied to the cluster shared volumes without rebuilding the VM.
 
 .PARAMETER SkipCopy
 Switch parameter to skip copying the first VHD of each VM template to a defined folder on the available cluster shared volume.
@@ -36,7 +36,7 @@ The "VM template" virtual machine must adhere to the following requirements for 
 
 The first VHD of the "VM template" virtual machine first VHD can be copied to each cluster shared volume available on the hypervisor.
 
-The copy of the VHD is intended to be leveraged by VHD-based deployment of new VMs on the same cluster shared volume. This enables ReFS block cloning to minimizes I/O and storage consumption when deploying new VMs.
+The copy of the VHD is intended to be leveraged by VHD-based deployment of new VMs on the same cluster shared volume. This enables ReFS block cloning to minimize I/O and storage consumption when deploying new VMs.
 
 #>
 
