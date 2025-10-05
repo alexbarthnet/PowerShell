@@ -1717,7 +1717,24 @@ Function Import-CmsCredential {
 	}
 	# if destination file does not exist or force requested...
 	Else {
-		# define parameters
+		# define parameters for New-Item
+		$NewItem = @{
+			Path        = $local:DestinationPath
+			Force       = $true
+			ItemType    = 'File'
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# create file and path to file
+		Try {
+			$null = New-Item @NewItem | Remove-Item -Force
+		}
+		Catch {
+			Write-Warning -Message "could not create file with '$local:DestinationPath' path on host: $local:Hostname"
+			Throw $_
+		}
+
+		# define parameters for Copy-Item
 		$CopyItem = @{
 			Path        = $FilePath
 			Destination = $DestinationPath
