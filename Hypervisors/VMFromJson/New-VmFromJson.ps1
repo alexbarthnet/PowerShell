@@ -3217,7 +3217,7 @@ Begin {
 			}
 		}
 		Catch {
-			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not check provided path")
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not check provided path for unattend file")
 			Throw $_
 		}
 
@@ -3287,14 +3287,15 @@ Begin {
 		# mount VHD
 		Try {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...mounting target VHD")
-			$DriveLetter = Invoke-Command @InvokeCommand -ScriptBlock {
+			Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
+				# define parameters for Mount-VHD
 				$MountVHD = @{
 					Path        = $ArgumentList['Path']
-					Passthru    = $true
 					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 				}
-				Mount-VHD @MountVHD | Get-Disk | Get-Partition | Get-Volume | Select-Object -ExpandProperty 'DriveLetter'
+				# mount VHD
+				Mount-VHD @MountVHD
 			}
 		}
 		Catch {
@@ -3302,14 +3303,58 @@ Begin {
 			Throw $_
 		}
 
-		# evaluate drive letter
-		If (!$DriveLetter) {
-			Write-Host ("$Hostname,$ComputerName,$Name - ...skipping VHD edit, could not mount target VHD: '$DestinationPath'")
-			Return
+		# retrieve volume path
+		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...retrieving volume path")
+			$Root = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				# retrieve disk object from path
+				$Disk = Get-Disk | Sort-Object -Property 'Number' | Where-Object { $_.Location -eq $ArgumentList['Path'] }
+
+				# retrieve first basic partition on disk
+				$Partition = Get-Partition -Disk $Disk | Sort-Object -Property 'PartitionNumber' | Where-Object { $_.Type -eq 'Basic' } | Select-Object -First 1
+
+				# retrieve first volume on partition
+				$Volume = Get-Volume -Partition $Partition | Select-Object -First 1
+
+				# return volume path
+				return $Volume.Path
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve volume path: '$($_.Exception.Message)'")
+			Throw $_
+		}
+
+		# update argument list for PSDrive
+		$InvokeCommand['ArgumentList']['Name'] = $Name
+		$InvokeCommand['ArgumentList']['Root'] = $Root
+
+		# create PSDrive
+		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...creating PSDrive")
+			$PSDriveName = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				# define parameters for New-PSDrive
+				$NewPSDrive = @{
+					Name        = $ArgumentList['Name']
+					Root        = $ArgumentList['Root']
+					PSProvider  = 'FileSystem'
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				# create PSDrive
+				$PSDrive = New-PSDrive @NewPSDrive
+				# return PSDrive name
+				return $PSDrive.Name
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not create PSDrive: '$($_.Exception.Message)'")
+			Throw $_
 		}
 
 		# define unattend file on VHD
-		$UnattendFileOnVHD = '{0}:\Windows\Panther\unattend.xml' -f $DriveLetter
+		$UnattendFileOnVHD = '{0}:\Windows\Panther\unattend.xml' -f $PSDriveName
 
 		# update argument list for Copy-Item with unattend files on VHD
 		$InvokeCommand['ArgumentList']['Path'] = $UnattendFile
@@ -3372,17 +3417,38 @@ Begin {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...writing content to unattend file: '$UnattendFileOnVHD'")
 			$Content = Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
-				$GetContent = @{
+				# define parameters for Set-Content
+				$SetContent = @{
 					Path        = $ArgumentList['Path']
 					Value       = $ArgumentList['Value']
 					NoNewline   = $true
 					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 				}
-				Set-Content @GetContent
+				# update content in unattend file
+				Set-Content @SetContent
 			}
 		}
 		Catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not write content to unattend file: '$UnattendFileOnVHD'")
+			Throw $_
+		}
+
+		# remove PSDrive
+		Try {
+			Write-Host ("$Hostname,$ComputerName,$Name - ...removing PSDrive")
+			Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				# define parameters for Remove-PSDrive
+				$RemovePSDrive = @{
+					Name        = $ArgumentList['Name']
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				# remove PSDrive
+				Remove-PSDrive @RemovePSDrive
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not remove PSDrive: '$($_.Exception.Message)'")
 			Throw $_
 		}
 
@@ -3394,10 +3460,12 @@ Begin {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...dismounting target VHD after updates")
 			Invoke-Command @InvokeCommand -ScriptBlock {
 				Param($ArgumentList)
+				# define parameters for Dismount-VHD
 				$DismountVHD = @{
 					Path        = $ArgumentList['Path']
 					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 				}
+				# dismount VHD
 				Dismount-VHD @DismountVHD
 			}
 		}
