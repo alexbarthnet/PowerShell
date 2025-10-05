@@ -1677,7 +1677,7 @@ Function Import-CmsCredential {
 	}
 	# if certificate not found or force requested...
 	Else {
-		# define required parameters for Find-CmsCertificate
+		# define required parameters for Import-PfxCertificate
 		$ImportPfxCertificate = @{
 			FilePath          = $PfxFile
 			Exportable        = $Exportable
@@ -1685,7 +1685,7 @@ Function Import-CmsCredential {
 			ErrorAction       = [System.Management.Automation.ActionPreference]::Stop
 		}
 
-		# define optional parameters for Find-CmsCertificate
+		# define optional parameters for Import-PfxCertificate
 		If ($PSBoundParameters.ContainsKey('Password')) {
 			$ImportPfxCertificate.Add('Password', $local:Password)
 		}
