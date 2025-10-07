@@ -80,7 +80,7 @@
                 <RunSynchronousCommand wcm:action="add">
                     <Description>Remove Windows.Old Directory</Description>
                     <Order>1</Order>
-                    <Path>%WINDIR%\System32\cmd.exe /d /c rmdir /s /q "%SystemDrive%\Windows.Old"</Path>
+                    <Path>%WINDIR%\System32\cmd.exe /d /c if exist "%SystemDrive%\Windows.Old" rmdir /s /q "%SystemDrive%\Windows.Old"</Path>
                     <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
