@@ -608,22 +608,22 @@ Begin {
 					}
 				}
 
-				# retrieve folders that are missing from Destination
-				$MissingTargetFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeSourceFolders, [string[]]$RelativeTargetFolders))
+				# # retrieve folders that are missing from Destination
+				# $MissingTargetFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeSourceFolders, [string[]]$RelativeTargetFolders))
 
-				# create folders that are missing from Destination
-				ForEach ($MissingTargetFolder in $MissingTargetFolders) {
-					$MissingTargetFolder = Join-Path -Path $TargetPath -ChildPath $MissingTargetFolder
-					If ($PSCmdlet.ShouldProcess($MissingTargetFolder, 'create folder')) {
-						Try {
-							$null = New-Item -Path $MissingTargetFolder -ItemType 'Directory' -Force -Verbose:$VerbosePreference
-						}
-						Catch {
-							Write-Warning "could not create folder '$MissingTargetFolder'"
-							Return $_
-						}
-					}
-				}
+				# # create folders that are missing from Destination
+				# ForEach ($MissingTargetFolder in $MissingTargetFolders) {
+				# 	$MissingTargetFolder = Join-Path -Path $TargetPath -ChildPath $MissingTargetFolder
+				# 	If ($PSCmdlet.ShouldProcess($MissingTargetFolder, 'create folder')) {
+				# 		Try {
+				# 			$null = New-Item -Path $MissingTargetFolder -ItemType 'Directory' -Force -Verbose:$VerbosePreference
+				# 		}
+				# 		Catch {
+				# 			Write-Warning "could not create folder '$MissingTargetFolder'"
+				# 			Return $_
+				# 		}
+				# 	}
+				# }
 			}
 
 			# create folders in Path missing from Destination
@@ -656,22 +656,22 @@ Begin {
 					}
 				}
 
-				# retrieve folders that are missing from Path
-				$MissingSourceFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeTargetFolders, [string[]]$RelativeSourceFolders))
+				# # retrieve folders that are missing from Path
+				# $MissingSourceFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeTargetFolders, [string[]]$RelativeSourceFolders))
 
-				# create folders that are missing from Path
-				ForEach ($MissingSourceFolder in $MissingSourceFolders) {
-					$MissingSourceFolder = Join-Path -Path $SourcePath -ChildPath $MissingSourceFolder
-					If ($PSCmdlet.ShouldProcess($MissingSourceFolder, 'create folder')) {
-						Try {
-							$null = New-Item -Path $MissingSourceFolder -ItemType 'Directory' -Force -Verbose:$VerbosePreference
-						}
-						Catch {
-							Write-Warning "could not create folder '$MissingSourceFolder'"
-							Return $_
-						}
-					}
-				}
+				# # create folders that are missing from Path
+				# ForEach ($MissingSourceFolder in $MissingSourceFolders) {
+				# 	$MissingSourceFolder = Join-Path -Path $SourcePath -ChildPath $MissingSourceFolder
+				# 	If ($PSCmdlet.ShouldProcess($MissingSourceFolder, 'create folder')) {
+				# 		Try {
+				# 			$null = New-Item -Path $MissingSourceFolder -ItemType 'Directory' -Force -Verbose:$VerbosePreference
+				# 		}
+				# 		Catch {
+				# 			Write-Warning "could not create folder '$MissingSourceFolder'"
+				# 			Return $_
+				# 		}
+				# 	}
+				# }
 			}
 		}
 
@@ -720,22 +720,22 @@ Begin {
 					}
 				}
 
-				# retrieve files that are missing from Destination
-				$MissingTargetFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeSourceFiles, [string[]]$RelativeTargetFiles))
+				# # retrieve files that are missing from Destination
+				# $MissingTargetFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeSourceFiles, [string[]]$RelativeTargetFiles))
 
-				# copy files that are missing from Destination
-				ForEach ($MissingTargetFile in $MissingTargetFiles) {
-					$MissingTargetFileOnSource = Join-Path -Path $SourcePath -ChildPath $MissingTargetFile
-					$MissingTargetFileExpected = Join-Path -Path $TargetPath -ChildPath $MissingTargetFile
-					If ($PSCmdlet.ShouldProcess("source: $MissingTargetFileOnSource, target: $MissingTargetFileExpected", 'copy file')) {
-						Try {
-							Copy-Item -Path $MissingTargetFileOnSource -Destination $MissingTargetFileExpected -Force -Verbose:$VerbosePreference
-						}
-						Catch {
-							Write-Warning "could not copy file '$MissingTargetFileOnSource' to file '$MissingTargetFileExpected'"
-						}
-					}
-				}
+				# # copy files that are missing from Destination
+				# ForEach ($MissingTargetFile in $MissingTargetFiles) {
+				# 	$MissingTargetFileOnSource = Join-Path -Path $SourcePath -ChildPath $MissingTargetFile
+				# 	$MissingTargetFileExpected = Join-Path -Path $TargetPath -ChildPath $MissingTargetFile
+				# 	If ($PSCmdlet.ShouldProcess("source: $MissingTargetFileOnSource, target: $MissingTargetFileExpected", 'copy file')) {
+				# 		Try {
+				# 			Copy-Item -Path $MissingTargetFileOnSource -Destination $MissingTargetFileExpected -Force -Verbose:$VerbosePreference
+				# 		}
+				# 		Catch {
+				# 			Write-Warning "could not copy file '$MissingTargetFileOnSource' to file '$MissingTargetFileExpected'"
+				# 		}
+				# 	}
+				# }
 			}
 
 			# copy new files from Destination to Path
@@ -769,22 +769,22 @@ Begin {
 					}
 				}
 
-				# retrieve files that are missing from Path
-				$MissingSourceFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeTargetFiles, [string[]]$RelativeSourceFiles))
+				# # retrieve files that are missing from Path
+				# $MissingSourceFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeTargetFiles, [string[]]$RelativeSourceFiles))
 
-				# copy files that are missing from Path
-				ForEach ($MissingSourceFile in $MissingSourceFiles) {
-					$MissingSourceFileOnTarget = Join-Path -Path $TargetPath -ChildPath $MissingSourceFile
-					$MissingSourceFileExpected = Join-Path -Path $SourcePath -ChildPath $MissingSourceFile
-					If ($PSCmdlet.ShouldProcess("source: $MissingSourceFileOnTarget, target: $MissingSourceFileExpected", 'copy file')) {
-						Try {
-							Copy-Item -Path $MissingSourceFileOnTarget -Destination $MissingSourceFileExpected -Force -Verbose:$VerbosePreference
-						}
-						Catch {
-							Write-Warning "could not copy file '$MissingSourceFileOnTarget' to file '$MissingSourceFileExpected'"
-						}
-					}
-				}
+				# # copy files that are missing from Path
+				# ForEach ($MissingSourceFile in $MissingSourceFiles) {
+				# 	$MissingSourceFileOnTarget = Join-Path -Path $TargetPath -ChildPath $MissingSourceFile
+				# 	$MissingSourceFileExpected = Join-Path -Path $SourcePath -ChildPath $MissingSourceFile
+				# 	If ($PSCmdlet.ShouldProcess("source: $MissingSourceFileOnTarget, target: $MissingSourceFileExpected", 'copy file')) {
+				# 		Try {
+				# 			Copy-Item -Path $MissingSourceFileOnTarget -Destination $MissingSourceFileExpected -Force -Verbose:$VerbosePreference
+				# 		}
+				# 		Catch {
+				# 			Write-Warning "could not copy file '$MissingSourceFileOnTarget' to file '$MissingSourceFileExpected'"
+				# 		}
+				# 	}
+				# }
 			}
 		}
 
@@ -809,8 +809,8 @@ Begin {
 				# compare files by hash if requested
 				If ($CheckHash) {
 					If ((Get-FileHash -Path $MatchedSourcePath).Hash -eq (Get-FileHash -Path $MatchedTargetPath).Hash) {
-						Write-Host "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same file hash"
-						Continue
+						Write-Verbose "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same file hash"
+						Continue NextMatchedFile
 					}
 				}
 				# retrieve files
@@ -819,8 +819,8 @@ Begin {
 				# compare files by last
 				If (-not $CheckHash) {
 					If ($MatchedSourceItem.LastWriteTimeUtc -eq $MatchedTargetItem.LastWriteTimeUtc) {
-						Write-Host "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same LastWriteTimeUtc"
-						Continue
+						Write-Verbose "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same LastWriteTimeUtc"
+						Continue NextMatchedFile
 					}
 				}
 				# copy file from Path to Destination if newer or Direction is not 'Both'
@@ -831,6 +831,7 @@ Begin {
 						}
 						Catch {
 							Write-Warning "could not copy file '$MatchedSourcePath' to file '$MatchedTargetPath'"
+							Continue NextMatchedFile
 						}
 					}
 				}
@@ -842,6 +843,7 @@ Begin {
 						}
 						Catch {
 							Write-Warning "could not copy file '$MatchedTargetPath' to file '$MatchedSourcePath'"
+							Continue NextMatchedFile
 						}
 					}
 				}
@@ -866,8 +868,8 @@ Begin {
 			If ($OldSourceFiles.Count) { $OldRelativeSourceFiles = $OldSourceFiles.Replace($SourcePath, $null) } Else { $OldRelativeSourceFiles = @() }
 			If ($OldTargetFiles.Count) { $OldRelativeTargetFiles = $OldTargetFiles.Replace($TargetPath, $null) } Else { $OldRelativeTargetFiles = @() }
 
-			# retrieve files in both Path and Destination
-			$MatchedFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$AllRelativeSourceFiles, [string[]]$AllRelativeTargetFiles))
+			# # retrieve files in both Path and Destination
+			# $MatchedFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$AllRelativeSourceFiles, [string[]]$AllRelativeTargetFiles))
 
 			# remove old files from Destination
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
@@ -899,21 +901,21 @@ Begin {
 					}
 				}
 
-				# retrieve old files that are only in Destination
-				$ExpiredTargetFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeTargetFiles, $MatchedFiles))
+				# # retrieve old files that are only in Destination
+				# $ExpiredTargetFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeTargetFiles, $MatchedFiles))
 
-				# remove old files that are only in Destination
-				ForEach ($ExpiredTargetFile in $ExpiredTargetFiles) {
-					$ExpiredTargetFilePath = Join-Path -Path $TargetPath -ChildPath $ExpiredTargetFile
-					If ($PSCmdlet.ShouldProcess($ExpiredTargetFilePath, 'remove file')) {
-						Try {
-							$null = Remove-Item -Path $ExpiredTargetFilePath -Force -Verbose:$VerbosePreference
-						}
-						Catch {
-							Write-Warning "could not remove file '$ExpiredTargetFilePath'"
-						}
-					}
-				}
+				# # remove old files that are only in Destination
+				# ForEach ($ExpiredTargetFile in $ExpiredTargetFiles) {
+				# 	$ExpiredTargetFilePath = Join-Path -Path $TargetPath -ChildPath $ExpiredTargetFile
+				# 	If ($PSCmdlet.ShouldProcess($ExpiredTargetFilePath, 'remove file')) {
+				# 		Try {
+				# 			$null = Remove-Item -Path $ExpiredTargetFilePath -Force -Verbose:$VerbosePreference
+				# 		}
+				# 		Catch {
+				# 			Write-Warning "could not remove file '$ExpiredTargetFilePath'"
+				# 		}
+				# 	}
+				# }
 			}
 
 			# remove old files from Path
@@ -946,21 +948,21 @@ Begin {
 					}
 				}
 
-				# retrieve old files that are only in Path
-				$ExpiredSourceFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeSourceFiles, $MatchedFiles))
+				# # retrieve old files that are only in Path
+				# $ExpiredSourceFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeSourceFiles, $MatchedFiles))
 
-				# remove old files that are only in Path
-				ForEach ($ExpiredSourceFile in $ExpiredSourceFiles) {
-					$ExpiredSourceFilePath = Join-Path -Path $SourcePath -ChildPath $ExpiredSourceFile
-					If ($PSCmdlet.ShouldProcess($ExpiredSourceFilePath, 'remove file')) {
-						Try {
-							$null = Remove-Item -Path $ExpiredSourceFilePath -Force -Verbose:$VerbosePreference
-						}
-						Catch {
-							Write-Warning "could not remove file '$ExpiredSourceFilePath'"
-						}
-					}
-				}
+				# # remove old files that are only in Path
+				# ForEach ($ExpiredSourceFile in $ExpiredSourceFiles) {
+				# 	$ExpiredSourceFilePath = Join-Path -Path $SourcePath -ChildPath $ExpiredSourceFile
+				# 	If ($PSCmdlet.ShouldProcess($ExpiredSourceFilePath, 'remove file')) {
+				# 		Try {
+				# 			$null = Remove-Item -Path $ExpiredSourceFilePath -Force -Verbose:$VerbosePreference
+				# 		}
+				# 		Catch {
+				# 			Write-Warning "could not remove file '$ExpiredSourceFilePath'"
+				# 		}
+				# 	}
+				# }
 			}
 		}
 
@@ -982,8 +984,8 @@ Begin {
 			If ($OldSourceFolders.Count) { $OldRelativeSourceFolders = $OldSourceFolders.Replace($SourcePath, $null) } Else { $OldRelativeSourceFolders = @() }
 			If ($OldTargetFolders.Count) { $OldRelativeTargetFolders = $OldTargetFolders.Replace($TargetPath, $null) } Else { $OldRelativeTargetFolders = @() }
 
-			# retrieve paths in both Path and Destination
-			$MatchedFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$AllRelativeSourceFolders, [string[]]$AllRelativeTargetFolders))
+			# # retrieve paths in both Path and Destination
+			# $MatchedFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$AllRelativeSourceFolders, [string[]]$AllRelativeTargetFolders))
 
 			# remove old paths from Destination
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
@@ -1015,21 +1017,21 @@ Begin {
 					}
 				}
 
-				# retrieve old paths only in Destination
-				$ExpiredTargetFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeTargetFolders, $MatchedFolders))
+				# # retrieve old paths only in Destination
+				# $ExpiredTargetFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeTargetFolders, $MatchedFolders))
 
-				# remove old paths only in Destination
-				ForEach ($ExpiredTargetFolder in $ExpiredTargetFolders) {
-					$ExpiredTargetFolderPath = Join-Path -Path $TargetPath -ChildPath $ExpiredTargetFolder
-					If ($PSCmdlet.ShouldProcess($ExpiredTargetFolderPath, 'remove folder')) {
-						Try {
-							$null = Remove-Item -Path $ExpiredTargetFolderPath -Force -Verbose:$VerbosePreference
-						}
-						Catch {
-							Write-Warning "could not remove path '$ExpiredTargetFolderPath'"
-						}
-					}
-				}
+				# # remove old paths only in Destination
+				# ForEach ($ExpiredTargetFolder in $ExpiredTargetFolders) {
+				# 	$ExpiredTargetFolderPath = Join-Path -Path $TargetPath -ChildPath $ExpiredTargetFolder
+				# 	If ($PSCmdlet.ShouldProcess($ExpiredTargetFolderPath, 'remove folder')) {
+				# 		Try {
+				# 			$null = Remove-Item -Path $ExpiredTargetFolderPath -Force -Verbose:$VerbosePreference
+				# 		}
+				# 		Catch {
+				# 			Write-Warning "could not remove path '$ExpiredTargetFolderPath'"
+				# 		}
+				# 	}
+				# }
 			}
 
 			# remove old paths from Path
@@ -1062,21 +1064,21 @@ Begin {
 					}
 				}
 
-				# retrieve old paths only in Path
-				$ExpiredSourceFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeSourceFolders, $MatchedFolders))
+				# # retrieve old paths only in Path
+				# $ExpiredSourceFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeSourceFolders, $MatchedFolders))
 
-				# remove old paths only in Path
-				ForEach ($ExpiredSourceFolder in $ExpiredSourceFolders) {
-					$ExpiredSourceFolderPath = Join-Path -Path $SourcePath -ChildPath $ExpiredSourceFolder
-					If ($PSCmdlet.ShouldProcess($ExpiredSourceFolderPath, 'remove folder')) {
-						Try {
-							$null = Remove-Item -Path $ExpiredSourceFolderPath -Force -Verbose:$VerbosePreference
-						}
-						Catch {
-							Write-Warning "could not remove path '$ExpiredSourceFolderPath'"
-						}
-					}
-				}
+				# # remove old paths only in Path
+				# ForEach ($ExpiredSourceFolder in $ExpiredSourceFolders) {
+				# 	$ExpiredSourceFolderPath = Join-Path -Path $SourcePath -ChildPath $ExpiredSourceFolder
+				# 	If ($PSCmdlet.ShouldProcess($ExpiredSourceFolderPath, 'remove folder')) {
+				# 		Try {
+				# 			$null = Remove-Item -Path $ExpiredSourceFolderPath -Force -Verbose:$VerbosePreference
+				# 		}
+				# 		Catch {
+				# 			Write-Warning "could not remove path '$ExpiredSourceFolderPath'"
+				# 		}
+				# 	}
+				# }
 			}
 		}
 
