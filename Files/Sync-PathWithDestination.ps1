@@ -738,104 +738,60 @@ Begin {
 
 			# copy new files from Path to Destination
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
-				# loop through source files
-				ForEach ($RelativeSourceFile in $RelativeSourceFiles) {
-					# if source file in target files...
-					if ($RelativeSourceFile -in $RelativeTargetFiles) {
-						# add file to set
-						$null = $FilesCheckedInTarget.Add($RelativeSourceFile)
-					}
-					# if source file not in target files...
-					Else {
-						# define missing target file
-						$MissingTargetFileOnSource = Join-Path -Path $SourcePath -ChildPath $RelativeSourceFile
-						$MissingTargetFileExpected = Join-Path -Path $TargetPath -ChildPath $RelativeSourceFile
+				# retrieve files that are missing from Destination
+				$MissingRelativeTargetFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeSourceFiles, [string[]]$RelativeTargetFiles))
 
-						# create missing target file
-						If ($PSCmdlet.ShouldProcess("source: $MissingTargetFileOnSource, target: $MissingTargetFileExpected", 'copy file')) {
-							Try {
-								Copy-Item -Path $MissingTargetFileOnSource -Destination $MissingTargetFileExpected -Force -Verbose:$VerbosePreference
-							}
-							Catch {
-								Write-Warning "could not copy file '$MissingTargetFileOnSource' to file '$MissingTargetFileExpected'"
-								Return $_
-							}
+				# loop through missing relative target folders
+				ForEach ($MissingRelativeTargetFile in $MissingRelativeTargetFiles) {
+					# define missing target file and present source file
+					$MissingTargetFile = Join-Path -Path $TargetPath -ChildPath $MissingRelativeTargetFile
+					$PresentSourceFile = Join-Path -Path $SourcePath -ChildPath $MissingRelativeTargetFile
+
+					# create missing target file
+					If ($PSCmdlet.ShouldProcess("source: $PresentSourceFile, target: $MissingTargetFile", 'copy file')) {
+						Try {
+							Copy-Item -Path $PresentSourceFile -Destination $MissingTargetFile -Force -Verbose:$VerbosePreference
 						}
-
-						# add file to set
-						$null = $FilesCreatedInTarget.Add($RelativeSourceFile)
+						Catch {
+							Write-Warning "could not copy file '$PresentSourceFile' to file '$MissingTargetFile'"
+							Return $_
+						}
 					}
+
+					# add file to set
+					$null = $FilesCreatedInTarget.Add($MissingRelativeTargetFile)
 				}
-
-				# # retrieve files that are missing from Destination
-				# $MissingTargetFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeSourceFiles, [string[]]$RelativeTargetFiles))
-
-				# # copy files that are missing from Destination
-				# ForEach ($MissingTargetFile in $MissingTargetFiles) {
-				# 	$MissingTargetFileOnSource = Join-Path -Path $SourcePath -ChildPath $MissingTargetFile
-				# 	$MissingTargetFileExpected = Join-Path -Path $TargetPath -ChildPath $MissingTargetFile
-				# 	If ($PSCmdlet.ShouldProcess("source: $MissingTargetFileOnSource, target: $MissingTargetFileExpected", 'copy file')) {
-				# 		Try {
-				# 			Copy-Item -Path $MissingTargetFileOnSource -Destination $MissingTargetFileExpected -Force -Verbose:$VerbosePreference
-				# 		}
-				# 		Catch {
-				# 			Write-Warning "could not copy file '$MissingTargetFileOnSource' to file '$MissingTargetFileExpected'"
-				# 		}
-				# 	}
-				# }
 			}
 
 			# copy new files from Destination to Path
 			If ($Direction -eq 'Both') {
-				# loop through target files
-				ForEach ($RelativeTargetFile in $RelativeTargetFiles) {
-					# if target file in source files...
-					if ($RelativeTargetFile -in $RelativeSourceFiles) {
-						# add file to set
-						$null = $FilesCheckedInSource.Add($RelativeTargetFile)
-					}
-					# if target file not in source files...
-					Else {
-						# define missing source file
-						$MissingSourceFileOnTarget = Join-Path -Path $TargetPath -ChildPath $RelativeTargetFile
-						$MissingSourceFileExpected = Join-Path -Path $SourcePath -ChildPath $RelativeTargetFile
+				# retrieve files that are missing from Path
+				$MissingRelativeSourceFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeTargetFiles, [string[]]$RelativeSourceFiles))
 
-						# create missing source file
-						If ($PSCmdlet.ShouldProcess("source: $MissingSourceFileOnTarget, target: $MissingSourceFileExpected", 'copy file')) {
-							Try {
-								Copy-Item -Path $MissingSourceFileOnTarget -Destination $MissingSourceFileExpected -Force -Verbose:$VerbosePreference
-							}
-							Catch {
-								Write-Warning "could not copy file '$MissingSourceFileOnTarget' to file '$MissingSourceFileExpected'"
-								Return $_
-							}
+				# loop through missing relative source files
+				ForEach ($MissingRelativeSourceFile in $MissingRelativeSourceFiles) {
+					# define missing source file and present target file
+					$MissingSourceFile = Join-Path -Path $SourcePath -ChildPath $MissingRelativeSourceFile
+					$PresentTargetFile = Join-Path -Path $TargetPath -ChildPath $MissingRelativeSourceFile
+
+					# create missing source file
+					If ($PSCmdlet.ShouldProcess("source: $PresentTargetFile, target: $MissingSourceFile", 'copy file')) {
+						Try {
+							Copy-Item -Path $PresentTargetFile -Destination $MissingSourceFile -Force -Verbose:$VerbosePreference
 						}
-
-						# add file to set
-						$null = $FilesCreatedInSource.Add($RelativeTargetFile)
+						Catch {
+							Write-Warning "could not copy file '$PresentTargetFile' to file '$MissingSourceFile'"
+							Return $_
+						}
 					}
+
+					# add file to set
+					$null = $FilesCreatedInSource.Add($MissingRelativeSourceFile)
 				}
-
-				# # retrieve files that are missing from Path
-				# $MissingSourceFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeTargetFiles, [string[]]$RelativeSourceFiles))
-
-				# # copy files that are missing from Path
-				# ForEach ($MissingSourceFile in $MissingSourceFiles) {
-				# 	$MissingSourceFileOnTarget = Join-Path -Path $TargetPath -ChildPath $MissingSourceFile
-				# 	$MissingSourceFileExpected = Join-Path -Path $SourcePath -ChildPath $MissingSourceFile
-				# 	If ($PSCmdlet.ShouldProcess("source: $MissingSourceFileOnTarget, target: $MissingSourceFileExpected", 'copy file')) {
-				# 		Try {
-				# 			Copy-Item -Path $MissingSourceFileOnTarget -Destination $MissingSourceFileExpected -Force -Verbose:$VerbosePreference
-				# 		}
-				# 		Catch {
-				# 			Write-Warning "could not copy file '$MissingSourceFileOnTarget' to file '$MissingSourceFileExpected'"
-				# 		}
-				# 	}
-				# }
 			}
 		}
 
-		# process files if SkipExisting and SkipFiles are false
+		# process files if files are in scope (SkipExisting and SkipFiles are false)
 		If (-not $SkipExisting -and -not $SkipFiles) {
 			# retrieve fullname of all files
 			$AllSourceFiles = $SourceItems | Select-Object -ExpandProperty 'FullName'
