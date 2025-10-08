@@ -81,7 +81,7 @@ function Lock-Workstation {
         $DynamicAssemblyName = [System.Reflection.AssemblyName]::new($AssemblyName)
 
         # define the builder for a new assembly (the container for modules) and limit it to memory only (second parameter)
-        [System.Reflection.Emit.AssemblyBuilder]$AssemblyBuilder = [System.AppDomain]::CurrentDomain.DefineDynamicAssembly($DynamicAssemblyName, [System.Reflection.Emit.AssemblyBuilderAccess]::Run)
+        [System.Reflection.Emit.AssemblyBuilder]$AssemblyBuilder = [System.Reflection.Emit.AssemblyBuilder]::DefineDynamicAssembly($DynamicAssemblyName, [System.Reflection.Emit.AssemblyBuilderAccess]::Run)
 
         # define the builder for a new module (the container for types) that does not emit symbol information (second parameter)
         [System.Reflection.Emit.ModuleBuilder]$ModuleBuilder = $AssemblyBuilder.DefineDynamicModule($ModuleName, $false)
