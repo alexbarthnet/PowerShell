@@ -503,13 +503,22 @@ Begin {
 		Else {
 			# if create path requested...
 			If ($CreatePath) {
-				Try {
-					$Source = New-Item -ItemType 'Directory' -Path $Path -Verbose:$VerbosePreference | Select-Object -ExpandProperty 'FullName'
+				# create missing source folder
+				If ($PSCmdlet.ShouldProcess($Path, 'create folder')) {
+					Try {
+						$Source = New-Item -ItemType 'Directory' -Path $Path -Verbose:$VerbosePreference | Select-Object -ExpandProperty 'FullName'
+					}
+					Catch {
+						Write-Warning -Message "Could not create Path folder '$Path' on host"
+						Return $_
+					}
+
+					# report state
 					Write-Host "Created '$Path' on host with full path: $Source"
 				}
-				Catch {
-					Write-Warning -Message "Could not create Path folder '$Path' on host"
-					Return $_
+				Else {
+					# assign path to source for WhatIf 
+					$Source = $Path
 				}
 			}
 			# if create path not requested...
@@ -528,13 +537,22 @@ Begin {
 		Else {
 			# if create destination requested...
 			If ($CreateDestination) {
-				Try {
-					$Target = New-Item -ItemType 'Directory' -Path $Destination -Verbose:$VerbosePreference | Select-Object -ExpandProperty 'FullName'
+				# create missing source folder
+				If ($PSCmdlet.ShouldProcess($Path, 'create folder')) {
+					Try {
+						$Target = New-Item -ItemType 'Directory' -Path $Destination -Verbose:$VerbosePreference | Select-Object -ExpandProperty 'FullName'
+					}
+					Catch {
+						Write-Warning -Message "could not create Destination folder '$Destination' on host"
+						Return $_
+					}
+
+					# report state
 					Write-Host "Created '$Destination' on host with full path: $Target"
 				}
-				Catch {
-					Write-Warning "Could not create Destination folder '$Destination' on host"
-					Return $_
+				Else {
+					# assign destination to target for WhatIf 
+					$Target = $Destination
 				}
 			}
 			# if create destination not requested...
@@ -569,9 +587,39 @@ Begin {
 
 		# create new folders if Recurse is true
 		If ($Recurse) {
-			# retrieve path objects
-			$SourceFolders = Get-ChildItem -Path $SourcePath -Recurse -Directory
-			$TargetFolders = Get-ChildItem -Path $TargetPath -Recurse -Directory
+			# if source path found...
+			If (Test-Path -Path $SourcePath -PathType Container) {
+				# retrieve path objects under source path
+				try {
+					$SourceFolders = Get-ChildItem -Path $SourcePath -Recurse -Directory
+				}
+				catch {
+					Write-Warning -Message "could not retrieve folders from path: '$SourcePath'"
+					Return $_
+				}
+			}
+			# if source path not found...
+			else {
+				# return empty array
+				$SourceFolders = @()
+			}
+
+			# if target path found...
+			If (Test-Path -Path $TargetPath -PathType Container) {
+				# retrieve path objects under target path
+				try {
+					$TargetFolders = Get-ChildItem -Path $TargetPath -Recurse -Directory
+				}
+				catch {
+					Write-Warning -Message "could not retrieve folders from path: '$TargetPath'"
+					Return $_
+				}
+			}
+			# if target path not found...
+			else {
+				# return empty array
+				$TargetFolders = @()
+			}
 
 			# retrieve fullname of new paths
 			$NewSourceFolders = $SourceFolders | Where-Object { $_.LastWriteTimeUtc.Ticks -ge $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
@@ -680,9 +728,39 @@ Begin {
 
 		# copy new files if SkipFiles is false
 		If (-not $SkipFiles) {
-			# retrieve file objects
-			$SourceItems = Get-ChildItem -Path $SourcePath -Recurse:$Recurse -File
-			$TargetItems = Get-ChildItem -Path $TargetPath -Recurse:$Recurse -File
+			# if source path found...
+			If (Test-Path -Path $SourcePath -PathType Container) {
+				# retrieve files under source path
+				try {
+					$SourceItems = Get-ChildItem -Path $SourcePath -Recurse:$Recurse -File
+				}
+				catch {
+					Write-Warning -Message "could not retrieve file from path: '$SourcePath'"
+					Return $_
+				}
+			}
+			# if source path not found...
+			else {
+				# return empty array
+				$SourceItems = @()
+			}
+
+			# if target path found...
+			If (Test-Path -Path $TargetPath -PathType Container) {
+				# retrieve files under target path
+				try {
+					$TargetItems = Get-ChildItem -Path $TargetPath -Recurse:$Recurse -File
+				}
+				catch {
+					Write-Warning -Message "could not retrieve files from path: '$TargetPath'"
+					Return $_
+				}
+			}
+			# if target path not found...
+			else {
+				# return empty array
+				$TargetItems = @()
+			}
 
 			# retrieve fullname of new files
 			$NewSourceFiles = $SourceItems | Where-Object { $_.LastWriteTimeUtc.Ticks -ge $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
@@ -853,11 +931,41 @@ Begin {
 			}
 		}
 
-		# remove old files if SkipDelete is false and SkipExisting or SkipFiles are false
-		If (-not $SkipDelete -and (-not $SkipExisting -or -not $SkipFiles)) {
-			# retrieve file objects
-			$SourceItems = Get-ChildItem -Path $SourcePath -Recurse:$Recurse -File
-			$TargetItems = Get-ChildItem -Path $TargetPath -Recurse:$Recurse -File
+		# remove old files if SkipDelete is false and files are in scope (SkipExisting and SkipFiles are false)
+		If (-not $SkipDelete -and (-not $SkipExisting -and -not $SkipFiles)) {
+			# if source path found...
+			If (Test-Path -Path $SourcePath -PathType Container) {
+				# retrieve files under source path
+				try {
+					$SourceItems = Get-ChildItem -Path $SourcePath -Recurse:$Recurse -File
+				}
+				catch {
+					Write-Warning -Message "could not retrieve file from path: '$SourcePath'"
+					Return $_
+				}
+			}
+			# if source path not found...
+			else {
+				# return empty array
+				$SourceItems = @()
+			}
+
+			# if target path found...
+			If (Test-Path -Path $TargetPath -PathType Container) {
+				# retrieve files under target path
+				try {
+					$TargetItems = Get-ChildItem -Path $TargetPath -Recurse:$Recurse -File
+				}
+				catch {
+					Write-Warning -Message "could not retrieve files from path: '$TargetPath'"
+					Return $_
+				}
+			}
+			# if target path not found...
+			else {
+				# return empty array
+				$TargetItems = @()
+			}
 
 			# retrieve fullname of files
 			$AllSourceFiles = $SourceItems | Select-Object -ExpandProperty 'FullName'
@@ -1311,8 +1419,8 @@ Process {
 		Return $_
 	}
 
-	# if SkipDelete not requested...
-	If (!$SkipDelete) {
+	# if date time returned by function and SkipDelete not requested...
+	If ($DateTimeFromSync -and !$SkipDelete) {
 		# if JSON method for last sync time was requested...
 		If ($LastSyncTimeMethod -eq 'Json') {
 			# write datetime to JSON file
