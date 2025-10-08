@@ -1043,101 +1043,59 @@ Begin {
 			If ($OldSourceFolders.Count) { $OldRelativeSourceFolders = $OldSourceFolders.Replace($SourcePath, $null) } Else { $OldRelativeSourceFolders = @() }
 			If ($OldTargetFolders.Count) { $OldRelativeTargetFolders = $OldTargetFolders.Replace($TargetPath, $null) } Else { $OldRelativeTargetFolders = @() }
 
-			# # retrieve paths in both Path and Destination
-			# $MatchedFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$AllRelativeSourceFolders, [string[]]$AllRelativeTargetFolders))
+			# retrieve paths in both Path and Destination
+			$MatchedFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$AllRelativeSourceFolders, [string[]]$AllRelativeTargetFolders))
 
 			# remove old paths from Destination
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
+				# retrieve old paths only in Destination
+				$ExpiredRelativeTargetFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeTargetFolders, $MatchedFolders))
+
 				# loop through old target folders
-				ForEach ($OldRelativeTargetFolder in $OldRelativeTargetFolders) {
-					# if old target folder in source folders...
-					if ($OldRelativeTargetFolder -in $AllRelativeSourceFolders) {
-						# add path to set
-						$null = $PathsCheckedInTarget.Add($OldRelativeTargetFolder)
-					}
-					# if old target folder not in source folders...
-					Else {
-						# define expired target folder
-						$ExpiredTargetFolder = Join-Path -Path $TargetPath -ChildPath $OldRelativeTargetFolder
+				ForEach ($ExpiredRelativeTargetFolder in $ExpiredRelativeTargetFolders) {
+					# define expired target folder
+					$ExpiredTargetFolder = Join-Path -Path $TargetPath -ChildPath $ExpiredRelativeTargetFolder
 
-						# remove expired target folder
-						If ($PSCmdlet.ShouldProcess($ExpiredTargetFolder, 'remove folder')) {
-							Try {
-								$null = Remove-Item -Path $ExpiredTargetFolder -Force -Verbose:$VerbosePreference
-							}
-							Catch {
-								Write-Warning "could not remove folder '$ExpiredTargetFolder'"
-								Return $_
-							}
+					# remove expired target folder
+					If ($PSCmdlet.ShouldProcess($ExpiredTargetFolder, 'remove folder')) {
+						Try {
+							$null = Remove-Item -Path $ExpiredTargetFolder -Force -Verbose:$VerbosePreference
 						}
-
-						# add path to set
-						$null = $PathsRemovedInTarget.Add($OldRelativeTargetFolder)
+						Catch {
+							Write-Warning "could not remove folder '$ExpiredTargetFolder'"
+							Return $_
+						}
 					}
+
+					# add path to set
+					$null = $PathsRemovedInTarget.Add($ExpiredRelativeTargetFolder)
 				}
-
-				# # retrieve old paths only in Destination
-				# $ExpiredTargetFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeTargetFolders, $MatchedFolders))
-
-				# # remove old paths only in Destination
-				# ForEach ($ExpiredTargetFolder in $ExpiredTargetFolders) {
-				# 	$ExpiredTargetFolderPath = Join-Path -Path $TargetPath -ChildPath $ExpiredTargetFolder
-				# 	If ($PSCmdlet.ShouldProcess($ExpiredTargetFolderPath, 'remove folder')) {
-				# 		Try {
-				# 			$null = Remove-Item -Path $ExpiredTargetFolderPath -Force -Verbose:$VerbosePreference
-				# 		}
-				# 		Catch {
-				# 			Write-Warning "could not remove path '$ExpiredTargetFolderPath'"
-				# 		}
-				# 	}
-				# }
 			}
 
 			# remove old paths from Path
 			If ($Direction -eq 'Reverse' -or $Direction -eq 'Both') {
-				# loop through old source folders
-				ForEach ($OldRelativeSourceFolder in $OldRelativeSourceFolders) {
-					# if old source folder in target folders...
-					if ($OldRelativeSourceFolder -in $AllRelativeTargetFolders) {
-						# add path to set
-						$null = $PathsCheckedInSource.Add($OldRelativeSourceFolder)
-					}
-					# if old source folder not in target folders...
-					Else {
-						# define expired source folder
-						$ExpiredSourceFolder = Join-Path -Path $SourcePath -ChildPath $OldRelativeSourceFolder
+				# retrieve old paths only in Path
+				$ExpiredRelativeSourceFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeSourceFolders, $MatchedFolders))
 
-						# remove expired source folder
-						If ($PSCmdlet.ShouldProcess($ExpiredSourceFolder, 'remove folder')) {
-							Try {
-								$null = Remove-Item -Path $ExpiredSourceFolder -Force -Verbose:$VerbosePreference
-							}
-							Catch {
-								Write-Warning "could not remove folder '$ExpiredSourceFolder'"
-								Return $_
-							}
+				# loop through expired relative source folders
+				ForEach ($ExpiredRelativeSourceFolder in $ExpiredRelativeSourceFolders) {
+					# define expired source folder
+					$ExpiredSourceFolder = Join-Path -Path $SourcePath -ChildPath $ExpiredRelativeSourceFolder
+
+					# remove expired source folder
+					If ($PSCmdlet.ShouldProcess($ExpiredSourceFolder, 'remove folder')) {
+						Try {
+							$null = Remove-Item -Path $ExpiredSourceFolder -Force -Verbose:$VerbosePreference
 						}
-
-						# add path to set
-						$null = $PathsRemovedInSource.Add($OldRelativeSourceFolder)
+						Catch {
+							Write-Warning "could not remove folder '$ExpiredSourceFolder'"
+							Return $_
+						}
 					}
+
+					# add path to set
+					$null = $PathsRemovedInSource.Add($ExpiredRelativeSourceFolder)
 				}
-
-				# # retrieve old paths only in Path
-				# $ExpiredSourceFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeSourceFolders, $MatchedFolders))
-
-				# # remove old paths only in Path
-				# ForEach ($ExpiredSourceFolder in $ExpiredSourceFolders) {
-				# 	$ExpiredSourceFolderPath = Join-Path -Path $SourcePath -ChildPath $ExpiredSourceFolder
-				# 	If ($PSCmdlet.ShouldProcess($ExpiredSourceFolderPath, 'remove folder')) {
-				# 		Try {
-				# 			$null = Remove-Item -Path $ExpiredSourceFolderPath -Force -Verbose:$VerbosePreference
-				# 		}
-				# 		Catch {
-				# 			Write-Warning "could not remove path '$ExpiredSourceFolderPath'"
-				# 		}
-				# 	}
-				# }
 			}
 		}
 
