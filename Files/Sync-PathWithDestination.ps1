@@ -629,100 +629,66 @@ Begin {
 			If ($NewSourceFolders.Count) { $RelativeSourceFolders = $NewSourceFolders.Replace($SourcePath, $null) } Else { $RelativeSourceFolders = @() }
 			If ($NewTargetFolders.Count) { $RelativeTargetFolders = $NewTargetFolders.Replace($TargetPath, $null) } Else { $RelativeTargetFolders = @() }
 
+			# retrieve folders in both Path and Destination
+			$MatchedFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$RelativeSourceFolders, [string[]]$RelativeTargetFolders))
+
+			# loop through matched folders
+			foreach ($MatchedFolder in $MatchedFolders) {
+				# add path to set
+				$null = $PathsCheckedInSource.Add($MatchedFolder)
+				$null = $PathsCheckedInTarget.Add($MatchedFolder)
+			}
+
 			# create folders in Destination missing from Path
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
-				# loop through source folders
-				ForEach ($RelativeSourceFolder in $RelativeSourceFolders) {
-					# if source folder in target folders...
-					if ($RelativeSourceFolder -in $RelativeTargetFolders) {
-						# add path to set
-						$null = $PathsCheckedInTarget.Add($RelativeSourceFolder)
-					}
-					# if source folder not in target folders...
-					Else {
-						# define missing target folder
-						$MissingTargetFolder = Join-Path -Path $TargetPath -ChildPath $RelativeSourceFolder
+				# retrieve folders that are missing from Destination
+				$MissingRelativeTargetFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeSourceFolders, [string[]]$RelativeTargetFolders))
 
-						# create missing target folder
-						If ($PSCmdlet.ShouldProcess($MissingTargetFolder, 'create folder')) {
-							Try {
-								$null = New-Item -Path $MissingTargetFolder -ItemType 'Directory' -Force -Verbose:$VerbosePreference
-							}
-							Catch {
-								Write-Warning "could not create folder '$MissingTargetFolder'"
-								Return $_
-							}
+				# loop through missing relative target folders
+				ForEach ($MissingRelativeTargetFolder in $MissingRelativeTargetFolders) {
+					# define missing target folder
+					$MissingTargetFolder = Join-Path -Path $TargetPath -ChildPath $MissingRelativeTargetFolder
+
+					# create missing target folder
+					If ($PSCmdlet.ShouldProcess($MissingTargetFolder, 'create folder')) {
+						Try {
+							$null = New-Item -Path $MissingTargetFolder -ItemType 'Directory' -Force -Verbose:$VerbosePreference
 						}
-
-						# add path to set
-						$null = $PathsCreatedInTarget.Add($RelativeSourceFolder)
+						Catch {
+							Write-Warning "could not create folder '$MissingTargetFolder'"
+							Return $_
+						}
 					}
+
+					# add path to set
+					$null = $PathsCreatedInTarget.Add($MissingRelativeTargetFolder)
 				}
-
-				# # retrieve folders that are missing from Destination
-				# $MissingTargetFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeSourceFolders, [string[]]$RelativeTargetFolders))
-
-				# # create folders that are missing from Destination
-				# ForEach ($MissingTargetFolder in $MissingTargetFolders) {
-				# 	$MissingTargetFolder = Join-Path -Path $TargetPath -ChildPath $MissingTargetFolder
-				# 	If ($PSCmdlet.ShouldProcess($MissingTargetFolder, 'create folder')) {
-				# 		Try {
-				# 			$null = New-Item -Path $MissingTargetFolder -ItemType 'Directory' -Force -Verbose:$VerbosePreference
-				# 		}
-				# 		Catch {
-				# 			Write-Warning "could not create folder '$MissingTargetFolder'"
-				# 			Return $_
-				# 		}
-				# 	}
-				# }
 			}
 
 			# create folders in Path missing from Destination
 			If ($Direction -eq 'Both') {
-				# loop through target folders
-				ForEach ($RelativeTargetFolder in $RelativeTargetFolders) {
-					# if target folder in source folders...
-					if ($RelativeTargetFolder -in $RelativeSourceFolders) {
-						# add path to set
-						$null = $PathsCheckedInSource.Add($RelativeTargetFolder)
-					}
-					# if target folder not in source folders...
-					Else {
-						# define missing source folder
-						$MissingSourceFolder = Join-Path -Path $SourcePath -ChildPath $RelativeTargetFolder
+				# retrieve folders that are missing from Path
+				$MissingRelativeSourceFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeTargetFolders, [string[]]$RelativeSourceFolders))
 
-						# create missing source folder
-						If ($PSCmdlet.ShouldProcess($MissingSourceFolder, 'create folder')) {
-							Try {
-								$null = New-Item -Path $MissingSourceFolder -ItemType 'Directory' -Force -Verbose:$VerbosePreference
-							}
-							Catch {
-								Write-Warning "could not create folder '$MissingSourceFolder'"
-								Return $_
-							}
+				# loop through missing relative source folders
+				ForEach ($MissingRelativeSourceFolder in $MissingRelativeSourceFolders) {
+					# define missing source folder
+					$MissingSourceFolder = Join-Path -Path $SourcePath -ChildPath $MissingRelativeSourceFolder
+
+					# create missing source folder
+					If ($PSCmdlet.ShouldProcess($MissingSourceFolder, 'create folder')) {
+						Try {
+							$null = New-Item -Path $MissingSourceFolder -ItemType 'Directory' -Force -Verbose:$VerbosePreference
 						}
-
-						# add path to set
-						$null = $PathsCreatedInSource.Add($RelativeTargetFolder)
+						Catch {
+							Write-Warning "could not create folder '$MissingSourceFolder'"
+							Return $_
+						}
 					}
+
+					# add path to set
+					$null = $PathsCreatedInSource.Add($MissingRelativeSourceFolder)
 				}
-
-				# # retrieve folders that are missing from Path
-				# $MissingSourceFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeTargetFolders, [string[]]$RelativeSourceFolders))
-
-				# # create folders that are missing from Path
-				# ForEach ($MissingSourceFolder in $MissingSourceFolders) {
-				# 	$MissingSourceFolder = Join-Path -Path $SourcePath -ChildPath $MissingSourceFolder
-				# 	If ($PSCmdlet.ShouldProcess($MissingSourceFolder, 'create folder')) {
-				# 		Try {
-				# 			$null = New-Item -Path $MissingSourceFolder -ItemType 'Directory' -Force -Verbose:$VerbosePreference
-				# 		}
-				# 		Catch {
-				# 			Write-Warning "could not create folder '$MissingSourceFolder'"
-				# 			Return $_
-				# 		}
-				# 	}
-				# }
 			}
 		}
 
