@@ -84,7 +84,7 @@ function Lock-Workstation {
         [System.Reflection.Emit.AssemblyBuilder]$AssemblyBuilder = [System.Reflection.Emit.AssemblyBuilder]::DefineDynamicAssembly($DynamicAssemblyName, [System.Reflection.Emit.AssemblyBuilderAccess]::Run)
 
         # define the builder for a new module (the container for types) that does not emit symbol information (second parameter)
-        [System.Reflection.Emit.ModuleBuilder]$ModuleBuilder = $AssemblyBuilder.DefineDynamicModule($ModuleName, $false)
+        [System.Reflection.Emit.ModuleBuilder]$ModuleBuilder = $AssemblyBuilder.DefineDynamicModule($ModuleName)
 
         # define the builder for a new type and make it public (second parameter)
         [System.Reflection.Emit.TypeBuilder]$TypeBuilder = $ModuleBuilder.DefineType($TypeName, [System.Reflection.TypeAttributes]::Public)
