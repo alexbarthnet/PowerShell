@@ -652,7 +652,7 @@ Begin {
 					# create missing target folder
 					If ($PSCmdlet.ShouldProcess($MissingTargetFolder, 'create folder')) {
 						Try {
-							$null = New-Item -Path $MissingTargetFolder -ItemType 'Directory' -Force -Verbose:$VerbosePreference
+							$null = New-Item -Path $MissingTargetFolder -ItemType 'Directory' -Force
 						}
 						Catch {
 							Write-Warning "could not create folder '$MissingTargetFolder'"
@@ -678,7 +678,7 @@ Begin {
 					# create missing source folder
 					If ($PSCmdlet.ShouldProcess($MissingSourceFolder, 'create folder')) {
 						Try {
-							$null = New-Item -Path $MissingSourceFolder -ItemType 'Directory' -Force -Verbose:$VerbosePreference
+							$null = New-Item -Path $MissingSourceFolder -ItemType 'Directory' -Force
 						}
 						Catch {
 							Write-Warning "could not create folder '$MissingSourceFolder'"
@@ -750,7 +750,7 @@ Begin {
 					# create missing target file
 					If ($PSCmdlet.ShouldProcess("source: $PresentSourceFile, target: $MissingTargetFile", 'copy file')) {
 						Try {
-							Copy-Item -Path $PresentSourceFile -Destination $MissingTargetFile -Force -Verbose:$VerbosePreference
+							Copy-Item -Path $PresentSourceFile -Destination $MissingTargetFile -Force
 						}
 						Catch {
 							Write-Warning "could not copy file '$PresentSourceFile' to file '$MissingTargetFile'"
@@ -777,7 +777,7 @@ Begin {
 					# create missing source file
 					If ($PSCmdlet.ShouldProcess("source: $PresentTargetFile, target: $MissingSourceFile", 'copy file')) {
 						Try {
-							Copy-Item -Path $PresentTargetFile -Destination $MissingSourceFile -Force -Verbose:$VerbosePreference
+							Copy-Item -Path $PresentTargetFile -Destination $MissingSourceFile -Force
 						}
 						Catch {
 							Write-Warning "could not copy file '$PresentTargetFile' to file '$MissingSourceFile'"
@@ -847,7 +847,7 @@ Begin {
 					# copy file from Path to Destination
 					If ($PSCmdlet.ShouldProcess("source: $MatchedSourcePath, target: $MatchedTargetPath", 'copy file')) {
 						Try {
-							Copy-Item -Path $MatchedSourcePath -Destination $MatchedTargetPath -Force -Verbose:$VerbosePreference
+							Copy-Item -Path $MatchedSourcePath -Destination $MatchedTargetPath -Force
 						}
 						Catch {
 							Write-Warning "could not copy file '$MatchedSourcePath' to file '$MatchedTargetPath'"
@@ -864,7 +864,7 @@ Begin {
 					# copy file from Destination to Path
 					If ($PSCmdlet.ShouldProcess("source: $MatchedTargetPath, target: $MatchedSourcePath", 'copy file')) {
 						Try {
-							Copy-Item -Path $MatchedTargetPath -Destination $MatchedSourcePath -Force -Verbose:$VerbosePreference
+							Copy-Item -Path $MatchedTargetPath -Destination $MatchedSourcePath -Force
 						}
 						Catch {
 							Write-Warning "could not copy file '$MatchedTargetPath' to file '$MatchedSourcePath'"
@@ -943,7 +943,7 @@ Begin {
 					# remove expired target file
 					If ($PSCmdlet.ShouldProcess($ExpiredTargetFile, 'remove file')) {
 						Try {
-							$null = Remove-Item -Path $ExpiredTargetFile -Force -Verbose:$VerbosePreference
+							$null = Remove-Item -Path $ExpiredTargetFile -Force
 						}
 						Catch {
 							Write-Warning "could not remove file '$ExpiredTargetFile'"
@@ -969,7 +969,7 @@ Begin {
 					# remove expired source file
 					If ($PSCmdlet.ShouldProcess($ExpiredSourceFile, 'remove file')) {
 						Try {
-							$null = Remove-Item -Path $ExpiredSourceFile -Force -Verbose:$VerbosePreference
+							$null = Remove-Item -Path $ExpiredSourceFile -Force
 						}
 						Catch {
 							Write-Warning "could not remove file '$ExpiredSourceFile'"
@@ -1047,7 +1047,7 @@ Begin {
 					# remove expired target folder
 					If ($PSCmdlet.ShouldProcess($ExpiredTargetFolder, 'remove folder')) {
 						Try {
-							$null = Remove-Item -Path $ExpiredTargetFolder -Force -Verbose:$VerbosePreference
+							$null = Remove-Item -Path $ExpiredTargetFolder -Force
 						}
 						Catch {
 							Write-Warning "could not remove folder '$ExpiredTargetFolder'"
@@ -1073,7 +1073,7 @@ Begin {
 					# remove expired source folder
 					If ($PSCmdlet.ShouldProcess($ExpiredSourceFolder, 'remove folder')) {
 						Try {
-							$null = Remove-Item -Path $ExpiredSourceFolder -Force -Verbose:$VerbosePreference
+							$null = Remove-Item -Path $ExpiredSourceFolder -Force
 						}
 						Catch {
 							Write-Warning "could not remove folder '$ExpiredSourceFolder'"
