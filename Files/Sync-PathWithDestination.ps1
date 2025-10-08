@@ -985,9 +985,39 @@ Begin {
 
 		# remove old paths if SkipDelete is files and folders are in scope (SkipExisting is false and Recurse is true)
 		If (-not $SkipDelete -and -not $SkipExisting -and $Recurse) {
-			# retrieve path objects
-			$SourceFolders = Get-ChildItem -Path $SourcePath -Recurse:$Recurse -Directory
-			$TargetFolders = Get-ChildItem -Path $TargetPath -Recurse:$Recurse -Directory
+			# if source path found...
+			If (Test-Path -Path $SourcePath -PathType Container) {
+				# retrieve path objects under source path
+				try {
+					$SourceFolders = Get-ChildItem -Path $SourcePath -Recurse -Directory
+				}
+				catch {
+					Write-Warning -Message "could not retrieve folders from path: '$SourcePath'"
+					Return $_
+				}
+			}
+			# if source path not found...
+			else {
+				# return empty array
+				$SourceFolders = @()
+			}
+
+			# if target path found...
+			If (Test-Path -Path $TargetPath -PathType Container) {
+				# retrieve path objects under target path
+				try {
+					$TargetFolders = Get-ChildItem -Path $TargetPath -Recurse -Directory
+				}
+				catch {
+					Write-Warning -Message "could not retrieve folders from path: '$TargetPath'"
+					Return $_
+				}
+			}
+			# if target path not found...
+			else {
+				# return empty array
+				$TargetFolders = @()
+			}
 
 			# retrieve fullname of paths
 			$AllSourceFolders = $SourceFolders | Select-Object -ExpandProperty 'FullName'
