@@ -809,8 +809,8 @@ Begin {
 				# compare files by hash if requested
 				If ($CheckHash) {
 					If ((Get-FileHash -Path $MatchedSourcePath).Hash -eq (Get-FileHash -Path $MatchedTargetPath).Hash) {
-						Write-Host "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same file hash"
-						Continue
+						Write-Verbose "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same file hash"
+						Continue NextMatchedFile
 					}
 				}
 				# retrieve files
@@ -819,8 +819,8 @@ Begin {
 				# compare files by last
 				If (-not $CheckHash) {
 					If ($MatchedSourceItem.LastWriteTimeUtc -eq $MatchedTargetItem.LastWriteTimeUtc) {
-						Write-Host "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same LastWriteTimeUtc"
-						Continue
+						Write-Verbose "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same LastWriteTimeUtc"
+						Continue NextMatchedFile
 					}
 				}
 				# copy file from Path to Destination if newer or Direction is not 'Both'
@@ -831,6 +831,7 @@ Begin {
 						}
 						Catch {
 							Write-Warning "could not copy file '$MatchedSourcePath' to file '$MatchedTargetPath'"
+							Continue NextMatchedFile
 						}
 					}
 				}
@@ -842,6 +843,7 @@ Begin {
 						}
 						Catch {
 							Write-Warning "could not copy file '$MatchedTargetPath' to file '$MatchedSourcePath'"
+							Continue NextMatchedFile
 						}
 					}
 				}
