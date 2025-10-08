@@ -124,17 +124,20 @@ Begin {
 	$PathsCheckedInSource = [System.Collections.Generic.SortedSet[System.String]]::new()
 	$PathsCheckedInTarget = [System.Collections.Generic.SortedSet[System.String]]::new()
 
-	$PathsRemovedInSource = [System.Collections.Generic.SortedSet[System.String]]::new()
-	$PathsRemovedInTarget = [System.Collections.Generic.SortedSet[System.String]]::new()
-
 	$FilesCreatedInSource = [System.Collections.Generic.SortedSet[System.String]]::new()
 	$FilesCreatedInTarget = [System.Collections.Generic.SortedSet[System.String]]::new()
 
 	$FilesCheckedInSource = [System.Collections.Generic.SortedSet[System.String]]::new()
 	$FilesCheckedInTarget = [System.Collections.Generic.SortedSet[System.String]]::new()
 
+	$FilesUpdatedInSource = [System.Collections.Generic.SortedSet[System.String]]::new()
+	$FilesUpdatedInTarget = [System.Collections.Generic.SortedSet[System.String]]::new()
+
 	$FilesRemovedInSource = [System.Collections.Generic.SortedSet[System.String]]::new()
 	$FilesRemovedInTarget = [System.Collections.Generic.SortedSet[System.String]]::new()
+
+	$PathsRemovedInSource = [System.Collections.Generic.SortedSet[System.String]]::new()
+	$PathsRemovedInTarget = [System.Collections.Generic.SortedSet[System.String]]::new()
 
 	Function Get-DateTimeFromJson {
 		Param(
@@ -1356,15 +1359,18 @@ End {
 	If ($PathsCheckedInSource.Count) { "Paths checked in source: {0}" -f $PathsCheckedInSource.Count }
 	If ($PathsCheckedInTarget.Count) { "Paths checked in target: {0}" -f $PathsCheckedInTarget.Count }
 
-	If ($PathsRemovedInSource.Count) { "Paths removed in source: {0}" -f $PathsRemovedInSource.Count }
-	If ($PathsRemovedInTarget.Count) { "Paths removed in target: {0}" -f $PathsRemovedInTarget.Count }
-
 	If ($FilesCreatedInSource.Count) { "Files created in source: {0}" -f $FilesCreatedInSource.Count }
 	If ($FilesCreatedInTarget.Count) { "Files created in target: {0}" -f $FilesCreatedInTarget.Count }
 
 	If ($FilesCheckedInSource.Count) { "Files checked in source: {0}" -f $FilesCheckedInSource.Count }
 	If ($FilesCheckedInTarget.Count) { "Files checked in target: {0}" -f $FilesCheckedInTarget.Count }
 
+	If ($FilesUpdatedInSource.Count) { "Files updated in source: {0}" -f $FilesUpdatedInSource.Count }
+	If ($FilesUpdatedInTarget.Count) { "Files updated in target: {0}" -f $FilesUpdatedInTarget.Count }
+
 	If ($FilesRemovedInSource.Count) { "Files removed in source: {0}" -f $FilesRemovedInSource.Count }
 	If ($FilesRemovedInTarget.Count) { "Files removed in target: {0}" -f $FilesRemovedInTarget.Count }
+
+	If ($PathsRemovedInSource.Count) { "Paths removed in source: {0}" -f $PathsRemovedInSource.Count }
+	If ($PathsRemovedInTarget.Count) { "Paths removed in target: {0}" -f $PathsRemovedInTarget.Count }
 }
