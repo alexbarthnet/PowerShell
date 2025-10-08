@@ -114,6 +114,28 @@ Param(
 )
 
 Begin {
+	# define time started
+	$TimeStarted = [System.DateTime]::Now
+
+	# define counters
+	$PathsCreatedInSource = [System.Collections.Generic.SortedSet[System.String]]::new()
+	$PathsCreatedInTarget = [System.Collections.Generic.SortedSet[System.String]]::new()
+
+	$PathsCheckedInSource = [System.Collections.Generic.SortedSet[System.String]]::new()
+	$PathsCheckedInTarget = [System.Collections.Generic.SortedSet[System.String]]::new()
+
+	$PathsRemovedInSource = [System.Collections.Generic.SortedSet[System.String]]::new()
+	$PathsRemovedInTarget = [System.Collections.Generic.SortedSet[System.String]]::new()
+
+	$FilesCreatedInSource = [System.Collections.Generic.SortedSet[System.String]]::new()
+	$FilesCreatedInTarget = [System.Collections.Generic.SortedSet[System.String]]::new()
+
+	$FilesCheckedInSource = [System.Collections.Generic.SortedSet[System.String]]::new()
+	$FilesCheckedInTarget = [System.Collections.Generic.SortedSet[System.String]]::new()
+
+	$FilesRemovedInSource = [System.Collections.Generic.SortedSet[System.String]]::new()
+	$FilesRemovedInTarget = [System.Collections.Generic.SortedSet[System.String]]::new()
+
 	Function Get-DateTimeFromJson {
 		Param(
 			# path to JSON file
@@ -558,6 +580,34 @@ Begin {
 
 			# create folders in Destination missing from Path
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
+				# loop through source folders
+				ForEach ($RelativeSourceFolder in $RelativeSourceFolders) {
+					# if source folder in target folders...
+					if ($RelativeSourceFolder -in $RelativeTargetFolders) {
+						# add path to set
+						$null = $PathsCheckedInTarget.Add($RelativeSourceFolder)
+					}
+					# if source folder not in target folders...
+					Else {
+						# define missing target folder
+						$MissingTargetFolder = Join-Path -Path $TargetPath -ChildPath $RelativeSourceFolder
+
+						# create missing target folder
+						If ($PSCmdlet.ShouldProcess($MissingTargetFolder, 'create folder')) {
+							Try {
+								$null = New-Item -Path $MissingTargetFolder -ItemType 'Directory' -Force -Verbose:$VerbosePreference
+							}
+							Catch {
+								Write-Warning "could not create folder '$MissingTargetFolder'"
+								Return $_
+							}
+						}
+
+						# add path to set
+						$null = $PathsCreatedInTarget.Add($RelativeSourceFolder)
+					}
+				}
+
 				# retrieve folders that are missing from Destination
 				$MissingTargetFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeSourceFolders, [string[]]$RelativeTargetFolders))
 
@@ -578,6 +628,34 @@ Begin {
 
 			# create folders in Path missing from Destination
 			If ($Direction -eq 'Both') {
+				# loop through target folders
+				ForEach ($RelativeTargetFolder in $RelativeTargetFolders) {
+					# if target folder in source folders...
+					if ($RelativeTargetFolder -in $RelativeSourceFolders) {
+						# add path to set
+						$null = $PathsCheckedInSource.Add($RelativeTargetFolder)
+					}
+					# if target folder not in source folders...
+					Else {
+						# define missing source folder
+						$MissingSourceFolder = Join-Path -Path $SourcePath -ChildPath $RelativeTargetFolder
+
+						# create missing source folder
+						If ($PSCmdlet.ShouldProcess($MissingSourceFolder, 'create folder')) {
+							Try {
+								$null = New-Item -Path $MissingSourceFolder -ItemType 'Directory' -Force -Verbose:$VerbosePreference
+							}
+							Catch {
+								Write-Warning "could not create folder '$MissingSourceFolder'"
+								Return $_
+							}
+						}
+
+						# add path to set
+						$null = $PathsCreatedInSource.Add($RelativeTargetFolder)
+					}
+				}
+
 				# retrieve folders that are missing from Path
 				$MissingSourceFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeTargetFolders, [string[]]$RelativeSourceFolders))
 
@@ -613,6 +691,35 @@ Begin {
 
 			# copy new files from Path to Destination
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
+				# loop through source files
+				ForEach ($RelativeSourceFile in $RelativeSourceFiles) {
+					# if source file in target files...
+					if ($RelativeSourceFile -in $RelativeTargetFiles) {
+						# add file to set
+						$null = $FilesCheckedInTarget.Add($RelativeSourceFile)
+					}
+					# if source file not in target files...
+					Else {
+						# define missing target file
+						$MissingTargetFileOnSource = Join-Path -Path $SourcePath -ChildPath $RelativeSourceFile
+						$MissingTargetFileExpected = Join-Path -Path $TargetPath -ChildPath $RelativeSourceFile
+
+						# create missing target file
+						If ($PSCmdlet.ShouldProcess("source: $MissingTargetFileOnSource, target: $MissingTargetFileExpected", 'copy file')) {
+							Try {
+								Copy-Item -Path $MissingTargetFileOnSource -Destination $MissingTargetFileExpected -Force -Verbose:$VerbosePreference
+							}
+							Catch {
+								Write-Warning "could not copy file '$MissingTargetFileOnSource' to file '$MissingTargetFileExpected'"
+								Return $_
+							}
+						}
+
+						# add file to set
+						$null = $FilesCreatedInTarget.Add($RelativeSourceFile)
+					}
+				}
+
 				# retrieve files that are missing from Destination
 				$MissingTargetFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeSourceFiles, [string[]]$RelativeTargetFiles))
 
@@ -633,6 +740,35 @@ Begin {
 
 			# copy new files from Destination to Path
 			If ($Direction -eq 'Both') {
+				# loop through target files
+				ForEach ($RelativeTargetFile in $RelativeTargetFiles) {
+					# if target file in source files...
+					if ($RelativeTargetFile -in $RelativeSourceFiles) {
+						# add file to set
+						$null = $FilesCheckedInSource.Add($RelativeTargetFile)
+					}
+					# if target file not in source files...
+					Else {
+						# define missing source file
+						$MissingSourceFileOnTarget = Join-Path -Path $TargetPath -ChildPath $RelativeTargetFile
+						$MissingSourceFileExpected = Join-Path -Path $SourcePath -ChildPath $RelativeTargetFile
+
+						# create missing source file
+						If ($PSCmdlet.ShouldProcess("source: $MissingSourceFileOnTarget, target: $MissingSourceFileExpected", 'copy file')) {
+							Try {
+								Copy-Item -Path $MissingSourceFileOnTarget -Destination $MissingSourceFileExpected -Force -Verbose:$VerbosePreference
+							}
+							Catch {
+								Write-Warning "could not copy file '$MissingSourceFileOnTarget' to file '$MissingSourceFileExpected'"
+								Return $_
+							}
+						}
+
+						# add file to set
+						$null = $FilesCreatedInSource.Add($RelativeTargetFile)
+					}
+				}
+
 				# retrieve files that are missing from Path
 				$MissingSourceFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeTargetFiles, [string[]]$RelativeSourceFiles))
 
@@ -735,6 +871,34 @@ Begin {
 
 			# remove old files from Destination
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
+				# loop through old target files
+				ForEach ($OldRelativeTargetFile in $OldRelativeTargetFiles) {
+					# if old target file in source files...
+					if ($OldRelativeTargetFile -in $AllRelativeSourceFiles) {
+						# add path to set
+						$null = $PathsCheckedInTarget.Add($OldRelativeTargetFile)
+					}
+					# if old target file not in source files...
+					Else {
+						# define expired target file
+						$ExpiredTargetFile = Join-Path -Path $TargetPath -ChildPath $OldRelativeTargetFile
+
+						# remove expired target file
+						If ($PSCmdlet.ShouldProcess($ExpiredTargetFile, 'remove file')) {
+							Try {
+								$null = Remove-Item -Path $ExpiredTargetFile -Force -Verbose:$VerbosePreference
+							}
+							Catch {
+								Write-Warning "could not remove file '$ExpiredTargetFile'"
+								Return $_
+							}
+						}
+
+						# add path to set
+						$null = $PathsRemovedInTarget.Add($OldRelativeTargetFile)
+					}
+				}
+
 				# retrieve old files that are only in Destination
 				$ExpiredTargetFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeTargetFiles, $MatchedFiles))
 
@@ -754,6 +918,34 @@ Begin {
 
 			# remove old files from Path
 			If ($Direction -eq 'Reverse' -or $Direction -eq 'Both') {
+				# loop through old source files
+				ForEach ($OldRelativeSourceFile in $OldRelativeSourceFiles) {
+					# if old source file in target files...
+					if ($OldRelativeSourceFile -in $AllRelativeTargetFiles) {
+						# add file to set
+						$null = $FilesCheckedInSource.Add($OldRelativeSourceFile)
+					}
+					# if old source file not in target files...
+					Else {
+						# define expired source file
+						$ExpiredSourceFile = Join-Path -Path $SourcePath -ChildPath $OldRelativeSourceFile
+
+						# remove expired source file
+						If ($PSCmdlet.ShouldProcess($ExpiredSourceFile, 'remove file')) {
+							Try {
+								$null = Remove-Item -Path $ExpiredSourceFile -Force -Verbose:$VerbosePreference
+							}
+							Catch {
+								Write-Warning "could not remove file '$ExpiredSourceFile'"
+								Return $_
+							}
+						}
+
+						# add file to set
+						$null = $FilesRemovedInSource.Add($OldRelativeSourceFile)
+					}
+				}
+
 				# retrieve old files that are only in Path
 				$ExpiredSourceFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeSourceFiles, $MatchedFiles))
 
@@ -795,6 +987,34 @@ Begin {
 
 			# remove old paths from Destination
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
+				# loop through old target folders
+				ForEach ($OldRelativeTargetFolder in $OldRelativeTargetFolders) {
+					# if old target folder in source folders...
+					if ($OldRelativeTargetFolder -in $AllRelativeSourceFolders) {
+						# add path to set
+						$null = $PathsCheckedInTarget.Add($OldRelativeTargetFolder)
+					}
+					# if old target folder not in source folders...
+					Else {
+						# define expired target folder
+						$ExpiredTargetFolder = Join-Path -Path $TargetPath -ChildPath $OldRelativeTargetFolder
+
+						# remove expired target folder
+						If ($PSCmdlet.ShouldProcess($ExpiredTargetFolder, 'remove folder')) {
+							Try {
+								$null = Remove-Item -Path $ExpiredTargetFolder -Force -Verbose:$VerbosePreference
+							}
+							Catch {
+								Write-Warning "could not remove folder '$ExpiredTargetFolder'"
+								Return $_
+							}
+						}
+
+						# add path to set
+						$null = $PathsRemovedInTarget.Add($OldRelativeTargetFolder)
+					}
+				}
+
 				# retrieve old paths only in Destination
 				$ExpiredTargetFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeTargetFolders, $MatchedFolders))
 
@@ -814,6 +1034,34 @@ Begin {
 
 			# remove old paths from Path
 			If ($Direction -eq 'Reverse' -or $Direction -eq 'Both') {
+				# loop through old source folders
+				ForEach ($OldRelativeSourceFolder in $OldRelativeSourceFolders) {
+					# if old source folder in target folders...
+					if ($OldRelativeSourceFolder -in $AllRelativeTargetFolders) {
+						# add path to set
+						$null = $PathsCheckedInSource.Add($OldRelativeSourceFolder)
+					}
+					# if old source folder not in target folders...
+					Else {
+						# define expired source folder
+						$ExpiredSourceFolder = Join-Path -Path $SourcePath -ChildPath $OldRelativeSourceFolder
+
+						# remove expired source folder
+						If ($PSCmdlet.ShouldProcess($ExpiredSourceFolder, 'remove folder')) {
+							Try {
+								$null = Remove-Item -Path $ExpiredSourceFolder -Force -Verbose:$VerbosePreference
+							}
+							Catch {
+								Write-Warning "could not remove folder '$ExpiredSourceFolder'"
+								Return $_
+							}
+						}
+
+						# add path to set
+						$null = $PathsRemovedInSource.Add($OldRelativeSourceFolder)
+					}
+				}
+
 				# retrieve old paths only in Path
 				$ExpiredSourceFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeSourceFolders, $MatchedFolders))
 
@@ -1090,4 +1338,31 @@ Process {
 			}
 		}
 	}
+}
+
+End {
+	# define time stopped
+	$TimeStopped = [System.DateTime]::Now
+
+	# report state
+	"Time started: {0}" -f $TimeStarted.ToString('o')
+	"Time stopped: {0}" -f $TimeStopped.ToString('o')
+
+	If ($PathsCreatedInSource.Count) { "Paths created in source: {0}" -f $PathsCreatedInSource.Count }
+	If ($PathsCreatedInTarget.Count) { "Paths created in target: {0}" -f $PathsCreatedInTarget.Count }
+
+	If ($PathsCheckedInSource.Count) { "Paths checked in source: {0}" -f $PathsCheckedInSource.Count }
+	If ($PathsCheckedInTarget.Count) { "Paths checked in target: {0}" -f $PathsCheckedInTarget.Count }
+
+	If ($PathsRemovedInSource.Count) { "Paths removed in source: {0}" -f $PathsRemovedInSource.Count }
+	If ($PathsRemovedInTarget.Count) { "Paths removed in target: {0}" -f $PathsRemovedInTarget.Count }
+
+	If ($FilesCreatedInSource.Count) { "Files created in source: {0}" -f $FilesCreatedInSource.Count }
+	If ($FilesCreatedInTarget.Count) { "Files created in target: {0}" -f $FilesCreatedInTarget.Count }
+
+	If ($FilesCheckedInSource.Count) { "Files checked in source: {0}" -f $FilesCheckedInSource.Count }
+	If ($FilesCheckedInTarget.Count) { "Files checked in target: {0}" -f $FilesCheckedInTarget.Count }
+
+	If ($FilesRemovedInSource.Count) { "Files removed in source: {0}" -f $FilesRemovedInSource.Count }
+	If ($FilesRemovedInTarget.Count) { "Files removed in target: {0}" -f $FilesRemovedInTarget.Count }
 }
