@@ -927,105 +927,63 @@ Begin {
 			If ($OldSourceFiles.Count) { $OldRelativeSourceFiles = $OldSourceFiles.Replace($SourcePath, $null) } Else { $OldRelativeSourceFiles = @() }
 			If ($OldTargetFiles.Count) { $OldRelativeTargetFiles = $OldTargetFiles.Replace($TargetPath, $null) } Else { $OldRelativeTargetFiles = @() }
 
-			# # retrieve files in both Path and Destination
-			# $MatchedFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$AllRelativeSourceFiles, [string[]]$AllRelativeTargetFiles))
+			# retrieve files in both Path and Destination
+			$MatchedFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$AllRelativeSourceFiles, [string[]]$AllRelativeTargetFiles))
 
 			# remove old files from Destination
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
-				# loop through old target files
-				ForEach ($OldRelativeTargetFile in $OldRelativeTargetFiles) {
-					# if old target file in source files...
-					if ($OldRelativeTargetFile -in $AllRelativeSourceFiles) {
-						# add path to set
-						$null = $PathsCheckedInTarget.Add($OldRelativeTargetFile)
-					}
-					# if old target file not in source files...
-					Else {
-						# define expired target file
-						$ExpiredTargetFile = Join-Path -Path $TargetPath -ChildPath $OldRelativeTargetFile
+				# retrieve old files that are only in Destination
+				$ExpiredRelativeTargetFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeTargetFiles, $MatchedFiles))
 
-						# remove expired target file
-						If ($PSCmdlet.ShouldProcess($ExpiredTargetFile, 'remove file')) {
-							Try {
-								$null = Remove-Item -Path $ExpiredTargetFile -Force -Verbose:$VerbosePreference
-							}
-							Catch {
-								Write-Warning "could not remove file '$ExpiredTargetFile'"
-								Return $_
-							}
+				# loop through expired relative target files
+				ForEach ($ExpiredRelativeTargetFile in $ExpiredRelativeTargetFiles) {
+					# define expired target file
+					$ExpiredTargetFile = Join-Path -Path $TargetPath -ChildPath $ExpiredRelativeTargetFile
+
+					# remove expired target file
+					If ($PSCmdlet.ShouldProcess($ExpiredTargetFile, 'remove file')) {
+						Try {
+							$null = Remove-Item -Path $ExpiredTargetFile -Force -Verbose:$VerbosePreference
 						}
-
-						# add path to set
-						$null = $PathsRemovedInTarget.Add($OldRelativeTargetFile)
+						Catch {
+							Write-Warning "could not remove file '$ExpiredTargetFile'"
+							Return $_
+						}
 					}
+
+					# add path to set
+					$null = $PathsRemovedInTarget.Add($ExpiredRelativeTargetFile)
 				}
-
-				# # retrieve old files that are only in Destination
-				# $ExpiredTargetFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeTargetFiles, $MatchedFiles))
-
-				# # remove old files that are only in Destination
-				# ForEach ($ExpiredTargetFile in $ExpiredTargetFiles) {
-				# 	$ExpiredTargetFilePath = Join-Path -Path $TargetPath -ChildPath $ExpiredTargetFile
-				# 	If ($PSCmdlet.ShouldProcess($ExpiredTargetFilePath, 'remove file')) {
-				# 		Try {
-				# 			$null = Remove-Item -Path $ExpiredTargetFilePath -Force -Verbose:$VerbosePreference
-				# 		}
-				# 		Catch {
-				# 			Write-Warning "could not remove file '$ExpiredTargetFilePath'"
-				# 		}
-				# 	}
-				# }
 			}
 
 			# remove old files from Path
 			If ($Direction -eq 'Reverse' -or $Direction -eq 'Both') {
-				# loop through old source files
-				ForEach ($OldRelativeSourceFile in $OldRelativeSourceFiles) {
-					# if old source file in target files...
-					if ($OldRelativeSourceFile -in $AllRelativeTargetFiles) {
-						# add file to set
-						$null = $FilesCheckedInSource.Add($OldRelativeSourceFile)
-					}
-					# if old source file not in target files...
-					Else {
-						# define expired source file
-						$ExpiredSourceFile = Join-Path -Path $SourcePath -ChildPath $OldRelativeSourceFile
+				# retrieve old files that are only in Path
+				$ExpiredRelativeSourceFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeSourceFiles, $MatchedFiles))
 
-						# remove expired source file
-						If ($PSCmdlet.ShouldProcess($ExpiredSourceFile, 'remove file')) {
-							Try {
-								$null = Remove-Item -Path $ExpiredSourceFile -Force -Verbose:$VerbosePreference
-							}
-							Catch {
-								Write-Warning "could not remove file '$ExpiredSourceFile'"
-								Return $_
-							}
+				# loop through expired relative source files
+				ForEach ($ExpiredRelativeSourceFile in $ExpiredRelativeSourceFiles) {
+					# define expired source file
+					$ExpiredSourceFile = Join-Path -Path $SourcePath -ChildPath $ExpiredRelativeSourceFile
+
+					# remove expired source file
+					If ($PSCmdlet.ShouldProcess($ExpiredSourceFile, 'remove file')) {
+						Try {
+							$null = Remove-Item -Path $ExpiredSourceFile -Force -Verbose:$VerbosePreference
 						}
-
-						# add file to set
-						$null = $FilesRemovedInSource.Add($OldRelativeSourceFile)
+						Catch {
+							Write-Warning "could not remove file '$ExpiredSourceFile'"
+							Return $_
+						}
 					}
+
+					# add file to set
+					$null = $FilesRemovedInSource.Add($ExpiredRelativeSourceFile)
 				}
-
-				# # retrieve old files that are only in Path
-				# $ExpiredSourceFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeSourceFiles, $MatchedFiles))
-
-				# # remove old files that are only in Path
-				# ForEach ($ExpiredSourceFile in $ExpiredSourceFiles) {
-				# 	$ExpiredSourceFilePath = Join-Path -Path $SourcePath -ChildPath $ExpiredSourceFile
-				# 	If ($PSCmdlet.ShouldProcess($ExpiredSourceFilePath, 'remove file')) {
-				# 		Try {
-				# 			$null = Remove-Item -Path $ExpiredSourceFilePath -Force -Verbose:$VerbosePreference
-				# 		}
-				# 		Catch {
-				# 			Write-Warning "could not remove file '$ExpiredSourceFilePath'"
-				# 		}
-				# 	}
-				# }
 			}
 		}
 
-		# remove old paths if SkipDelete and SkipExisting are false and Recurse is true
+		# remove old paths if SkipDelete is files and folders are in scope (SkipExisting is false and Recurse is true)
 		If (-not $SkipDelete -and -not $SkipExisting -and $Recurse) {
 			# retrieve path objects
 			$SourceFolders = Get-ChildItem -Path $SourcePath -Recurse:$Recurse -Directory
