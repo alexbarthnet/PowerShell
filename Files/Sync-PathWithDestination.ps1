@@ -811,8 +811,16 @@ Begin {
 				$MatchedTargetPath = Join-Path -Path $TargetPath -ChildPath $MatchedFile
 				# compare files by hash if requested
 				If ($CheckHash) {
+					# if file in Path and Direction have same file hash
 					If ((Get-FileHash -Path $MatchedSourcePath).Hash -eq (Get-FileHash -Path $MatchedTargetPath).Hash) {
-						Write-Verbose "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same file hash"
+						# report state
+						Write-Verbose -Verbose:$VerbosePreference -Message "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same file hash"
+
+						# add file to sets
+						$null = $FilesCheckedInSource.Add($MatchedFile)
+						$null = $FilesCheckedInTarget.Add($MatchedFile)
+
+						# continue to next matched file
 						Continue NextMatchedFile
 					}
 				}
@@ -821,13 +829,22 @@ Begin {
 				$MatchedTargetItem = $TargetItems.Where({ $_.FullName -eq $MatchedTargetPath })
 				# compare files by last
 				If (-not $CheckHash) {
+					# if file in Path and Direction have same LastWriteTimeUtc
 					If ($MatchedSourceItem.LastWriteTimeUtc -eq $MatchedTargetItem.LastWriteTimeUtc) {
-						Write-Verbose "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same LastWriteTimeUtc"
+						# report state
+						Write-Verbose -Verbose:$VerbosePreference -Message "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same LastWriteTimeUtc"
+
+						# add file to sets
+						$null = $FilesCheckedInSource.Add($MatchedFile)
+						$null = $FilesCheckedInTarget.Add($MatchedFile)
+
+						# continue to next matched file
 						Continue NextMatchedFile
 					}
 				}
-				# copy file from Path to Destination if newer or Direction is not 'Both'
+				# if file in Path is newer or Direction is not 'Both'
 				If ($MatchedSourceItem.LastWriteTimeUtc -gt $MatchedTargetItem.LastWriteTimeUtc -or $Direction -ne 'Both') {
+					# copy file from Path to Destination
 					If ($PSCmdlet.ShouldProcess("source: $MatchedSourcePath, target: $MatchedTargetPath", 'copy file')) {
 						Try {
 							Copy-Item -Path $MatchedSourcePath -Destination $MatchedTargetPath -Force -Verbose:$VerbosePreference
@@ -837,9 +854,14 @@ Begin {
 							Continue NextMatchedFile
 						}
 					}
+
+					# add file to sets
+					$null = $FilesCheckedInSource.Add($MatchedFile)
+					$null = $FilesUpdatedInTarget.Add($MatchedFile)
 				}
-				# copy file from Destination to Path if newer and Direction is 'Both'
+				# if file in Destination is newer and Direction is not 'Both'
 				ElseIf ($MatchedSourceItem.LastWriteTimeUtc -lt $MatchedTargetItem.LastWriteTimeUtc -and $Direction -eq 'Both') {
+					# copy file from Destination to Path
 					If ($PSCmdlet.ShouldProcess("source: $MatchedTargetPath, target: $MatchedSourcePath", 'copy file')) {
 						Try {
 							Copy-Item -Path $MatchedTargetPath -Destination $MatchedSourcePath -Force -Verbose:$VerbosePreference
@@ -849,6 +871,10 @@ Begin {
 							Continue NextMatchedFile
 						}
 					}
+
+					# add file to sets
+					$null = $FilesUpdatedInSource.Add($MatchedFile)
+					$null = $FilesCheckedInTarget.Add($MatchedFile)
 				}
 			}
 		}
