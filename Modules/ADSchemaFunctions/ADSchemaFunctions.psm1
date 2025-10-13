@@ -121,19 +121,24 @@ Function Add-ADSchemaAttributes {
 		$OtherAttributes
 		Write-Host ''
 		
+		# define ShouldProcess values
+		$ShouldProcessMessage = "Attribute '$AttributeName' WOULD have been created"
+		$ShouldProcessAction = 'Create attribute'
+		$ShouldProcessTarget = $AttributeName
+
 		# create attribute
-		If ($PSCmdlet.ShouldProcess($AttributeName)) {
+		If ($PSCmdlet.ShouldProcess($ShouldProcessMessage, $ShouldProcessAction, $ShouldProcessTarget)) {
+			# create schema object
 			Try {
 				New-ADObject -Server $Server -Name $AttributeName -Type 'attributeSchema' -Path $SchemaNamingContext -OtherAttributes $OtherAttributes
-				Write-Host "Attribute '$($AttributeName)' was SUCCESSFULLY created"
 			}
 			Catch {
 				Write-Error "Attribute '$($AttributeName)' was NOT created"
 				Return $_
 			}
-		}
-		Else {
-			Write-Host "Attribute '$($AttributeName)' WOULD have been created"
+
+			# report created
+			Write-Host "Attribute '$AttributeName' was SUCCESSFULLY created"
 		}
 	}
 
