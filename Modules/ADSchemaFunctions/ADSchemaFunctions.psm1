@@ -311,7 +311,7 @@ Function Add-ADSchemaClass {
 		$ClassObject = $null
 	}
 
-	# if class object exists...
+	# if class object already exists...
 	If ($null -ne $ClassObject) {
 		# report and return
 		Write-Host "Class '$($ClassObject.Name)' was ALREADY created"
@@ -343,14 +343,17 @@ Function Add-ADSchemaClass {
 
 	# create the class
 	If ($PSCmdlet.ShouldProcess($ShouldProcessMessage, $ShouldProcessAction, $ShouldProcessTarget)) {
+		# create schema object
 		Try {
-			New-ADObject -Server $Server -Name $ClassName -Type 'classSchema' -Path $Schema -OtherAttributes $OtherAttributes
-			Write-Host "Class '$ClassName' was SUCCESSFULLY created"
+			New-ADObject -Server $Server -Name $ClassName -Type 'classSchema' -Path $SchemaNamingContext -OtherAttributes $OtherAttributes
 		}
 		Catch {
 			Write-Warning -Message "Class '$ClassName' was NOT created"
 			Return $_
 		}
+
+		# report created
+		Write-Host "Class '$ClassName' was SUCCESSFULLY created"
 	}
 
 	# reload schema after update
