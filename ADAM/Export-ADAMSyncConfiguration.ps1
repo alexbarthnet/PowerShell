@@ -123,10 +123,7 @@ If ($PSCmdlet.ParameterSetName -eq 'Implicit') {
         Write-Host "setting state to 'initial' due to lack of last sync error time and last sync success time"
         $State = 'initial'
     }
-}
 
-# if implicit parameter set...
-If ($PSCmdlet.ParameterSetName -eq 'Implicit') {
     # create exports directory
     if (![System.IO.Directory]::Exists($ExportsDirectory)) {
         try {
