@@ -1,8 +1,8 @@
 #Requires -Modules ActiveDirectory
 
-Function Add-ADSchemaAttributes {
+function Add-ADSchemaAttributes {
 	[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
-	Param(
+	param(
 		[Parameter(DontShow)]
 		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
 		[Parameter(DontShow)]
@@ -63,39 +63,39 @@ Function Add-ADSchemaAttributes {
 		}
 		Default {
 			Write-Host 'Unsupported attribute type provided, exiting...'
-			Return
+			return
 		}
 	}
 
 	# refresh schema before update
-	Try {
+	try {
 		$Schema.RefreshSchema()
 	}
-	Catch {
-		Return $_
+	catch {
+		return $_
 	}
 
 	# format type
 	$FormattedType = [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.ToTitleCase($Type.ToLower())
 
 	# create each attribute object
-	For ($Index = 0; $Index -lt $Count; $Index++) {
+	for ($Index = 0; $Index -lt $Count; $Index++) {
 		# create strings
 		$AttributeName = '{0}{1}{2}' -f $NamePrefix, $FormattedType, ($Suffix + $Index)
 		$Identity = 'CN={0},{1}' -f $AttributeName, $SchemaNamingContext
 
 		# check if attribute exists
-		Try {
+		try {
 			$ADObject = Get-ADObject -Server $Server -Identity $Identity
 		}
-		Catch {
+		catch {
 			$ADObject = $null
 		}
 
-		If ($null -ne $ADObject) {
+		if ($null -ne $ADObject) {
 			#report attribute WAS found
 			Write-Host "Attribute '$($ADObject.Name)' was ALREADY created"
-			Continue
+			continue
 		}
 
 		# create attribute hashtable for schema object
@@ -111,7 +111,7 @@ Function Add-ADSchemaAttributes {
 		}
 
 		# if attribute should be added to global catalog...
-		If ($AddToGlobalCatalog) {
+		if ($AddToGlobalCatalog) {
 			$OtherAttributes['isMemberOfPartialAttributeSet'] = $true
 		}
 		
@@ -127,14 +127,14 @@ Function Add-ADSchemaAttributes {
 		$ShouldProcessTarget = $AttributeName
 
 		# create attribute
-		If ($PSCmdlet.ShouldProcess($ShouldProcessMessage, $ShouldProcessAction, $ShouldProcessTarget)) {
+		if ($PSCmdlet.ShouldProcess($ShouldProcessMessage, $ShouldProcessAction, $ShouldProcessTarget)) {
 			# create schema object
-			Try {
+			try {
 				New-ADObject -Server $Server -Name $AttributeName -Type 'attributeSchema' -Path $SchemaNamingContext -OtherAttributes $OtherAttributes
 			}
-			Catch {
+			catch {
 				Write-Error "Attribute '$($AttributeName)' was NOT created"
-				Return $_
+				return $_
 			}
 
 			# report created
@@ -143,15 +143,15 @@ Function Add-ADSchemaAttributes {
 	}
 
 	# reload schema after update
-	If ($PSCmdlet.ShouldProcess($Server, 'Update active schema')) {
+	if ($PSCmdlet.ShouldProcess($Server, 'Update active schema')) {
 		$RootDSE.Put('schemaUpdateNow', 1)
 		$RootDSE.SetInfo()
 	}
 }
 
-Function Add-ADSchemaAttributesToClass {
+function Add-ADSchemaAttributesToClass {
 	[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
-	Param (
+	param (
 		[Parameter(DontShow)]
 		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
 		[Parameter(DontShow)]
@@ -173,48 +173,48 @@ Function Add-ADSchemaAttributesToClass {
 	)
 
 	# refresh schema before update
-	Try {
+	try {
 		$Schema.RefreshSchema()
 	}
-	Catch {
-		Return $_
+	catch {
+		return $_
 	}
 
 	# create strings
 	$ClassIdentity = 'CN={0},{1}' -f $Class, $SchemaNamingContext
 
 	# retrieve class
-	Try {
+	try {
 		$ClassObject = Get-ADObject -Server $Server -Identity $ClassIdentity -Properties 'mayContain'
 	}
-	Catch {
+	catch {
 		Write-Wanring -Message "Class '$Class' does NOT exist"
-		Return $null
+		return $null
 	}
 
 	# format type
 	$FormattedType = [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.ToTitleCase($Type.ToLower())
 
 	# add each attribute object to class
-	For ($Index = 0; $Index -lt $Count; $Index++) {
+	for ($Index = 0; $Index -lt $Count; $Index++) {
 		# create strings
 		$AttributeName = '{0}{1}{2}' -f $NamePrefix, $FormattedType, ($Suffix + $Index)
 		$Identity = 'CN={0},{1}' -f $AttributeName, $SchemaNamingContext
 
 		# verify attribute
-		Try {
+		try {
 			$null = Get-ADObject -Server $Server -Identity $Identity
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "Attribute '$AttributeName' was NOT found"
-			Return
+			return
 		}
 
 		# if class object already contains attribute...
-		If ($ClassObject.mayContain.Contains($AttributeName)) {
+		if ($ClassObject.mayContain.Contains($AttributeName)) {
 			# report and continue
 			Write-Host "Attribute '$AttributeName' was ALREADY in the MayContain of '$Class'"
-			Continue
+			continue
 		}
 
 		# define ShouldProcess values
@@ -223,14 +223,14 @@ Function Add-ADSchemaAttributesToClass {
 		$ShouldProcessTarget = $AttributeName
 
 		# add attribute to mayContain attribute of class
-		If ($PSCmdlet.ShouldProcess($ShouldProcessMessage, $ShouldProcessAction, $ShouldProcessTarget)) {
+		if ($PSCmdlet.ShouldProcess($ShouldProcessMessage, $ShouldProcessAction, $ShouldProcessTarget)) {
 			# update schema object
-			Try {
+			try {
 				Set-ADObject -Server $Server -Identity $ClassObject -Add @{ mayContain = $AttributeName }
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "Attribute '$AttributeName' was NOT added to the MayContain of '$Class'"
-				Return $_
+				return $_
 			}
 
 			# report updated
@@ -239,15 +239,15 @@ Function Add-ADSchemaAttributesToClass {
 	}
 
 	# reload schema after update
-	If ($PSCmdlet.ShouldProcess($Server, 'Update active schema')) {
+	if ($PSCmdlet.ShouldProcess($Server, 'Update active schema')) {
 		$RootDSE.Put('schemaUpdateNow', 1)
 		$RootDSE.SetInfo()
 	}
 }
 
-Function Add-ADSchemaClass {
+function Add-ADSchemaClass {
 	[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
-	Param (
+	param (
 		[Parameter(DontShow)]
 		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
 		[Parameter(DontShow)]
@@ -279,23 +279,23 @@ Function Add-ADSchemaClass {
 		}
 		default {
 			Write-Host 'Invalid class type, exiting...'
-			Return
+			return
 		}
 	}
 
 	# refresh schema before update
-	Try {
+	try {
 		$Schema.RefreshSchema()
 	}
-	Catch {
-		Return $_
+	catch {
+		return $_
 	}
 
 	# create suffix string
-	If ($IncludeSuffixInName) {
+	if ($IncludeSuffixInName) {
 		$SuffixString = $Suffix.ToString()
 	}
-	Else {
+	else {
 		$SuffixString = 'Class'
 	}
 
@@ -304,18 +304,18 @@ Function Add-ADSchemaClass {
 	$ClassIdentity = '{0}{1}{2}' -f $ClassName, $SchemaNamingContext
 
 	# retrieve class object
-	Try {
+	try {
 		$ClassObject = Get-ADObject -Server $Server -Identity $ClassIdentity
 	}
-	Catch {
+	catch {
 		$ClassObject = $null
 	}
 
 	# if class object already exists...
-	If ($null -ne $ClassObject) {
+	if ($null -ne $ClassObject) {
 		# report and return
 		Write-Host "Class '$($ClassObject.Name)' was ALREADY created"
-		Return
+		return
 	}
 
 	# create class
@@ -342,14 +342,14 @@ Function Add-ADSchemaClass {
 	$ShouldProcessTarget = $ClassName
 
 	# create the class
-	If ($PSCmdlet.ShouldProcess($ShouldProcessMessage, $ShouldProcessAction, $ShouldProcessTarget)) {
+	if ($PSCmdlet.ShouldProcess($ShouldProcessMessage, $ShouldProcessAction, $ShouldProcessTarget)) {
 		# create schema object
-		Try {
+		try {
 			New-ADObject -Server $Server -Name $ClassName -Type 'classSchema' -Path $SchemaNamingContext -OtherAttributes $OtherAttributes
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "Class '$ClassName' was NOT created"
-			Return $_
+			return $_
 		}
 
 		# report created
@@ -357,13 +357,13 @@ Function Add-ADSchemaClass {
 	}
 
 	# reload schema after update
-	If ($PSCmdlet.ShouldProcess($Server, 'Update active schema')) {
+	if ($PSCmdlet.ShouldProcess($Server, 'Update active schema')) {
 		$RootDSE.Put('schemaUpdateNow', 1)
 		$RootDSE.SetInfo()
 	}
 }
 
-Function Add-ADSchemaClassToParent {
+function Add-ADSchemaClassToParent {
 	[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 	param (
 		[Parameter(DontShow)]
@@ -381,11 +381,11 @@ Function Add-ADSchemaClassToParent {
 	)
 
 	# refresh schema before update
-	Try {
+	try {
 		$Schema.RefreshSchema()
 	}
-	Catch {
-		Return $_
+	catch {
+		return $_
 	}
 
 	# create strings
@@ -393,28 +393,28 @@ Function Add-ADSchemaClassToParent {
 	$ParentClassIdentity = 'CN={0},{1}' -f $ParentClass, $SchemaNamingContext
 
 	# verify class
-	Try {
+	try {
 		$ClassObject = Get-ADObject -Server $Server -Identity $ClassIdentity -Properties 'governsID'
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "Class '$Class' was NOT found"
-		Return
+		return
 	}
 
 	# verify the parent class object
-	Try {
+	try {
 		$ParentClassObject = Get-ADObject -Server $Server -Identity $ParentClassIdentity -Properties 'auxiliaryClass'
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "Class '$ParentClass' was NOT found"
-		Return
+		return
 	}
 
 	# if parent class auxiliary class attribute already contains child class...
-	If ($ParentClassObject.auxiliaryClass.Contains($Class)) {
+	if ($ParentClassObject.auxiliaryClass.Contains($Class)) {
 		# report and return
 		Write-Host "Class '$Class' was ALREADY an auxiliary class of '$ParentClass'"
-		Return
+		return
 	}
 
 	# define ShouldProcess values
@@ -423,14 +423,14 @@ Function Add-ADSchemaClassToParent {
 	$ShouldProcessTarget = $Class
 
 	# add governsID of child class to auxiliaryClass attribute of parent class
-	If ($PSCmdlet.ShouldProcess($ShouldProcessMessage, $ShouldProcessAction, $ShouldProcessTarget)) {
+	if ($PSCmdlet.ShouldProcess($ShouldProcessMessage, $ShouldProcessAction, $ShouldProcessTarget)) {
 		# update schema object
-		Try {
+		try {
 			Set-ADObject -Server $Server -Identity $ParentClassIdentity -Add @{ auxiliaryClass = $ClassObject.governsID }
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "Class '$Class' was NOT added as an auxiliary class of '$ParentClass'"
-			Return $_
+			return $_
 		}
 
 		# report updated
@@ -438,15 +438,15 @@ Function Add-ADSchemaClassToParent {
 	}
 
 	# reload schema after update
-	If ($PSCmdlet.ShouldProcess($Server, 'Update active schema')) {
+	if ($PSCmdlet.ShouldProcess($Server, 'Update active schema')) {
 		$RootDSE.Put('schemaUpdateNow', 1)
 		$RootDSE.SetInfo()
 	}
 }
 
-Function Get-ADSchemaClass {
+function Get-ADSchemaClass {
 	[CmdletBinding()]
-	Param (
+	param (
 		[Parameter(DontShow)]
 		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
 		[Parameter(DontShow)]
@@ -462,16 +462,16 @@ Function Get-ADSchemaClass {
 	)
 
 	# check class hastable
-	If ($null -eq $ad_schema_classes) {
+	if ($null -eq $ad_schema_classes) {
 		New-Variable -Force -Scope 'Global' -Name 'ad_schema_classes' -Value @{}
 	}
 
 	# check class hashtable for requested class
-	If ($ad_schema_classes[$ObjectClass] -is [Microsoft.ActiveDirectory.Management.ADObject] -and -not $Reset) {
+	if ($ad_schema_classes[$ObjectClass] -is [Microsoft.ActiveDirectory.Management.ADObject] -and -not $Reset) {
 		# return existing schema object for requested class
-		Return $ad_schema_classes[$ObjectClass]
+		return $ad_schema_classes[$ObjectClass]
 	}
-	Else {
+	else {
 		# define query for requested class
 		$ad_schema_classes_ldapquery = "(&(objectCategory=classSchema)(objectClass=classSchema)(lDAPDisplayName=$ObjectClass))"
 
@@ -479,23 +479,23 @@ Function Get-ADSchemaClass {
 		$ad_schema_object = Get-ADObject -Server $Server -SearchBase $SchemaNamingContext -LDAPFilter $ad_schema_classes_ldapquery -Properties *
 
 		# verify requested class exists
-		If ($null -ne $ad_schema_object) {
+		if ($null -ne $ad_schema_object) {
 			# populate class hashtable with schema object for requested class
 			$ad_schema_classes[$ObjectClass] = $ad_schema_object
 
 			# return schema object for requested class
-			Return $ad_schema_classes[$ObjectClass]
+			return $ad_schema_classes[$ObjectClass]
 		}
-		Else {
+		else {
 			# return null
-			Return $null
+			return $null
 		}
 	}
 }
 
-Function Get-ADSchemaClassAncestry {
+function Get-ADSchemaClassAncestry {
 	[CmdletBinding()]
-	Param (
+	param (
 		[Parameter(DontShow)]
 		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
 		[Parameter(DontShow)]
@@ -511,16 +511,16 @@ Function Get-ADSchemaClassAncestry {
 	)
 
 	# check class ancestry hashtable
-	If ($null -eq $ad_schema_class_ancestry) {
+	if ($null -eq $ad_schema_class_ancestry) {
 		New-Variable -Force -Scope 'Global' -Name 'ad_schema_class_ancestry' -Value @{}
 	}
 
 	# check class ancestry hashtable for requested class
-	If ($ad_schema_class_ancestry[$ObjectClass] -is [hashtable] -and $ad_schema_class_ancestry[$ObjectClass].Keys.Count -gt 0 -and -not $Reset) {
+	if ($ad_schema_class_ancestry[$ObjectClass] -is [hashtable] -and $ad_schema_class_ancestry[$ObjectClass].Keys.Count -gt 0 -and -not $Reset) {
 		# return existing class ancestry hashtable for requested class
 		$ad_schema_class_ancestry[$ObjectClass]
 	}
-	Else {
+	else {
 		# create or reset class ancestry hashtable for requested class
 		$ad_schema_class_ancestry[$ObjectClass] = @{}
 
@@ -528,39 +528,39 @@ Function Get-ADSchemaClassAncestry {
 		$ad_schema_class_object = Get-ADSchemaClass -Server $Server -ObjectClass $ObjectClass
 
 		# verify requested class exists
-		If ($null -ne $ad_schema_class_object) {
+		if ($null -ne $ad_schema_class_object) {
 			# set requested class as focus of first loop iteration
 			$ad_schema_class_for_loop = $ObjectClass
 
 			# populate class ancestry hashtable with ancestry for requested class
-			Do {
+			do {
 				# retrieve schema object for current class
 				$ad_schema_class_object = Get-ADSchemaClass -Server $Server -ObjectClass $ad_schema_class_for_loop
 
 				# add values in ldapDisplayName, auxiliaryClass, systemAuxiliaryClass attributes to class ancestry hashtable for requested class
-				ForEach ($ad_schema_class in $ad_schema_class_object.ldapDisplayName) { $ad_schema_class_ancestry[$ObjectClass][$ad_schema_class] = $true }
-				ForEach ($ad_schema_class in $ad_schema_class_object.auxiliaryClass) { $ad_schema_class_ancestry[$ObjectClass][$ad_schema_class] = $true }
-				ForEach ($ad_schema_class in $ad_schema_class_object.systemAuxiliaryClass) { $ad_schema_class_ancestry[$ObjectClass][$ad_schema_class] = $true }
+				foreach ($ad_schema_class in $ad_schema_class_object.ldapDisplayName) { $ad_schema_class_ancestry[$ObjectClass][$ad_schema_class] = $true }
+				foreach ($ad_schema_class in $ad_schema_class_object.auxiliaryClass) { $ad_schema_class_ancestry[$ObjectClass][$ad_schema_class] = $true }
+				foreach ($ad_schema_class in $ad_schema_class_object.systemAuxiliaryClass) { $ad_schema_class_ancestry[$ObjectClass][$ad_schema_class] = $true }
 
 				# set parent class as focus of next loop iteration
 				$ad_schema_class_for_loop = $ad_schema_class_object.SubClassOf
 			}
 			# exit loop when displayName and SubClassOf match
-			Until ($ad_schema_class_object.ldapDisplayName -eq $ad_schema_class_object.SubClassOf)
+			until ($ad_schema_class_object.ldapDisplayName -eq $ad_schema_class_object.SubClassOf)
 
 			# return class ancestry hashtable for requested class
-			Return $ad_schema_class_ancestry[$ObjectClass]
+			return $ad_schema_class_ancestry[$ObjectClass]
 		}
-		Else {
+		else {
 			# return null
-			Return $null
+			return $null
 		}
 	}
 }
 
-Function Get-ADSchemaClassAttributes {
+function Get-ADSchemaClassAttributes {
 	[CmdletBinding()]
-	Param (
+	param (
 		[Parameter(DontShow)]
 		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
 		[Parameter(DontShow)]
@@ -576,16 +576,16 @@ Function Get-ADSchemaClassAttributes {
 	)
 
 	# check class attributes hashtable
-	If ($null -eq $ad_schema_class_attributes) {
+	if ($null -eq $ad_schema_class_attributes) {
 		New-Variable -Force -Scope 'Global' -Name 'ad_schema_class_attributes' -Value @{}
 	}
 
 	# check class attributes hashtable for requested class
-	If ($ad_schema_class_attributes[$ObjectClass] -is [hashtable] -and $ad_schema_class_attributes[$ObjectClass].Keys.Count -gt 0 -and -not $Reset) {
+	if ($ad_schema_class_attributes[$ObjectClass] -is [hashtable] -and $ad_schema_class_attributes[$ObjectClass].Keys.Count -gt 0 -and -not $Reset) {
 		# return existing class attributes hashtable for requested class
 		$ad_schema_class_attributes[$ObjectClass]
 	}
-	Else {
+	else {
 		# create or reset class attributes hashtable for requested class
 		$ad_schema_class_attributes[$ObjectClass] = @{}
 
@@ -593,32 +593,32 @@ Function Get-ADSchemaClassAttributes {
 		$ad_schema_class_ancestry = Get-ADSchemaClassAncestry -Server $Server -ObjectClass $ObjectClass
 
 		# verify ancestry for requested class exists
-		If ($null -ne $ad_schema_class_ancestry) {
+		if ($null -ne $ad_schema_class_ancestry) {
 			# populate class attributes hashtable with all attributes for requested class
-			ForEach ($ad_schema_class_ancestor in $ad_schema_class_ancestry.Keys) {
+			foreach ($ad_schema_class_ancestor in $ad_schema_class_ancestry.Keys) {
 				# retrieve schema object for current class
 				$ad_schema_class_object = Get-ADSchemaClass -Server $Server -ObjectClass $ad_schema_class_ancestor
 
 				# add values in mayContain, mustContain, systemMayContain, systemMustContain attributes to class attributes hashtable for requested class
-				ForEach ($ad_schema_attribute in $ad_schema_class_object.mayContain) { $ad_schema_class_attributes[$ObjectClass][$ad_schema_attribute] = $true }
-				ForEach ($ad_schema_attribute in $ad_schema_class_object.mustContain) { $ad_schema_class_attributes[$ObjectClass][$ad_schema_attribute] = $true }
-				ForEach ($ad_schema_attribute in $ad_schema_class_object.systemMayContain) { $ad_schema_class_attributes[$ObjectClass][$ad_schema_attribute] = $true }
-				ForEach ($ad_schema_attribute in $ad_schema_class_object.systemMustContain) { $ad_schema_class_attributes[$ObjectClass][$ad_schema_attribute] = $true }
+				foreach ($ad_schema_attribute in $ad_schema_class_object.mayContain) { $ad_schema_class_attributes[$ObjectClass][$ad_schema_attribute] = $true }
+				foreach ($ad_schema_attribute in $ad_schema_class_object.mustContain) { $ad_schema_class_attributes[$ObjectClass][$ad_schema_attribute] = $true }
+				foreach ($ad_schema_attribute in $ad_schema_class_object.systemMayContain) { $ad_schema_class_attributes[$ObjectClass][$ad_schema_attribute] = $true }
+				foreach ($ad_schema_attribute in $ad_schema_class_object.systemMustContain) { $ad_schema_class_attributes[$ObjectClass][$ad_schema_attribute] = $true }
 			}
 
 			# return class attributes hashtable for requested class
-			Return $ad_schema_class_attributes[$ObjectClass]
+			return $ad_schema_class_attributes[$ObjectClass]
 		}
-		Else {
+		else {
 			# return null
-			Return $null
+			return $null
 		}
 	}
 }
 
-Function Get-ADSchemaAttribute {
+function Get-ADSchemaAttribute {
 	[CmdletBinding()]
-	Param (
+	param (
 		[Parameter(DontShow)]
 		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
 		[Parameter(DontShow)]
@@ -634,16 +634,16 @@ Function Get-ADSchemaAttribute {
 	)
 
 	# check for existing attribute hastable
-	If ($null -eq $ad_schema_attributes) {
+	if ($null -eq $ad_schema_attributes) {
 		New-Variable -Force -Scope 'Global' -Name 'ad_schema_attributes' -Value @{}
 	}
 
 	# check attribute hashtable for requested attribute
-	If ($ad_schema_attributes[$Attribute] -is [Microsoft.ActiveDirectory.Management.ADObject] -and -not $Reset) {
+	if ($ad_schema_attributes[$Attribute] -is [Microsoft.ActiveDirectory.Management.ADObject] -and -not $Reset) {
 		# return existing schema object for requested attribute
-		Return $ad_schema_attributes[$Attribute]
+		return $ad_schema_attributes[$Attribute]
 	}
-	Else {
+	else {
 		# define query for requested attribute
 		$ad_schema_attribute_ldapquery = "(&(objectCategory=attributeSchema)(objectClass=attributeSchema)(lDAPDisplayName=$Attribute))"
 
@@ -651,23 +651,23 @@ Function Get-ADSchemaAttribute {
 		$ad_schema_object = Get-ADObject -Server $Server -SearchBase $SchemaNamingContext -LDAPFilter $ad_schema_attribute_ldapquery -Properties *
 
 		# verify requested attribute exists
-		If ($null -ne $ad_schema_object) {
+		if ($null -ne $ad_schema_object) {
 			# populate attribute hashtable with schema object for requested attribute
 			$ad_schema_attributes[$Attribute] = $ad_schema_object
 
 			# return schema object for requested attribute
-			Return $ad_schema_attributes[$Attribute]
+			return $ad_schema_attributes[$Attribute]
 		}
-		Else {
+		else {
 			# return null
-			Return $null
+			return $null
 		}
 	}
 }
 
-Function Set-ADAttribute {
+function Set-ADAttribute {
 	[CmdletBinding(SupportsShouldProcess)]
-	Param (
+	param (
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][ValidateScript({ $_ -is [Microsoft.ActiveDirectory.Management.ADObject] -or $_ -is [System.String] })]
 		[object]$Identity,
 		[Parameter(Position = 1, Mandatory = $true)]
@@ -689,33 +689,33 @@ Function Set-ADAttribute {
 	$function_reply = @()
 
 	# verify object
-	Try {
+	try {
 		$object_to_update = Get-ADObject -Server $Server -Properties $Attribute -Identity $Identity
 		$object_attribute = (Get-ADSchemaClassAttributes -Server $Server -ObjectClass $object_to_update.objectClass)[$Attribute]
-		If ($null -eq $object_attribute) {
+		if ($null -eq $object_attribute) {
 			$function_error += $null
 			$function_reply += 'ERROR-attribute-not-valid-for-object'
 		}
 	}
-	Catch {
+	catch {
 		$function_error += $_
 		$function_reply += "ERROR-get-object: $Identity"
 	}
 
 	# check if attribute valid for requested object
-	If ($null -ne $object_to_update -and $null -ne $object_attribute) {
+	if ($null -ne $object_to_update -and $null -ne $object_attribute) {
 		# clear attribute
-		If ($AttributeValues.Count -eq 0) {
+		if ($AttributeValues.Count -eq 0) {
 			# check if requested attribute is already clear
-			If ($object_to_update.$Attribute.Count -gt 0) {
+			if ($object_to_update.$Attribute.Count -gt 0) {
 				# check -whatif before clearing attribute
-				If ($PSCmdlet.ShouldProcess($object_to_update.Name, "Clear $Attribute")) {
-					Try {
+				if ($PSCmdlet.ShouldProcess($object_to_update.Name, "Clear $Attribute")) {
+					try {
 						Set-ADObject -Server $Server -Identity $object_to_update.DistinguishedName -Clear $Attribute
 						$function_error += $null
 						$function_reply += "cleared-$Attribute"
 					}
-					Catch {
+					catch {
 						$function_error += $_
 						$function_reply += "ERROR-clearing-$Attribute"
 					}
@@ -723,34 +723,34 @@ Function Set-ADAttribute {
 			}
 		}
 		# update single-valued attribute with multiple requested values
-		ElseIf (($AttributeValues.Count -gt 1) -and (Get-ADSchemaAttribute -Server $Server -Attribute $Attribute).IsSingleValued) {
+		elseif (($AttributeValues.Count -gt 1) -and (Get-ADSchemaAttribute -Server $Server -Attribute $Attribute).IsSingleValued) {
 			# sort and join requested values
 			$attribute_singlevalue = ($AttributeValues | Sort-Object) -join $Separator
 			# check if requested attribute is empty
-			If ($object_to_update.$Attribute.Count -eq 0) {
+			if ($object_to_update.$Attribute.Count -eq 0) {
 				# check -whatif before adding attribute
-				If ($PSCmdlet.ShouldProcess($object_to_update.Name, "Add $Attribute")) {
-					Try {
+				if ($PSCmdlet.ShouldProcess($object_to_update.Name, "Add $Attribute")) {
+					try {
 						Set-ADObject -Server $Server -Identity $object_to_update.DistinguishedName -Add @{ $Attribute = $attribute_singlevalue }
 						$function_error += $null
 						$function_reply += "added-joined-values-to-$Attribute"
 					}
-					Catch {
+					catch {
 						$function_error += $_
 						$function_reply += "ERROR-adding-joined-values-to-$Attribute"
 					}
 				}
 			}
 			# check if requested attribute matches requsted values
-			ElseIf ($object_to_update.$Attribute -ne $attribute_singlevalue) {
+			elseif ($object_to_update.$Attribute -ne $attribute_singlevalue) {
 				# check -whatif before replacing attribute
-				If ($PSCmdlet.ShouldProcess($object_to_update.Name, "Replace $Attribute")) {
-					Try {
+				if ($PSCmdlet.ShouldProcess($object_to_update.Name, "Replace $Attribute")) {
+					try {
 						Set-ADObject -Server $Server -Identity $object_to_update.DistinguishedName -Replace @{ $Attribute = $attribute_singlevalue }
 						$function_error += $null
 						$function_reply += "replaced-joined-values-on-$Attribute"
 					}
-					Catch {
+					catch {
 						$function_error += $_
 						$function_reply += "ERROR-replacing-joined-values-on-$Attribute"
 					}
@@ -758,17 +758,17 @@ Function Set-ADAttribute {
 			}
 		}
 		# update multi-valued attribute with one requested value and one existing value
-		ElseIf (($AttributeValues.Count -eq 1) -and ($object_to_update.$Attribute.Count -eq 1)) {
+		elseif (($AttributeValues.Count -eq 1) -and ($object_to_update.$Attribute.Count -eq 1)) {
 			# check if requested value matches existing value
-			If ($object_to_update.$Attribute -ne $AttributeValues) {
+			if ($object_to_update.$Attribute -ne $AttributeValues) {
 				# check -whatif before replacing attribute
-				If ($PSCmdlet.ShouldProcess($object_to_update.Name, "Replace $Attribute")) {
-					Try {
+				if ($PSCmdlet.ShouldProcess($object_to_update.Name, "Replace $Attribute")) {
+					try {
 						Set-ADObject -Server $Server -Identity $object_to_update.DistinguishedName -Replace @{ $Attribute = $AttributeValues }
 						$function_error += $null
 						$function_reply += "replaced-value-on-$Attribute"
 					}
-					Catch {
+					catch {
 						$function_error += $_
 						$function_reply += "ERROR-replacing-value-on-$Attribute"
 					}
@@ -776,29 +776,29 @@ Function Set-ADAttribute {
 			}
 		}
 		# update multi-valued attribute with either one or more requested values or one or more existing values
-		Else {
+		else {
 			# create empty arrays
 			$existing_values = @()
 			$attr_values_to_add = @()
 			$attr_values_to_rem = @()
 
 			# add existing values to array
-			ForEach ($value in $object_to_update.$Attribute) { $existing_values += $value }
+			foreach ($value in $object_to_update.$Attribute) { $existing_values += $value }
 
 			# retrieve diffs between requested values and existing values
 			$attr_values_to_add += [array][System.Linq.Enumerable]::Except([string[]]$AttributeValues, [string[]]$existing_values)
 			$attr_values_to_rem += [array][System.Linq.Enumerable]::Except([string[]]$existing_values, [string[]]$AttributeValues)
 
 			# check for values to add
-			If ($attr_values_to_add.Count -gt 0) {
+			if ($attr_values_to_add.Count -gt 0) {
 				# check -whatif before adding values
-				If ($PSCmdlet.ShouldProcess($object_to_update.Name, "Add $Attribute")) {
-					Try {
+				if ($PSCmdlet.ShouldProcess($object_to_update.Name, "Add $Attribute")) {
+					try {
 						Set-ADObject -Server $Server -Identity $object_to_update.DistinguishedName -Add @{ $Attribute = $attr_values_to_add }
 						$function_error += $null
 						$function_reply += "added-value(s)-to-$Attribute"
 					}
-					Catch {
+					catch {
 						$function_error += $_
 						$function_reply += "ERROR-adding-value(s)-to-$Attribute"
 					}
@@ -806,15 +806,15 @@ Function Set-ADAttribute {
 			}
 
 			# check for values to remove
-			If ($attr_values_to_rem.Count -gt 0) {
+			if ($attr_values_to_rem.Count -gt 0) {
 				# check -whatif before removing values
-				If ($PSCmdlet.ShouldProcess($object_to_update.Name, "Remove $Attribute")) {
-					Try {
+				if ($PSCmdlet.ShouldProcess($object_to_update.Name, "Remove $Attribute")) {
+					try {
 						Set-ADObject -Server $Server -Identity $object_to_update.DistinguishedName -Remove @{ $Attribute = $attr_values_to_rem }
 						$function_error += $null
 						$function_reply += "removed-value(s)-from-$Attribute"
 					}
-					Catch {
+					catch {
 						$function_error += $_
 						$function_reply += "ERROR-removing-value(s)-from-$Attribute"
 					}
@@ -824,7 +824,7 @@ Function Set-ADAttribute {
 	}
 
 	# report actions if requested
-	If ($Report) {
+	if ($Report) {
 		[PSCustomObject]@{
 			FQDN    = $object_to_update.DistinguishedName
 			Error   = $function_error
