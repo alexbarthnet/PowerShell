@@ -224,14 +224,17 @@ Function Add-ADSchemaAttributesToClass {
 
 		# add attribute to mayContain attribute of class
 		If ($PSCmdlet.ShouldProcess($ShouldProcessMessage, $ShouldProcessAction, $ShouldProcessTarget)) {
+			# update schema object
 			Try {
 				Set-ADObject -Server $Server -Identity $ClassObject -Add @{ mayContain = $AttributeName }
-				Write-Host "Attribute '$AttributeName' was SUCCESSFULLY added to the MayContain of '$Class'"
 			}
 			Catch {
 				Write-Warning -Message "Attribute '$AttributeName' was NOT added to the MayContain of '$Class'"
 				Return $_
 			}
+
+			# report updated
+			Write-Host "Attribute '$AttributeName' was SUCCESSFULLY added to the MayContain of '$Class'"
 		}
 	}
 
