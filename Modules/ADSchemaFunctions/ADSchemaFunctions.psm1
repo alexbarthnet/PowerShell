@@ -210,8 +210,9 @@ Function Add-ADSchemaAttributesToClass {
 			Return
 		}
 
-		# check for attribute in mayContain of class
+		# if class object already contains attribute...
 		If ($ClassObject.mayContain.Contains($AttributeName)) {
+			# report and continue
 			Write-Host "Attribute '$AttributeName' was ALREADY in the MayContain of '$Class'"
 			Continue
 		}
