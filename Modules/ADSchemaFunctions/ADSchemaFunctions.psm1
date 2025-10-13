@@ -424,14 +424,17 @@ Function Add-ADSchemaClassToParent {
 
 	# add governsID of child class to auxiliaryClass attribute of parent class
 	If ($PSCmdlet.ShouldProcess($ShouldProcessMessage, $ShouldProcessAction, $ShouldProcessTarget)) {
+		# update schema object
 		Try {
 			Set-ADObject -Server $Server -Identity $ParentClassIdentity -Add @{ auxiliaryClass = $ClassObject.governsID }
-			Write-Host "Class '$Class' was SUCCESSFULLY added as an auxiliary class of '$ParentClass'"
 		}
 		Catch {
 			Write-Warning -Message "Class '$Class' was NOT added as an auxiliary class of '$ParentClass'"
 			Return $_
 		}
+
+		# report updated
+		Write-Host "Class '$Class' was SUCCESSFULLY added as an auxiliary class of '$ParentClass'"
 	}
 
 	# reload schema after update
