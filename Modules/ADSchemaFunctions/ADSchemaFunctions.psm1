@@ -102,7 +102,7 @@ Function Add-ADSchemaAttributes {
 		$OtherAttributes = @{
 			lDAPDisplayName  = $AttributeName
 			adminDisplayName = $AttributeName
-			adminDescription = $AttributeName
+			adminDescription = '{0}.{1}' -f $AttributeProperties.adminTextPrefix, ($Suffix + $Index)
 			attributeId      = '{0}.{1}' -f $OIDPrefix, ($Suffix + $Index)
 			attributeSyntax  = $AttributeProperties.attributeSyntax
 			isSingleValued   = $AttributeProperties.isSingleValued
