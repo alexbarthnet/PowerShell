@@ -1,6 +1,6 @@
 #Requires -Modules ActiveDirectory
 
-Function Get-ADObjectTypeDefaultAccessRule {
+function Get-ADObjectTypeDefaultAccessRule {
 	<#
 	.SYNOPSIS
 	Retrieve the default access rule from the schema definition of an object type in Active Directory.
@@ -22,7 +22,7 @@ Function Get-ADObjectTypeDefaultAccessRule {
 	#>
 
 	[CmdletBinding()]
-	Param (
+	param (
 		[Parameter(Mandatory = $true, Position = 0, ValueFromPipeline)]
 		[string]$DisplayName,
 		[Parameter(DontShow)]
@@ -30,23 +30,23 @@ Function Get-ADObjectTypeDefaultAccessRule {
 	)
 
 	# retrieve default security descriptor for class with matching display name
-	Try {
+	try {
 		[System.DirectoryServices.ActiveDirectorySecurity]$DefaultObjectSecurityDescriptor = $Schema.FindClass($DisplayName).DefaultObjectSecurityDescriptor
 	}
 	# if class not found...
-	Catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
-		Return $null
+	catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
+		return $null
 	}
 	# if any other error thrown...
-	Catch {
-		Return $_
+	catch {
+		return $_
 	}
 
 	# return default security descriptor
-	Return $DefaultObjectSecurityDescriptor
+	return $DefaultObjectSecurityDescriptor
 }
 
-Function Get-ADObjectTypeGuid {
+function Get-ADObjectTypeGuid {
 	<#
 	.SYNOPSIS
 	Retrieve the GUID for an object type or an extended right in Active Directory.
@@ -77,7 +77,7 @@ Function Get-ADObjectTypeGuid {
 	#>
 
 	[CmdletBinding()]
-	Param (
+	param (
 		[Parameter(Mandatory = $true, Position = 0, ValueFromPipeline)]
 		[string]$DisplayName,
 		[Parameter(Mandatory = $false)]
@@ -87,21 +87,21 @@ Function Get-ADObjectTypeGuid {
 	)
 
 	# retrieve schema guid for class with matching display name
-	Try {
+	try {
 		[guid]$Guid = $Schema.FindClass($DisplayName).SchemaGuid
 	}
 	# if class not found...
-	Catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
+	catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
 		# if limit to schema class objects requested...
-		If ($LimitToSchemaClassObjects) {
-			Return $null
+		if ($LimitToSchemaClassObjects) {
+			return $null
 		}
 		# retrieve schema guid for property with matching display name
-		Try {
+		try {
 			[guid]$Guid = $Schema.FindProperty($DisplayName).SchemaGuid
 		}
 		# if property not found...
-		Catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
+		catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
 			# define LDAP path for extended rights container
 			$SearchBase = 'LDAP://CN=Extended-Rights', $Schema.Name.Split(',', 2)[1] -join ','
 
@@ -109,39 +109,39 @@ Function Get-ADObjectTypeGuid {
 			$Filter = "(&(displayName=$DisplayName)(rightsGuid=*))"
 
 			# search for extended right with matching display name
-			Try {
+			try {
 				$SearchResult = [System.DirectoryServices.DirectorySearcher]::new($SearchBase, $Filter , 'rightsGuid' , [System.DirectoryServices.SearchScope]::OneLevel).FindOne()
 			}
-			Catch {
-				Return $_
+			catch {
+				return $_
 			}
 
 			# if search result found...
-			If ($SearchResult -is [System.DirectoryServices.SearchResult]) {
+			if ($SearchResult -is [System.DirectoryServices.SearchResult]) {
 				# ...and the first search result contains the 'rightsGuid' property...
-				If ($SearchResult[0].Properties.PropertyNames -contains 'rightsGuid') {
+				if ($SearchResult[0].Properties.PropertyNames -contains 'rightsGuid') {
 					# ...and first value in 'rightsGuid' property can parse into a GUID...
-					If ([guid]::TryParse($SearchResult[0].Properties['rightsGuid'][0], [ref][guid]::empty)) {
+					if ([guid]::TryParse($SearchResult[0].Properties['rightsGuid'][0], [ref][guid]::empty)) {
 						# retrieve the rights guid
 						[guid]$Guid = $SearchResult[0].Properties['rightsGuid'][0]
 					}
 				}
 			}
 			# if search result not found...
-			Else {
-				Return $null
+			else {
+				return $null
 			}
 		}
 	}
-	Catch {
-		Return $_
+	catch {
+		return $_
 	}
 
 	# return guid
-	Return $Guid
+	return $Guid
 }
 
-Function Get-ADPrincipal {
+function Get-ADPrincipal {
 	<#
 	.SYNOPSIS
 	Retrieve a NTAccount-style principal from a security identifier.
@@ -169,16 +169,16 @@ Function Get-ADPrincipal {
 	)
 
 	# translate SID to NTAccount principal
-	Try {
+	try {
 		$SecurityIdentifier.Translate([System.Security.Principal.NTAccount]).Value
 	}
-	Catch {
+	catch {
 		# return error
-		Return $_
+		return $_
 	}
 }
 
-Function Get-ADSecurityIdentifier {
+function Get-ADSecurityIdentifier {
 	<#
 	.SYNOPSIS
 	Retrieve the security identifier for a security principal in Active Directory.
@@ -222,33 +222,33 @@ Function Get-ADSecurityIdentifier {
 	)
 
 	# if principal is a SecurityIdentifier object...
-	If ($Principal -is [System.Security.Principal.SecurityIdentifier]) {
+	if ($Principal -is [System.Security.Principal.SecurityIdentifier]) {
 		# return principal as-is
-		Return $Principal
+		return $Principal
 	}
 
 	# if principal is an NTAccount object...
-	If ($Principal -is [System.Security.Principal.NTAccount]) {
+	if ($Principal -is [System.Security.Principal.NTAccount]) {
 		# return principal translated to SecurityIdentifier
-		Return $Principal.Translate([System.Security.Principal.SecurityIdentifier])
+		return $Principal.Translate([System.Security.Principal.SecurityIdentifier])
 	}
 
 	# if principal is an ADPrincipal object...
-	If ($Principal -is [Microsoft.ActiveDirectory.Management.ADPrincipal]) {
+	if ($Principal -is [Microsoft.ActiveDirectory.Management.ADPrincipal]) {
 		# return SID property from principal
-		Return $Principal.SID
+		return $Principal.SID
 	}
 
 	# if principal is not a string...
-	If ($Principal -isnot [System.String]) {
+	if ($Principal -isnot [System.String]) {
 		Write-Warning -Message "an unsupported object type was provided: $($Principal.GetType().FullName)"
-		Return $null
+		return $null
 	}
 
 	# if principal is a SID in SDDL format...
-	If ($Principal -match '^S-1-\d{1,2}-\d+') {
+	if ($Principal -match '^S-1-\d{1,2}-\d+') {
 		# return SecurityIdentifier constructed from principal
-		Return [System.Security.Principal.SecurityIdentifier]::new($Principal)
+		return [System.Security.Principal.SecurityIdentifier]::new($Principal)
 	}
 
 	# if principal matches the name of a well-known SID that only translate on servers or domain controllers...
@@ -256,30 +256,30 @@ Function Get-ADSecurityIdentifier {
 	switch -regex ($Principal) {
 		# return SecurityIdentifier constructed from matching well-known SID
 		'(^|^\w+\\)Account Operators$' {
-			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-548')
+			return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-548')
 		}
 		'(^|^\w+\\)Server Operators$' {
-			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-549')
+			return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-549')
 		}
 		'(^|^\w+\\)Print Operators$' {
-			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-550')
+			return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-550')
 		}
 		'(^|^\w+\\)Pre–Windows 2000 Compatible Access$' {
-			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-554')
+			return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-554')
 		}
 		'(^|^\w+\\)Incoming Forest Trust Builders$' {
-			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-557')
+			return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-557')
 		}
 		'(^|^\w+\\)Windows Authorization Access Group$' {
-			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-560')
+			return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-560')
 		}
 		'(^|^\w+\\)Terminal Server License Servers$' {
-			Return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-561')
+			return [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-561')
 		}
 	}
 
 	# if server provided...
-	If ($PSBoundParameters.ContainsKey('Server')) {
+	if ($PSBoundParameters.ContainsKey('Server')) {
 		# define parameters for Get-ADObject
 		$GetADObject = @{
 			Server      = $Server
@@ -288,53 +288,53 @@ Function Get-ADSecurityIdentifier {
 		}
 
 		# retrieve object by UserPrincipalName
-		Try {
+		try {
 			$ADObject = Get-ADObject @GetADObject -Filter "UserPrincipalName -eq '$Principal'"
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not query Active Directory for object by UserPrincipalName for principal: $Principal"
-			Return $_
+			return $_
 		}
 
 		# if ADObject found...
-		If ($ADObject) {
-			Return $ADObject.ObjectSid
+		if ($ADObject) {
+			return $ADObject.ObjectSid
 		}
 
 		# retrieve object by SamAccountName
-		Try {
+		try {
 			$ADObject = Get-ADObject @GetADObject -Filter "SamAccountName -eq '$Principal'"
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not query Active Directory for object by SamAccountName for principal: $Principal"
-			Return $_
+			return $_
 		}
 
 		# if ADObject found...
-		If ($ADObject) {
-			Return $ADObject.ObjectSid
+		if ($ADObject) {
+			return $ADObject.ObjectSid
 		}
 
 		# retrieve object by SamAccountName with $ suffix for computer objects
-		Try {
+		try {
 			$ADObject = Get-ADObject @GetADObject -Filter "SamAccountName -eq '$Principal$'"
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not query Active Directory for object by SamAccountName for principal: $Principal"
-			Return $_
+			return $_
 		}
 
 		# if ADObject found...
-		If ($ADObject) {
-			Return $ADObject.ObjectSid
+		if ($ADObject) {
+			return $ADObject.ObjectSid
 		}
 	}
 
 	# translate principal to SID
-	Return ([System.Security.Principal.NTAccount]::new($Principal)).Translate([System.Security.Principal.SecurityIdentifier])
+	return ([System.Security.Principal.NTAccount]::new($Principal)).Translate([System.Security.Principal.SecurityIdentifier])
 }
 
-Function Get-ADAccessRule {
+function Get-ADAccessRule {
 	<#
 	.SYNOPSIS
 	Retrieve the Active Directory access rules from an existing object.
@@ -383,7 +383,7 @@ Function Get-ADAccessRule {
 	#>
 
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
-	Param (
+	param (
 		# one or more Active Directory objects, each value must be an ADObject or the distinguished name of an Active Directory object
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][Alias('Objects')]
 		[object[]]$Identity,
@@ -417,18 +417,18 @@ Function Get-ADAccessRule {
 	)
 
 	# translate object name to GUID of schema class object, attribute object, or a control access right
-	If ($PSBoundParameters.ContainsKey('ObjectName')) {
+	if ($PSBoundParameters.ContainsKey('ObjectName')) {
 		$objectType = Get-ADObjectTypeGuid -DisplayName $ObjectName
 	}
-	Else {
+	else {
 		$objectType = [guid]::empty
 	}
 
 	# translate inheriting object name to GUID of schema class object
-	If ($PSBoundParameters.ContainsKey('InheritingObjectName')) {
+	if ($PSBoundParameters.ContainsKey('InheritingObjectName')) {
 		$inheritedObjectType = Get-ADObjectTypeGuid -DisplayName $InheritingObjectName -LimitToSchemaClassObjects
 	}
-	Else {
+	else {
 		$inheritedObjectType = [guid]::empty
 	}
 
@@ -436,43 +436,43 @@ Function Get-ADAccessRule {
 	$ADObjects = [System.Collections.Generic.List[Microsoft.ActiveDirectory.Management.ADObject]]::new()
 
 	# retrieve Active Directory objects for each identity
-	ForEach ($Object in $Identity) {
+	foreach ($Object in $Identity) {
 		# if object is an ADObject...
-		If ($Object -is [Microsoft.ActiveDirectory.Management.ADObject]) {
+		if ($Object -is [Microsoft.ActiveDirectory.Management.ADObject]) {
 			# add object to list and continue
 			$ADObjects.Add($Object)
 		}
 		# if object is a string...
-		ElseIf ($Object -is [System.String]) {
+		elseif ($Object -is [System.String]) {
 			# get ADObject using object as identity
-			Try {
+			try {
 				$ADObject = Get-ADObject -Server $Server -Identity $Object -Properties 'nTSecurityDescriptor'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not retrieve object for input: '$Object'"
-				Return $_
+				return $_
 			}
 			# add ADObject to list and continue
 			$ADObjects.Add($ADObject)
 		}
 		# if object is not an ADObject or a string...
-		Else {
+		else {
 			# warn and return
 			Write-Warning -Message "could not process '[$($Object.GetType().FullName)]' object type for object: '$Object'"
-			Return
+			return
 		}
 	}
 
 	# reset security descriptors for each object
-	ForEach ($ADObject in $ADObjects) {
+	foreach ($ADObject in $ADObjects) {
 		# check object for nTSecurityDescriptor property
-		If ($null -eq $ADObject.nTSecurityDescriptor) {
-			Try {
+		if ($null -eq $ADObject.nTSecurityDescriptor) {
+			try {
 				$ADObject = Get-ADObject -Server $Server -Identity $ADObject.DistinguishedName -Properties 'nTSecurityDescriptor'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not retrieve nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
-				Return $_
+				return $_
 			}
 		}
 
@@ -480,67 +480,67 @@ Function Get-ADAccessRule {
 		$nTSecurityDescriptor = $ADObject.nTSecurityDescriptor
 
 		# validate nTSecurityDescriptor object type
-		If ($nTSecurityDescriptor -isnot [System.DirectoryServices.ActiveDirectorySecurity]) {
+		if ($nTSecurityDescriptor -isnot [System.DirectoryServices.ActiveDirectorySecurity]) {
 			Write-Warning -Message "found invalid '[$($nTSecurityDescriptor.GetType().FullName)]' object type for nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
-			Return $_
+			return $_
 		}
 
 		# retrieve existing access rules that are explicitly defined and not inherited for the unique identity references
 		$ExistingAccessRules = $nTSecurityDescriptor.GetAccessRules($true, $IncludeInherited, [System.Security.Principal.SecurityIdentifier])
 
 		# filter existing access rules
-		:NextAccessRule ForEach ($ExistingAccessRule in $ExistingAccessRules) {
+		:NextAccessRule foreach ($ExistingAccessRule in $ExistingAccessRules) {
 			# if security identifier provided...
-			If ($PSBoundParameters.ContainsKey('SecurityIdentifier')) {
+			if ($PSBoundParameters.ContainsKey('SecurityIdentifier')) {
 				# ...and existing access rule does not contain security identifier...
-				If ($ExistingAccessRule.IdentityReference -ne $SecurityIdentifier) {
+				if ($ExistingAccessRule.IdentityReference -ne $SecurityIdentifier) {
 					# ...continue to next access rule
-					Continue NextAccessRule
+					continue NextAccessRule
 				}
 			}
 
 			# if active directory rights provided...
-			If ($PSBoundParameters.ContainsKey('Rights')) {
+			if ($PSBoundParameters.ContainsKey('Rights')) {
 				# ...and existing access rule does not contain active directory rights...
-				If ($ExistingAccessRule.ActiveDirectoryRights -ne $Rights) {
+				if ($ExistingAccessRule.ActiveDirectoryRights -ne $Rights) {
 					# ...continue to next access rule
-					Continue NextAccessRule
+					continue NextAccessRule
 				}
 			}
 
 			# if access control type provided...
-			If ($PSBoundParameters.ContainsKey('AccessControlType')) {
+			if ($PSBoundParameters.ContainsKey('AccessControlType')) {
 				# ...and existing access rule does not contain access control type...
-				If ($ExistingAccessRule.ActiveDirectoryRights -ne $AccessControlType) {
+				if ($ExistingAccessRule.ActiveDirectoryRights -ne $AccessControlType) {
 					# ...continue to next access rule
-					Continue NextAccessRule
+					continue NextAccessRule
 				}
 			}
 
 			# if inheritance type provided...
-			If ($PSBoundParameters.ContainsKey('InheritanceType')) {
+			if ($PSBoundParameters.ContainsKey('InheritanceType')) {
 				# ...and existing access rule does not contain inheritance type...
-				If ($ExistingAccessRule.InheritanceType -ne $InheritanceType) {
+				if ($ExistingAccessRule.InheritanceType -ne $InheritanceType) {
 					# ...continue to next access rule
-					Continue NextAccessRule
+					continue NextAccessRule
 				}
 			}
 
 			# if object name provided...
-			If ($PSBoundParameters.ContainsKey('ObjectName')) {
+			if ($PSBoundParameters.ContainsKey('ObjectName')) {
 				# ...and existing access rule does not contain associated object type...
-				If ($ExistingAccessRule.objectType -ne $objectType) {
+				if ($ExistingAccessRule.objectType -ne $objectType) {
 					# ...continue to next access rule
-					Continue NextAccessRule
+					continue NextAccessRule
 				}
 			}
 
 			# if inheriting object name provided...
-			If ($PSBoundParameters.ContainsKey('InheritingObjectName')) {
+			if ($PSBoundParameters.ContainsKey('InheritingObjectName')) {
 				# ...and existing access rule does not contain associated inherited object type...
-				If ($ExistingAccessRule.InheritedObjectType -ne $inheritedObjectType) {
+				if ($ExistingAccessRule.InheritedObjectType -ne $inheritedObjectType) {
 					# ...continue to next access rule
-					Continue NextAccessRule
+					continue NextAccessRule
 				}
 			}
 
@@ -550,10 +550,10 @@ Function Get-ADAccessRule {
 	}
 
 	# return ACE objects
-	Return $AccessRule
+	return $AccessRule
 }
 
-Function New-ADAccessRule {
+function New-ADAccessRule {
 	<#
 	.SYNOPSIS
 	Create an Active Directory access rule.
@@ -599,7 +599,7 @@ Function New-ADAccessRule {
 	#>
 
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
-	Param (
+	param (
 		# the security identifier for the access rule
 		[Parameter(Mandatory = $true, Position = 0, ValueFromPipeline)]
 		[System.Security.Principal.SecurityIdentifier]$SecurityIdentifier,
@@ -636,11 +636,11 @@ Function New-ADAccessRule {
 		# retrieve control access right
 		$DirectoryEntry = [System.DirectoryServices.DirectoryEntry]::new($DistinguishedName)
 		# if control access right not found...
-		If ([string]::IsNullOrEmpty($DirectoryEntry.DistinguishedName)) {
+		if ([string]::IsNullOrEmpty($DirectoryEntry.DistinguishedName)) {
 			# create exception
 			$Exception = [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException]::new('The Specified directory object cannot be found.')
 			# throw error record with exception
-			Throw [System.Management.Automation.ErrorRecord]::new($Exception, $Exception.GetType().Name, [System.Management.Automation.ErrorCategory]::NotSpecified, $null)
+			throw [System.Management.Automation.ErrorRecord]::new($Exception, $Exception.GetType().Name, [System.Management.Automation.ErrorCategory]::NotSpecified, $null)
 		}
 		# create custom control access right object
 		$ControlAccessRight = [pscustomobject]@{ 
@@ -652,19 +652,19 @@ Function New-ADAccessRule {
 			
 		}
 		# return custom control access right object
-		Return $ControlAccessRight
+		return $ControlAccessRight
 	}
 
 	# add script method to schema object
-	Try {
+	try {
 		Add-Member -InputObject $Schema -Force -MemberType ScriptMethod -Name 'FindControlAccessRight' -Value $ScriptBlock
 	}
-	Catch {
+	catch {
 		<#Do this if a terminating exception happens#>
 	}
 
 	# if preset provided...
-	If ($PSBoundParameters.ContainsKey('Preset')) {
+	if ($PSBoundParameters.ContainsKey('Preset')) {
 		# process the requested delegation type
 		switch ($Preset) {
 			'Department' {
@@ -1233,20 +1233,20 @@ Function New-ADAccessRule {
 		}
 	}
 	# if preset not provided...
-	Else {
+	else {
 		# translate object name to GUID of schema class object, attribute object, or a control access right
-		If ($PSBoundParameters.ContainsKey('ObjectName') -and -not [string]::IsNullOrEmpty($local:ObjectName)) {
+		if ($PSBoundParameters.ContainsKey('ObjectName') -and -not [string]::IsNullOrEmpty($local:ObjectName)) {
 			$objectType = Get-ADObjectTypeGuid -DisplayName $ObjectName
 		}
-		Else {
+		else {
 			$objectType = [guid]::empty
 		}
 
 		# translate inheriting object name to GUID of schema class object
-		If ($PSBoundParameters.ContainsKey('InheritingObjectName') -and -not [string]::IsNullOrEmpty($local:InheritingObjectName)) {
+		if ($PSBoundParameters.ContainsKey('InheritingObjectName') -and -not [string]::IsNullOrEmpty($local:InheritingObjectName)) {
 			$inheritedObjectType = Get-ADObjectTypeGuid -DisplayName $InheritingObjectName -LimitToSchemaClassObjects
 		}
-		Else {
+		else {
 			$inheritedObjectType = [guid]::empty
 		}
 
@@ -1265,10 +1265,10 @@ Function New-ADAccessRule {
 	}
 
 	# return ACE objects
-	Return $AccessRule
+	return $AccessRule
 }
 
-Function Remove-ADSecurity {
+function Remove-ADSecurity {
 	<#
 	.SYNOPSIS
 	Remove one or more Active Directory access rules from one or more Active Directory objects.
@@ -1306,10 +1306,10 @@ Function Remove-ADSecurity {
 	)
 
 	# validate access rules
-	ForEach ($ActiveDirectoryAccessRule in $AccessRule) {
-		If ($ActiveDirectoryAccessRule -isnot [System.DirectoryServices.ActiveDirectoryAccessRule]) {
+	foreach ($ActiveDirectoryAccessRule in $AccessRule) {
+		if ($ActiveDirectoryAccessRule -isnot [System.DirectoryServices.ActiveDirectoryAccessRule]) {
 			Write-Warning -Message 'one or more values for the AccessRule parameter are not an ActiveDirectoryAccessRule object'
-			Return
+			return
 		}
 	}
 
@@ -1317,43 +1317,43 @@ Function Remove-ADSecurity {
 	$ADObjects = [System.Collections.Generic.List[Microsoft.ActiveDirectory.Management.ADObject]]::new()
 
 	# retrieve Active Directory objects for each identity
-	ForEach ($Object in $Identity) {
+	foreach ($Object in $Identity) {
 		# if object is an ADObject...
-		If ($Object -is [Microsoft.ActiveDirectory.Management.ADObject]) {
+		if ($Object -is [Microsoft.ActiveDirectory.Management.ADObject]) {
 			# add object to list and continue
 			$ADObjects.Add($Object)
 		}
 		# if object is a string...
-		ElseIf ($Object -is [System.String]) {
+		elseif ($Object -is [System.String]) {
 			# get ADObject using object as identity
-			Try {
+			try {
 				$ADObject = Get-ADObject -Server $Server -Identity $Object -Properties 'nTSecurityDescriptor'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not retrieve object for input: '$Object'"
-				Return $_
+				return $_
 			}
 			# add ADObject to list and continue
 			$ADObjects.Add($ADObject)
 		}
 		# if object is not an ADObject or a string...
-		Else {
+		else {
 			# warn and return
 			Write-Warning -Message "could not process '[$($Object.GetType().FullName)]' object type for object: '$Object'"
-			Return
+			return
 		}
 	}
 
 	# reset security descriptors for each object
-	ForEach ($ADObject in $ADObjects) {
+	foreach ($ADObject in $ADObjects) {
 		# check object for nTSecurityDescriptor property
-		If ($null -eq $ADObject.nTSecurityDescriptor) {
-			Try {
+		if ($null -eq $ADObject.nTSecurityDescriptor) {
+			try {
 				$ADObject = Get-ADObject -Server $Server -Identity $ADObject.DistinguishedName -Properties 'nTSecurityDescriptor'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not retrieve nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
-				Return $_
+				return $_
 			}
 		}
 
@@ -1361,32 +1361,32 @@ Function Remove-ADSecurity {
 		$nTSecurityDescriptor = $ADObject.nTSecurityDescriptor
 
 		# validate nTSecurityDescriptor object type
-		If ($nTSecurityDescriptor -isnot [System.DirectoryServices.ActiveDirectorySecurity]) {
+		if ($nTSecurityDescriptor -isnot [System.DirectoryServices.ActiveDirectorySecurity]) {
 			Write-Warning -Message "found invalid '[$($nTSecurityDescriptor.GetType().FullName)]' object type for nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
-			Return $_
+			return $_
 		}
 
 		# process each provided access rule
-		ForEach ($ActiveDirectoryAccessRule in $AccessRule) {
+		foreach ($ActiveDirectoryAccessRule in $AccessRule) {
 			# remove provided access rule
-			Try {
+			try {
 				$nTSecurityDescriptor.RemoveAccessRuleSpecific($ActiveDirectoryAccessRule)
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not remove specific access rule from object: '$($ADObject.DistinguishedName)'"
-				Return $_
+				return $_
 			}
 		}
 
 		# process each provided security identifier
-		ForEach ($IdentityReference in $SecurityIdentifier) {
+		foreach ($IdentityReference in $SecurityIdentifier) {
 			# remove access rule with identity reference matching security identifier
-			Try {
+			try {
 				$nTSecurityDescriptor.PurgeAccessRules($IdentityReference)
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not remove access rule for '$IdentityReference' from object: '$($ADObject.DistinguishedName)'"
-				Return $_
+				return $_
 			}
 		}
 
@@ -1399,17 +1399,17 @@ Function Remove-ADSecurity {
 		}
 
 		# call Set-ADObject
-		Try {
+		try {
 			Set-ADObject @SetADObject
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not update nTSecurityDescriptor on object: '$($ADObject.DistinguishedName)'"
-			Return $_
+			return $_
 		}
 	}
 }
 
-Function Revoke-ADSecurity {
+function Revoke-ADSecurity {
 	<#
 	.SYNOPSIS
 	Remove Active Directory access rules containing the provided security identifiers from one or more Active Directory objects.
@@ -1447,10 +1447,10 @@ Function Revoke-ADSecurity {
 	)
 
 	# validate security identifier
-	ForEach ($Object in $SecurityIdentifier) {
-		If ($Object -isnot [System.Security.Principal.SecurityIdentifier]) {
+	foreach ($Object in $SecurityIdentifier) {
+		if ($Object -isnot [System.Security.Principal.SecurityIdentifier]) {
 			Write-Warning -Message 'one or more values for the SecurityIdentifier parameter are not a SecurityIdentifier object'
-			Return
+			return
 		}
 	}
 
@@ -1458,43 +1458,43 @@ Function Revoke-ADSecurity {
 	$ADObjects = [System.Collections.Generic.List[Microsoft.ActiveDirectory.Management.ADObject]]::new()
 
 	# retrieve Active Directory objects for each identity
-	ForEach ($Object in $Identity) {
+	foreach ($Object in $Identity) {
 		# if object is an ADObject...
-		If ($Object -is [Microsoft.ActiveDirectory.Management.ADObject]) {
+		if ($Object -is [Microsoft.ActiveDirectory.Management.ADObject]) {
 			# add object to list and continue
 			$ADObjects.Add($Object)
 		}
 		# if object is a string...
-		ElseIf ($Object -is [System.String]) {
+		elseif ($Object -is [System.String]) {
 			# get ADObject using object as identity
-			Try {
+			try {
 				$ADObject = Get-ADObject -Server $Server -Identity $Object -Properties 'nTSecurityDescriptor'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not retrieve object for input: '$Object'"
-				Return $_
+				return $_
 			}
 			# add ADObject to list and continue
 			$ADObjects.Add($ADObject)
 		}
 		# if object is not an ADObject or a string...
-		Else {
+		else {
 			# warn and return
 			Write-Warning -Message "could not process '[$($Object.GetType().FullName)]' object type for object: '$Object'"
-			Return
+			return
 		}
 	}
 
 	# reset security descriptors for each object
-	ForEach ($ADObject in $ADObjects) {
+	foreach ($ADObject in $ADObjects) {
 		# check object for nTSecurityDescriptor property
-		If ($null -eq $ADObject.nTSecurityDescriptor) {
-			Try {
+		if ($null -eq $ADObject.nTSecurityDescriptor) {
+			try {
 				$ADObject = Get-ADObject -Server $Server -Identity $ADObject.DistinguishedName -Properties 'nTSecurityDescriptor'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not retrieve nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
-				Return $_
+				return $_
 			}
 		}
 
@@ -1502,20 +1502,20 @@ Function Revoke-ADSecurity {
 		$nTSecurityDescriptor = $ADObject.nTSecurityDescriptor
 
 		# validate nTSecurityDescriptor object type
-		If ($nTSecurityDescriptor -isnot [System.DirectoryServices.ActiveDirectorySecurity]) {
+		if ($nTSecurityDescriptor -isnot [System.DirectoryServices.ActiveDirectorySecurity]) {
 			Write-Warning -Message "found invalid '[$($nTSecurityDescriptor.GetType().FullName)]' object type for nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
-			Return $_
+			return $_
 		}
 
 		# process each provided security identifier
-		ForEach ($IdentityReference in $SecurityIdentifier) {
+		foreach ($IdentityReference in $SecurityIdentifier) {
 			# remove access rule with identity reference matching security identifier
-			Try {
+			try {
 				$nTSecurityDescriptor.PurgeAccessRules($IdentityReference)
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not revoke access for '$IdentityReference' from object: '$($ADObject.DistinguishedName)'"
-				Return $_
+				return $_
 			}
 		}
 
@@ -1528,17 +1528,17 @@ Function Revoke-ADSecurity {
 		}
 
 		# call Set-ADObject
-		Try {
+		try {
 			Set-ADObject @SetADObject
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not update nTSecurityDescriptor on object: '$($ADObject.DistinguishedName)'"
-			Return $_
+			return $_
 		}
 	}
 }
 
-Function Reset-ADSecurity {
+function Reset-ADSecurity {
 	<#
 	.SYNOPSIS
 	Reset the Active Directory access rules on one or more Active Directory objects.
@@ -1582,14 +1582,14 @@ Function Reset-ADSecurity {
 	)
 
 	# if owner provided and not a SID...
-	If ($PSBoundParameters.ContainsKey('Owner') -and $Owner -isnot [System.Security.Principal.SecurityIdentifier]) {
+	if ($PSBoundParameters.ContainsKey('Owner') -and $Owner -isnot [System.Security.Principal.SecurityIdentifier]) {
 		# get owner SID
-		Try {
+		try {
 			$Owner = Get-ADSecurityIdentifier -Principal $Owner
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not retrieve SID for owner: '$Owner'"
-			Return $_
+			return $_
 		}
 	}
 
@@ -1597,30 +1597,30 @@ Function Reset-ADSecurity {
 	$ADObjects = [System.Collections.Generic.List[Microsoft.ActiveDirectory.Management.ADObject]]::new()
 
 	# retrieve Active Directory objects for each identity
-	ForEach ($Object in $Identity) {
+	foreach ($Object in $Identity) {
 		# if object is an ADObject...
-		If ($Object -is [Microsoft.ActiveDirectory.Management.ADObject]) {
+		if ($Object -is [Microsoft.ActiveDirectory.Management.ADObject]) {
 			# add object to list and continue
 			$ADObjects.Add($Object)
 		}
 		# if object is a string...
-		ElseIf ($Object -is [System.String]) {
+		elseif ($Object -is [System.String]) {
 			# get ADObject using object as identity
-			Try {
+			try {
 				$ADObject = Get-ADObject -Server $Server -Identity $Object -Properties 'nTSecurityDescriptor'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not retrieve object for input: '$Object'"
-				Return $_
+				return $_
 			}
 			# add ADObject to list and continue
 			$ADObjects.Add($ADObject)
 		}
 		# if object is not an ADObject or a string...
-		Else {
+		else {
 			# warn and return
 			Write-Warning -Message "could not process '[$($Object.GetType().FullName)]' object type for object: '$Object'"
-			Return
+			return
 		}
 	}
 
@@ -1628,30 +1628,30 @@ Function Reset-ADSecurity {
 	$defaultSecurityDescriptors = @{}
 
 	# retrieve default security descriptors for each object class
-	ForEach ($ADObject in $ADObjects) {
+	foreach ($ADObject in $ADObjects) {
 		# if object class not in hashtable for default security descriptors...
-		If (!$defaultSecurityDescriptors.ContainsKey($ADObject.objectClass)) {
+		if (!$defaultSecurityDescriptors.ContainsKey($ADObject.objectClass)) {
 			# retrieve default security descriptor for object class
-			Try {
+			try {
 				$defaultSecurityDescriptors[$ADObject.objectClass] = Get-ADObjectTypeDefaultAccessRule -DisplayName $ADObject.objectClass
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not retrieve default security descriptor for object class: '$($ADObject.objectClass)'"
-				Return $_
+				return $_
 			}
 		}
 	}
 
 	# reset security descriptors for each object
-	ForEach ($ADObject in $ADObjects) {
+	foreach ($ADObject in $ADObjects) {
 		# check object for nTSecurityDescriptor property
-		If ($null -eq $ADObject.nTSecurityDescriptor) {
-			Try {
+		if ($null -eq $ADObject.nTSecurityDescriptor) {
+			try {
 				$ADObject = Get-ADObject -Server $Server -Identity $ADObject.DistinguishedName -Properties 'nTSecurityDescriptor'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not retrieve nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
-				Return $_
+				return $_
 			}
 		}
 
@@ -1659,13 +1659,13 @@ Function Reset-ADSecurity {
 		$nTSecurityDescriptor = $ADObject.nTSecurityDescriptor
 
 		# validate nTSecurityDescriptor object type
-		If ($nTSecurityDescriptor -isnot [System.DirectoryServices.ActiveDirectorySecurity]) {
+		if ($nTSecurityDescriptor -isnot [System.DirectoryServices.ActiveDirectorySecurity]) {
 			Write-Warning -Message "found invalid '[$($nTSecurityDescriptor.GetType().FullName)]' object type for nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
-			Return $_
+			return $_
 		}
 
 		# if inheritance set...
-		If ($PSBoundParameters.ContainsKey('Inheritance')) {
+		if ($PSBoundParameters.ContainsKey('Inheritance')) {
 			# ...and inheritance is...
 			switch ($Inheritance) {
 				'Enable' {
@@ -1678,59 +1678,59 @@ Function Reset-ADSecurity {
 				}
 			}
 		}
-		Else {
+		else {
 			# retrieve inheritance settings from security descriptor
 			$IsProtected = $nTSecurityDescriptor.AreAccessRulesProtected
 		}
 
 		# disable inheritance and remove inherited access rules from object
-		Try {
+		try {
 			$nTSecurityDescriptor.SetAccessRuleProtection($true, $false)
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not disable inheritance on nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
-			Return $_
+			return $_
 		}
 
 		# process each existing access rule
-		ForEach ($AccessRule in $nTSecurityDescriptor.Access) {
+		foreach ($AccessRule in $nTSecurityDescriptor.Access) {
 			# remove existing access rule from security descriptor
-			Try {
+			try {
 				$nTSecurityDescriptor.RemoveAccessRuleSpecific($AccessRule)
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not remove access rule on nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
-				Return $_
+				return $_
 			}
 		}
 
 		# set security descriptor to default value for object class
-		Try {
+		try {
 			$nTSecurityDescriptor.SetSecurityDescriptorSddlForm($defaultSecurityDescriptors[$ADObject.objectClass])
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not copy default security descriptor to nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
-			Return $_
+			return $_
 		}
 
 		# set inheritance on security descriptor and copy inherited rules if inheritance enabled
-		Try {
+		try {
 			$nTSecurityDescriptor.SetAccessRuleProtection($IsProtected, $true)
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not configure inheritance on nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
-			Return $_
+			return $_
 		}
 
 		# if owner provided...
-		If ($PSBoundParameters.ContainsKey('Owner')) {
+		if ($PSBoundParameters.ContainsKey('Owner')) {
 			# set owner on security descriptor
-			Try {
+			try {
 				$nTSecurityDescriptor.SetOwner($OwnerSid)
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not set owner in nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
-				Return $_
+				return $_
 			}
 		}
 
@@ -1743,17 +1743,17 @@ Function Reset-ADSecurity {
 		}
 
 		# call Set-ADObject
-		Try {
+		try {
 			Set-ADObject @SetADObject
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not update nTSecurityDescriptor on object: '$($ADObject.DistinguishedName)'"
-			Return $_
+			return $_
 		}
 	}
 }
 
-Function Update-ADSecurity {
+function Update-ADSecurity {
 	<#
 	.SYNOPSIS
 	Updates the Active Directory access rules on one or more Active Directory objects.
@@ -1789,7 +1789,7 @@ Function Update-ADSecurity {
 	PS> Update-ADSecurity -Identity 'CN=Computers,DC=example,DC=com' -AccessRule $AccessRules -Inheritance 'Enable'
 	#>
 
-	Param (
+	param (
 		# one or more Active Directory objects, each value must be an ADObject or the distinguished name of an Active Directory object
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)][Alias('Objects')]
 		[object[]]$Identity,
@@ -1808,10 +1808,10 @@ Function Update-ADSecurity {
 	)
 
 	# validate access rules
-	ForEach ($ActiveDirectoryAccessRule in $AccessRule) {
-		If ($ActiveDirectoryAccessRule -isnot [System.DirectoryServices.ActiveDirectoryAccessRule]) {
+	foreach ($ActiveDirectoryAccessRule in $AccessRule) {
+		if ($ActiveDirectoryAccessRule -isnot [System.DirectoryServices.ActiveDirectoryAccessRule]) {
 			Write-Warning -Message 'one or more values for the AccessRule parameter are not an ActiveDirectoryAccessRule'
-			Return
+			return
 		}
 	}
 
@@ -1819,43 +1819,43 @@ Function Update-ADSecurity {
 	$ADObjects = [System.Collections.Generic.List[Microsoft.ActiveDirectory.Management.ADObject]]::new()
 
 	# retrieve Active Directory objects for each identity
-	ForEach ($Object in $Identity) {
+	foreach ($Object in $Identity) {
 		# if object is an ADObject...
-		If ($Object -is [Microsoft.ActiveDirectory.Management.ADObject]) {
+		if ($Object -is [Microsoft.ActiveDirectory.Management.ADObject]) {
 			# add object to list and continue
 			$ADObjects.Add($Object)
 		}
 		# if object is a string...
-		ElseIf ($Object -is [System.String]) {
+		elseif ($Object -is [System.String]) {
 			# get ADObject using object as identity
-			Try {
+			try {
 				$ADObject = Get-ADObject -Server $Server -Identity $Object -Properties 'nTSecurityDescriptor'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not retrieve object for input: '$Object'"
-				Return $_
+				return $_
 			}
 			# add ADObject to list and continue
 			$ADObjects.Add($ADObject)
 		}
 		# if object is not an ADObject or a string...
-		Else {
+		else {
 			# warn and return
 			Write-Warning -Message "could not process '[$($Object.GetType().FullName)]' object type for object: '$Object'"
-			Return
+			return
 		}
 	}
 
 	# update security descriptors for each object
-	:NextObject ForEach ($ADObject in $ADObjects) {
+	:NextObject foreach ($ADObject in $ADObjects) {
 		# check object for nTSecurityDescriptor property
-		If ($null -eq $ADObject.nTSecurityDescriptor) {
-			Try {
+		if ($null -eq $ADObject.nTSecurityDescriptor) {
+			try {
 				$ADObject = Get-ADObject -Server $Server -Identity $ADObject.DistinguishedName -Properties 'nTSecurityDescriptor'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not retrieve nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
-				Return $_
+				return $_
 			}
 		}
 
@@ -1863,13 +1863,13 @@ Function Update-ADSecurity {
 		$nTSecurityDescriptor = $ADObject.nTSecurityDescriptor
 
 		# validate nTSecurityDescriptor object type
-		If ($nTSecurityDescriptor -isnot [System.DirectoryServices.ActiveDirectorySecurity]) {
+		if ($nTSecurityDescriptor -isnot [System.DirectoryServices.ActiveDirectorySecurity]) {
 			Write-Warning -Message "found invalid '[$($nTSecurityDescriptor.GetType().FullName)]' object type for nTSecurityDescriptor for object: '$($ADObject.DistinguishedName)'"
-			Return $_
+			return $_
 		}
 
 		# if inheritance changes requested...
-		If ($PSBoundParameters.ContainsKey('Inheritance')) {
+		if ($PSBoundParameters.ContainsKey('Inheritance')) {
 			# define inheritance objects
 			switch ($Inheritance) {
 				'Enable' {
@@ -1893,23 +1893,23 @@ Function Update-ADSecurity {
 			}
 
 			# if removal of inherited rules requested but no explicit rules are defined in the access control list and no access rules provided...
-			If ($Inheritance -eq 'Remove' -and -not $nTSecurityDescriptor.GetAccessRules($true, $false, [System.Security.Principal.SecurityIdentifier]) -and -not $PSBoundParameters.ContainsKey('AccessRule')) {
+			if ($Inheritance -eq 'Remove' -and -not $nTSecurityDescriptor.GetAccessRules($true, $false, [System.Security.Principal.SecurityIdentifier]) -and -not $PSBoundParameters.ContainsKey('AccessRule')) {
 				Write-Warning -Message "cannot disable inheritance and remove inherited access rules when all existing access rules are inherited and AccessRule parameter is not set; could not remove inheritance for object: '$($ADObject.DistinguishedName)'"
-				Return
+				return
 			}
 
 			# update inheritance settings
-			Try {
+			try {
 				$nTSecurityDescriptor.SetAccessRuleProtection($IsProtected, $PreserveInheritance)
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not modify inheritance of ACL on object: '$($ADObject.DistinguishedName)'"
-				Return $_
+				return $_
 			}
 		}
 
 		# if reset requested...
-		If ($local:Reset) {
+		if ($local:Reset) {
 			# retrieve unique identity references in provided access rules
 			$IdentityReferences = $AccessRule.IdentityReference | Select-Object -Unique
 
@@ -1917,27 +1917,27 @@ Function Update-ADSecurity {
 			$ExistingAccessRules = $nTSecurityDescriptor.GetAccessRules($true, $false, [System.Security.Principal.SecurityIdentifier]).Where({ $_.IdentityReference -in $IdentityReferences })
 
 			# process each existing access rule
-			ForEach ($ExistingAccessRule in $ExistingAccessRules) {
+			foreach ($ExistingAccessRule in $ExistingAccessRules) {
 				# remove existing access rule
-				Try {
+				try {
 					$nTSecurityDescriptor.RemoveAccessRuleSpecific($ExistingAccessRule)
 				}
-				Catch {
+				catch {
 					Write-Warning -Message "could not remove existing access rules for '$($ExistingAccessRule.IdentityReference)' from object: '$($ADObject.DistinguishedName)'"
-					Return $_
+					return $_
 				}
 			}
 		}
 
 		# process each provided access rule
-		ForEach ($ActiveDirectoryAccessRule in $AccessRule) {
+		foreach ($ActiveDirectoryAccessRule in $AccessRule) {
 			# add provided access rule
-			Try {
+			try {
 				$nTSecurityDescriptor.AddAccessRule($ActiveDirectoryAccessRule)
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not add access rule to object: '$($ADObject.DistinguishedName)'"
-				Return $_
+				return $_
 			}
 		}
 
@@ -1950,12 +1950,12 @@ Function Update-ADSecurity {
 		}
 
 		# call Set-ADObject
-		Try {
+		try {
 			Set-ADObject @SetADObject
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not update nTSecurityDescriptor on object: '$($ADObject.DistinguishedName)'"
-			Return $_
+			return $_
 		}
 	}
 }
