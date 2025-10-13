@@ -623,8 +623,45 @@ Function New-ADAccessRule {
 		[string]$InheritingObjectName,
 		# create list for ActiveDirectoryAccessRule objects; supports importing existing ActiveDirectoryAccessRule object or existing list of ActiveDirectoryAccessRule objects
 		[Parameter(Mandatory = $false)]
-		[System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]$AccessRule = [System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]::new()
+		[System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]$AccessRule = [System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]::new(),
+		# object for schema
+		[Parameter(DontShow)]
+		[System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]$Schema = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().Schema
 	)
+
+	# define script block for ScriptMethod
+	$ScriptBlock = {
+		# define distinguished name for control access right
+		$DistinguishedName = 'LDAP://CN={0},CN=Extended-Rights,{1}' -f $args[0], $this.Name.Split(',', 2)[1]
+		# retrieve control access right
+		$DirectoryEntry = [System.DirectoryServices.DirectoryEntry]::new($DistinguishedName)
+		# if control access right not found...
+		If ([string]::IsNullOrEmpty($DirectoryEntry.DistinguishedName)) {
+			# create exception
+			$Exception = [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException]::new('The Specified directory object cannot be found.')
+			# throw error record with exception
+			Throw [System.Management.Automation.ErrorRecord]::new($Exception, $Exception.GetType().Name, [System.Management.Automation.ErrorCategory]::NotSpecified, $null)
+		}
+		# create custom control access right object
+		$ControlAccessRight = [pscustomobject]@{ 
+			Name              = [string]$DirectoryEntry.Name[0]
+			DisplayName       = [string]$DirectoryEntry.DisplayName[0]
+			DistinguishedName = [string]$DirectoryEntry.DistinguishedName
+			AppliesTo         = [guid[]]$DirectoryEntry.appliesTo
+			RightsGuid        = [guid]$DirectoryEntry.rightsGUID[0]
+			
+		}
+		# return custom control access right object
+		Return $ControlAccessRight
+	}
+
+	# add script method to schema object
+	Try {
+		Add-Member -InputObject $Schema -Force -MemberType ScriptMethod -Name 'FindControlAccessRight' -Value $ScriptBlock
+	}
+	Catch {
+		<#Do this if a terminating exception happens#>
+	}
 
 	# if preset provided...
 	If ($PSBoundParameters.ContainsKey('Preset')) {
@@ -636,7 +673,7 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'WriteProperty'
 					type                = 'Deny'
-					objectType          = [guid]'bf9679f0-0de6-11d0-a285-00aa003049e2' # GUID for 'ou' attribute
+					objectType          = $Schema.FindProperty('ou').SchemaGuid
 					inheritanceType     = 'None'
 					inheritedObjectType = [guid]::empty
 				}
@@ -664,7 +701,7 @@ Function New-ADAccessRule {
 					type                = 'Deny'
 					objectType          = [guid]::empty
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967aa5-0de6-11d0-a285-00aa003049e2' # GUID for 'organizationalUnit' objects
+					inheritedObjectType = $Schema.FindClass('organizationalUnit').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -675,7 +712,7 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'CreateChild', 'DeleteChild'
 					type                = 'Deny'
-					objectType          = [guid]'bf967aba-0de6-11d0-a285-00aa003049e2' # GUID for 'user' objects
+					objectType          = $Schema.FindClass('user').SchemaGuid
 					inheritanceType     = 'All'
 					inheritedObjectType = [guid]::empty
 				}
@@ -688,7 +725,7 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'CreateChild', 'DeleteChild'
 					type                = 'Deny'
-					objectType          = [guid]'4828cc14-1437-45bc-9b07-ad6f015e5f28' # GUID for 'inetOrgPerson' objects
+					objectType          = $Schema.FindClass('inetOrgPerson').SchemaGuid
 					inheritanceType     = 'All'
 					inheritedObjectType = [guid]::empty
 				}
@@ -701,7 +738,7 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'CreateChild', 'DeleteChild'
 					type                = 'Deny'
-					objectType          = [guid]'2628a46a-a6ad-4ae0-b854-2b12d9fe6f9e' # GUID for 'account' objects
+					objectType          = $Schema.FindClass('account').SchemaGuid
 					inheritanceType     = 'All'
 					inheritedObjectType = [guid]::empty
 				}
@@ -728,7 +765,7 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'CreateChild', 'DeleteChild'
 					type                = 'Allow'
-					objectType          = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					objectType          = $Schema.FindClass('computer').SchemaGuid
 					inheritanceType     = 'All'
 					inheritedObjectType = [guid]::empty
 				}
@@ -743,7 +780,7 @@ Function New-ADAccessRule {
 					type                = 'Allow'
 					objectType          = [guid]::empty
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -756,7 +793,7 @@ Function New-ADAccessRule {
 					type                = 'Allow'
 					objectType          = [guid]::empty
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'ea715d30-8f53-40d0-bd1e-6109186d782c' # GUID for 'msFVE-RecoveryInformation' objects
+					inheritedObjectType = $Schema.FindClass('msFVE-RecoveryInformation').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -768,7 +805,7 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'CreateChild'
 					type                = 'Allow'
-					objectType          = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					objectType          = $Schema.FindClass('computer').SchemaGuid
 					inheritanceType     = 'All'
 					inheritedObjectType = [guid]::empty
 				}
@@ -782,7 +819,7 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'DeleteChild'
 					type                = 'Allow'
-					objectType          = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					objectType          = $Schema.FindClass('computer').SchemaGuid
 					inheritanceType     = 'All'
 					inheritedObjectType = [guid]::empty
 				}
@@ -796,7 +833,7 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'CreateChild'
 					type                = 'Deny'
-					objectType          = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					objectType          = $Schema.FindClass('computer').SchemaGuid
 					inheritanceType     = 'All'
 					inheritedObjectType = [guid]::empty
 				}
@@ -810,9 +847,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'ReadProperty', 'ExtendedRight'
 					type                = 'Allow'
-					objectType          = [guid]'18c34bdf-9362-4ad4-9e4c-5f22796cc969' # GUID for 'ms-Mcs-AdmPwd' attribute
+					objectType          = $Schema.FindProperty('ms-Mcs-AdmPwd').SchemaGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -824,9 +861,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'ReadProperty', 'ExtendedRight'
 					type                = 'Allow'
-					objectType          = [guid]'23f208e9-5657-4fc0-a61c-f3bbe4a45277' # GUID for 'msLAPS-Password' attribute
+					objectType          = $Schema.FindProperty('msLAPS-Password').SchemaGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -837,9 +874,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'ReadProperty', 'ExtendedRight'
 					type                = 'Allow'
-					objectType          = [guid]'291d1f487-0bda-4d78-8df9-38072e3b827a' # GUID for 'msLAPS-EncryptedPassword' attribute
+					objectType          = $Schema.FindProperty('msLAPS-EncryptedPassword').SchemaGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -850,9 +887,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'ReadProperty', 'ExtendedRight'
 					type                = 'Allow'
-					objectType          = [guid]'18100c82-7fdc-4fba-8b0c-0cc7930ebfcd' # GUID for 'msLAPS-EncryptedPasswordHistory' attribute
+					objectType          = $Schema.FindProperty('msLAPS-EncryptedPasswordHistory').SchemaGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -863,9 +900,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'ReadProperty'
 					type                = 'Allow'
-					objectType          = [guid]'1762af1f-0320-43c4-9847-fb4de0c4b9d0' # GUID for 'msLAPS-PasswordExpirationTime' attribute
+					objectType          = $Schema.FindProperty('msLAPS-PasswordExpirationTime').SchemaGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -879,7 +916,7 @@ Function New-ADAccessRule {
 					type                = 'Allow'
 					objectType          = [guid]::empty
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'ea715d30-8f53-40d0-bd1e-6109186d782c' # GUID for 'msFVE-RecoveryInformation' objects
+					inheritedObjectType = $Schema.FindClass('msFVE-RecoveryInformation').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -891,9 +928,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'WriteProperty'
 					type                = 'Allow'
-					objectType          = [guid]'4c164200-20c0-11d0-a768-00aa006e0529' # GUID for 'Account Restrictions' property set
+					objectType          = $Schema.FindControlAccessRight('User-Account-Restrictions').RightsGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -904,9 +941,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'ExtendedRight'
 					type                = 'Allow'
-					objectType          = [guid]'00299570-246d-11d0-a768-00aa006e0529' # GUID for 'Reset Password' rights
+					objectType          = $Schema.FindControlAccessRight('User-Force-Change-Password').RightsGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -917,9 +954,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'Self'
 					type                = 'Allow'
-					objectType          = [guid]'9b026da6-0d3c-465c-8bee-5199d7165cba' # GUID for 'Validated write to computer attributes' rights
+					objectType          = $Schema.FindControlAccessRight('DS-Validated-Write-Computer').RightsGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -930,9 +967,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'Self'
 					type                = 'Allow'
-					objectType          = [guid]'72e39547-7b18-11d1-adef-00c04fd8d5cd' # GUID for 'Validated write to DNS host name' rights
+					objectType          = $Schema.FindControlAccessRight('Validated-DNS-Host-Name').RightsGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -943,9 +980,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'Self'
 					type                = 'Allow'
-					objectType          = [guid]'f3a64788-5306-11d1-a9c5-0000f80367c1' # GUID for 'Validated write to service principal name' rights
+					objectType          = $Schema.FindControlAccessRight('Validated-SPN').RightsGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -957,9 +994,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'WriteProperty'
 					type                = 'Allow'
-					objectType          = [guid]'bf96793f-0de6-11d0-a285-00aa003049e2' # GUID for 'cn' attribute
+					objectType          = $Schema.FindProperty('cn').SchemaGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -970,9 +1007,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'WriteProperty'
 					type                = 'Allow'
-					objectType          = [guid]'3e0abfd0-126a-11d0-a060-00aa006c33ed' # GUID for 'sAMAccountName' attribute
+					objectType          = $Schema.FindProperty('sAMAccountName').SchemaGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -983,9 +1020,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'WriteProperty'
 					type                = 'Allow'
-					objectType          = [guid]'4c164200-20c0-11d0-a768-00aa006e0529' # GUID for 'Account Restrictions' property set
+					objectType          = $Schema.FindControlAccessRight('User-Account-Restrictions').RightsGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -996,9 +1033,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'Self'
 					type                = 'Allow'
-					objectType          = [guid]'9b026da6-0d3c-465c-8bee-5199d7165cba' # GUID for 'Validated write to computer attributes' rights
+					objectType          = $Schema.FindControlAccessRight('DS-Validated-Write-Computer').RightsGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -1009,9 +1046,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'Self'
 					type                = 'Allow'
-					objectType          = [guid]'72e39547-7b18-11d1-adef-00c04fd8d5cd' # GUID for 'Validated write to DNS host name' rights
+					objectType          = $Schema.FindControlAccessRight('Validated-DNS-Host-Name').RightsGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -1022,21 +1059,21 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'Self'
 					type                = 'Allow'
-					objectType          = [guid]'f3a64788-5306-11d1-a9c5-0000f80367c1' # GUID for 'Validated write to service principal name' rights
+					objectType          = $Schema.FindControlAccessRight('Validated-SPN').RightsGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a86-0de6-11d0-a285-00aa003049e2' # GUID for 'computer' objects
+					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
 				}
 
 				# create ACE and add to array
 				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
 			'Contact' {
-				# define ACE: allow 'CreateChild','DeleteChild' of 'group' objects on 'this object and all child objects'
+				# define ACE: allow 'CreateChild','DeleteChild' of 'contact' objects on 'this object and all child objects'
 				$Ace = @{
 					objectSid           = $SecurityIdentifier
 					adRights            = 'CreateChild', 'DeleteChild'
 					type                = 'Allow'
-					objectType          = [guid]'5cb41ed0-0e4c-11d0-a286-00aa003049e2' # GUID for 'group' objects
+					objectType          = $Schema.FindClass('contact').SchemaGuid
 					inheritanceType     = 'All'
 					inheritedObjectType = [guid]::empty
 				}
@@ -1044,14 +1081,14 @@ Function New-ADAccessRule {
 				# create ACE and add to array
 				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 
-				# define ACE: allow 'GenericAll' on all descendent 'group' objects
+				# define ACE: allow 'GenericAll' on all descendent 'contact' objects
 				$Ace = @{
 					objectSid           = $SecurityIdentifier
 					adRights            = 'GenericAll'
 					type                = 'Allow'
 					objectType          = [guid]::empty
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'5cb41ed0-0e4c-11d0-a286-00aa003049e2' # GUID for 'group' objects
+					inheritedObjectType = $Schema.FindClass('contact').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -1063,7 +1100,7 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'CreateChild', 'DeleteChild'
 					type                = 'Allow'
-					objectType          = [guid]'bf967a9c-0de6-11d0-a285-00aa003049e2' # GUID for 'group' objects
+					objectType          = $Schema.FindClass('group').SchemaGuid
 					inheritanceType     = 'All'
 					inheritedObjectType = [guid]::empty
 				}
@@ -1078,7 +1115,7 @@ Function New-ADAccessRule {
 					type                = 'Allow'
 					objectType          = [guid]::empty
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a9c-0de6-11d0-a285-00aa003049e2' # GUID for 'group' objects
+					inheritedObjectType = $Schema.FindClass('group').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -1090,9 +1127,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'ReadProperty', 'WriteProperty'
 					type                = 'Allow'
-					objectType          = [guid]'bf9679c0-0de6-11d0-a285-00aa003049e2' # GUID for 'member' attribute
+					objectType          = $Schema.FindProperty('member').SchemaGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967a9c-0de6-11d0-a285-00aa003049e2' # GUID for 'group' objects
+					inheritedObjectType = $Schema.FindClass('group').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -1104,7 +1141,7 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'ReadProperty', 'WriteProperty'
 					type                = 'Allow'
-					objectType          = [guid]'f30e3bbe-9ff0-11d1-b603-0000f80367c1' # GUID for 'gPLink' attribute
+					objectType          = $Schema.FindProperty('gPLink').SchemaGuid
 					inheritanceType     = 'None'
 					inheritedObjectType = [guid]::empty
 				}
@@ -1117,7 +1154,7 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'ReadProperty', 'WriteProperty'
 					type                = 'Allow'
-					objectType          = [guid]'f30e3bbf-9ff0-11d1-b603-0000f80367c1' # GUID for 'gPOptions' attribute
+					objectType          = $Schema.FindProperty('gPOptions').SchemaGuid
 					inheritanceType     = 'None'
 					inheritedObjectType = [guid]::empty
 				}
@@ -1129,9 +1166,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'ReadProperty', 'WriteProperty'
 					type                = 'Allow'
-					objectType          = [guid]'f30e3bbe-9ff0-11d1-b603-0000f80367c1' # GUID for 'gPLink' attribute
+					objectType          = $Schema.FindProperty('gPLink').SchemaGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967aa5-0de6-11d0-a285-00aa003049e2' # GUID for 'organizationalUnit' objects
+					inheritedObjectType = $Schema.FindClass('organizationalUnit').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -1142,9 +1179,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'ReadProperty', 'WriteProperty'
 					type                = 'Allow'
-					objectType          = [guid]'f30e3bbf-9ff0-11d1-b603-0000f80367c1' # GUID for 'gPOptions' attribute
+					objectType          = $Schema.FindProperty('gPOptions').SchemaGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967aa5-0de6-11d0-a285-00aa003049e2' # GUID for 'organizationalUnit' objects
+					inheritedObjectType = $Schema.FindClass('organizationalUnit').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -1156,7 +1193,7 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'CreateChild', 'DeleteChild'
 					type                = 'Allow'
-					objectType          = [guid]'bf967aa5-0de6-11d0-a285-00aa003049e2' # GUID for 'organizationalUnit' objects
+					objectType          = $Schema.FindClass('organizationalUnit').SchemaGuid
 					inheritanceType     = 'All'
 					inheritedObjectType = [guid]::empty
 				}
@@ -1169,9 +1206,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'ReadProperty', 'WriteProperty'
 					type                = 'Allow'
-					objectType          = [guid]'bf9679f0-0de6-11d0-a285-00aa003049e2' # GUID for 'ou' attribute
+					objectType          = $Schema.FindProperty('ou').SchemaGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967aa5-0de6-11d0-a285-00aa003049e2' # GUID for 'organizationalUnit' objects
+					inheritedObjectType = $Schema.FindClass('organizationalUnit').SchemaGuid
 				}
 
 				# create ACE and add to array
@@ -1182,9 +1219,9 @@ Function New-ADAccessRule {
 					objectSid           = $SecurityIdentifier
 					adRights            = 'ReadProperty', 'WriteProperty'
 					type                = 'Allow'
-					objectType          = [guid]'bf967950-0de6-11d0-a285-00aa003049e2' # GUID for 'description' attribute
+					objectType          = $Schema.FindProperty('description').SchemaGuid
 					inheritanceType     = 'Descendents'
-					inheritedObjectType = [guid]'bf967aa5-0de6-11d0-a285-00aa003049e2' # GUID for 'organizationalUnit' objects
+					inheritedObjectType = $Schema.FindClass('organizationalUnit').SchemaGuid
 				}
 
 				# create ACE and add to array
