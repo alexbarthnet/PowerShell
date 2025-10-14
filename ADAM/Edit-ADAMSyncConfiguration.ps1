@@ -196,8 +196,15 @@ $Action = 'install'
 # Run the following commands to create the XML object:
 $Xml = [System.Xml.XmlDocument]::new()
 
-# Run the following commands to load the template file:
-$Xml.Load($Path)
+# if WhatIf provided...
+if ($WhatIfPreference) {
+    # populate XML object from directory object
+    $Xml.LoadXml($ADObject.configurationFile)
+}
+else {
+    # populate XML object from configuration file
+    $Xml.Load($Path)
+}
 
 # loop through attributes to add
 foreach ($AttributeToAdd in $AddAttributes) {
