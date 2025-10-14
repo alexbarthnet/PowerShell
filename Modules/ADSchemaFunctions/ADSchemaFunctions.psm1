@@ -36,7 +36,7 @@ function Add-ADSchemaAttributes {
 		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType)
 
 		# define directory source
-		$DirectorySource = "current $($DirectoryContextType.ToLower())"
+		$DirectorySource = "current $($DirectoryContextType.ToString().ToLower())"
 	}
 
 	# retrieve schema object
@@ -221,7 +221,7 @@ function Add-ADSchemaAttributesToClass {
 		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType)
 
 		# define directory source
-		$DirectorySource = "current $($DirectoryContextType.ToLower())"
+		$DirectorySource = "current $($DirectoryContextType.ToString().ToLower())"
 	}
 
 	# retrieve schema object
@@ -357,7 +357,7 @@ function Add-ADSchemaClass {
 		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType)
 
 		# define directory source
-		$DirectorySource = "current $($DirectoryContextType.ToLower())"
+		$DirectorySource = "current $($DirectoryContextType.ToString().ToLower())"
 	}
 
 	# retrieve schema object
@@ -510,7 +510,7 @@ function Add-ADSchemaClassToParent {
 		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType)
 
 		# define directory source
-		$DirectorySource = "current $($DirectoryContextType.ToLower())"
+		$DirectorySource = "current $($DirectoryContextType.ToString().ToLower())"
 	}
 
 	# retrieve schema object
