@@ -17,26 +17,24 @@ function Add-ADSchemaAttributes {
 		[uint16]$SearchFlags = 0,
 		[Parameter(Position = 6)]
 		[switch]$AddToGlobalCatalog,
-		[Parameter(Position = 7)][ValidateSet('DirectoryServer', 'Domain', 'Forest')]
-		[System.DirectoryServices.ActiveDirectory.DirectoryContextType]$DirectoryContextType = 'Forest',
-		[Parameter(Position = 8)]
-		[string]$Server = $env:COMPUTERNAME
+		[Parameter(Position = 7)]
+		[string]$Server
 	)
 
 	# if directory context type is server...
-	if ($DirectoryContextType -eq 'DirectoryServer') {
+	if ($PSBoundParameters.ContainsKey('Server')) {
 		# create directory context using context type and server
-		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType, $Server)
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new('DirectoryServer', $Server)
 
 		# define directory source
 		$DirectorySource = "server: $Server"
 	}
 	else {
 		# create directory context using context type
-		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType)
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new('Forest')
 
 		# define directory source
-		$DirectorySource = "current $($DirectoryContextType.ToString().ToLower())"
+		$DirectorySource = "current forest"
 	}
 
 	# retrieve schema object
@@ -202,26 +200,24 @@ function Add-ADSchemaAttributesToClass {
 		[uint16]$Suffix = 1,
 		[Parameter(Position = 4)][ValidateRange(1, 65535)]
 		[uint16]$Count = 1,
-		[Parameter(Position = 5)][ValidateSet('DirectoryServer', 'Domain', 'Forest')]
-		[System.DirectoryServices.ActiveDirectory.DirectoryContextType]$DirectoryContextType = 'Forest',
-		[Parameter(Position = 6)]
-		[string]$Server = $env:COMPUTERNAME
+		[Parameter(Position = 5)]
+		[string]$Server
 	)
 
 	# if directory context type is server...
-	if ($DirectoryContextType -eq 'DirectoryServer') {
+	if ($PSBoundParameters.ContainsKey('Server')) {
 		# create directory context using context type and server
-		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType, $Server)
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new('DirectoryServer', $Server)
 
 		# define directory source
 		$DirectorySource = "server: $Server"
 	}
 	else {
 		# create directory context using context type
-		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType)
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new('Forest')
 
 		# define directory source
-		$DirectorySource = "current $($DirectoryContextType.ToString().ToLower())"
+		$DirectorySource = "current forest"
 	}
 
 	# retrieve schema object
@@ -338,26 +334,24 @@ function Add-ADSchemaClass {
 		[uint16]$Suffix = 1,
 		[Parameter(Position = 4)]
 		[switch]$IncludeSuffixInName,
-		[Parameter(Position = 5)][ValidateSet('DirectoryServer', 'Domain', 'Forest')]
-		[System.DirectoryServices.ActiveDirectory.DirectoryContextType]$DirectoryContextType = 'Forest',
-		[Parameter(Position = 6)]
-		[string]$Server = $env:COMPUTERNAME
+		[Parameter(Position = 5)]
+		[string]$Server
 	)
 
 	# if directory context type is server...
-	if ($DirectoryContextType -eq 'DirectoryServer') {
+	if ($PSBoundParameters.ContainsKey('Server')) {
 		# create directory context using context type and server
-		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType, $Server)
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new('DirectoryServer', $Server)
 
 		# define directory source
 		$DirectorySource = "server: $Server"
 	}
 	else {
 		# create directory context using context type
-		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType)
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new('Forest')
 
 		# define directory source
-		$DirectorySource = "current $($DirectoryContextType.ToString().ToLower())"
+		$DirectorySource = "current forest"
 	}
 
 	# retrieve schema object
@@ -491,26 +485,24 @@ function Add-ADSchemaClassToParent {
 		[string]$Class,
 		[Parameter(Position = 1, Mandatory)]
 		[string]$ParentClass,
-		[Parameter(Position = 2)][ValidateSet('DirectoryServer', 'Domain', 'Forest')]
-		[System.DirectoryServices.ActiveDirectory.DirectoryContextType]$DirectoryContextType = 'Forest',
-		[Parameter(Position = 3)]
-		[string]$Server = $env:COMPUTERNAME
+		[Parameter(Position = 2)]
+		[string]$Server
 	)
 
 	# if directory context type is server...
-	if ($DirectoryContextType -eq 'DirectoryServer') {
+	if ($PSBoundParameters.ContainsKey('Server')) {
 		# create directory context using context type and server
-		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType, $Server)
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new('DirectoryServer', $Server)
 
 		# define directory source
 		$DirectorySource = "server: $Server"
 	}
 	else {
 		# create directory context using context type
-		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType)
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new('Forest')
 
 		# define directory source
-		$DirectorySource = "current $($DirectoryContextType.ToString().ToLower())"
+		$DirectorySource = "current forest"
 	}
 
 	# retrieve schema object
