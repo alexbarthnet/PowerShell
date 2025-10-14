@@ -258,7 +258,7 @@ function Add-ADSchemaAttributesToClass {
 		$ClassObject = Get-ADObject -Server $Server -Identity $ClassIdentity -Properties 'mayContain'
 	}
 	catch {
-		Write-Wanring -Message "Class '$Class' does NOT exist"
+		Write-Warning -Message "Class '$Class' does NOT exist"
 		return $null
 	}
 
