@@ -410,7 +410,7 @@ function Add-ADSchemaClass {
 
 	# create strings
 	$ClassName = '{0}{1}{2}' -f $NamePrefix, [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.ToTitleCase($Type.ToLower()), $SuffixString
-	$ClassIdentity = '{0}{1}{2}' -f $ClassName, $SchemaNamingContext
+	$ClassIdentity = 'CN={0},{1}' -f $ClassName, $SchemaNamingContext
 
 	# retrieve class object
 	try {
