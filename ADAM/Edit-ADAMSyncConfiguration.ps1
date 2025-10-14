@@ -127,11 +127,11 @@ if (![System.IO.Directory]::Exists($ExportsDirectory)) {
     # define state
     $State = '{0}-for-edit' -f $Action
 
-# define export file name
-$ExportFileName = '{0}_{1}_{2}_{3}_{4}_{5}.xml' -f $LogFileDateTime, $InstanceName, $State, $ComputerName, $Port, $Partition
+    # define file name for export
+    $FileName = '{0}_{1}_{2}_{3}_{4}_{5}.xml' -f $LogFileDateTime, $InstanceName, $State, $ComputerName, $Port, $Partition
 
-# combined directory and file name
-$Path = Join-Path -Path $ExportsDirectory -ChildPath $ExportFileName
+    # combined directory and file name
+    $Path = Join-Path -Path $ExportsDirectory -ChildPath $FileName
 
 # create working directory
 if (![System.IO.Directory]::Exists($WorkingDirectory)) {
@@ -257,11 +257,11 @@ else {
     # define state
     $State = '{0}-for-edit' -f $Action
 
-    # define export file name
-    $ImportFileName = '{0}_{1}_{2}_{3}_{4}_{5}.xml' -f $LogFileDateTime, $InstanceName, $State, $ComputerName, $Port, $Partition
+    # define file name after edit
+    $FileName = '{0}_{1}_{2}_{3}_{4}_{5}.xml' -f $LogFileDateTime, $InstanceName, $State, $ComputerName, $Port, $Partition
 
     # combined directory and file name
-    $Path = Join-Path -Path $ExportsDirectory -ChildPath $ImportFileName
+    $Path = Join-Path -Path $ExportsDirectory -ChildPath $FileName
 
     # update the XML writer settings
     $XmlWriterSettings.CloseOutput = $true
