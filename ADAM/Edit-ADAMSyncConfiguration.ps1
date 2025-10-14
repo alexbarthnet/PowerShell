@@ -35,6 +35,8 @@ param(
     [string[]]$AddContainers,
     # define base DN to remove
     [string[]]$RemoveContainers,
+    # define object filter to replace
+    [string]$ObjectFilter,
     # server for AD cmdlets
     [Parameter(DontShow)]
     [string]$Server = ($ComputerName, $Port -join ':')
@@ -248,6 +250,11 @@ foreach ($ContainerToRemove in $RemoveContainers) {
     $Element = $Xml.SelectSingleNode("//doc//configuration//query//base-dn[text()='$ContainerToRemove']")
     # remove XML element from query section
     $null = $Xml.doc.configuration['query'].RemoveChild($Element)
+}
+
+# if object filter provided...
+If ($PSBoundParameters.ContainsKey('ObjectFilter')) {
+    $Xml.doc.configuration.query['object-filter'].InnerText = $ObjectFilter
 }
 
 # create the XML writer settings
