@@ -161,6 +161,9 @@ $LogFileName = '{0}_{1}_{2}_{3}_{4}_{5}.txt' -f $LogFileDateTime, $InstanceName,
 # define log file
 $LogFile = Join-Path -Path $LogFileDirectory -ChildPath $LogFileName
 
+# update action
+$Action = 'export'
+
 # define argument list
 $ArgumentList = @(
     '/{0}' -f $Action
@@ -279,6 +282,9 @@ $LogFileName = '{0}_{1}_{2}_{3}_{4}_{5}.txt' -f $LogFileDateTime, $InstanceName,
 
 # define log file
 $LogFile = Join-Path -Path $LogFileDirectory -ChildPath $LogFileName
+
+# update action
+$Action = 'install'
 
 # define argument list
 $ArgumentList = @(
