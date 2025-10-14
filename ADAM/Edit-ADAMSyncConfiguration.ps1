@@ -207,6 +207,8 @@ foreach ($AttributeToAdd in $AddAttributes) {
     $Element.InnerText = $AttributeToAdd
     # append XML element to attributes section
     $null = $Xml.doc.configuration.query['attributes'].AppendChild($Element)
+    # insert XML element into attributes section before exclude
+    $null = $Xml.doc.configuration.query['attributes'].InsertBefore($Element, $Xml.doc.configuration.query.attributes['exclude'])
 }
 
 # loop through attributes to remove
