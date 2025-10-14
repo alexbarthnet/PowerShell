@@ -221,9 +221,9 @@ foreach ($AttributeToRemove in $RemoveAttributes) {
 foreach ($ContainerToAdd in $AddContainers) {
     # define XML element
     $Element = $Xml.CreateElement('base-dn')
-    # define inner text as attribute name
+    # define inner text as container name
     $Element.InnerText = $ContainerToAdd
-    # append XML element to attributes section
+    # insert XML element into query section before object-filter
     $null = $Xml.doc.configuration['query'].InsertBefore($Element, $Xml.doc.configuration.query['object-filter'])
 }
 
@@ -231,7 +231,7 @@ foreach ($ContainerToAdd in $AddContainers) {
 foreach ($ContainerToRemove in $RemoveContainers) {
     # retrieve XML element
     $Element = $Xml.SelectSingleNode("//doc//configuration//query//base-dn[text()='$ContainerToRemove']")
-    # remove XML element from attributes section
+    # remove XML element from query section
     $null = $Xml.doc.configuration['query'].RemoveChild($Element)
 }
 
