@@ -45,7 +45,7 @@ param(
 ################################################
 
 # define action
-$Action = 'edit'
+$Action = 'export'
 
 # connect to instance
 try {
@@ -124,8 +124,8 @@ if (![System.IO.Directory]::Exists($ExportsDirectory)) {
     }
 }
 
-# define state
-$State = 'export-for-edit'
+    # define state
+    $State = '{0}-for-edit' -f $Action
 
 # define export file name
 $ExportFileName = '{0}_{1}_{2}_{3}_{4}_{5}.xml' -f $LogFileDateTime, $InstanceName, $State, $ComputerName, $Port, $Partition
@@ -161,9 +161,6 @@ $LogFileName = '{0}_{1}_{2}_{3}_{4}_{5}.txt' -f $LogFileDateTime, $InstanceName,
 # define log file
 $LogFile = Join-Path -Path $LogFileDirectory -ChildPath $LogFileName
 
-# update action
-$Action = 'export'
-
 # define argument list
 $ArgumentList = @(
     '/{0}' -f $Action
@@ -192,6 +189,9 @@ Write-Host "complete $Action of ADAM Sync configuration to file: $Path"
 ################################################
 # define configuration data
 ################################################
+
+# update action
+$Action = 'install'
 
 # Run the following commands to create the XML object:
 $Xml = [System.Xml.XmlDocument]::new()
@@ -255,7 +255,7 @@ if ($WhatIfPreference) {
 }
 else {
     # define state
-    $State = 'import-for-edit'
+    $State = '{0}-for-edit' -f $Action
 
     # define export file name
     $ImportFileName = '{0}_{1}_{2}_{3}_{4}_{5}.xml' -f $LogFileDateTime, $InstanceName, $State, $ComputerName, $Port, $Partition
@@ -282,9 +282,6 @@ $LogFileName = '{0}_{1}_{2}_{3}_{4}_{5}.txt' -f $LogFileDateTime, $InstanceName,
 
 # define log file
 $LogFile = Join-Path -Path $LogFileDirectory -ChildPath $LogFileName
-
-# update action
-$Action = 'install'
 
 # define argument list
 $ArgumentList = @(
