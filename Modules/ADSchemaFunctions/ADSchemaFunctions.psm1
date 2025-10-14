@@ -3,14 +3,6 @@
 function Add-ADSchemaAttributes {
 	[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 	param(
-		[Parameter(DontShow)]
-		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
-		[Parameter(DontShow)]
-		[string]$SchemaNamingContext = $Schema.Name,
-		[Parameter(DontShow)]
-		[string]$Server = $Schema.SchemaRoleOwner.Name,
-		[Parameter(DontShow)]
-		[object]$RootDSE = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/RootDSE"),
 		[Parameter(Position = 0, Mandatory)]
 		[string]$OIDPrefix,
 		[Parameter(Position = 1, Mandatory)]
@@ -24,8 +16,58 @@ function Add-ADSchemaAttributes {
 		[Parameter(Position = 5)][ValidateRange(0, 8191)]
 		[uint16]$SearchFlags = 0,
 		[Parameter(Position = 6)]
-		[switch]$AddToGlobalCatalog
+		[switch]$AddToGlobalCatalog,
+		[Parameter(Position = 7)][ValidateSet('DirectoryServer', 'Domain', 'Forest')]
+		[System.DirectoryServices.ActiveDirectory.DirectoryContextType]$DirectoryContextType = 'Forest',
+		[Parameter(Position = 8)]
+		[string]$Server = $env:COMPUTERNAME
 	)
+
+	# if directory context type is server...
+	if ($DirectoryContextType -eq 'DirectoryServer') {
+		# create directory context using context type and server
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType, $Server)
+
+		# define directory source
+		$DirectorySource = "server: $Server"
+	}
+	else {
+		# create directory context using context type
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType)
+
+		# define directory source
+		$DirectorySource = "current $($DirectoryContextType.ToLower())"
+	}
+
+	# retrieve schema object
+	try {
+		$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetSchema($DirectoryContext)
+	}
+	catch {
+		Write-Error "could not retrieve schema object from $DirectorySource"
+		return $_
+	}
+
+	# retrieve schema naming context
+	$SchemaNamingContext = $Schema.Name
+
+	# if schema role owner is empty...
+	if ([System.String]::IsNullOrEmpty($Schema.SchemaRoleOwner)) {
+		# warn and return
+		Write-Warning -Message "could not retrieve schema role owner for instance on $Server"
+		return
+	}
+	else {
+		$Server = $Schema.SchemaRoleOwner
+	}
+
+	# refresh schema before update
+	try {
+		$Schema.RefreshSchema()
+	}
+	catch {
+		return $_
+	}
 
 	# set values for attribute
 	switch ($Type) {
@@ -65,14 +107,6 @@ function Add-ADSchemaAttributes {
 			Write-Host 'Unsupported attribute type provided, exiting...'
 			return
 		}
-	}
-
-	# refresh schema before update
-	try {
-		$Schema.RefreshSchema()
-	}
-	catch {
-		return $_
 	}
 
 	# format type
@@ -144,7 +178,13 @@ function Add-ADSchemaAttributes {
 
 	# reload schema after update
 	if ($PSCmdlet.ShouldProcess($Server, 'Update active schema')) {
+		# define root DSE
+		$RootDSE = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/RootDSE")
+		
+		# set schema update now property
 		$RootDSE.Put('schemaUpdateNow', 1)
+		
+		# save root DSE
 		$RootDSE.SetInfo()
 	}
 }
@@ -152,14 +192,6 @@ function Add-ADSchemaAttributes {
 function Add-ADSchemaAttributesToClass {
 	[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 	param (
-		[Parameter(DontShow)]
-		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
-		[Parameter(DontShow)]
-		[string]$SchemaNamingContext = $Schema.Name,
-		[Parameter(DontShow)]
-		[string]$Server = $Schema.SchemaRoleOwner.Name,
-		[Parameter(DontShow)]
-		[object]$RootDSE = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/RootDSE"),
 		[Parameter(Position = 0, Mandatory)]
 		[string]$Class,
 		[Parameter(Position = 1, Mandatory)]
@@ -169,8 +201,50 @@ function Add-ADSchemaAttributesToClass {
 		[Parameter(Position = 3)][ValidateRange(1, 65535)]
 		[uint16]$Suffix = 1,
 		[Parameter(Position = 4)][ValidateRange(1, 65535)]
-		[uint16]$Count = 1
+		[uint16]$Count = 1,
+		[Parameter(Position = 5)][ValidateSet('DirectoryServer', 'Domain', 'Forest')]
+		[System.DirectoryServices.ActiveDirectory.DirectoryContextType]$DirectoryContextType = 'Forest',
+		[Parameter(Position = 6)]
+		[string]$Server = $env:COMPUTERNAME
 	)
+
+	# if directory context type is server...
+	if ($DirectoryContextType -eq 'DirectoryServer') {
+		# create directory context using context type and server
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType, $Server)
+
+		# define directory source
+		$DirectorySource = "server: $Server"
+	}
+	else {
+		# create directory context using context type
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType)
+
+		# define directory source
+		$DirectorySource = "current $($DirectoryContextType.ToLower())"
+	}
+
+	# retrieve schema object
+	try {
+		$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetSchema($DirectoryContext)
+	}
+	catch {
+		Write-Error "could not retrieve schema object from $DirectorySource"
+		return $_
+	}
+
+	# retrieve schema naming context
+	$SchemaNamingContext = $Schema.Name
+
+	# if schema role owner is empty...
+	if ([System.String]::IsNullOrEmpty($Schema.SchemaRoleOwner)) {
+		# warn and return
+		Write-Warning -Message "could not retrieve schema role owner for instance on $Server"
+		return
+	}
+	else {
+		$Server = $Schema.SchemaRoleOwner
+	}
 
 	# refresh schema before update
 	try {
@@ -240,7 +314,13 @@ function Add-ADSchemaAttributesToClass {
 
 	# reload schema after update
 	if ($PSCmdlet.ShouldProcess($Server, 'Update active schema')) {
+		# define root DSE
+		$RootDSE = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/RootDSE")
+		
+		# set schema update now property
 		$RootDSE.Put('schemaUpdateNow', 1)
+		
+		# save root DSE
 		$RootDSE.SetInfo()
 	}
 }
@@ -248,14 +328,6 @@ function Add-ADSchemaAttributesToClass {
 function Add-ADSchemaClass {
 	[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 	param (
-		[Parameter(DontShow)]
-		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
-		[Parameter(DontShow)]
-		[string]$SchemaNamingContext = $Schema.Name,
-		[Parameter(DontShow)]
-		[string]$Server = $Schema.SchemaRoleOwner.Name,
-		[Parameter(DontShow)]
-		[object]$RootDSE = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/RootDSE"),
 		[Parameter(Position = 0, Mandatory)]
 		[string]$OIDPrefix,
 		[Parameter(Position = 1, Mandatory)]
@@ -264,8 +336,59 @@ function Add-ADSchemaClass {
 		[string]$Type,
 		[Parameter(Position = 3)][ValidateRange(1, 65535)]
 		[uint16]$Suffix = 1,
-		[switch]$IncludeSuffixInName
+		[Parameter(Position = 4)]
+		[switch]$IncludeSuffixInName,
+		[Parameter(Position = 5)][ValidateSet('DirectoryServer', 'Domain', 'Forest')]
+		[System.DirectoryServices.ActiveDirectory.DirectoryContextType]$DirectoryContextType = 'Forest',
+		[Parameter(Position = 6)]
+		[string]$Server = $env:COMPUTERNAME
 	)
+
+	# if directory context type is server...
+	if ($DirectoryContextType -eq 'DirectoryServer') {
+		# create directory context using context type and server
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType, $Server)
+
+		# define directory source
+		$DirectorySource = "server: $Server"
+	}
+	else {
+		# create directory context using context type
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType)
+
+		# define directory source
+		$DirectorySource = "current $($DirectoryContextType.ToLower())"
+	}
+
+	# retrieve schema object
+	try {
+		$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetSchema($DirectoryContext)
+	}
+	catch {
+		Write-Error "could not retrieve schema object from $DirectorySource"
+		return $_
+	}
+
+	# retrieve schema naming context
+	$SchemaNamingContext = $Schema.Name
+
+	# if schema role owner is empty...
+	if ([System.String]::IsNullOrEmpty($Schema.SchemaRoleOwner)) {
+		# warn and return
+		Write-Warning -Message "could not retrieve schema role owner for instance on $Server"
+		return
+	}
+	else {
+		$Server = $Schema.SchemaRoleOwner
+	}
+
+	# refresh schema before update
+	try {
+		$Schema.RefreshSchema()
+	}
+	catch {
+		return $_
+	}
 
 	#check attribute type variable
 	switch ($Type) {
@@ -281,14 +404,6 @@ function Add-ADSchemaClass {
 			Write-Host 'Invalid class type, exiting...'
 			return
 		}
-	}
-
-	# refresh schema before update
-	try {
-		$Schema.RefreshSchema()
-	}
-	catch {
-		return $_
 	}
 
 	# create suffix string
@@ -358,7 +473,13 @@ function Add-ADSchemaClass {
 
 	# reload schema after update
 	if ($PSCmdlet.ShouldProcess($Server, 'Update active schema')) {
+		# define root DSE
+		$RootDSE = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/RootDSE")
+		
+		# set schema update now property
 		$RootDSE.Put('schemaUpdateNow', 1)
+		
+		# save root DSE
 		$RootDSE.SetInfo()
 	}
 }
@@ -366,19 +487,53 @@ function Add-ADSchemaClass {
 function Add-ADSchemaClassToParent {
 	[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 	param (
-		[Parameter(DontShow)]
-		[object]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema(),
-		[Parameter(DontShow)]
-		[string]$SchemaNamingContext = $Schema.Name,
-		[Parameter(DontShow)]
-		[string]$Server = $Schema.SchemaRoleOwner.Name,
-		[Parameter(DontShow)]
-		[object]$RootDSE = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/RootDSE"),
 		[Parameter(Position = 0, Mandatory)]
 		[string]$Class,
 		[Parameter(Position = 1, Mandatory)]
-		[string]$ParentClass
+		[string]$ParentClass,
+		[Parameter(Position = 2)][ValidateSet('DirectoryServer', 'Domain', 'Forest')]
+		[System.DirectoryServices.ActiveDirectory.DirectoryContextType]$DirectoryContextType = 'Forest',
+		[Parameter(Position = 3)]
+		[string]$Server = $env:COMPUTERNAME
 	)
+
+	# if directory context type is server...
+	if ($DirectoryContextType -eq 'DirectoryServer') {
+		# create directory context using context type and server
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType, $Server)
+
+		# define directory source
+		$DirectorySource = "server: $Server"
+	}
+	else {
+		# create directory context using context type
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new($DirectoryContextType)
+
+		# define directory source
+		$DirectorySource = "current $($DirectoryContextType.ToLower())"
+	}
+
+	# retrieve schema object
+	try {
+		$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetSchema($DirectoryContext)
+	}
+	catch {
+		Write-Error "could not retrieve schema object from $DirectorySource"
+		return $_
+	}
+
+	# retrieve schema naming context
+	$SchemaNamingContext = $Schema.Name
+
+	# if schema role owner is empty...
+	if ([System.String]::IsNullOrEmpty($Schema.SchemaRoleOwner)) {
+		# warn and return
+		Write-Warning -Message "could not retrieve schema role owner for instance on $Server"
+		return
+	}
+	else {
+		$Server = $Schema.SchemaRoleOwner
+	}
 
 	# refresh schema before update
 	try {
@@ -439,7 +594,13 @@ function Add-ADSchemaClassToParent {
 
 	# reload schema after update
 	if ($PSCmdlet.ShouldProcess($Server, 'Update active schema')) {
+		# define root DSE
+		$RootDSE = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/RootDSE")
+		
+		# set schema update now property
 		$RootDSE.Put('schemaUpdateNow', 1)
+		
+		# save root DSE
 		$RootDSE.SetInfo()
 	}
 }
