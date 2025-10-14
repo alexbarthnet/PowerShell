@@ -41,7 +41,7 @@ param(
 )
 
 ################################################
-# begin export
+# retrieve existing configuration
 ################################################
 
 # define action
@@ -289,7 +289,7 @@ else {
 }
 
 ################################################
-# begin import
+# install updated configuration
 ################################################
 
 # define log file name
@@ -321,7 +321,3 @@ catch {
 
 # report state
 Write-Host "complete $Action of ADAM Sync configuration from file: $Path"
-
-################################################
-# end import
-################################################
