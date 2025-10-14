@@ -187,7 +187,7 @@ catch {
 Write-Host "complete $Action of ADAM Sync configuration to file: $Path"
 
 ################################################
-# define configuration data
+# update configuration data
 ################################################
 
 # update action
