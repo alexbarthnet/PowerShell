@@ -113,16 +113,21 @@ if (!$SkipStatusCheck) {
     }
 }
 
-# create exports directory
-if (![System.IO.Directory]::Exists($ExportsDirectory)) {
-    try {
-        $null = New-Item -Force -ItemType 'Directory' -Path $ExportsDirectory
-    }
-    catch {
-        Write-Warning -Message "could not create '$ExportsDirectory' log file directory: $($_.Exception.Message)"
-        throw $_
-    }
+# if WhatIf provided...
+if ($WhatIfPreference) {
+    Write-Host 'skipping export of configuretion file due to WhatIfPreference'
 }
+else {
+    # create exports directory
+    if (![System.IO.Directory]::Exists($ExportsDirectory)) {
+        try {
+            $null = New-Item -Force -ItemType 'Directory' -Path $ExportsDirectory
+        }
+        catch {
+            Write-Warning -Message "could not create '$ExportsDirectory' log file directory: $($_.Exception.Message)"
+            throw $_
+        }
+    }
 
     # define state
     $State = '{0}-for-edit' -f $Action
@@ -133,58 +138,59 @@ if (![System.IO.Directory]::Exists($ExportsDirectory)) {
     # combined directory and file name
     $Path = Join-Path -Path $ExportsDirectory -ChildPath $FileName
 
-# create working directory
-if (![System.IO.Directory]::Exists($WorkingDirectory)) {
+    # create working directory
+    if (![System.IO.Directory]::Exists($WorkingDirectory)) {
+        try {
+            $null = New-Item -Force -ItemType 'Directory' -Path $WorkingDirectory
+        }
+        catch {
+            Write-Warning -Message "could not create '$WorkingDirectory' working directory on '$Server' server: $($_.Exception.Message)"
+            throw $_
+        }
+    }
+
+    # create log files directory
+    if (![System.IO.Directory]::Exists($LogFileDirectory)) {
+        try {
+            $null = New-Item -Force -ItemType 'Directory' -Path $LogFileDirectory
+        }
+        catch {
+            Write-Warning -Message "could not create '$LogFileDirectory' log file directory: $($_.Exception.Message)"
+            throw $_
+        }
+    }
+
+    # define log file name
+    $LogFileName = '{0}_{1}_{2}_{3}_{4}_{5}.txt' -f $LogFileDateTime, $InstanceName, $State, $ComputerName, $Port, $Partition
+
+    # define log file
+    $LogFile = Join-Path -Path $LogFileDirectory -ChildPath $LogFileName
+
+    # define argument list
+    $ArgumentList = @(
+        '/{0}' -f $Action
+        $Server
+        '"{0}"' -f $Partition
+        '"{0}"' -f $Path
+        '/log'
+        '"{0}"' -f $LogFile
+    )
+
+    # report state
+    Write-Host "starting $Action of ADAM Sync configuration file for '$Partition' partition of '$InstanceName' instance name on '$Server' server"
+
+    # sync ADAM
     try {
-        $null = New-Item -Force -ItemType 'Directory' -Path $WorkingDirectory
+        Start-Process -NoNewWindow -Wait -WorkingDirectory $WorkingDirectory -FilePath 'C:\Windows\ADAM\adamsync.exe' -ArgumentList $ArgumentList
     }
     catch {
-        Write-Warning -Message "could not create '$WorkingDirectory' working directory on '$Server' server: $($_.Exception.Message)"
+        Write-Warning -Message "cannot $Action ADAM Sync configuration file: $($_.Exception.Message)"
         throw $_
     }
+
+    # report state
+    Write-Host "complete $Action of ADAM Sync configuration to file: $Path"
 }
-
-# create log files directory
-if (![System.IO.Directory]::Exists($LogFileDirectory)) {
-    try {
-        $null = New-Item -Force -ItemType 'Directory' -Path $LogFileDirectory
-    }
-    catch {
-        Write-Warning -Message "could not create '$LogFileDirectory' log file directory: $($_.Exception.Message)"
-        throw $_
-    }
-}
-
-# define log file name
-$LogFileName = '{0}_{1}_{2}_{3}_{4}_{5}.txt' -f $LogFileDateTime, $InstanceName, $State, $ComputerName, $Port, $Partition
-
-# define log file
-$LogFile = Join-Path -Path $LogFileDirectory -ChildPath $LogFileName
-
-# define argument list
-$ArgumentList = @(
-    '/{0}' -f $Action
-    $Server
-    '"{0}"' -f $Partition
-    '"{0}"' -f $Path
-    '/log'
-    '"{0}"' -f $LogFile
-)
-
-# report state
-Write-Host "starting $Action of ADAM Sync configuration file for '$Partition' partition of '$InstanceName' instance name on '$Server' server"
-
-# sync ADAM
-try {
-    Start-Process -NoNewWindow -Wait -WorkingDirectory $WorkingDirectory -FilePath 'C:\Windows\ADAM\adamsync.exe' -ArgumentList $ArgumentList
-}
-catch {
-    Write-Warning -Message "cannot $Action ADAM Sync configuration file: $($_.Exception.Message)"
-    throw $_
-}
-
-# report state
-Write-Host "complete $Action of ADAM Sync configuration to file: $Path"
 
 ################################################
 # update configuration data
