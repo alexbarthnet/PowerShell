@@ -587,62 +587,82 @@ Begin {
 
 		# create new folders if Recurse is true
 		If ($Recurse) {
+			# define sorted sets for relative paths
+			$AllRelativeSourceFolders = [System.Collections.Generic.SortedSet[System.String]]::new()
+			$AllRelativeTargetFolders = [System.Collections.Generic.SortedSet[System.String]]::new()
+			$NewRelativeSourceFolders = [System.Collections.Generic.SortedSet[System.String]]::new()
+			$NewRelativeTargetFolders = [System.Collections.Generic.SortedSet[System.String]]::new()
+			$OldRelativeSourceFolders = [System.Collections.Generic.SortedSet[System.String]]::new()
+			$OldRelativeTargetFolders = [System.Collections.Generic.SortedSet[System.String]]::new()
+
 			# if source path found...
 			If (Test-Path -Path $SourcePath -PathType Container) {
-				# retrieve path objects under source path
+				# populate sorted set with relative path of new directory objects under source path
 				try {
-					$SourceFolders = Get-ChildItem -Path $SourcePath -Recurse -Directory
+					Get-ChildItem -Path $SourcePath -Recurse -Directory | ForEach-Object { 
+						# define relative path
+						$RelativePath = $_.FullName.Replace($SourcePath, [System.String]::Empty)
+
+						# add relative path to all set only
+						$null = $AllRelativeSourceFolders.Add($RelativePath)
+
+						# if last write time newer than last sync...
+						If ($_.LastWriteTimeUtc.Ticks -ge $LastSyncDateTime.Ticks) {
+							# add relative path to new set
+							$null = $NewRelativeSourceFolders.Add($RelativePath)
+						}
+						# if last write time not newer than last sync...
+						else {
+							# add relative path to old set
+							$null = $OldRelativeSourceFolders.Add($RelativePath)
+						}
+					}
 				}
 				catch {
 					Write-Warning -Message "could not retrieve folders from path: '$SourcePath'"
 					Return $_
 				}
 			}
-			# if source path not found...
-			else {
-				# return empty array
-				$SourceFolders = @()
-			}
 
 			# if target path found...
 			If (Test-Path -Path $TargetPath -PathType Container) {
-				# retrieve path objects under target path
+				# populate sorted set with relative path of new directory objects under target path
 				try {
-					$TargetFolders = Get-ChildItem -Path $TargetPath -Recurse -Directory
+					Get-ChildItem -Path $TargetPath -Recurse -Directory | ForEach-Object {
+						# define relative path
+						$RelativePath = $_.FullName.Replace($TargetPath, [System.String]::Empty)
+
+						# add relative path to all set only
+						$null = $AllRelativeSourceFolders.Add($RelativePath)
+
+						# if last write time newer than last sync...
+						If ($_.LastWriteTimeUtc.Ticks -ge $LastSyncDateTime.Ticks) {
+							# add relative path to new set
+							$null = $NewRelativeSourceFolders.Add($RelativePath)
+						}
+						# if last write time not newer than last sync...
+						else {
+							# add relative path to old set
+							$null = $OldRelativeSourceFolders.Add($RelativePath)
+						}
+					}
 				}
 				catch {
 					Write-Warning -Message "could not retrieve folders from path: '$TargetPath'"
 					Return $_
 				}
 			}
-			# if target path not found...
-			else {
-				# return empty array
-				$TargetFolders = @()
-			}
-
-			# retrieve fullname of new paths
-			$NewSourceFolders = $SourceFolders | Where-Object { $_.LastWriteTimeUtc.Ticks -ge $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
-			$NewTargetFolders = $TargetFolders | Where-Object { $_.LastWriteTimeUtc.Ticks -ge $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
-
-			# trim new paths to relative paths
-			If ($NewSourceFolders.Count) { $RelativeSourceFolders = $NewSourceFolders.Replace($SourcePath, $null) } Else { $RelativeSourceFolders = @() }
-			If ($NewTargetFolders.Count) { $RelativeTargetFolders = $NewTargetFolders.Replace($TargetPath, $null) } Else { $RelativeTargetFolders = @() }
 
 			# retrieve folders in both Path and Destination
-			$MatchedFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$RelativeSourceFolders, [string[]]$RelativeTargetFolders))
-
-			# loop through matched folders
-			foreach ($MatchedFolder in $MatchedFolders) {
-				# add path to set
-				$null = $PathsCheckedInSource.Add($MatchedFolder)
-				$null = $PathsCheckedInTarget.Add($MatchedFolder)
-			}
-
-			# create folders in Destination missing from Path
+			$MatchedFolders = [System.Collections.Generic.SortedSet[System.String]]::new([System.Linq.Enumerable]::Intersect($AllRelativeSourceFolders, $AllRelativeTargetFolders))
+			
+			# create folders in Destination that are missing from Path
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
-				# retrieve folders that are missing from Destination
-				$MissingRelativeTargetFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeSourceFolders, [string[]]$RelativeTargetFolders))
+				# retrieve folders in Destination that are missing from Path
+				$MissingRelativeTargetFolders = [System.Collections.Generic.SortedSet[System.String]]::new([System.Linq.Enumerable]::Except($NewRelativeSourceFolders, $MatchedFolders))
+
+				# report count
+				Write-Host "Found '$($MissingRelativeTargetFolders.Count)' folder(s) to create in path: '$TargetPath'"
 
 				# loop through missing relative target folders
 				ForEach ($MissingRelativeTargetFolder in $MissingRelativeTargetFolders) {
@@ -665,10 +685,13 @@ Begin {
 				}
 			}
 
-			# create folders in Path missing from Destination
+			# create folders in Path that are missing from Destination
 			If ($Direction -eq 'Both') {
-				# retrieve folders that are missing from Path
-				$MissingRelativeSourceFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeTargetFolders, [string[]]$RelativeSourceFolders))
+				# retrieve folders in Path that are missing from Destination
+				$MissingRelativeSourceFolders = [System.Collections.Generic.SortedSet[System.String]]::new([System.Linq.Enumerable]::Except($NewRelativeTargetFolders, $MatchedFolders))
+
+				# report count
+				Write-Host "Found '$($MissingRelativeSourceFolders.Count)' folder(s) to create in path: '$SourcePath'"
 
 				# loop through missing relative source folders
 				ForEach ($MissingRelativeSourceFolder in $MissingRelativeSourceFolders) {
@@ -694,52 +717,92 @@ Begin {
 
 		# copy new files if SkipFiles is false
 		If (-not $SkipFiles) {
+			# define sorted sets for relative paths
+			$AllRelativeSourceFiles = [System.Collections.Generic.SortedSet[System.String]]::new()
+			$AllRelativeTargetFiles = [System.Collections.Generic.SortedSet[System.String]]::new()
+			$NewRelativeSourceFiles = [System.Collections.Generic.SortedSet[System.String]]::new()
+			$NewRelativeTargetFiles = [System.Collections.Generic.SortedSet[System.String]]::new()
+			$OldRelativeSourceFiles = [System.Collections.Generic.SortedSet[System.String]]::new()
+			$OldRelativeTargetFiles = [System.Collections.Generic.SortedSet[System.String]]::new()
+
+			# define sorted lists for datetimes
+			$DateTimeForSourceFiles = [System.Collections.Generic.SortedList[System.String, System.DateTime]]::new()
+			$DateTimeForTargetFiles = [System.Collections.Generic.SortedList[System.String, System.DateTime]]::new()
+
 			# if source path found...
 			If (Test-Path -Path $SourcePath -PathType Container) {
-				# retrieve files under source path
+				# populate sorted set with relative path of file objects under source path
 				try {
-					$SourceItems = Get-ChildItem -Path $SourcePath -Recurse:$Recurse -File
+					Get-ChildItem -Path $SourcePath -Recurse:$Recurse -File | ForEach-Object { 
+						# define relative path
+						$RelativePath = $_.FullName.Replace($SourcePath, [System.String]::Empty)
+
+						# add relative path and datetime to list
+						$DateTimeForSourceFiles.Add($RelativePath, $_.LastWriteTimeUtc)
+
+						# add relative path to all set only
+						$null = $AllRelativeSourceFiles.Add($RelativePath)
+
+						# if last write time newer than last sync...
+						If ($_.LastWriteTimeUtc.Ticks -ge $LastSyncDateTime.Ticks) {
+							# add relative path to new set
+							$null = $NewRelativeSourceFiles.Add($RelativePath)
+						}
+						# if last write time not newer than last sync...
+						else {
+							# add relative path to old
+							$null = $OldRelativeSourceFiles.Add($RelativePath)
+						}
+					}
 				}
 				catch {
-					Write-Warning -Message "could not retrieve file from path: '$SourcePath'"
+					Write-Warning -Message "could not retrieve files from path: '$SourcePath'"
 					Return $_
 				}
-			}
-			# if source path not found...
-			else {
-				# return empty array
-				$SourceItems = @()
 			}
 
 			# if target path found...
 			If (Test-Path -Path $TargetPath -PathType Container) {
-				# retrieve files under target path
+				# populate sorted set with relative path of file objects under target path
 				try {
-					$TargetItems = Get-ChildItem -Path $TargetPath -Recurse:$Recurse -File
+					Get-ChildItem -Path $TargetPath -Recurse:$Recurse -File | ForEach-Object { 
+						# define relative path
+						$RelativePath = $_.FullName.Replace($TargetPath, [System.String]::Empty)
+
+						# add relative path and datetime to list
+						$DateTimeForTargetFiles.Add($RelativePath, $_.LastWriteTimeUtc)
+
+						# add relative path to all set only
+						$null = $AllRelativeTargetFiles.Add($RelativePath)
+
+						# if last write time newer than last sync...
+						If ($_.LastWriteTimeUtc.Ticks -ge $LastSyncDateTime.Ticks) {
+							# add relative path to new set
+							$null = $NewRelativeTargetFiles.Add($RelativePath)
+						}
+						# if last write time not newer than last sync...
+						else {
+							# add relative path to old
+							$null = $OldRelativeTargetFiles.Add($RelativePath)
+						}
+					}
 				}
 				catch {
 					Write-Warning -Message "could not retrieve files from path: '$TargetPath'"
 					Return $_
 				}
 			}
-			# if target path not found...
-			else {
-				# return empty array
-				$TargetItems = @()
-			}
 
-			# retrieve fullname of new files
-			$NewSourceFiles = $SourceItems | Where-Object { $_.LastWriteTimeUtc.Ticks -ge $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
-			$NewTargetFiles = $TargetItems | Where-Object { $_.LastWriteTimeUtc.Ticks -ge $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
-
-			# trim new files to relative paths
-			If ($NewSourceFiles.Count) { $RelativeSourceFiles = $NewSourceFiles.Replace($SourcePath, $null) } Else { $RelativeSourceFiles = @() }
-			If ($NewTargetFiles.Count) { $RelativeTargetFiles = $NewTargetFiles.Replace($TargetPath, $null) } Else { $RelativeTargetFiles = @() }
-
-			# copy new files from Path to Destination
+			# retrieve files in both Path and Destination
+			$MatchedFiles = [System.Collections.Generic.SortedSet[System.String]]::new([System.Linq.Enumerable]::Intersect($AllRelativeSourceFiles, $AllRelativeTargetFiles))
+			
+			# copy files in Path that are missing from Destination
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
-				# retrieve files that are missing from Destination
-				$MissingRelativeTargetFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeSourceFiles, [string[]]$RelativeTargetFiles))
+				# retrieve files in Path that are missing from Destination
+				$MissingRelativeTargetFiles = [System.Collections.Generic.SortedSet[System.String]]::new([System.Linq.Enumerable]::Except($NewRelativeSourceFiles, $MatchedFiles))
+
+				# report count
+				Write-Host "Found '$($MissingRelativeTargetFiles.Count)' files(s) to copy to path: '$TargetPath'"
 
 				# loop through missing relative target folders
 				ForEach ($MissingRelativeTargetFile in $MissingRelativeTargetFiles) {
@@ -766,7 +829,10 @@ Begin {
 			# copy new files from Destination to Path
 			If ($Direction -eq 'Both') {
 				# retrieve files that are missing from Path
-				$MissingRelativeSourceFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$RelativeTargetFiles, [string[]]$RelativeSourceFiles))
+				$MissingRelativeSourceFiles = [System.Collections.Generic.SortedSet[System.String]]::new([System.Linq.Enumerable]::Except($NewRelativeTargetFiles, $MatchedFiles))
+
+				# report count
+				Write-Host "Found '$($MissingRelativeSourceFiles.Count)' files(s) to copy to path: '$SourcePath'"
 
 				# loop through missing relative source files
 				ForEach ($MissingRelativeSourceFile in $MissingRelativeSourceFiles) {
@@ -793,23 +859,16 @@ Begin {
 
 		# process files if files are in scope (SkipExisting and SkipFiles are false)
 		If (-not $SkipExisting -and -not $SkipFiles) {
-			# retrieve fullname of all files
-			$AllSourceFiles = $SourceItems | Select-Object -ExpandProperty 'FullName'
-			$AllTargetFiles = $TargetItems | Select-Object -ExpandProperty 'FullName'
-
-			# trim all files to relative paths
-			If ($AllSourceFiles.Count) { $AllRelativeSourceFiles = $AllSourceFiles.Replace($SourcePath, $null) } Else { $AllRelativeSourceFiles = @() }
-			If ($AllTargetFiles.Count) { $AllRelativeTargetFiles = $AllTargetFiles.Replace($TargetPath, $null) } Else { $AllRelativeTargetFiles = @() }
-
-			# retrieve files in both Path and Destination
-			$MatchedFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$AllRelativeSourceFiles, [string[]]$AllRelativeTargetFiles))
+			# report count
+			Write-Host "Found '$($MatchedFiles.Count)' files(s) to compare"
 
 			# copy any present files when hash or lastwritetime are different
 			:NextMatchedFile ForEach ($MatchedFile in $MatchedFiles) {
 				# define file path
 				$MatchedSourcePath = Join-Path -Path $SourcePath -ChildPath $MatchedFile
 				$MatchedTargetPath = Join-Path -Path $TargetPath -ChildPath $MatchedFile
-				# compare files by hash if requested
+
+				# if compare files by hash requested
 				If ($CheckHash) {
 					# if file in Path and Direction have same file hash
 					If ((Get-FileHash -Path $MatchedSourcePath).Hash -eq (Get-FileHash -Path $MatchedTargetPath).Hash) {
@@ -824,13 +883,10 @@ Begin {
 						Continue NextMatchedFile
 					}
 				}
-				# retrieve files
-				$MatchedSourceItem = $SourceItems.Where({ $_.FullName -eq $MatchedSourcePath })
-				$MatchedTargetItem = $TargetItems.Where({ $_.FullName -eq $MatchedTargetPath })
-				# compare files by last
-				If (-not $CheckHash) {
+				# if compare files by hash not requested
+				else {
 					# if file in Path and Direction have same LastWriteTimeUtc
-					If ($MatchedSourceItem.LastWriteTimeUtc -eq $MatchedTargetItem.LastWriteTimeUtc) {
+					If ($DateTimeForSourceFiles[$MatchedFile] -eq $DateTimeForTargetFiles[$MatchedFile]) {
 						# report state
 						Write-Verbose -Verbose:$VerbosePreference -Message "Skipping '$MatchedSourcePath' as '$MatchedTargetPath' has same LastWriteTimeUtc"
 
@@ -842,25 +898,9 @@ Begin {
 						Continue NextMatchedFile
 					}
 				}
-				# if file in Path is newer or Direction is not 'Both'
-				If ($MatchedSourceItem.LastWriteTimeUtc -gt $MatchedTargetItem.LastWriteTimeUtc -or $Direction -ne 'Both') {
-					# copy file from Path to Destination
-					If ($PSCmdlet.ShouldProcess("source: $MatchedSourcePath, target: $MatchedTargetPath", 'copy file')) {
-						Try {
-							Copy-Item -Path $MatchedSourcePath -Destination $MatchedTargetPath -Force
-						}
-						Catch {
-							Write-Warning "could not copy file '$MatchedSourcePath' to file '$MatchedTargetPath'"
-							Continue NextMatchedFile
-						}
-					}
 
-					# add file to sets
-					$null = $FilesCheckedInSource.Add($MatchedFile)
-					$null = $FilesUpdatedInTarget.Add($MatchedFile)
-				}
-				# if file in Destination is newer and Direction is not 'Both'
-				ElseIf ($MatchedSourceItem.LastWriteTimeUtc -lt $MatchedTargetItem.LastWriteTimeUtc -and $Direction -eq 'Both') {
+				# if file in Destination is newer and Direction is 'Both'
+				If ($DateTimeForTargetFiles[$MatchedFile] -gt $DateTimeForSourceFiles[$MatchedFile] -and $Direction -eq 'Both') {
 					# copy file from Destination to Path
 					If ($PSCmdlet.ShouldProcess("source: $MatchedTargetPath, target: $MatchedSourcePath", 'copy file')) {
 						Try {
@@ -876,67 +916,35 @@ Begin {
 					$null = $FilesUpdatedInSource.Add($MatchedFile)
 					$null = $FilesCheckedInTarget.Add($MatchedFile)
 				}
+				# if file in Destination is older and Direction is not 'Both'
+				else {
+					# copy file from Path to Destination
+					If ($PSCmdlet.ShouldProcess("source: $MatchedSourcePath, target: $MatchedTargetPath", 'copy file')) {
+						Try {
+							Copy-Item -Path $MatchedSourcePath -Destination $MatchedTargetPath -Force
+						}
+						Catch {
+							Write-Warning "could not copy file '$MatchedSourcePath' to file '$MatchedTargetPath'"
+							Continue NextMatchedFile
+						}
+					}
+
+					# add file to sets
+					$null = $FilesCheckedInSource.Add($MatchedFile)
+					$null = $FilesUpdatedInTarget.Add($MatchedFile)
+				}
 			}
 		}
 
 		# remove old files if SkipDelete is false and files are in scope (SkipExisting and SkipFiles are false)
 		If (-not $SkipDelete -and (-not $SkipExisting -and -not $SkipFiles)) {
-			# if source path found...
-			If (Test-Path -Path $SourcePath -PathType Container) {
-				# retrieve files under source path
-				try {
-					$SourceItems = Get-ChildItem -Path $SourcePath -Recurse:$Recurse -File
-				}
-				catch {
-					Write-Warning -Message "could not retrieve file from path: '$SourcePath'"
-					Return $_
-				}
-			}
-			# if source path not found...
-			else {
-				# return empty array
-				$SourceItems = @()
-			}
-
-			# if target path found...
-			If (Test-Path -Path $TargetPath -PathType Container) {
-				# retrieve files under target path
-				try {
-					$TargetItems = Get-ChildItem -Path $TargetPath -Recurse:$Recurse -File
-				}
-				catch {
-					Write-Warning -Message "could not retrieve files from path: '$TargetPath'"
-					Return $_
-				}
-			}
-			# if target path not found...
-			else {
-				# return empty array
-				$TargetItems = @()
-			}
-
-			# retrieve fullname of files
-			$AllSourceFiles = $SourceItems | Select-Object -ExpandProperty 'FullName'
-			$AllTargetFiles = $TargetItems | Select-Object -ExpandProperty 'FullName'
-			$OldSourceFiles = $SourceItems | Where-Object { $_.LastWriteTimeUtc.Ticks -lt $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
-			$OldTargetFiles = $TargetItems | Where-Object { $_.LastWriteTimeUtc.Ticks -lt $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
-
-			# trim files to relative paths
-			If ($AllSourceFiles.Count) { $AllRelativeSourceFiles = $AllSourceFiles.Replace($SourcePath, $null) } Else { $AllRelativeSourceFiles = @() }
-			If ($AllTargetFiles.Count) { $AllRelativeTargetFiles = $AllTargetFiles.Replace($TargetPath, $null) } Else { $AllRelativeTargetFiles = @() }
-			If ($OldSourceFiles.Count) { $OldRelativeSourceFiles = $OldSourceFiles.Replace($SourcePath, $null) } Else { $OldRelativeSourceFiles = @() }
-			If ($OldTargetFiles.Count) { $OldRelativeTargetFiles = $OldTargetFiles.Replace($TargetPath, $null) } Else { $OldRelativeTargetFiles = @() }
-
-			# retrieve files in both Path and Destination
-			$MatchedFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$AllRelativeSourceFiles, [string[]]$AllRelativeTargetFiles))
-
 			# remove old files from Destination
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
 				# retrieve old files that are only in Destination
-				$ExpiredRelativeTargetFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeTargetFiles, $MatchedFiles))
+				$ExpiredRelativeTargetFiles = [System.Collections.Generic.SortedSet[System.String]]::new([System.Linq.Enumerable]::Except($OldRelativeTargetFiles, $MatchedFiles))
 
 				# loop through expired relative target files
-				ForEach ($ExpiredRelativeTargetFile in $ExpiredRelativeTargetFiles) {
+				ForEach ($ExpiredRelativeTargetFile in $ExpiredRelativeTargetFiles.Reverse()) {
 					# define expired target file
 					$ExpiredTargetFile = Join-Path -Path $TargetPath -ChildPath $ExpiredRelativeTargetFile
 
@@ -959,10 +967,10 @@ Begin {
 			# remove old files from Path
 			If ($Direction -eq 'Reverse' -or $Direction -eq 'Both') {
 				# retrieve old files that are only in Path
-				$ExpiredRelativeSourceFiles = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeSourceFiles, $MatchedFiles))
+				$ExpiredRelativeSourceFiles = [System.Collections.Generic.SortedSet[System.String]]::new([System.Linq.Enumerable]::Except($OldRelativeSourceFiles, $MatchedFiles))
 
-				# loop through expired relative source files
-				ForEach ($ExpiredRelativeSourceFile in $ExpiredRelativeSourceFiles) {
+				# loop through expired relative source files in reverse
+				ForEach ($ExpiredRelativeSourceFile in $ExpiredRelativeSourceFiles.Reverse()) {
 					# define expired source file
 					$ExpiredSourceFile = Join-Path -Path $SourcePath -ChildPath $ExpiredRelativeSourceFile
 
@@ -985,62 +993,13 @@ Begin {
 
 		# remove old paths if SkipDelete is files and folders are in scope (SkipExisting is false and Recurse is true)
 		If (-not $SkipDelete -and -not $SkipExisting -and $Recurse) {
-			# if source path found...
-			If (Test-Path -Path $SourcePath -PathType Container) {
-				# retrieve path objects under source path
-				try {
-					$SourceFolders = Get-ChildItem -Path $SourcePath -Recurse -Directory
-				}
-				catch {
-					Write-Warning -Message "could not retrieve folders from path: '$SourcePath'"
-					Return $_
-				}
-			}
-			# if source path not found...
-			else {
-				# return empty array
-				$SourceFolders = @()
-			}
-
-			# if target path found...
-			If (Test-Path -Path $TargetPath -PathType Container) {
-				# retrieve path objects under target path
-				try {
-					$TargetFolders = Get-ChildItem -Path $TargetPath -Recurse -Directory
-				}
-				catch {
-					Write-Warning -Message "could not retrieve folders from path: '$TargetPath'"
-					Return $_
-				}
-			}
-			# if target path not found...
-			else {
-				# return empty array
-				$TargetFolders = @()
-			}
-
-			# retrieve fullname of paths
-			$AllSourceFolders = $SourceFolders | Select-Object -ExpandProperty 'FullName'
-			$AllTargetFolders = $TargetFolders | Select-Object -ExpandProperty 'FullName'
-			$OldSourceFolders = $SourceFolders | Where-Object { $_.LastWriteTimeUtc.Ticks -lt $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
-			$OldTargetFolders = $TargetFolders | Where-Object { $_.LastWriteTimeUtc.Ticks -lt $LastSyncDateTime.Ticks } | Select-Object -ExpandProperty 'FullName'
-
-			# trim paths to relative paths
-			If ($AllSourceFolders.Count) { $AllRelativeSourceFolders = $AllSourceFolders.Replace($SourcePath, $null) } Else { $AllRelativeSourceFolders = @() }
-			If ($AllTargetFolders.Count) { $AllRelativeTargetFolders = $AllTargetFolders.Replace($TargetPath, $null) } Else { $AllRelativeTargetFolders = @() }
-			If ($OldSourceFolders.Count) { $OldRelativeSourceFolders = $OldSourceFolders.Replace($SourcePath, $null) } Else { $OldRelativeSourceFolders = @() }
-			If ($OldTargetFolders.Count) { $OldRelativeTargetFolders = $OldTargetFolders.Replace($TargetPath, $null) } Else { $OldRelativeTargetFolders = @() }
-
-			# retrieve paths in both Path and Destination
-			$MatchedFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Intersect([string[]]$AllRelativeSourceFolders, [string[]]$AllRelativeTargetFolders))
-
 			# remove old paths from Destination
 			If ($Direction -eq 'Forward' -or $Direction -eq 'Both') {
 				# retrieve old paths only in Destination
-				$ExpiredRelativeTargetFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeTargetFolders, $MatchedFolders))
+				$ExpiredRelativeTargetFolders = [System.Collections.Generic.SortedSet[System.String]]::new([System.Linq.Enumerable]::Except($OldRelativeTargetFolders, $MatchedFolders))
 
-				# loop through old target folders
-				ForEach ($ExpiredRelativeTargetFolder in $ExpiredRelativeTargetFolders) {
+				# loop through old target folders in reverse
+				ForEach ($ExpiredRelativeTargetFolder in $ExpiredRelativeTargetFolders.Reverse()) {
 					# define expired target folder
 					$ExpiredTargetFolder = Join-Path -Path $TargetPath -ChildPath $ExpiredRelativeTargetFolder
 
@@ -1063,10 +1022,10 @@ Begin {
 			# remove old paths from Path
 			If ($Direction -eq 'Reverse' -or $Direction -eq 'Both') {
 				# retrieve old paths only in Path
-				$ExpiredRelativeSourceFolders = [System.Linq.Enumerable]::ToList([System.Linq.Enumerable]::Except([string[]]$OldRelativeSourceFolders, $MatchedFolders))
+				$ExpiredRelativeSourceFolders = [System.Collections.Generic.SortedSet[System.String]]::new([System.Linq.Enumerable]::Except($OldRelativeSourceFolders, $MatchedFolders))
 
-				# loop through expired relative source folders
-				ForEach ($ExpiredRelativeSourceFolder in $ExpiredRelativeSourceFolders) {
+				# loop through expired relative source folders in reverse
+				ForEach ($ExpiredRelativeSourceFolder in $ExpiredRelativeSourceFolders.Reverse()) {
 					# define expired source folder
 					$ExpiredSourceFolder = Join-Path -Path $SourcePath -ChildPath $ExpiredRelativeSourceFolder
 
