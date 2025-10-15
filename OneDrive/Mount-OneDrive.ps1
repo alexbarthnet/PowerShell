@@ -6,6 +6,7 @@ param(
 	[switch]$WaitForOneDrive,
 	[switch]$ClearHiddenItemsFromEmptyFolders,
 	[switch]$CreateMissingFolders,
+	[string[]]$ProhibitedLocalFolders = 'AppData',
 	[string[]]$ExcludeOneDriveFolders,
 	[string[]]$IncludeOneDriveFolders,
 	[string[]]$WaitForOneDriveFolders
@@ -152,6 +153,12 @@ catch {
 			Write-Host "...skipped '$OneDriveFolderBaseName' folder; folder name is not in IncludeOneDriveFolders"
 			continue NextOneDriveFolder
 		}
+	}
+
+	# check if OneDrive folder base name matches the prohibited list
+	if ($OneDriveFolderBaseName -in $ProhibitedLocalFolders -or $OneDriveFolderFullName -in $ProhibitedLocalFolders -or $ExistingFolderFullName -in $ProhibitedLocalFolders) {
+		Write-Host "...skipped '$OneDriveFolderBaseName' folder; folder name is in ProhibitedLocalFolders"
+		continue NextOneDriveFolder
 	}
 
 	# check if OneDrive folder base name matches the exclude list
