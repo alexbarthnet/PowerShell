@@ -1712,6 +1712,7 @@ Begin {
 			[string]$IPAddress,
 			[string]$MacAddress,
 			[string]$Router,
+			[string[]]$DnsServer,
 			[boolean]$ReservationRequired = $true
 		)
 
@@ -1847,8 +1848,8 @@ Begin {
 			Write-Host ("$Hostname,$ComputerName,$Name - ...created DHCP reservation")
 		}
 
-		# if router provided...
-		If ($PSBoundParameters.ContainsKey('Router') -and $null -ne $Router) {
+		# if options provided...
+		If ($PSBoundParameters.ContainsKey('Router') -or $PSBoundParameters.ContainsKey('DnsServer')) {
 			# define parameters for Get-DhcpServerv4OptionValue
 			$GetDhcpServerv4OptionValue = @{
 				ComputerName = $ComputerName
@@ -1858,46 +1859,102 @@ Begin {
 
 			# retrieve options
 			Try {
-				Write-Host ("$Hostname,$ComputerName,$Name - checking for DHCP option for router...")
-				$DhcpServerv4OptionValue = Get-DhcpServerv4OptionValue @GetDhcpServerv4OptionValue
+				Write-Host ("$Hostname,$ComputerName,$Name - retrieving existing DHCP options...")
+				$DhcpServerv4OptionValues = Get-DhcpServerv4OptionValue @GetDhcpServerv4OptionValue
 			}
 			Catch {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving DHCP options")
 				Throw $_
 			}
 
-			# filter DHCP options
-			$DhcpServerv4OptionValue = $DhcpServerv4OptionValue | Where-Object { $_.Name -eq 'Router' }
+			# if router provided...
+			If ($PSBoundParameters.ContainsKey('Router') -and $null -ne $Router) {
+				# filter DHCP options
+				$DhcpServerv4OptionValue = $DhcpServerv4OptionValues | Where-Object { $_.Name -eq 'Router' }
 
-			# if DHPC option exists
-			If ($DhcpServerv4OptionValue.Value -eq $Router ) {
-				# declare state
-				Write-Host ("$Hostname,$ComputerName,$Name - ...existing DHCP option for router found")
+				# if DHPC option exists
+				If ($DhcpServerv4OptionValue.Value -eq $Router ) {
+					# declare state
+					Write-Host ("$Hostname,$ComputerName,$Name - ...existing DHCP option for router found")
+				}
+				Else {
+					# if value is empty...
+					If ([System.String]::IsNullOrEmpty($DhcpServerv4OptionValue)) {
+						# declare state
+						Write-Host ("$Hostname,$ComputerName,$Name - ...existing DHCP option for router not found")
+					}
+					# if value is not empty...
+					Else {
+						# declare state
+						Write-Host ("$Hostname,$ComputerName,$Name - ...existing DHCP option for router not correct")
+					}
+
+					# define parameters for Get-DhcpServerv4OptionValue
+					$SetDhcpServerv4OptionValue = @{
+						ComputerName = $ComputerName
+						IPAddress    = $IPAddress
+						Router       = $Router
+						ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+					}
+
+					# update options for IP address
+					Try {
+						Write-Host ("$Hostname,$ComputerName,$Name - setting DHCP option for router...")
+						Set-DhcpServerv4OptionValue @SetDhcpServerv4OptionValue
+					}
+					Catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: setting DHCP option for router")
+						Throw $_
+					}
+
+					# declare action and set repliation required
+					Write-Host ("$Hostname,$ComputerName,$Name - ...set DHCP option for router: $Router")
+				}
 			}
-			Else {
-				# declare state
-				Write-Host ("$Hostname,$ComputerName,$Name - ...existing DHCP option for router not found")
 
-				# define parameters for Get-DhcpServerv4OptionValue
-				$SetDhcpServerv4OptionValue = @{
-					ComputerName = $ComputerName
-					IPAddress    = $IPAddress
-					Router       = $Router
-					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
-				}
+			# if name servers provided...
+			If ($PSBoundParameters.ContainsKey('DnsServer') -and $null -ne $DnsServer) {
+				# filter DHCP options
+				$DhcpServerv4OptionValue = $DhcpServerv4OptionValues | Where-Object { $_.Name -eq 'Name Servers' }
 
-				# update options for IP address
-				Try {
-					Write-Host ("$Hostname,$ComputerName,$Name - creating DHCP option for router...")
-					Set-DhcpServerv4OptionValue @SetDhcpServerv4OptionValue
+				# if DHCP option already configured
+				If ($DhcpServerv4OptionValue.Value -as [string] -eq $DnsServer -as [string]) {
+					# declare state
+					Write-Host ("$Hostname,$ComputerName,$Name - ...existing DHCP option for name servers already configured")
 				}
-				Catch {
-					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: creating DHCP option for router")
-					Throw $_
-				}
+				Else {
+					# if value is empty...
+					If ([System.String]::IsNullOrEmpty($DhcpServerv4OptionValue)) {
+						# declare state
+						Write-Host ("$Hostname,$ComputerName,$Name - ...existing DHCP option for name servers not found")
+					}
+					# if value is not empty...
+					Else {
+						# declare state
+						Write-Host ("$Hostname,$ComputerName,$Name - ...existing DHCP option for name servers not correct")
+					}
 
-				# declare action and set repliation required
-				Write-Host ("$Hostname,$ComputerName,$Name - ...created DHCP option for router: $Router")
+					# define parameters for Get-DhcpServerv4OptionValue
+					$SetDhcpServerv4OptionValue = @{
+						ComputerName = $ComputerName
+						IPAddress    = $IPAddress
+						DnsServer    = $DnsServer
+						ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+					}
+
+					# update options for IP address
+					Try {
+						Write-Host ("$Hostname,$ComputerName,$Name - setting DHCP option for name servers...")
+						Set-DhcpServerv4OptionValue @SetDhcpServerv4OptionValue
+					}
+					Catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: setting DHCP option for name servers")
+						Throw $_
+					}
+
+					# declare action and set repliation required
+					Write-Host ("$Hostname,$ComputerName,$Name - ...set DHCP option for name servers: $($DnsServer -join ',')")
+				}
 			}
 		}
 
@@ -4392,9 +4449,13 @@ Process {
 					}
 
 					# define optional parameters for DHCP reservation
-					If (![System.String]::IsNullOrEmpty($VMNetworkAdapterEntry.Router)) {
-						$AddVMNetworkAdapterToDHCP['Router'] = $VMNetworkAdapterEntry.Router
+					If (![System.String]::IsNullOrEmpty($VMNetworkAdapterEntry.IPGateway)) {
+						$AddVMNetworkAdapterToDHCP['Router'] = $VMNetworkAdapterEntry.IPGateway
 					}
+					If (![System.String]::IsNullOrEmpty($VMNetworkAdapterEntry.DnsServers)) {
+						$AddVMNetworkAdapterToDHCP['DnsServer'] = $VMNetworkAdapterEntry.DnsServers
+					}
+
 					# create DHCP reservation
 					Try {
 						Add-VMNetworkAdapterToDHCP @AddVMNetworkAdapterToDHCP
