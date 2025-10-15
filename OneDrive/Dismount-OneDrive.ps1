@@ -5,7 +5,9 @@ Param(
 	[string]$Identity,
 	[switch]$WaitForOneDrive,
 	[switch]$RestoreFolders,
-	[string[]]$FoldersToRestore
+	[string[]]$FoldersToDismount,
+	[string[]]$FoldersToRestore,
+	[string[]]$FoldersToRetain
 )
 
 # check user environment variable for the OneDrive path
@@ -121,96 +123,116 @@ if ($OneDrive.Count -eq 0) {
 	}
 }
 
-# report OneDrive container:
+# report OneDrive container
 Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 
-# define the default OneDrive excluded folders list
-$FoldersToRestore_default = @()
-$FoldersToRestore_default += 'Desktop'
-$FoldersToRestore_default += 'Documents'
-$FoldersToRestore_default += 'Downloads'
-$FoldersToRestore_default += 'Music'
-$FoldersToRestore_default += 'Pictures'
-$FoldersToRestore_default += 'Videos'
+# report state
+Write-Host 'Searching for folders junctioned to OneDrive container...'
 
-# define OneDrive directories that will *NOT* be un-junctioned
-If ($RestoreFolders) {
-	Write-Output ('Checking the excluded folders...')
-	If ($FoldersToRestore.Count -ge 1) {
-		ForEach ($FolderToRestore in $FoldersToRestore) {
-			$FolderToRestore_path = Join-Path -Path $onedrive_directory -ChildPath $FolderToRestore
-			If (Test-Path $FolderToRestore_path) {
-				Write-Output ("`t Located: $FolderToRestore_path")
-			}
-			Else {
-				Write-Output ("`t Missing: $FolderToRestore_path")
-				Write-Output ('WARNING: the folder above was defined in the FolderToExcludes parameter but not found in OneDrive, exiting!')
-				Return
-			}
-		}
-	}
-	Else {
-		Write-Output ('NOTICE: no restore folders were explicitly defined')
-		Write-Output ('...the following default folders will be restored from junctions:')
-		$FoldersToRestore = $FoldersToRestore_default
-		ForEach ($FolderToRestore in $FoldersToRestore) {
-			$FolderToRestore_path = Join-Path -Path $onedrive_directory -ChildPath $FolderToRestore
-			Write-Output ("`t $FolderToRestore_path")
-		}
-		# insert warning here!
-	}
+# retrieve folders in profile directory junctioned to OneDrive container
+$JunctionedFolders = Get-ChildItem -Path $env:USERPROFILE | Where-Object { $_.PSIsContainer -and $_.LinkType -eq 'Junction' -and $_.Target -match "^$($OneDrive.FullName)" }
+
+# if no junctioned folders found....
+if ($JunctionedFolders.Count -eq 0) {
+	Write-Host "...no folders in user profile junctioned to OneDrive"
+	return
 }
 
-# buffer output
-Write-Output "`n"
-Write-Output ('-----')
-
-# retrieve junctions in profile directory
-$folders_junctioned = Get-ChildItem -Path $env:USERPROFILE | Where-Object { $_.PSIsContainer -and $_.LinkType -eq 'Junction' -and $_.Target -match $onedrive_directory.Name }
-
-# loop through directories inside profile
-ForEach ($folder_junctioned in $folders_junctioned) {
+# loop through junctioned folders
+:NextOneDriveFolder foreach ($JunctionedFolder in $JunctionedFolders) {
 	# define variables and declare folder
-	$folder_basename = ($folder_junctioned.BaseName)
-	$folder_fullname = ($folder_junctioned.FullName)
-	$folder_target = ($folder_junctioned.Target)
-	Write-Output (' ')
-	Write-Output ("Found OneDrive folder: '" + $folder_fullname + "'")
+	$JunctionedFolderBaseName = $JunctionedFolder.BaseName
+	$JunctionedFolderFullName = $JunctionedFolder.FullName
+	$JunctionedTargetFullName = $JunctionedFolder.Target
+
+	# report state
+	Write-Host "Found junctioned folder: $JunctionedFolderBaseName"
+
+	# check if junctioned folder name matches the retain list
+	if ($JunctionedFolderBaseName -in $FoldersToRetain -or $JunctionedFolderFullName -in $FoldersToRetain -or $JunctionedTargetFullName -in $FoldersToRetain) {
+		Write-Host "...skipped '$JunctionedFolderBaseName' folder; folder name is in FoldersToRetain"
+		continue NextOneDriveFolder
+	}
 
 	# remove junction
 	Try {
-		# $_.Delete()
-		Invoke-Expression -Command "fsutil reparsepoint delete $folder_fullname"
-		Write-Output ("...'" + $folder_basename + "' removing junction!")
+		Invoke-Expression -Command "fsutil reparsepoint delete $JunctionedFolderFullName"
+		Write-Host "...removed junction of '$JunctionedFolderFullName' folder to $JunctionedTargetFullName' folder"
 	}
 	Catch {
-		Write-Output ('ERROR: the junction above could not be removed, exiting!')
-		Return
+		Write-Warning -Message "could not remove junction from '$JunctionedFolderFullName' folder"
+		return $_
 	}
 
-	# restore contents of junctions to original folders
-	If ($RestoreFolders) {
-		If ($FoldersToRestore -contains $folder_basename ) {
-			Write-Output ("...'" + $folder_basename + "' restoring contents...")
-			$path_items = Get-ChildItem -Path $folder_target -Recurse -Force
-			$path_items | ForEach-Object {
-				$path_old = $_.FullName
-				$path_new = $_.FullName.Replace($folder_target, $folder_fullname)
-				Try {
-					Write-Output ("... - restoring '$path_new'...")
-					Copy-Item -Path $path_old -Destination $path_new -Force
-				}
-				Catch {
-					Write-Output ('ERROR: could restore previous file or folder, exiting!')
-					Return
-				}
-			}
+	# check if junctioned folder name matches the dismount list
+	if ($JunctionedFolderBaseName -in $FoldersToDismount -or $JunctionedFolderFullName -in $FoldersToDismount -or $JunctionedTargetFullName -in $FoldersToDismount) {
+		Write-Host "...skipped restore of '$JunctionedFolderBaseName' folder; folder name is in FoldersToDismount"
+		continue NextOneDriveFolder
+	}
+
+	# if folders to restore explicitly defined...
+	if ($PSBoundParameters.ContainsKey('FoldersToRestore')) {
+		# check if junctioned folder name matches the dismount list
+		if ($JunctionedFolderBaseName -notin $FoldersToRestore -and $JunctionedFolderFullName -notin $FoldersToRestore -and $JunctionedTargetFullName -notin $FoldersToRestore) {
+			Write-Host "...skipped restore of '$JunctionedFolderBaseName' folder; folder name is not in FoldersToRestore"
+			continue NextOneDriveFolder
+		}
+	}
+
+	# report state
+	Write-Host "...restoring contents of '$JunctionedFolderFullName' folder from $JunctionedTargetFullName' folder"
+
+	# retrieve folders in target folder
+	try {
+		$TargetFolders = Get-ChildItem -Path $JunctionedTargetFullName -Recurse -Force -Directory
+	}
+	catch {
+		Write-Warning -Message "could not retrieve folders in '$JunctionedTargetFullName' folder"
+		return $_
+	}
+
+	# loop through folders in target folder
+	foreach ($TargetFolder in $TargetFolders) {
+		# retrieve relative path for target folder
+		$RelativeTargetFolderPath = $TargetFolder.FullName.Replace($JunctionedTargetFullName, $null)
+
+		# create destination path for target folder
+		$RestoredFolderPath = Join-Path -Path $JunctionedFolderFullName -ChildPath $RelativeTargetFolderPath
+
+		# restore folder
+		try {
+			$null = New-Item -ItemType Directory -Path $RestoredFolderPath -Force
+		}
+		catch {
+			Write-Warning -Message "could not restore '$RestoredFolderPath' folder"
+			return $_
+		}
+	}
+
+	# retrieve folders in target folder
+	try {
+		$TargetFiles = Get-ChildItem -Path $JunctionedTargetFullName -Recurse -Force -File
+	}
+	catch {
+		Write-Warning -Message "could not retrieve files in '$JunctionedTargetFullName' folder"
+		return $_
+	}
+
+	# loop through files in target folder
+	foreach ($TargetFile in $TargetFiles) {
+		# retrieve relative path for target file
+		$RelativeTargetFilePath = $TargetFile.FullName.Replace($JunctionedTargetFullName, $null)
+
+		# create destination path for target file
+		$RestoredFilePath = Join-Path -Path $JunctionedFolderFullName -ChildPath $RelativeTargetFilePath
+
+		# restore file
+		try {
+			Copy-Item -Path $TargetFile -Destination $RestoredFilePath -Force
+		}
+		catch {
+			Write-Warning -Message "could not restore '$RestoredFilePath' file"
+			return $_
 		}
 	}
 }
-
-# close out
-Write-Output (' ')
-Write-Output ('-----')
-Write-Output (' ')
-Write-Output ('All permitted OneDrive directory junctions have been removed!')
