@@ -37,7 +37,7 @@ Param(
 	[string[]]$ZoneType = @('Primary', 'Forwarder'),
 	# local computer name
 	[Parameter(DontShow)]
-	[string]$ComputerName = $env:COMPUTERNAME,
+	[string]$ComputerName = $env:COMPUTERNAME.ToLowerInvariant(),
 	# suffix for DNS client subnet
 	[Parameter(DontShow)]
 	[string]$ClientSubnetName = "$ComputerName-subnets",
