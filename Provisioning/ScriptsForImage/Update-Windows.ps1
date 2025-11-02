@@ -224,7 +224,7 @@ process {
 		Write-Warning -Message "could not create Microsoft.Update.Searcher object: $($_.Exception.Message)"
 
 		# set exit code to a "The command failed" code before returning
-		$ExitCode = 201
+		$ExitCode = 202
 
 		# return exception
 		return $_
@@ -255,7 +255,7 @@ process {
 		Write-Warning -Message "could not call Search method with '$Criteria' criteria: $($_.Exception.Message)"
 
 		# set exit code to a "The command failed" code before returning
-		$ExitCode = 202
+		$ExitCode = 203
 
 		# return exception
 		return $_
@@ -291,7 +291,7 @@ process {
 		Write-Warning -Message "could not create Microsoft.Update.UpdateColl object: $($_.Exception.Message)"
 
 		# set exit code to a "The command failed" code before returning
-		$ExitCode = 203
+		$ExitCode = 204
 
 		# return exception
 		return $_
@@ -334,7 +334,7 @@ process {
 		Write-Warning -Message "could not create Microsoft.Update.Session object: $($_.Exception.Message)"
 
 		# set exit code to a "The command failed" code before returning
-		$ExitCode = 204
+		$ExitCode = 205
 
 		# return exception
 		return $_
@@ -350,7 +350,7 @@ process {
 		Write-Warning -Message "could not call CreateUpdateDownloader method: $($_.Exception.Message)"
 
 		# set exit code to a "The command failed" code before returning
-		$ExitCode = 205
+		$ExitCode = 206
 
 		# return exception
 		return $_
@@ -365,7 +365,7 @@ process {
 		Write-Warning -Message "could not add update collection to Downloader object: $($_.Exception.Message)"
 
 		# set exit code to a "The command failed" code before returning
-		$ExitCode = 206
+		$ExitCode = 207
 
 		# return exception for transcript
 		return $_
@@ -381,7 +381,7 @@ process {
 		Write-Warning -Message "could not call Download() method: $($_.Exception.Message)"
 
 		# set exit code to a "The command failed" code before returning
-		$ExitCode = 207
+		$ExitCode = 208
 
 		# return exception for transcript
 		return $_
@@ -401,7 +401,7 @@ process {
 		Write-Warning -Message "could not download updates: $Message"
 
 		# set exit code to a "The command failed" code before returning
-		$ExitCode = 208
+		$ExitCode = 209
 
 		# return message as exception for transcript
 		return [System.Exception]::new($Message)
@@ -419,7 +419,7 @@ process {
 		Write-Warning -Message "could not create Microsoft.Update.Installer object: $($_.Exception.Message)"
 
 		# set exit code to a "The command failed" code before returning
-		$ExitCode = 209
+		$ExitCode = 210
 
 		# return exception for transcript
 		return $_
@@ -434,7 +434,7 @@ process {
 		Write-Warning -Message "could not add update collection to Installer object: $($_.Exception.Message)"
 
 		# set exit code to a "The command failed" code before returning
-		$ExitCode = 210
+		$ExitCode = 211
 
 		# return exception for transcript
 		return $_
@@ -450,7 +450,7 @@ process {
 		Write-Warning -Message "could not call Install() method: $($_.Exception.Message)"
 
 		# set exit code to a "The command failed" code before returning
-		$ExitCode = 211
+		$ExitCode = 212
 
 		# return exception for transcript
 		return $_
@@ -470,7 +470,7 @@ process {
 		Write-Warning -Message "could not install updates: $Message"
 
 		# set exit code to a "The command failed" code before returning
-		$ExitCode = 212
+		$ExitCode = 213
 
 		# return message as exception for transcript
 		return [System.Exception]::new($Message)
@@ -489,7 +489,7 @@ process {
 				Write-Warning -Message "could not update '$PathForAppliedUpdates' applied updates file: $($_.Exception.Message)"
 
 				# set exit code to a "The command failed" code before returning
-				$ExitCode = 213
+				$ExitCode = 214
 
 				# return exception for transcript
 				return $_
