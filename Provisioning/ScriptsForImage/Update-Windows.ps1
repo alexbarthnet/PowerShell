@@ -48,6 +48,82 @@ param(
 )
 
 begin {
+	function Assert-NetConnectionToWindowsUpdate {
+		[CmdletBinding()]
+		param (
+			[string]$ComputerName = 'windowsupdate.microsoft.com'
+		)
+
+		# report state
+		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Verifying connectivity to Windows Update...'
+
+		# test connection to Windows Update
+		try {
+			$TcpTestSucceeded = Test-NetConnection -ComputerName $ComputerName -CommonTCPPort HTTP -WarningAction SilentlyContinue | Select-Object -ExpandProperty 'TcpTestSucceeded'
+		}
+		catch {
+			# warn before throwing exception
+			Write-Warning -Message 'could not test connection to Windows Update'
+
+			# throw exception
+			throw $_
+		}
+
+		# define integers for while loop and reporting
+		$Limit = [int32]8
+		$Seconds = [int32]5
+		$WaitTime = [int32]0
+		$Multiplier = [int32]0
+
+		# wait limit not reached and connection to Windows Update not successful...
+		while ($Multiplier -lt $Limit -and -not $TcpTestSucceeded) {
+			# increment multiplier
+			$Multiplier++
+
+			# record total time
+			$WaitTime += ($Seconds * $Multiplier)
+
+			# wait for collection update to complete
+			Write-Host "...waiting an additional '$($Seconds * $Multiplier)' seconds"
+			Start-Sleep -Seconds ($Seconds * $Multiplier)
+
+			# retrieve device by name
+			try {
+				$TcpTestSucceeded = Test-NetConnection -ComputerName $ComputerName -CommonTCPPort HTTP -WarningAction SilentlyContinue | Select-Object -ExpandProperty 'TcpTestSucceeded'
+			}
+			catch {
+				# warn before throwing exception
+				Write-Warning -Message 'could not test connection to Windows Update'
+
+				# throw exception
+				throw $_
+			}
+		}
+
+		# if connection to Windows Update successful...
+		if ($TcpTestSucceeded) {
+			# ...and wait time incurred...
+			if ($WaitTime -gt 0) {
+				# ...declare connectivity and wait time
+				"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), "...verified connectivity to Windows Update after '$WaitTime' seconds"
+			}
+			# ...and wait time not incurred...
+			else {
+				# ...declare connectivity
+				"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), "...verified connectivity to Windows Update"
+
+			}
+		}
+		# if connection to Windows Update not successful...
+		else {
+			# ...declare wait time before throwing exception
+			Write-Warning -Message "could not verify connectivity to Windows Update after '$WaitTime' seconds"
+
+			# throw exception
+			throw
+		}
+	}
+
 	# define error preference
 	$ErrorActionPreference = [System.Management.Automation.ActionPreference]::Stop
 
@@ -121,6 +197,21 @@ begin {
 }
 
 process {
+	# assert network connectivity
+	try {
+		Assert-NetConnectionToWindowsUpdate
+	}
+	catch {
+		# warn before setting exit code and return exception
+		Write-Warning -Message 'could not assert network connectivity to Windows Update'
+
+		# set exit code to a "The command failed" code before returning
+		$ExitCode = 201
+
+		# return exception
+		return $_
+	}
+
 	# report state
 	"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Finding updates...'
 
