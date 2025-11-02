@@ -103,6 +103,9 @@ If (!$ClientSubnet) {
 	Write-Host "Created '$($ClientSubnet.Name)' DNS client subnet with default values"
 }
 
+# refresh DNS client subnet name
+$ClientSubnetName = $ClientSubnet.Name
+
 # retrieve DNS query resolution policies
 Try {
 	$QueryResolutionPolicies = Get-DnsServerQueryResolutionPolicy
@@ -143,6 +146,9 @@ If (!$QueryResolutionPolicy) {
 	Write-Host "Created '$($QueryResolutionPolicy.Name)' DNS policy with default values"
 }
 
+# refresh DNS query resolution policy name
+$QueryResolutionPolicyName = $QueryResolutionPolicy.Name
+
 ### update DNS server client subnet
 
 # define lists for subnets
@@ -175,18 +181,18 @@ ForEach ($IPv4Subnet in $IPv4Subnets) {
 # check expected IPv6 DNS client subnets
 ForEach ($IPv6Subnet in $IPv6Subnets) {
 	If ($IPv6Subnet -notin $ClientSubnet.IPV6Subnet) {
-		Write-Host "Will update '$($ClientSubnet.Name)' client subnet to add subnet: $IPv6Subnet"
+		Write-Host "Will update '$ClientSubnetName' client subnet to add subnet: $IPv6Subnet"
 		$UpdateIPv6 = $true
 	}
 	Else {
-		Write-Host "Verified '$($ClientSubnet.Name)' client subnet contains subnet: $IPv6Subnet"
+		Write-Host "Verified '$ClientSubnetName' client subnet contains subnet: $IPv6Subnet"
 	}
 }
 
 # check existing IPv4 DNS client subnets
 ForEach ($IPV4Subnet in $ClientSubnet.IPV4Subnet) {
 	If ($IPv4Subnet -notin $IPv4Subnets) {
-		Write-Host "Will update '$($ClientSubnet.Name)' client subnet to remove subnet: $IPv4Subnet"
+		Write-Host "Will update '$ClientSubnetName' client subnet to remove subnet: $IPv4Subnet"
 		$UpdateIPv4 = $true
 	}
 }
