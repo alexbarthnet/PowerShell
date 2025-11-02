@@ -142,26 +142,17 @@ Begin {
 
 		# if windows identity is system...
 		If ($WindowsIdentity.IsSystem) {
-			# get computer DN
-			$DistinguishedName = Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Group Policy\State\Machine' -Name 'Distinguished-Name'
-
-			# get directory entry
-			$DirectoryEntry = [System.DirectoryServices.DirectoryEntry]::New("LDAP://$DistinguishedName")
-
-			# add token groups to directory entry
-			$DirectoryEntry.RefreshCache('tokenGroups')
-
-			# get token groups from directory entry
-			$TokenGroups = $DirectoryEntry.Properties['tokenGroups'].Value
-
-			# translate token groups into windows groups
-			$Groups = $TokenGroups | ForEach-Object { [System.Security.Principal.SecurityIdentifier]::new($_, 0).Translate([System.Security.Principal.NTAccount]).Value }
+			# reset windows identity from windows principal
+			try {
+				$WindowsIdentity = [System.Security.Principal.WindowsPrincipal]::new("$env:COMPUTERNAME$").Identity
+			}
+			catch {
+				throw $_
+			}
 		}
-		# if windows identity is not system...
-		Else {
-			# get groups directly from windows identity object
-			$Groups = $WindowsIdentity.Groups.Where({ $_.AccountDomainSid }).Translate([System.Security.Principal.NTAccount]).Where({ !$_.Value.StartsWith('NT AUTHORITY') }).Value
-		}
+
+		# get groups directly from windows identity object
+		$Groups = $WindowsIdentity.Groups.Where({ $_.AccountDomainSid }).Translate([System.Security.Principal.NTAccount]).Where({ !$_.Value.StartsWith('NT AUTHORITY') }).Value
 
 		# return groups
 		Return $Groups
