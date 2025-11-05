@@ -1,33 +1,71 @@
-#requires -modules ActiveDirectory,TranscriptWithHostAndDate
-
 <#
 .SYNOPSIS
-Stop services before shutdown of an Active Directory domain controller.
+Stop Active Directory and related services before shutdown of an Active Directory directory server.
 
 .DESCRIPTION
-Stop services before shutdown of an Active Directory domain controller.
+Stop Active Directory and related services before shutdown of an Active Directory directory server.
 
-.PARAMETER Name
-Name of services to stop. The default values are 'ADWS', 'KDC', and 'Netlogon'
+.NOTES
+This script first stops ADWS and sleeps for 30 seconds to allow load balancers to determine the server will be shutting down.
+This script then exits if the server is not a full domain controller.
+This script then stops KDC and NetLogon to prevent clients from attempting to authenticate to the server during shutdown.
+
+.LINK
+https://learn.microsoft.com/en-us/troubleshoot/windows-server/windows-security/cannot-authenticate-users-shut-down-domain-controller
 
 #>
 
 [CmdletBinding()]
 Param (
-	# string array with ordered service names
-	[Parameter(Position = 0)]
-	[string[]]$Name = ('ADWS', 'KDC', 'Netlogon')
+	# domain role of current system
+	[Parameter(DontShow)]
+	[uint16]$DomainRole = (Get-CimInstance -ClassName 'Win32_ComputerSystem' -Property 'DomainRole').DomainRole
 )
 
 Begin {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# start transcript with default parameters
+	Function Stop-ServiceAndSleep {
+		Param(
+			[Parameter(Position = 0, Mandatory)]
+			[string]$Name,
+			[Parameter(Position = 1)]
+			[int32]$Seconds
+		)
+
+		# get service status
+		$Status = $script:Services.Where({ $_.Name -eq $Name }).Status
+
+		# if status not found...
+		If ([string]::IsNullOrEmpty($Status)) {
+			# warn and continue
+			Write-Warning -Message "$Name; could not retrieve status for service: $($_.Exception.Message)"
+			Return
+		}
+		
+		# if service is not running...
+		If ($Status -ne 'Running') {
+			Write-Warning -Message "$Name; found unexpected status for service: $Status"
+			Return
+		}
+		
+		# stop the service
 		Try {
-			Start-TranscriptWithHostAndDate
+			Stop-Service -Name $Name -Force
 		}
 		Catch {
-			Throw $_
+			Write-Warning -Message "$Name; could not stop service: $($_.Exception.Message)"
+			Return $_
+		}
+		
+		# declare stopped
+		Write-Host "Stopped service: $Name"
+
+		# if seconds provided...
+		If ($PSBoundParameters.ContainsKey('Seconds')) {
+			# declare sleep
+			Write-Host "Sleeping for '$Seconds' seconds..."
+
+			# sleep!
+			Start-Sleep -Seconds $Seconds
 		}
 	}
 }
@@ -38,54 +76,36 @@ Process {
 		$Services = Get-Service
 	}
 	Catch {
-		Write-Warning -Message 'could not retrieve services'
+		Write-Warning -Message "could not retrieve services: $($_.Exception.Message)"
 		Return $_
 	}
 
-	# process services to stop
-	:NextService ForEach ($ServiceName in $Name) {
-		# get service status
-		$Status = $Services.Where({ $_.Name -eq $ServiceName }).Status
-
-		# if status not found...
-		If ([string]::IsNullOrEmpty($Status)) {
-			# warn and continue
-			Write-Warning -Message "could not retrieve status for service: $Service"
-			Continue NextService
-		}
-
-		# if service is not running...
-		If ($Status -ne 'Running') {
-			Write-Warning -Message "found '$ServiceName' with unexpected status: $Status"
-			Continue NextService
-		}
-
-		# stop the service
-		Try {
-			Stop-Service -Name $ServiceName -Force
-		}
-		Catch {
-			Write-Warning -Message "could not stop service: $ServiceName"
-			Return $_
-		}
-
-		# declare stopped
-		Write-Verbose -Verbose -Message "stopped service: $ServiceName"
+	# stop ADWS and sleep for 30 seconds
+	Try {
+		Stop-ServiceAndSleep -Name 'ADWS' -Seconds 30
+	}
+	Catch {
+		Return $_
 	}
 
-	# sleep to allow clients to determine domain controller services are offline
-	Start-Sleep -Seconds 60
-}
+	# if local system is not a domain controller...
+	If ($DomainRole -lt 4) {
+		Return
+	}
 
-End {
-	# if skip transcript not requested...
-	If (!$SkipTranscript) {
-		# stop transcript with default parameters
-		Try {
-			Stop-TranscriptWithHostAndDate
-		}
-		Catch {
-			Throw $_
-		}
+	# stop KCC and do not sleep
+	Try {
+		Stop-ServiceAndSleep -Name 'KDC'
+	}
+	Catch {
+		Return $_
+	}
+
+	# stop Netlogon and do not sleep
+	Try {
+		Stop-ServiceAndSleep -Name 'Netlogon'
+	}
+	Catch {
+		Return $_
 	}
 }
