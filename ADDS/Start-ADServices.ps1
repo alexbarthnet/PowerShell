@@ -102,7 +102,7 @@ begin {
 		}
 	}
 
-	function Start-ServiceAfterWait {
+	function Assert-ServiceStarted {
 		param(
 			[Parameter(Position = 0, Mandatory)]
 			[string]$Name,
@@ -187,7 +187,7 @@ process {
 	if ($DomainRole -ge 4) {
 		# start NTDS
 		try {
-			Start-ServiceAfterWait -Name 'NTDS'
+			Assert-ServiceStarted -Name 'NTDS'
 		}
 		catch {
 			return $_
@@ -195,7 +195,7 @@ process {
 
 		# start Netlogon
 		try {
-			Start-ServiceAfterWait -Name 'Netlogon'
+			Assert-ServiceStarted -Name 'Netlogon'
 		}
 		catch {
 			return $_
@@ -203,7 +203,7 @@ process {
 
 		# start KDC
 		try {
-			Start-ServiceAfterWait -Name 'KDC'
+			Assert-ServiceStarted -Name 'KDC'
 		}
 		catch {
 			return $_
@@ -227,7 +227,7 @@ process {
 		foreach ($Name in $Services.Name) {
 			# start AD LDS instance
 			try {
-				Start-ServiceAfterWait -Name $Name
+				Assert-ServiceStarted -Name $Name
 			}
 			catch {
 				return $_
@@ -240,7 +240,7 @@ process {
 
 	# start ADWS
 	try {
-		Start-ServiceAfterWait -Name 'ADWS'
+		Assert-ServiceStarted -Name 'ADWS'
 	}
 	catch {
 		return $_
