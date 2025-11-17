@@ -102,26 +102,63 @@ begin {
 		}
 	}
 
-	function Start-ServiceAfterWait {
+	function Assert-ServiceStarted {
 		param(
 			[Parameter(Position = 0, Mandatory)]
 			[string]$Name,
 			[uint32]$Limit = [uint32]5,
 			[uint32]$Seconds = [int32]5,
 			[uint32]$WaitTime = [int32]0,
-			[uint32]$Multiplier = [int32]0
+			[uint32]$Multiplier = [int32]0,
+			[switch]$SkipWaitTimeMultiplier
 		)
 
-		# report state
-		Write-Host "$Name; waiting for service to start automatically..."
-
-		# get service by name
+		# retrieve service by name
 		try {
 			$Service = Get-Service -Name $Name -ErrorAction 'Stop'
 		}
 		catch {
 			Write-Warning -Message "$Name; could not retrieve service: $($_.Exception.Message)"
-			return $_
+			throw $_
+		}
+
+		# if service running...
+		if ($Service.Status -eq 'Running') {
+			# report state and return
+			Write-Host "$Name; found service running"
+			return
+		}
+
+		# if service start type is disabled...
+		if ($Service.StartType -eq 'Disabled') {
+			# warn before throwing exception
+			Write-Warning -Message "$Name; cannot start disabled service"
+			throw
+		}
+
+		# if service start type is manual...
+		if ($Service.StartType -eq 'Manual') {
+			# start service by name
+			try {
+				$Service = Start-Service -Name $Name -PassThru -ErrorAction 'Stop'
+			}
+			catch {
+				Write-Warning -Message "$Name; could not start service manually: $($_.Exception.Message)"
+				throw $_
+			}
+
+			# if service running...
+			if ($Service.Status -eq 'Running') {
+				# report state and return
+				Write-Host "$Name; started service manually"
+				return
+			}
+			# if service is not running...
+			else {
+				# warn before throwing exception
+				Write-Warning -Message "$Name; found service not running after starting service manually"
+				throw
+			}
 		}
 
 		# while limit not reached and service not running...
@@ -129,55 +166,63 @@ begin {
 			# increment multiplier
 			$Multiplier++
 
-			# record total time
-			$WaitTime += ($Seconds * $Multiplier)
+			# if skip wait time multiplier requested...
+			if ($SkipWaitTimeMultiplier.IsPresent) {
+				$SecondsToSleep = $Seconds
+			}
+			# if skip wait time multiplier not requested...
+			else {
+				$SecondsToSleep = $Seconds * $Multiplier
+			}
 
-			# wait for collection update to complete
-			Write-Host "$Name; waiting an additional '$($Seconds * $Multiplier)' seconds"
-			Start-Sleep -Seconds ($Seconds * $Multiplier)
+			# record total wait time
+			$WaitTime += $SecondsToSleep
 
-			# get service by name
+			# report state then wait
+			Write-Host "...waiting an additional '$SecondsToSleep' seconds"
+			Start-Sleep -Seconds $SecondsToSleep
+
+			# retrieve service by name
 			try {
 				$Service = Get-Service -Name $Name -ErrorAction 'Stop'
 			}
 			catch {
 				Write-Warning -Message "$Name; could not retrieve service: $($_.Exception.Message)"
-				return $_
+				throw $_
 			}
+
+			# if service running...
+			if ($Service.Status -eq 'Running') {
+				# report state and wait time then return
+				Write-Host "$Name; found service running after '$WaitTime' seconds"
+				return
+			}
+		}
+
+
+		# warn before starting service
+		Write-Warning -Message "$Name; found service not running after '$WaitTime' seconds; starting service..."
+
+		# start the service
+		try {
+			$Service = Start-Service -Name $Name -PassThru -Force -ErrorAction 'Stop'
+		}
+		catch {
+			Write-Warning -Message "$Name; could not start service: $($_.Exception.Message)"
+			throw $_
 		}
 
 		# if service running...
 		if ($Service.Status -eq 'Running') {
-			# ...and wait time incurred...
-			if ($WaitTime -gt 0) {
-				# ...declare module loaded and wait time
-				Write-Host "$Name; found service started after '$WaitTime' seconds"
-			}
-			# ...and wait time not incurred...
-			else {
-				# ...declare module loaded
-				Write-Host "$Name; found service started"
-
-			}
+			# report state and return
+			Write-Host "$Name; started service manually"
+			return
 		}
-		# if service not running...
+		# if service is not running...
 		else {
-			# warn before starting service
-			Write-Warning -Message "$Name; service not started after '$WaitTime' seconds; starting service..."
-			return $_
-
-			# start the service
-			try {
-				Start-Service -Name $Name -Force
-			}
-			catch {
-				Write-Warning -Message "$Name; could not start service: $($_.Exception.Message)"
-				return $_
-			}
-
-			# report state
-			Write-Host "$Name; service started after '$WaitTime' seconds"
-			return $_
+			# warn before throwing exception
+			Write-Warning -Message "$Name; found service not running after starting service manually"
+			throw
 		}
 	}
 }
@@ -187,7 +232,7 @@ process {
 	if ($DomainRole -ge 4) {
 		# start NTDS
 		try {
-			Start-ServiceAfterWait -Name 'NTDS'
+			Assert-ServiceStarted -Name 'NTDS'
 		}
 		catch {
 			return $_
@@ -195,7 +240,7 @@ process {
 
 		# start Netlogon
 		try {
-			Start-ServiceAfterWait -Name 'Netlogon'
+			Assert-ServiceStarted -Name 'Netlogon'
 		}
 		catch {
 			return $_
@@ -203,7 +248,7 @@ process {
 
 		# start KDC
 		try {
-			Start-ServiceAfterWait -Name 'KDC'
+			Assert-ServiceStarted -Name 'KDC'
 		}
 		catch {
 			return $_
@@ -227,7 +272,7 @@ process {
 		foreach ($Name in $Services.Name) {
 			# start AD LDS instance
 			try {
-				Start-ServiceAfterWait -Name $Name
+				Assert-ServiceStarted -Name $Name
 			}
 			catch {
 				return $_
@@ -240,7 +285,7 @@ process {
 
 	# start ADWS
 	try {
-		Start-ServiceAfterWait -Name 'ADWS'
+		Assert-ServiceStarted -Name 'ADWS'
 	}
 	catch {
 		return $_
