@@ -300,11 +300,11 @@ process {
 	}
 
 	# define value for active state file
-	$Value = $ItemForActiveState.LastAccessTimeUtc.ToString('o')
+	$Value = $ItemForActiveState.LastWriteTimeUtc.ToString('o')
 
 	# update active state file
 	try {
-		$ItemForActiveState | Set-Content -Path $PathForActiveState -NoNewline -Value $Value
+		$ItemForActiveState | Set-Content -NoNewline -Value $Value
 	}
 	catch {
 		Write-Warning -Message "could not update '$PathForActiveState' active state file with '$Value' value: $($_.Exception.Message)"
