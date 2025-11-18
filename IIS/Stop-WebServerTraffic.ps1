@@ -29,8 +29,8 @@ process {
 
 	# if ready state file found...
 	if ($ReadyStateFileExists) {
-		# warn and report state
-		Write-Warning -Message "the '$PathForReadyState' ready state file was found; removing ready state file"
+		# report state
+		Write-Host "the '$PathForReadyState' ready state file was found; removing ready state file"
 
 		# remove ready state file
 		try {
