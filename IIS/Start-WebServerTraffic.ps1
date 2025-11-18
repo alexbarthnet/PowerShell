@@ -5,25 +5,25 @@ Inform configured load balancers that the local web server is ready to receive t
 .DESCRIPTION
 Inform configured load balancers that the local web server is ready to receive traffic by creating a state file used by configured load balancers when a configured state file exists.
 
-.PARAMETER PathForActiveState
-The path to the active state file. The default value is 'C:\inetpub\wwwroot\host\active'
+.PARAMETER PathForReadyState
+The path to the ready state file. The default value is 'C:\inetpub\wwwroot\host\ready.htm'
 
 .PARAMETER PathForConfiguredState
-The path to the configured state file. The default value is 'C:\inetpub\wwwroot\host\configured'
+The path to the configured state file. The default value is 'C:\inetpub\wwwroot\host\configured.htm'
 
 .NOTES
-The 'configured' state file should be created as the last step of configuring a web server. This acts as the key to determine if the 'active' state file should be present or removed.
+The 'configured' state file should be created as the last step of configuring a web server. This acts as the key to determine if the 'ready' state file should be present or removed.
 
 #>
 
 [CmdletBinding()]
 param (
-	# path to active state file
+	# path to ready state file
 	[Parameter(Position = 1)]
-	[string]$PathForActiveState = 'C:\inetpub\wwwroot\host\active',
+	[string]$PathForReadyState = 'C:\inetpub\wwwroot\host\ready.htm',
 	# path to configured state file
 	[Parameter(Position = 2)]
-	[string]$PathForConfiguredState = 'C:\inetpub\wwwroot\host\configured'
+	[string]$PathForConfiguredState = 'C:\inetpub\wwwroot\host\configured.htm'
 )
 
 begin {
@@ -153,37 +153,43 @@ begin {
 }
 
 process {
-	# find active state file
-	$ActiveStateFileExists = Test-Path -Path $PathForActiveState -PathType Leaf
+	# find ready state file
+	$ReadyStateFileExists = Test-Path -Path $PathForReadyState -PathType Leaf
+
+	# if ready state file found...
+	if ($ReadyStateFileExists) {
+		# warn and report state
+		Write-Warning -Message "the '$PathForReadyState' ready state file was found unexpectedly; removing ready state file"
+
+		# remove ready state file
+		try {
+			Remove-Item -Path $PathForReadyState -Force
+		}
+		catch {
+			Write-Warning -Message "could not remove '$PathForReadyState' ready state file: $($_.Exception.Message)"
+			return $_
+		}
+
+		# report state
+		Write-Host "removed '$PathForReadyState' ready state file, checking configured state file"
+	}
+	else {
+		# report state
+		Write-Host "the '$PathForReadyState' ready state file was not found as expected, checking configured state file"
+	}
 
 	# find configured state file
 	$ConfiguredStateFileExists = Test-Path -Path $PathForConfiguredState -PathType Leaf
 
+	# if configured state file found...
+	if ($ConfiguredStateFileExists) {
+		# report state
+		Write-Host "found '$PathForConfiguredState' configured state file; checking services"
+	}
 	# if configured state file not found...
-	if (!$ConfiguredStateFileExists) {
-		# if active state file found...
-		if ($ActiveStateFileExists) {
-			# warn and report state
-			Write-Warning -Message "found '$PathForActiveState' active state file without '$PathForConfiguredState' configured state file; removing active state file"
-
-			# remove active state file
-			try {
-				Remove-Item -Path $PathForActiveState -Force
-			}
-			catch {
-				Write-Warning -Message "could not remove '$PathForActiveState' active state file: $($_.Exception.Message)"
-				return $_
-			}
-
-			# report state
-			Write-Host "removed '$PathForActiveState' active state file"
-		}
-		else {
-			# warn and report state
-			Write-Warning -Message "could not locate either '$PathForActiveState' active state file or '$PathForConfiguredState' configured state file; skipping service checks"
-		}
-
-		# return after checking active state file
+	else {
+		# warn and return
+		Write-Warning -Message "the '$PathForConfiguredState' configured state file was not found; skipping service checks"
 		return
 	}
 
@@ -211,24 +217,24 @@ process {
 		return $_
 	}
 
-	# create active state file
+	# create ready state file
 	try {
-		$ItemForActiveState = New-Item -Force -Type File -Path $PathForActiveState
+		$ItemForReadyState = New-Item -Force -Type File -Path $PathForReadyState
 	}
 	catch {
-		Write-Warning -Message "could not create '$PathForActiveState' active state file: $($_.Exception.Message)"
+		Write-Warning -Message "could not create '$PathForReadyState' ready state file: $($_.Exception.Message)"
 		return $_
 	}
 
-	# define value for active state file
-	$Value = $ItemForActiveState.LastWriteTimeUtc.ToString('o')
+	# define value for ready state file
+	$Value = $ItemForReadyState.LastWriteTimeUtc.ToString('o')
 
-	# update active state file
+	# update ready state file
 	try {
-		$ItemForActiveState | Set-Content -NoNewline -Value $Value
+		$ItemForReadyState | Set-Content -NoNewline -Value $Value
 	}
 	catch {
-		Write-Warning -Message "could not update '$PathForActiveState' active state file with '$Value' value: $($_.Exception.Message)"
+		Write-Warning -Message "could not update '$PathForReadyState' ready state file with '$Value' value: $($_.Exception.Message)"
 		return $_
 	}
 }
