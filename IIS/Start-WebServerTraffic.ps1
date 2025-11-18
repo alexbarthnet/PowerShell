@@ -226,6 +226,9 @@ process {
 		return $_
 	}
 
+	# report state
+	Write-Host "created '$PathForReadyState' ready state file, setting contents to current time"
+
 	# define value for ready state file
 	$Value = $ItemForReadyState.LastWriteTimeUtc.ToString('o')
 
@@ -237,4 +240,7 @@ process {
 		Write-Warning -Message "could not update '$PathForReadyState' ready state file with '$Value' value: $($_.Exception.Message)"
 		return $_
 	}
+
+	# report state
+	Write-Host "updated '$PathForReadyState' ready state file with current time"
 }
