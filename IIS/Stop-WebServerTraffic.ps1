@@ -20,7 +20,7 @@ param (
 	[string]$PathForReadyState = 'C:\inetpub\wwwroot\host\ready.htm',
 	# time in seconds to sleep for
 	[Parameter(Position = 1)]
-	[unit16]$Seconds = 30
+	[uint16]$Seconds = 30
 )
 
 process {
