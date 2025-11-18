@@ -271,8 +271,14 @@ if ($SkipCopy -eq $false -or -not $SkipCopy.IsPresent ) {
 			# increment counter
 			$Counter++
 
-			#report state
-			Write-Host "Waited $Counter minute(s) for VM to rebuild: '$Name'"
+			# retrieve VMs on local system
+			try {
+				$VM = Get-VM | Where-Object { $_.Name -eq $Name }
+			}
+			catch {
+				Write-Warning -Message "could not retrieve local VMs: $($_.Exception.Message)"
+				return $_
+			}
 		}
 	}
 
