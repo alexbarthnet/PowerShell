@@ -231,6 +231,9 @@ if ($SkipRebuild -eq $false -or -not $SkipRebuild.IsPresent) {
 
 # if skip copy set to false or not requested...
 if ($SkipCopy -eq $false -or -not $SkipCopy.IsPresent ) {
+	# define counter
+	$Counter = 0
+
 	# loop through VM names - wait for rebuild to complete
 	:NextNameForWait foreach ($Name in $VMName) { 
 		# retrieve VMs on local system
@@ -259,9 +262,6 @@ if ($SkipCopy -eq $false -or -not $SkipCopy.IsPresent ) {
 			Write-Host "Found VM powered off: '$Name'"
 			continue NextNameForWait
 		}
-
-		# define counter
-		$Counter = 0
 
 		# if VM is not powered off...
 		while ($VM.State -ne 'Off') {
