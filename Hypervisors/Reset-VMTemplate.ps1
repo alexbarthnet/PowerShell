@@ -282,6 +282,9 @@ if ($SkipCopy -eq $false -or -not $SkipCopy.IsPresent ) {
 		}
 	}
 
+	#report state
+	Write-Host "Waited $Counter minute(s) for VM(s) to rebuild"
+
 	# report state
 	Write-Host "Copying VHD(s) to '$RelativePath' folder in each CSV"
 
