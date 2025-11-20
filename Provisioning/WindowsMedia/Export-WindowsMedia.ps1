@@ -249,13 +249,13 @@ process {
 			}
 
 			########################################
-			# write prepared image to ISO image
+			# prepare ISO image path
 			########################################
 
 			# if ISO image exists...
 			if ([System.IO.File]::Exists($ImagePath)) {
 				# report state
-				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Removing ISO image', $ImagePath
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Removing previous ISO image', $ImagePath
 
 				# retrieve existing ISO image
 				try {
@@ -268,7 +268,7 @@ process {
 			# if ISO image exists...
 			else {
 				# report state
-				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Verifying ISO image page', $ImagePath
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Verifying ISO image path', $ImagePath
 
 				# create temporary file for ISO image to create path
 				try {
@@ -286,6 +286,10 @@ process {
 			catch {
 				return $_
 			}
+
+			########################################
+			# write prepared image to ISO image
+			########################################
 
 			# report state
 			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Creating ISO image', $ImagePath
@@ -487,7 +491,7 @@ process {
 			}
 		}
 		Default {
-			Write-Warning -Message "export format not defined not remove exclusion for staging path: $global:WindowsMediaStagingPath"
+			Write-Warning -Message 'export format not defined'
 		}
 	}
 }

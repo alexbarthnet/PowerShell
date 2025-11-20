@@ -1,12 +1,9 @@
 <#
 .SYNOPSIS
-Imports Windows installation media to a staging path.
+Removes Windows installation media from a staging path.
 
 .DESCRIPTION
-Imports Windows installation media to a staging path. This enables peer scripts to update and export the media.
-
-.PARAMETER ImagePath
-Path to the ISO image containing Windows installation media.
+Removes Windows installation media from a staging path. This cleans up after peer scripts that imported, updated, and exported the media.
 
 .PARAMETER Path
 Path to the staging folder for the Windows installation media. This value is only required when updating media in an existing staging path and the staging path parameter has been cleared.
