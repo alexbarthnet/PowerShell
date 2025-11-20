@@ -68,6 +68,8 @@ param(
 	[Parameter(ParameterSetName = 'USB', Mandatory = $false)][ValidateSet('NTFS', 'FAT32')]
 	[string]$FileSystem = 'NTFS',
 	[Parameter(Mandatory = $false)]
+	[string]$FileSystemLabel = 'WindowsMedia',
+	[Parameter(Mandatory = $false)]
 	[string]$FileSystemLabelSuffix = 'UNATTENDED',
 	[Parameter(Mandatory = $false)]
 	[string]$Path,
@@ -162,12 +164,30 @@ begin {
 }
 
 process {
-	# retrieve file system label
-	try {
-		$FileSystemLabel = Get-Content -Path (Join-Path -Path $TemporaryPath -ChildPath 'label.txt')
-	}
-	catch {
-		return $_
+	# if file system label not provided...
+	if (!$PSBoundParameters.ContainsKey('FileSystemLabel')) {
+		# define saved file system label file
+		$FileSystemLabelFile = Join-Path -Path $TemporaryPath -ChildPath 'label.txt'
+
+		# if file system label file not found...
+		if (![System.IO.File]::Exists($FileSystemLabelFile)) {
+			Write-Warning -Message "could not locate file system label file: $FileSystemLabelFile"
+			Write-Warning -Message "continue to use default 'WindowsMedia' as base for file system label" -WarningAction Inquire
+		}
+
+		# retrieve file system label
+		try {
+			$FileSystemLabel = Get-Content -Path $FileSystemLabelFile
+		}
+		catch {
+			return $_
+		}
+
+		# if file system label is empty...
+		if ([System.String]::IsNullOrEmpty($FileSystemLabel)) {
+			Write-Warning -Message "found empty file system label file: $FileSystemLabelFile"
+			Write-Warning -Message "continue to use default 'WindowsMedia' as base for file system label" -WarningAction Inquire
+		}
 	}
 
 	# if file system label suffix exists...
