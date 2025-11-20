@@ -4012,8 +4012,8 @@ Process {
 		}
 
 		# override ComputerName with bound parameters if provided
-		If ($PSBoundParameters['ComputerName']) {
-			$ComputerName = $ComputerName
+		If ($PSBoundParameters.ContainsKey('ComputerName')) {
+			$ComputerName = $PSBoundParameters['ComputerName']
 			Write-Warning ("overriding ComputerName from JSON: '$($JsonData.$Name.ComputerName)'")
 		}
 		Else {
@@ -4021,8 +4021,8 @@ Process {
 		}
 
 		# override VirtualMachinePath with bound parameters if provided
-		If ($PSBoundParameters['Path']) {
-			$Path = $Path
+		If ($PSBoundParameters.ContainsKey('Path')) {
+			$Path = $PSBoundParameters['Path']
 			Write-Warning ("overriding Path from JSON: '$($JsonData.$Name.Path)'")
 		}
 		Else {
