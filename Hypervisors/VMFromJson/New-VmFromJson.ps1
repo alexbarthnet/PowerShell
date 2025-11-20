@@ -10,6 +10,8 @@ Param(
 	[string]$ComputerName,
 	[Parameter(Position = 3)]
 	[string]$Path,
+	[Parameter(Position = 4)]
+	[string]$DhcpServer,
 	[Parameter()]
 	[switch]$UseDefaultPathOnHost,
 	[Parameter()]
@@ -4454,6 +4456,11 @@ Process {
 					}
 					If (![System.String]::IsNullOrEmpty($VMNetworkAdapterEntry.DnsServers)) {
 						$AddVMNetworkAdapterToDHCP['DnsServer'] = $VMNetworkAdapterEntry.DnsServers
+					}
+
+					# define override parameters for DHCP reservation
+					If ($PSBoundParameters.ContainsKey('DhcpServer')) {
+						$AddVMNetworkAdapterToDHCP['ComputerName'] = $DhcpServer
 					}
 
 					# create DHCP reservation
