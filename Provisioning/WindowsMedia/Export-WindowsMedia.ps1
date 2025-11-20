@@ -137,12 +137,29 @@ begin {
 
 	# if Skip Exclude not requested...
 	if ($SkipExclude.IsPresent -eq $false) {
+		# add the staging path to the excluded paths in Windows Defender
 		try {
 			Add-MpPreference -ExclusionPath $global:WindowsMediaStagingPath -ErrorAction 'Stop'
 		}
 		catch {
-			Write-Warning -Message "could not create exclusion for staging path: $global:WindowsMediaStagingPath"
+			Write-Warning -Message "could not add Windows Defender path exclusion for staging path: $global:WindowsMediaStagingPath"
 			$PSCmdlet.ThrowTerminatingError($_)
+		}
+
+		# retrieve Windows Defender configuration
+		try {
+			$MpPreference = Get-MpPreference
+		}
+		catch {
+			Write-Warning -Message 'could not retrieve Windows Defender preferences to check excluded paths'
+			$PSCmdlet.ThrowTerminatingError($_)
+		}
+
+		# if the staging path is not in the excluded paths in Windows Defender...
+		if ($global:WindowsMediaStagingPath -notin $MpPreference.ExclusionPath) {
+			# warn and inquire
+			Write-Warning -Message "the Windows Defender excluded paths do not contain the global staging path: $global:WindowsMediaStagingPath"
+			Write-Warning -Message 'continue to process the Windows Media without the staging path excluded from Windows Defender scanning' -WarningAction Inquire
 		}
 	}
 
@@ -478,11 +495,13 @@ process {
 end {
 	# if Skip Exclude not requested...
 	if (!$SkipExclude) {
+		# remove the staging path from the excluded paths in Windows Defender
 		try {
 			Remove-MpPreference -ExclusionPath $global:WindowsMediaStagingPath -ErrorAction 'Stop'
 		}
 		catch {
-			Write-Warning -Message "could not remove exclusion for staging path: $global:WindowsMediaStagingPath"
+			Write-Warning -Message "could not remove Windows Defender path exclusion for staging path: $global:WindowsMediaStagingPath"
+			$PSCmdlet.ThrowTerminatingError($_)
 		}
 	}
 }
