@@ -106,11 +106,11 @@ begin {
 		param(
 			[Parameter(Position = 0, Mandatory)]
 			[string]$Name,
-			[uint32]$Limit = [uint32]5,
-			[uint32]$Seconds = [int32]5,
-			[uint32]$WaitTime = [int32]0,
-			[uint32]$Multiplier = [int32]0,
-			[switch]$SkipWaitTimeMultiplier
+			[switch]$Force,
+			[uint32]$TimeLimit = 60,
+			[uint32]$TimeBetweenQueries = 5,
+			[switch]$SkipWaitTimeMultiplier,
+			[switch]$WaitForDependentToStartService
 		)
 
 		# retrieve service by name
@@ -118,112 +118,86 @@ begin {
 			$Service = Get-Service -Name $Name -ErrorAction 'Stop'
 		}
 		catch {
-			Write-Warning -Message "$Name; could not retrieve service: $($_.Exception.Message)"
+			Write-Warning -Message "could not retrieve the '$Name' service: $($_.Exception.Message)"
 			throw $_
 		}
 
 		# if service running...
 		if ($Service.Status -eq 'Running') {
-			# report state and return
-			Write-Host "$Name; found service running"
+			# report state then return
+			Write-Host "the '$Name' service was found already running"
 			return
 		}
 
 		# if service start type is disabled...
 		if ($Service.StartType -eq 'Disabled') {
 			# warn before throwing exception
-			Write-Warning -Message "$Name; cannot start disabled service"
+			Write-Warning -Message "the '$Name' service is disabled and cannot start"
 			throw
 		}
 
-		# if service start type is manual...
-		if ($Service.StartType -eq 'Manual') {
-			# start service by name
+		# if service start type is manual or wait for dependent not requested...
+		if ($Service.StartType -eq 'Manual' -and -not $WaitForDependentToStartService) {
+			# start service by name and wait for service to start
 			try {
 				$Service = Start-Service -Name $Name -PassThru -ErrorAction 'Stop'
 			}
 			catch {
-				Write-Warning -Message "$Name; could not start service manually: $($_.Exception.Message)"
+				Write-Warning -Message "could not start the '$Name' service manually: $($_.Exception.Message)"
 				throw $_
 			}
 
-			# if service running...
-			if ($Service.Status -eq 'Running') {
-				# report state and return
-				Write-Host "$Name; started service manually"
-				return
-			}
-			# if service is not running...
-			else {
-				# warn before throwing exception
-				Write-Warning -Message "$Name; found service not running after starting service manually"
-				throw
-			}
+			# report state then return
+			Write-Host "the '$Name' service was started manually"
+			return
 		}
 
-		# while limit not reached and service not running...
-		while ($Multiplier -lt $Limit -and -not $Service.Status -eq 'Running') {
-			# increment multiplier
-			$Multiplier++
+		# report state
+		Write-Host "waiting for the '$Name' service to start..."
 
-			# if skip wait time multiplier requested...
-			if ($SkipWaitTimeMultiplier.IsPresent) {
-				$SecondsToSleep = $Seconds
-			}
-			# if skip wait time multiplier not requested...
-			else {
-				$SecondsToSleep = $Seconds * $Multiplier
-			}
+		# create and start stopwatch
+		$StopWatch = [System.Diagnostics.Stopwatch]::StartNew()
 
-			# record total wait time
-			$WaitTime += $SecondsToSleep
-
-			# report state then wait
-			Write-Host "...waiting an additional '$SecondsToSleep' seconds"
-			Start-Sleep -Seconds $SecondsToSleep
+		# while elapsed time is less than time limit and service not running...
+		while ($StopWatch.Elapsed.TotalSeconds -lt $TimeLimit -and $Service.Status -ne 'Running') {
+			# sleep between queries
+			Start-Sleep -Seconds $TimeBetweenQueries
 
 			# retrieve service by name
 			try {
 				$Service = Get-Service -Name $Name -ErrorAction 'Stop'
 			}
 			catch {
-				Write-Warning -Message "$Name; could not retrieve service: $($_.Exception.Message)"
+				Write-Warning -Message "could not retrieve the '$Name' service: $($_.Exception.Message)"
 				throw $_
 			}
 
 			# if service running...
 			if ($Service.Status -eq 'Running') {
 				# report state and wait time then return
-				Write-Host "$Name; found service running after '$WaitTime' seconds"
+				Write-Host "the '$Name' service was found running after '$([uint32]$StopWatch.Elapsed.TotalSeconds)' seconds"
 				return
 			}
-		}
 
+			# report state
+			Write-Host "...waiting an additional '$TimeBetweenQueries' seconds..."
+		}
 
 		# warn before starting service
-		Write-Warning -Message "$Name; found service not running after '$WaitTime' seconds; starting service..."
+		Write-Warning -Message "the '$Name' service was not found running after '$([uint32]$StopWatch.Elapsed.TotalSeconds)' seconds; starting service manually..."
 
-		# start the service
+		# start service by name and wait for service to start
 		try {
-			$Service = Start-Service -Name $Name -PassThru -Force -ErrorAction 'Stop'
+			$Service = Start-Service -Name $Name -PassThru -ErrorAction 'Stop'
 		}
 		catch {
-			Write-Warning -Message "$Name; could not start service: $($_.Exception.Message)"
+			Write-Warning -Message "could not start the '$Name' service manually: $($_.Exception.Message)"
 			throw $_
 		}
 
-		# if service running...
-		if ($Service.Status -eq 'Running') {
-			# report state and return
-			Write-Host "$Name; started service manually"
-			return
-		}
-		# if service is not running...
-		else {
-			# warn before throwing exception
-			Write-Warning -Message "$Name; found service not running after starting service manually"
-			throw
-		}
+		# report state and wait time then return
+		Write-Host "the '$Name' service was started manually after '$([uint32]$StopWatch.Elapsed.TotalSeconds)' seconds"
+		return
 	}
 }
 
