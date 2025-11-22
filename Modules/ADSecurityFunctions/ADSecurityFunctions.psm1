@@ -11,6 +11,9 @@ function Get-ADObjectTypeDefaultAccessRule {
 	.PARAMETER DisplayName
 	Specifies the value of the ldapDisplayName attribute of the schema object.
 
+	.PARAMETER Server
+	Specifies the server to query for the default access rule.
+
 	.INPUTS
 	System.String.
 
@@ -23,6 +26,7 @@ function Get-ADObjectTypeDefaultAccessRule {
 
 	[CmdletBinding()]
 	param (
+		# string for the display name of the schema object
 		[Parameter(Mandatory = $true, Position = 0, ValueFromPipeline)]
 		[string]$DisplayName,
 		# string for the server to query for GUIDs of schema objects and extended rights, the default server is the current PDC role owner
@@ -77,6 +81,9 @@ function Get-ADObjectTypeGuid {
 	.PARAMETER LimitToSchemaClassObjects
 	Switch to limit the search to only schema class objects.
 
+	.PARAMETER Server
+	Specifies the server to query for the object type or extended right.
+
 	.INPUTS
 	System.String.
 
@@ -95,8 +102,10 @@ function Get-ADObjectTypeGuid {
 
 	[CmdletBinding()]
 	param (
+		# string for the display name of the schema object
 		[Parameter(Mandatory = $true, Position = 0, ValueFromPipeline)]
 		[string]$DisplayName,
+		# switch that limits the query to class objects
 		[Parameter(Mandatory = $false)]
 		[switch]$LimitToSchemaClassObjects,
 		# string for the server where the schema will be queried, the default server is the current PDC role owner
@@ -403,6 +412,9 @@ function Get-ADAccessRule {
 	.PARAMETER AccessRule
 	Optional parameter for an existing list of access rules. The access rules retrieved will be added to this list and the updated list will be returned.
 
+	.PARAMETER Server
+	Optional parameter for the server where the access rules should be retrieved. The default value is the PDC of the current domain.
+
 	.INPUTS
 	System.Object.
 
@@ -446,7 +458,7 @@ function Get-ADAccessRule {
 		[Parameter(Mandatory = $false)]
 		[System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]$AccessRule = [System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]::new(),
 		# string for the server where the actions will be performed, the default server is the current PDC role owner
-		[Parameter(DontShow)]
+		[Parameter(Mandatory = $false)]
 		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
 	)
 
@@ -618,6 +630,9 @@ function New-ADAccessRule {
 
 	.PARAMETER AccessRule
 	Optional parameter for an existing list of access rules. The access rules created will be added to this list and the updated list will be returned.
+
+	.PARAMETER Server
+	Optional parameter for the server to query for resolving schema objects and extended rights to GUIDs. The default value is the PDC of the current domain.
 
 	.INPUTS
 	System.Security.Principal.SecurityIdentifier.
@@ -1332,6 +1347,9 @@ function Remove-ADSecurity {
 	.PARAMETER AccessRule
 	One or more Active Directory access rules. Each value must be a valid System.DirectoryServices.ActiveDirectoryAccessRule object.
 
+	.PARAMETER Server
+	Optional parameter for the server where the access rules should be updated. The default value is the PDC of the current domain.
+
 	.INPUTS
 	System.Object.
 
@@ -1351,7 +1369,7 @@ function Remove-ADSecurity {
 		[Parameter(Position = 1, Mandatory = $true)][Alias('Permissions')]
 		[object[]]$AccessRule,
 		# string for the server where the actions will be performed, the default server is the current PDC role owner
-		[Parameter(DontShow)]
+		[Parameter(Position = 2)]
 		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
 	)
 
@@ -1473,6 +1491,9 @@ function Revoke-ADSecurity {
 	.PARAMETER SecurityIdentifier
 	One or more security identifiers. Each value must be a valid System.Security.Principal.SecurityIdentifier object.
 
+	.PARAMETER Server
+	Optional parameter for the server where the access rules should be updated. The default value is the PDC of the current domain.
+
 	.INPUTS
 	System.Object.
 
@@ -1492,7 +1513,7 @@ function Revoke-ADSecurity {
 		[Parameter(Position = 1, Mandatory = $true)]
 		[object[]]$SecurityIdentifier,
 		# string for the server where the actions will be performed, the default server is the current PDC role owner
-		[Parameter(DontShow)]
+		[Parameter(Position = 2)]
 		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
 	)
 
@@ -1605,6 +1626,9 @@ function Reset-ADSecurity {
 	.PARAMETER Inheritance
 	Optional parameter to update the inheritance of the Active Directory objects.
 
+	.PARAMETER Server
+	Optional parameter for the server where the access rules should be updated. The default value is the PDC of the current domain.
+
 	.INPUTS
 	System.Object.
 
@@ -1627,7 +1651,7 @@ function Reset-ADSecurity {
 		[Parameter(Position = 2)][ValidateSet('Enable', 'Disable')]
 		[string]$Inheritance,
 		# string for the server where the actions will be performed, the default server is the current PDC role owner
-		[Parameter(DontShow)]
+		[Parameter(Position = 3)]
 		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
 	)
 
@@ -1826,6 +1850,9 @@ function Update-ADSecurity {
 	.PARAMETER Reset
 	Optional parameter to remove any existing access rules matching the identity reference in the provided access rules.
 
+	.PARAMETER Server
+	Optional parameter for the server where the access rules should be updated. The default value is the PDC of the current domain.
+
 	.INPUTS
 	System.Object.
 
@@ -1853,7 +1880,7 @@ function Update-ADSecurity {
 		[Parameter(Position = 3)]
 		[switch]$Reset,
 		# string for the server where the actions will be performed, the default server is the current PDC role owner
-		[Parameter(DontShow)]
+		[Parameter(Position = 4)]
 		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
 	)
 
