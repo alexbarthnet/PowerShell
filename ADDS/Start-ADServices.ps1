@@ -109,7 +109,7 @@ begin {
 			[switch]$Force,
 			[uint32]$TimeLimit = 60,
 			[uint32]$TimeBetweenQueries = 5,
-			[switch]$SkipWaitTimeMultiplier,
+			[switch]$TimeBetweenQueriesIsMultiplied,
 			[switch]$WaitForDependentToStartService
 		)
 
