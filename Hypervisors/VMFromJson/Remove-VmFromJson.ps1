@@ -10,6 +10,8 @@ Param(
 	[string]$ComputerName,
 	[Parameter(Position = 3)]
 	[string]$Path,
+	[Parameter(Position = 4)]
+	[string]$DhcpServer,
 	[Parameter()]
 	[switch]$PreserveVHDs,
 	[Parameter()]
@@ -1491,17 +1493,18 @@ Process {
 		}
 
 		# override ComputerName with bound parameters if provided
-		If ($PSBoundParameters['ComputerName']) {
-			$ComputerName = $ComputerName
-			Write-Host ("$Hostname,$ComputerName,$Name - WARNING: overriding ComputerName from JSON: '$($JsonData.$Name.ComputerName)'")
+		If ($PSBoundParameters.ContainsKey('ComputerName')) {
+			$ComputerName = $PSBoundParameters['ComputerName']
+			Write-Warning ("overriding ComputerName from JSON: '$($JsonData.$Name.ComputerName)'")
 		}
 		Else {
 			$ComputerName = $JsonData.$Name.ComputerName
 		}
 
 		# override VirtualMachinePath with bound parameters if provided
-		If ($PSBoundParameters['Path']) {
-			Write-Host ("$Hostname,$ComputerName,$Name - WARNING: overriding Path from JSON: '$($JsonData.$Name.Path)'")
+		If ($PSBoundParameters.ContainsKey('Path')) {
+			$Path = $PSBoundParameters['Path']
+			Write-Warning ("overriding Path from JSON: '$($JsonData.$Name.Path)'")
 		}
 		Else {
 			$Path = $JsonData.$Name.Path
@@ -1848,11 +1851,16 @@ Process {
 			ForEach ($VMNetworkAdapterEntry in $JsonData.$Name.VMNetworkAdapters) {
 				# if VM network adapter has DHCP server, DHCP scope, and IP address...
 				If ($null -ne $VMNetworkAdapterEntry.DhcpServer -and $null -ne $VMNetworkAdapterEntry.DhcpScope -and $null -ne $VMNetworkAdapterEntry.IPAddress) {
-					# define parameters for Remove-VMNetworkAdapterFromDHCP
+					# define required parameters for Remove-VMNetworkAdapterFromDHCP
 					$RemoveVMNetworkAdapterFromDHCP = @{
 						ComputerName = $VMNetworkAdapterEntry.DhcpServer
 						ScopeId      = $VMNetworkAdapterEntry.DhcpScope
 						IPAddress    = $VMNetworkAdapterEntry.IPAddress
+					}
+
+					# define override parameters for Remove-VMNetworkAdapterFromDHCP
+					If ($PSBoundParameters.ContainsKey('DhcpServer')) {
+						$RemoveVMNetworkAdapterFromDHCP['ComputerName'] = $DhcpServer
 					}
 
 					# remove VMNetworkAdapter from DHCP

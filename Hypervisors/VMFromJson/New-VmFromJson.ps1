@@ -10,6 +10,8 @@ Param(
 	[string]$ComputerName,
 	[Parameter(Position = 3)]
 	[string]$Path,
+	[Parameter(Position = 4)]
+	[string]$DhcpServer,
 	[Parameter()]
 	[switch]$UseDefaultPathOnHost,
 	[Parameter()]
@@ -20,6 +22,8 @@ Param(
 	[switch]$SkipStart,
 	[Parameter()]
 	[switch]$SkipClustering,
+	[Parameter()]
+	[switch]$SkipVMConnect,
 	[Parameter()]
 	[switch]$ChooseBestNode,
 	[Parameter()]
@@ -4010,8 +4014,8 @@ Process {
 		}
 
 		# override ComputerName with bound parameters if provided
-		If ($PSBoundParameters['ComputerName']) {
-			$ComputerName = $ComputerName
+		If ($PSBoundParameters.ContainsKey('ComputerName')) {
+			$ComputerName = $PSBoundParameters['ComputerName']
 			Write-Warning ("overriding ComputerName from JSON: '$($JsonData.$Name.ComputerName)'")
 		}
 		Else {
@@ -4019,8 +4023,8 @@ Process {
 		}
 
 		# override VirtualMachinePath with bound parameters if provided
-		If ($PSBoundParameters['Path']) {
-			$Path = $Path
+		If ($PSBoundParameters.ContainsKey('Path')) {
+			$Path = $PSBoundParameters['Path']
 			Write-Warning ("overriding Path from JSON: '$($JsonData.$Name.Path)'")
 		}
 		Else {
@@ -4456,6 +4460,11 @@ Process {
 						$AddVMNetworkAdapterToDHCP['DnsServer'] = $VMNetworkAdapterEntry.DnsServers
 					}
 
+					# define override parameters for DHCP reservation
+					If ($PSBoundParameters.ContainsKey('DhcpServer')) {
+						$AddVMNetworkAdapterToDHCP['ComputerName'] = $DhcpServer
+					}
+
 					# create DHCP reservation
 					Try {
 						Add-VMNetworkAdapterToDHCP @AddVMNetworkAdapterToDHCP
@@ -4881,9 +4890,8 @@ Process {
 					Throw $_
 				}
 
-				# declare and continue
+				# report state
 				Write-Host ("$Hostname,$ComputerName,$Name - ...started VM on cluster")
-				Continue
 			}
 			# if cluster group is online and ForceRestart set...
 			ElseIf ($ClusterGroup.State -eq 'Online' -and $ForceRestart) {
@@ -4927,19 +4935,18 @@ Process {
 					Throw $_
 				}
 
-				# declare and continue
+				# report state
 				Write-Host ("$Hostname,$ComputerName,$Name - ...restarted VM on cluster")
 				Continue
 			}
 			# if cluster group is online and ForceRestart not set...
 			ElseIf ($ClusterGroup.State -eq 'Online') {
-				# declare and continue
+				# report state
 				Write-Host ("$Hostname,$ComputerName,$Name - ...found VM running on cluster")
-				Continue
 			}
 			# if cluster group is not in an expected state...
 			Else {
-				# declare and continue
+				# report state and continue
 				Write-Host ("$Hostname,$ComputerName,$Name - ...found VM cluster group in unexpected state: $($ClusterGroup.State)")
 				Continue
 			}
@@ -4965,9 +4972,8 @@ Process {
 					Throw $_
 				}
 
-				# declare and continue
+				# report state
 				Write-Host ("$Hostname,$ComputerName,$Name - ...started VM on host")
-				Continue
 			}
 			# if VM is online and ForceRestart set...
 			ElseIf ($VM.State -eq 'Running' -and $ForceRestart) {
@@ -4983,21 +4989,31 @@ Process {
 					Throw $_
 				}
 
-				# declare and continue
+				# report state
 				Write-Host ("$Hostname,$ComputerName,$Name - ...restarted VM on host")
-				Continue
 			}
 			# if VM is online and ForceRestart not set...
 			ElseIf ($VM.State -eq 'Running') {
-				# declare and continue
+				# report state
 				Write-Host ("$Hostname,$ComputerName,$Name - ...found VM running on host")
-				Continue
 			}
 			# if VM is not in an expected state...
 			Else {
-				# declare and continue
+				# report state and continue
 				Write-Host ("$Hostname,$ComputerName,$Name - ...found VM in unexpected state: $($VM.State)")
 				Continue
+			}
+		}
+
+		# if skip VM connect not requested...
+		If ($null -ne $VM -and -not $SkipVMConnect) {
+			# start VM connect with hypervisor as first argument and VM as second argument
+			Try { 
+				Start-Process -FilePath 'vmconnect.exe' -ArgumentList $ComputerName, $Name
+			}
+			Catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: connecting to VM")
+				Throw $_
 			}
 		}
 	}

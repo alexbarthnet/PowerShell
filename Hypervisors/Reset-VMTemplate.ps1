@@ -231,6 +231,9 @@ if ($SkipRebuild -eq $false -or -not $SkipRebuild.IsPresent) {
 
 # if skip copy set to false or not requested...
 if ($SkipCopy -eq $false -or -not $SkipCopy.IsPresent ) {
+	# define counter
+	$Counter = 0
+
 	# loop through VM names - wait for rebuild to complete
 	:NextNameForWait foreach ($Name in $VMName) { 
 		# retrieve VMs on local system
@@ -260,9 +263,6 @@ if ($SkipCopy -eq $false -or -not $SkipCopy.IsPresent ) {
 			continue NextNameForWait
 		}
 
-		# define counter
-		$Counter = 0
-
 		# if VM is not powered off...
 		while ($VM.State -ne 'Off') {
 			# wait 1 minute
@@ -271,10 +271,19 @@ if ($SkipCopy -eq $false -or -not $SkipCopy.IsPresent ) {
 			# increment counter
 			$Counter++
 
-			#report state
-			Write-Host "Waited $Counter minute(s) for VM to rebuild: '$Name'"
+			# retrieve VMs on local system
+			try {
+				$VM = Get-VM | Where-Object { $_.Name -eq $Name }
+			}
+			catch {
+				Write-Warning -Message "could not retrieve local VMs: $($_.Exception.Message)"
+				return $_
+			}
 		}
 	}
+
+	#report state
+	Write-Host "Waited $Counter minute(s) for VM(s) to rebuild"
 
 	# report state
 	Write-Host "Copying VHD(s) to '$RelativePath' folder in each CSV"

@@ -68,6 +68,8 @@ param(
 	[Parameter(ParameterSetName = 'USB', Mandatory = $false)][ValidateSet('NTFS', 'FAT32')]
 	[string]$FileSystem = 'NTFS',
 	[Parameter(Mandatory = $false)]
+	[string]$FileSystemLabel = 'WindowsMedia',
+	[Parameter(Mandatory = $false)]
 	[string]$FileSystemLabelSuffix = 'UNATTENDED',
 	[Parameter(Mandatory = $false)]
 	[string]$Path,
@@ -135,12 +137,29 @@ begin {
 
 	# if Skip Exclude not requested...
 	if ($SkipExclude.IsPresent -eq $false) {
+		# add the staging path to the excluded paths in Windows Defender
 		try {
 			Add-MpPreference -ExclusionPath $global:WindowsMediaStagingPath -ErrorAction 'Stop'
 		}
 		catch {
-			Write-Warning -Message "could not create exclusion for staging path: $global:WindowsMediaStagingPath"
+			Write-Warning -Message "could not add Windows Defender path exclusion for staging path: $global:WindowsMediaStagingPath"
 			$PSCmdlet.ThrowTerminatingError($_)
+		}
+
+		# retrieve Windows Defender configuration
+		try {
+			$MpPreference = Get-MpPreference
+		}
+		catch {
+			Write-Warning -Message 'could not retrieve Windows Defender preferences to check excluded paths'
+			$PSCmdlet.ThrowTerminatingError($_)
+		}
+
+		# if the staging path is not in the excluded paths in Windows Defender...
+		if ($global:WindowsMediaStagingPath -notin $MpPreference.ExclusionPath) {
+			# warn and inquire
+			Write-Warning -Message "the Windows Defender excluded paths do not contain the global staging path: $global:WindowsMediaStagingPath"
+			Write-Warning -Message 'continue to process the Windows Media without the staging path excluded from Windows Defender scanning' -WarningAction Inquire
 		}
 	}
 
@@ -162,12 +181,30 @@ begin {
 }
 
 process {
-	# retrieve file system label
-	try {
-		$FileSystemLabel = Get-Content -Path (Join-Path -Path $TemporaryPath -ChildPath 'label.txt')
-	}
-	catch {
-		return $_
+	# if file system label not provided...
+	if (!$PSBoundParameters.ContainsKey('FileSystemLabel')) {
+		# define saved file system label file
+		$FileSystemLabelFile = Join-Path -Path $TemporaryPath -ChildPath 'label.txt'
+
+		# if file system label file not found...
+		if (![System.IO.File]::Exists($FileSystemLabelFile)) {
+			Write-Warning -Message "could not locate file system label file: $FileSystemLabelFile"
+			Write-Warning -Message "continue to use default 'WindowsMedia' as base for file system label" -WarningAction Inquire
+		}
+
+		# retrieve file system label
+		try {
+			$FileSystemLabel = Get-Content -Path $FileSystemLabelFile
+		}
+		catch {
+			return $_
+		}
+
+		# if file system label is empty...
+		if ([System.String]::IsNullOrEmpty($FileSystemLabel)) {
+			Write-Warning -Message "found empty file system label file: $FileSystemLabelFile"
+			Write-Warning -Message "continue to use default 'WindowsMedia' as base for file system label" -WarningAction Inquire
+		}
 	}
 
 	# if file system label suffix exists...
@@ -212,13 +249,13 @@ process {
 			}
 
 			########################################
-			# write prepared image to ISO image
+			# prepare ISO image path
 			########################################
 
 			# if ISO image exists...
 			if ([System.IO.File]::Exists($ImagePath)) {
 				# report state
-				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Removing ISO image', $ImagePath
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Removing previous ISO image', $ImagePath
 
 				# retrieve existing ISO image
 				try {
@@ -231,7 +268,7 @@ process {
 			# if ISO image exists...
 			else {
 				# report state
-				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Verifying ISO image page', $ImagePath
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Verifying ISO image path', $ImagePath
 
 				# create temporary file for ISO image to create path
 				try {
@@ -249,6 +286,10 @@ process {
 			catch {
 				return $_
 			}
+
+			########################################
+			# write prepared image to ISO image
+			########################################
 
 			# report state
 			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Creating ISO image', $ImagePath
@@ -450,7 +491,7 @@ process {
 			}
 		}
 		Default {
-			Write-Warning -Message "export format not defined not remove exclusion for staging path: $global:WindowsMediaStagingPath"
+			Write-Warning -Message 'export format not defined'
 		}
 	}
 }
@@ -458,11 +499,13 @@ process {
 end {
 	# if Skip Exclude not requested...
 	if (!$SkipExclude) {
+		# remove the staging path from the excluded paths in Windows Defender
 		try {
 			Remove-MpPreference -ExclusionPath $global:WindowsMediaStagingPath -ErrorAction 'Stop'
 		}
 		catch {
-			Write-Warning -Message "could not remove exclusion for staging path: $global:WindowsMediaStagingPath"
+			Write-Warning -Message "could not remove Windows Defender path exclusion for staging path: $global:WindowsMediaStagingPath"
+			$PSCmdlet.ThrowTerminatingError($_)
 		}
 	}
 }

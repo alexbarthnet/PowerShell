@@ -1,12 +1,9 @@
 <#
 .SYNOPSIS
-Imports Windows installation media to a staging path.
+Removes Windows installation media from a staging path.
 
 .DESCRIPTION
-Imports Windows installation media to a staging path. This enables peer scripts to update and export the media.
-
-.PARAMETER ImagePath
-Path to the ISO image containing Windows installation media.
+Removes Windows installation media from a staging path. This cleans up after peer scripts that imported, updated, and exported the media.
 
 .PARAMETER Path
 Path to the staging folder for the Windows installation media. This value is only required when updating media in an existing staging path and the staging path parameter has been cleared.
@@ -96,12 +93,29 @@ begin {
 
 	# if Skip Exclude not requested...
 	if ($SkipExclude.IsPresent -eq $false) {
+		# add the staging path to the excluded paths in Windows Defender
 		try {
 			Add-MpPreference -ExclusionPath $global:WindowsMediaStagingPath -ErrorAction 'Stop'
 		}
 		catch {
-			Write-Warning -Message "could not create exclusion for staging path: $global:WindowsMediaStagingPath"
+			Write-Warning -Message "could not add Windows Defender path exclusion for staging path: $global:WindowsMediaStagingPath"
 			$PSCmdlet.ThrowTerminatingError($_)
+		}
+
+		# retrieve Windows Defender configuration
+		try {
+			$MpPreference = Get-MpPreference
+		}
+		catch {
+			Write-Warning -Message 'could not retrieve Windows Defender preferences to check excluded paths'
+			$PSCmdlet.ThrowTerminatingError($_)
+		}
+
+		# if the staging path is not in the excluded paths in Windows Defender...
+		if ($global:WindowsMediaStagingPath -notin $MpPreference.ExclusionPath) {
+			# warn and inquire
+			Write-Warning -Message "the Windows Defender excluded paths do not contain the global staging path: $global:WindowsMediaStagingPath"
+			Write-Warning -Message 'continue to process the Windows Media without the staging path excluded from Windows Defender scanning' -WarningAction Inquire
 		}
 	}
 
@@ -214,11 +228,13 @@ process {
 end {
 	# if Skip Exclude not requested...
 	if (!$SkipExclude) {
+		# remove the staging path from the excluded paths in Windows Defender
 		try {
 			Remove-MpPreference -ExclusionPath $global:WindowsMediaStagingPath -ErrorAction 'Stop'
 		}
 		catch {
-			Write-Warning -Message "could not remove exclusion for staging path: $global:WindowsMediaStagingPath"
+			Write-Warning -Message "could not remove Windows Defender path exclusion for staging path: $global:WindowsMediaStagingPath"
+			$PSCmdlet.ThrowTerminatingError($_)
 		}
 	}
 }
