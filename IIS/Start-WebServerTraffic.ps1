@@ -184,12 +184,12 @@ process {
 	# if configured state file found...
 	if ($ConfiguredStateFileExists) {
 		# report state
-		Write-Host "found '$PathForConfiguredState' configured state file; checking services"
+		Write-Host "the '$PathForConfiguredState' configured state file was found; checking services"
 	}
 	# if configured state file not found...
 	else {
 		# warn and return
-		Write-Warning -Message "the '$PathForConfiguredState' configured state file was not found; skipping service checks"
+		Write-Warning -Message "the '$PathForConfiguredState' configured state file was NOT found; skipping service checks"
 		return
 	}
 

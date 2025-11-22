@@ -46,7 +46,7 @@ process {
 	}
 	# if ready state file not found...
 	else {
-		Write-Warning -Message "the '$PathForReadyState' ready state file was not found"
+		Write-Warning -Message "the '$PathForReadyState' ready state file was NOT found; skipping wait for load balancers"
 		return
 	}
 
