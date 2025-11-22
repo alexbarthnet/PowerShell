@@ -25,9 +25,26 @@ function Get-ADObjectTypeDefaultAccessRule {
 	param (
 		[Parameter(Mandatory = $true, Position = 0, ValueFromPipeline)]
 		[string]$DisplayName,
-		[Parameter(DontShow)]
-		[System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema()
+		# string for the server to query for GUIDs of schema objects and extended rights, the default server is the current PDC role owner
+		[Parameter(Mandatory = $false)]
+		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
 	)
+
+	# build directory context from server
+	try {
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new([System.DirectoryServices.ActiveDirectory.DirectoryContextType]::DirectoryServer, $Server)
+	}
+	catch {
+		throw $_
+	}
+
+	# retrieve schema from directory context
+	try {
+		$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetSchema($DirectoryContext)
+	}
+	catch {
+		throw $_
+	}
 
 	# retrieve default security descriptor for class with matching display name
 	try {
@@ -82,9 +99,26 @@ function Get-ADObjectTypeGuid {
 		[string]$DisplayName,
 		[Parameter(Mandatory = $false)]
 		[switch]$LimitToSchemaClassObjects,
-		[Parameter(DontShow)]
-		[System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetCurrentSchema()
+		# string for the server where the schema will be queried, the default server is the current PDC role owner
+		[Parameter(Mandatory = $false)]
+		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
 	)
+
+	# build directory context from server
+	try {
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new([System.DirectoryServices.ActiveDirectory.DirectoryContextType]::DirectoryServer, $Server)
+	}
+	catch {
+		throw $_
+	}
+
+	# retrieve schema from directory context
+	try {
+		$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetSchema($DirectoryContext)
+	}
+	catch {
+		throw $_
+	}
 
 	# retrieve schema guid for class with matching display name
 	try {
@@ -624,10 +658,26 @@ function New-ADAccessRule {
 		# create list for ActiveDirectoryAccessRule objects; supports importing existing ActiveDirectoryAccessRule object or existing list of ActiveDirectoryAccessRule objects
 		[Parameter(Mandatory = $false)]
 		[System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]$AccessRule = [System.Collections.Generic.List[System.DirectoryServices.ActiveDirectoryAccessRule]]::new(),
-		# object for schema
-		[Parameter(DontShow)]
-		[System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]$Schema = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().Schema
+		# string for the server to query for GUIDs of schema objects and extended rights, the default server is the current PDC role owner
+		[Parameter(Mandatory = $false)]
+		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
 	)
+
+	# build directory context from server
+	try {
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new([System.DirectoryServices.ActiveDirectory.DirectoryContextType]::DirectoryServer, $Server)
+	}
+	catch {
+		throw $_
+	}
+
+	# retrieve schema from directory context
+	try {
+		$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetSchema($DirectoryContext)
+	}
+	catch {
+		throw $_
+	}
 
 	# define script block for ScriptMethod
 	$ScriptBlock = {
