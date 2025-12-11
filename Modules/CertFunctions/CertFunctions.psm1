@@ -179,7 +179,7 @@ Function Export-CertificateAsPem {
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		[System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
 		[Parameter(Position = 1)]
-		[string]$FilePath,
+		[string]$Path,
 		[Parameter(Position = 2)]
 		[switch]$IncludeChain,
 		[Parameter(Position = 2)]
