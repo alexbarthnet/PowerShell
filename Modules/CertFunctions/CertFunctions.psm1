@@ -182,8 +182,12 @@ Function Export-CertificateAsPem {
 		[string]$Path,
 		[Parameter(Position = 2)]
 		[switch]$IncludeChain,
-		[Parameter(Position = 2)]
-		[switch]$IncludePrivateKey
+		[Parameter(Position = 3)]
+		[switch]$IncludePrivateKey,
+		[Parameter(Position = 4)]
+		[string]$NewLine = [System.Environment]::NewLine,
+		[Parameter(Position = 5)]
+		[Microsoft.PowerShell.Commands.FileSystemCmdletProviderEncoding]$Encoding = [Microsoft.PowerShell.Commands.FileSystemCmdletProviderEncoding]::ASCII
 	)
 
 	# creat empty string for certificate
@@ -222,7 +226,7 @@ Function Export-CertificateAsPem {
 			$CertificateString = $PrivateKeyInPEM
 		}
 		Else {
-			$CertificateString = $CertificateString, $PrivateKeyInPEM -join "`r`n"
+			$CertificateString = $CertificateString, $PrivateKeyInPEM -join $NewLine
 		}
 	}
 
@@ -239,7 +243,7 @@ Function Export-CertificateAsPem {
 		$CertificateString = $CertificateBundle
 	}
 	Else {
-		$CertificateString = $CertificateString, $CertificateBundle -join "`r`n"
+		$CertificateString = $CertificateString, $CertificateBundle -join $NewLine
 	}
 
 
@@ -253,7 +257,7 @@ Function Export-CertificateAsPem {
 
 		# write the certificate bundle to path
 		Try {
-			Set-Content -Path $Path -Value $CertificateBundle
+			Set-Content -Path $Path -Value $CertificateBundle -Encoding $Encoding
 		}
 		Catch {
 			Throw $_
