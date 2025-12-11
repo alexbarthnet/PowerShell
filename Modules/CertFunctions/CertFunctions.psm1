@@ -268,7 +268,7 @@ Function Export-CertificateAsPem {
 
 		# write the certificate bundle to path
 		Try {
-			Set-Content -Path $Path -Value $CertificateBundle -Encoding $Encoding
+			Set-Content -Path $Path -Value $CertificateString -Encoding $Encoding -NoNewline
 		}
 		Catch {
 			Throw $_
@@ -277,7 +277,7 @@ Function Export-CertificateAsPem {
 	# if path not provided...
 	Else {
 		# display bundle
-		Return $CertificateBundle
+		Return $CertificateString
 	}
 }
 
