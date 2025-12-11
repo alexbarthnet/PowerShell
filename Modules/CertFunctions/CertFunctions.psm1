@@ -227,7 +227,7 @@ Function Export-CertificateAsPem {
 			Write-Warning -Message 'could not retrieve private key for certificate; continue to create PEM file without private key?' -WarningAction Inquire
 			$PrivateKeyInPEM = [string]::Empty
 		}
-		
+
 		# add encoded data to string
 		If ([string]::IsNullOrEmpty($CertificateString)) {
 			$CertificateString = $PrivateKeyInPEM
@@ -608,7 +608,7 @@ Function Get-CertificateAltSecurityIdentity {
 				Write-Warning 'UserPrincipalName not found on certificate'
 				Return $null
 			}
-			
+
 			# if UserPrincipalName is not unique...
 			If ($Certificate.Extensions.UserPrincipalName.Count -gt 1) {
 				# ...warn and return
@@ -1048,7 +1048,7 @@ Function Get-CertificatePrivateKeyObject {
 
 	.OUTPUTS
 	Object, Byte[]. An object or byte array representing the private key for the provided certificate.
-	
+
 	#>
 	[CmdletBinding()]
 	Param(
@@ -1130,7 +1130,7 @@ Function Get-CertificatePrivateKeyObject {
 		# return byte array
 		Return $ByteArray
 	}
-	
+
 	# return private key object
 	Return $PrivateKey
 }
@@ -1651,7 +1651,7 @@ Function Register-ServiceCertificate {
 
 	# define registry path for service certificate store
 	$ServicePath = 'HKLM:\SOFTWARE\Microsoft\Cryptography\Services\{0}\SystemCertificates\My\Certificates' -f $Service.ServiceName, $Certificate.Thumbprint
-	
+
 	# test registry path for service certificate store
 	$ServicePathFound = Test-Path -Path $ServicePath -PathType 'Container'
 
@@ -1727,7 +1727,7 @@ Function Unregister-ServiceCertificate {
 
 	# define registry path for service certificate store
 	$ServicePath = 'HKLM:\SOFTWARE\Microsoft\Cryptography\{0}\SystemCertificates\My\Certificates\{1}' -f $Service.ServiceName, $Certificate.Thumbprint
-	
+
 	# test registry path for service certificate store
 	$ServicePathFound = Test-Path -Path $ServicePath -PathType 'Container'
 
