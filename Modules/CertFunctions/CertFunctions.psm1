@@ -24,7 +24,9 @@ Function ConvertTo-PEMCertificate {
 		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
 		$InputObject,
 		[Parameter(Position = 1)]
-		[switch]$AsPrivateKey
+		[switch]$AsPrivateKey,
+		[Parameter(Position = 2)]
+		[string]$NewLine = [System.Environment]::NewLine
 	)
 
 	Write-Verbose $InputObject.GetType().FullName
@@ -67,12 +69,17 @@ Function ConvertTo-PEMCertificate {
 	# if private key requested...
 	If ($AsPrivateKey) {
 		# create PEM-formatted string for a private key from base64-encoded string
-		$PemFormattedString = '-----BEGIN PRIVATE KEY-----', $Base64String, '-----END PRIVATE KEY-----' -join "`r`n"
+		$PemFormattedString = '-----BEGIN PRIVATE KEY-----', $Base64String, '-----END PRIVATE KEY-----' -join $NewLine
 	}
 	# if private key not requested...
 	Else {
 		# create PEM-formatted string for a certificate from base64-encoded string
-		$PemFormattedString = '-----BEGIN CERTIFICATE-----', $Base64String, '-----END CERTIFICATE-----' -join "`r`n"
+		$PemFormattedString = '-----BEGIN CERTIFICATE-----', $Base64String, '-----END CERTIFICATE-----' -join $NewLine
+	}
+
+	# update NewLine characters
+	if ($NewLine -ne "`r`n") {
+		$PemFormattedString = $PemFormattedString -replace "`r`n", $NewLine
 	}
 
 	# return PEM-formatted string
@@ -208,7 +215,7 @@ Function Export-CertificateAsPem {
 		If ($PrivateKeyAsByteArray) {
 			# convert private key byte array to PEM-formatted string
 			Try {
-				$PrivateKeyInPEM = ConvertTo-PEMCertificate -InputObject $PrivateKeyAsByteArray -AsPrivateKey
+				$PrivateKeyInPEM = ConvertTo-PEMCertificate -InputObject $PrivateKeyAsByteArray -AsPrivateKey -NewLine $NewLine
 			}
 			Catch {
 				Throw $_
@@ -232,7 +239,7 @@ Function Export-CertificateAsPem {
 
 	# get certificate bundle with original certificate
 	Try {
-		$CertificateBundle = Get-CertificateBundle -Certificate $Certificate -IncludeCertificate
+		$CertificateBundle = Get-CertificateBundle -Certificate $Certificate -IncludeCertificate -NewLine $NewLine
 	}
 	Catch {
 		Throw $_
@@ -246,6 +253,10 @@ Function Export-CertificateAsPem {
 		$CertificateString = $CertificateString, $CertificateBundle -join $NewLine
 	}
 
+	# update NewLine characters
+	if ($NewLine -ne "`r`n") {
+		$CertificateString = $CertificateString -replace "`r`n", $NewLine
+	}
 
 	# if path provided...
 	If ($PSBoundParameters.ContainsKey('Path')) {
@@ -306,7 +317,11 @@ Function Get-CertificateBundle {
 		[Parameter(Position = 2)]
 		[switch]$IncludeCertificate,
 		[Parameter(Position = 3)]
-		[switch]$RootFirst
+		[switch]$RootFirst,
+		[Parameter(Position = 4)]
+		[string]$NewLine = [System.Environment]::NewLine,
+		[Parameter(Position = 5)]
+		[Microsoft.PowerShell.Commands.FileSystemCmdletProviderEncoding]$Encoding = [Microsoft.PowerShell.Commands.FileSystemCmdletProviderEncoding]::ASCII
 	)
 
 	# get certificate chain from certificate
@@ -335,7 +350,7 @@ Function Get-CertificateBundle {
 
 		# convert certificate to PEM-formatted string
 		Try {
-			$CertificateInChainPEM = ConvertTo-PEMCertificate -InputObject $CertificateInChain.RawData
+			$CertificateInChainPEM = ConvertTo-PEMCertificate -InputObject $CertificateInChain.RawData -NewLine $NewLine
 		}
 		Catch {
 			Write-Warning -Message 'could not create PEM-formatted string from byte array'
@@ -347,8 +362,13 @@ Function Get-CertificateBundle {
 			$CertificateBundle = $CertificateInChainPEM
 		}
 		Else {
-			$CertificateBundle = $CertificateBundle, $CertificateInChainPEM -join "`r`n"
+			$CertificateBundle = $CertificateBundle, $CertificateInChainPEM -join $NewLine
 		}
+	}
+
+	# update NewLine characters
+	if ($NewLine -ne "`r`n") {
+		$CertificateBundle = $CertificateBundle -replace "`r`n", $NewLine
 	}
 
 	# if path provided...
@@ -361,7 +381,7 @@ Function Get-CertificateBundle {
 
 		# write the certificate bundle to path
 		Try {
-			Set-Content -Path $Path -Value $CertificateBundle
+			Set-Content -Path $Path -Value $CertificateBundle -Encoding $Encoding -NoNewline
 		}
 		Catch {
 			Throw $_
