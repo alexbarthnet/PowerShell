@@ -233,6 +233,8 @@ elseif ($ContentPath -ne $DfsrMembership.ContentPath) {
 else {
     # do not update DFS-R membership
     $UpdateMembership = $false
+    # report state
+    Write-Host "Found expected membership of '$ComputerName' in '$GroupName' DFS-R group"
 }
 
 # if membership update required...
