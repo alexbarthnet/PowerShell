@@ -13,7 +13,7 @@ param(
     [Parameter(Position = 3)]
     [switch]$ForcePrimaryMember, 
     [Parameter(Position = 4)]
-    [switch]$SkipContentPathAcl
+    [switch]$AddContentPathAcl
 )
 
 # define error preference
@@ -252,8 +252,37 @@ if ($UpdateMembership) {
     Write-Host "Updated DFS-R membership: set '$ContentPath' on '$ComputerName' as content path for '$GroupName' folder in '$GroupName' DFS-R group"
 }
 
-# if account name provided and skip content path ACL not provided...
-if ($PSBoundParameters.ContainsKey('AccountName') -and -not $SkipContentPathAcl) {
+# if add content path ACL requested and account name provided...
+if ($AddContentPathAcl -and $PSBoundParameters.ContainsKey('AccountName')) {
+    # set update content path to true
+    $UpdateContentPath = $true
+    # report state
+    Write-Host "Will update ACL for '$ContentPath' content path: switch parameter provided"
+}
+# if computer is primary member and account name provided...
+elseif ($PrimaryMember -and $PSBoundParameters.ContainsKey('AccountName')) {
+    # set update content path to true
+    $UpdateContentPath = $true
+    # report state
+    Write-Host "Will update ACL for '$ContentPath' content path: computer is primary member"
+}
+# if add content path ACL requested and account name not provided...
+elseif ($AddContentPathAcl -and -not $PSBoundParameters.ContainsKey('AccountName')) {
+    # do not update content path
+    $UpdateContentPath = $false
+    # report state
+    Write-Host "Skipping ACL update for '$ContentPath' content path: AccountName parameter not provided"
+}
+# if no conditions met...
+else {
+    # do not update content path
+    $UpdateContentPath = $false
+    # report state
+    Write-Host "Skipping ACL update for '$ContentPath' content path"
+}
+
+# if content path ACL update required...
+if ($UpdateContentPath) {
     # retrieve SID for account name
     try {
         $SecurityIdentifier = [System.Security.Principal.NTAccount]::new($AccountName).Translate([System.Security.Principal.SecurityIdentifier])
