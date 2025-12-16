@@ -77,7 +77,7 @@ $DfsReplicatedFolder = Get-DfsReplicatedFolder @Dfsr -FolderName $GroupName
 if (!$DfsReplicatedFolder) {
     # create DFS-R folder
     try {
-        New-DfsReplicatedFolder @Dfsr -FolderName $GroupName
+        $null = New-DfsReplicatedFolder @Dfsr -FolderName $GroupName
     }
     catch {
         Write-Warning -Message "could not create '$GroupName' folder in '$GroupName' DFS-R group: $($_.Exception.Message)"
