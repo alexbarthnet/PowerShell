@@ -212,7 +212,8 @@ try {
     $DfsrMembership = Get-DfsrMembership @Dfsr -ComputerName $ComputerName
 }
 catch {
-    <#Do this if a terminating exception happens#>
+    Write-Warning -Message "could not retrieve membership in '$GroupName' DFS-R group: $($_.Exception.Message)"
+    return $_
 }
 
 # if primary member is set but member is not primary...
