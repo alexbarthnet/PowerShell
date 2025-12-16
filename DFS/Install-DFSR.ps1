@@ -147,7 +147,7 @@ elseif ($DfsrCurrentMembers.Count -eq 0) {
     # report state
     Write-Host "Found '$GroupName' DFS-R group has no members: will set '$ComputerName' as primary member"
 }
-# if DFS-R group has only computer as member...
+# if DFS-R group has current computer as only member...
 elseif ($DfsrCurrentMembers.Count -eq 1 -and $DfsrCurrentMembers.ComputerName -eq $ComputerName) {
     # set primary member to true
     $PrimaryMember = $true
@@ -181,7 +181,7 @@ if ($DfsrFormerMembers.Count) {
         }
         # if DFS-R admin command not found...
         else {
-            Write-Warning "found GUID of former member: $Guid"
+            Write-Warning -Message "found GUID of former member: $Guid"
         }
     }
 }
