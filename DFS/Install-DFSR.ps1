@@ -11,7 +11,9 @@ param(
     [Parameter(Position = 2)]
     [string]$AccountName,
     [Parameter(Position = 3)]
-    [switch]$ForcePrimaryMember
+    [switch]$ForcePrimaryMember, 
+    [Parameter(Position = 4)]
+    [switch]$SkipContentPathAcl
 )
 
 # define error preference
@@ -205,17 +207,101 @@ else {
     Write-Host "Found '$ComputerName' is a member of '$GroupName' DFS-R group"
 }
 
-# define local content path for DFSR membership
+# retrieve membership
 try {
-    $null = Set-DfsrMembership @Dfsr -ComputerName $ComputerName -FolderName $GroupName -ContentPath $ContentPath -PrimaryMember $PrimaryMember -Force
+    $DfsrMembership = Get-DfsrMembership @Dfsr -ComputerName $ComputerName
 }
 catch {
-    Write-Warning -Message "could not set DFS-R membership in '$GroupName' DFS-R group: $($_.Exception.Message)"
-    return $_
+    <#Do this if a terminating exception happens#>
 }
 
-# report state
-Write-Host "Set '$ContentPath' on '$ComputerName' as content path for '$GroupName' folder in '$GroupName' DFS-R group"
+# if primary member is set but member is not primary...
+if ($PrimaryMember -and -not $DfsrMembership.PrimaryMember) {
+    # set update membership to true
+    $UpdateMembership = $true
+    # report state
+    Write-Host "Will update membership of '$ComputerName' in '$GroupName' DFS-R group to set computer as primary member"
+}
+elseif ($ContentPath -ne $DfsrMembership.ContentPath) {
+    # set update membership to true
+    $UpdateMembership = $true
+    # report state
+    Write-Host "Will update membership of '$ComputerName' in '$GroupName' DFS-R group to set '$ContentPath' as content path"
+}
+# if no conditions met...
+else {
+    # do not update DFS-R membership
+    $UpdateMembership = $false
+}
+
+# if membership update required...
+if ($UpdateMembership) {
+    # define local content path for DFSR membership
+    try {
+        $null = Set-DfsrMembership @Dfsr -ComputerName $ComputerName -FolderName $GroupName -ContentPath $ContentPath -PrimaryMember $PrimaryMember -Force
+    }
+    catch {
+        Write-Warning -Message "could not set DFS-R membership in '$GroupName' DFS-R group: $($_.Exception.Message)"
+        return $_
+    }
+
+    # report state
+    Write-Host "Updated DFS-R membership: set '$ContentPath' on '$ComputerName' as content path for '$GroupName' folder in '$GroupName' DFS-R group"
+}
+
+# if account name provided and skip content path ACL not provided...
+if ($PSBoundParameters.ContainsKey('AccountName') -and -not $SkipContentPathAcl) {
+    # retrieve SID for account name
+    try {
+        $SecurityIdentifier = [System.Security.Principal.NTAccount]::new($AccountName).Translate([System.Security.Principal.SecurityIdentifier])
+    }
+    catch {
+        Write-Warning -Message "could not translate '$AccountName' account name to security identifier: $($_.Exception.Message)"
+        return $_
+    }
+
+    # create access rule
+    try {
+        $AccessRule = [System.Security.AccessControl.FileSystemAccessRule]::new($SecurityIdentifier, 'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow')
+    }
+    catch {
+        Write-Warning -Message "could not create file system access rule for '$AccountName' account name: $($_.Exception.Message)"
+        return $_
+    }
+
+    # retrieve ACL
+    try {
+        $Acl = Get-Acl -Path $ContentPath
+    }
+    catch {
+        Write-Warning -Message "could not retrieve ACL for '$ContentPath' content path: $($_.Exception.Message)"
+        return $_
+    }
+
+    # if ACL does not contain access rule...
+    if ($Acl.Access -notcontains $AccessRule) {
+        # add access rule to ACL
+        try {
+            $Acl.AddAccessRule($AccessRule)
+        }
+        catch {
+            Write-Warning -Message "could not update ACL for '$ContentPath' content path: $($_.Exception.Message)"
+            return $_
+        }
+
+        # update ACL
+        try {
+            $Acl | Set-Acl -Path $ContentPath
+        }
+        catch {
+            Write-Warning -Message "could not apply ACL to '$ContentPath' content path: $($_.Exception.Message)"
+            return $_
+        }
+
+        # report state
+        Write-Host "Granted '$AccountName' account name full control on '$ContentPath' path"
+    }
+}
 
 # retrieve DFS-R connections
 try {
