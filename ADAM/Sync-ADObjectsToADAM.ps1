@@ -184,22 +184,19 @@ process {
 
     # loop through the relative paths in configuration context
     :NextRelativePath foreach ($RelativePath in $ConfigurationContextContainerObjects.Keys) {
-        # create source identity from relative path and source configuration container
-        $SourceIdentity = '{0},{1}' -f $RelativePath, $SourceRootDSE.configurationNamingContext
-
-        # create target identity from relative path and target configuration container
-        $TargetIdentity = '{0},{1}' -f $RelativePath, $TargetRootDSE.configurationNamingContext
-
-        # retrieve hashtable
-        $AttributeTable = $ConfigurationContextContainerObjects[$RelativePath]
-
-        # define parameters for Sync-ADObjectProperties
+        # define initial parameters for Sync-ADObjectProperties
         $SyncADObjectProperties = @{
-            SourceIdentity = $SourceIdentity
-            TargetIdentity = $TargetIdentity
-            AttributeTable = $AttributeTable
             ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
         }
+
+        # update parameters with source identity from relative path and source configuration container
+        $SyncADObjectProperties['SourceIdentity'] = '{0},{1}' -f $RelativePath, $SourceRootDSE.configurationNamingContext
+
+        # update parameters with target identity from relative path and target configuration container
+        $SyncADObjectProperties['TargetIdentity'] = '{0},{1}' -f $RelativePath, $TargetRootDSE.configurationNamingContext
+
+        # update parameters with attributes hashtable
+        $SyncADObjectProperties['AttributeTable'] = $ConfigurationContextContainerObjects[$RelativePath]
 
         # if whatif requested...
         if ($WhatIfPreference -eq 'Continue') {
@@ -226,22 +223,19 @@ process {
 
     # loop through the relative paths in default naming context
     :NextRelativePath foreach ($RelativePath in $DefaultNamingContextContainerObjects.Keys) {
-        # create source identity from relative path and source configuration container
-        $SourceIdentity = '{0},{1}' -f $RelativePath, $SourceRootDSE.defaultNamingContext
-
-        # create target identity from relative path and target configuration container
-        $TargetIdentity = '{0},{1}' -f $RelativePath, $TargetRootDSE.defaultNamingContext
-
-        # retrieve hashtable
-        $AttributeTable = $DefaultNamingContextContainerObjects[$RelativePath]
-
-        # define parameters for Sync-ADObjectProperties
+        # define initial parameters for Sync-ADObjectProperties
         $SyncADObjectProperties = @{
-            SourceIdentity = $SourceIdentity
-            TargetIdentity = $TargetIdentity
-            AttributeTable = $AttributeTable
             ErrorAction    = [System.Management.Automation.ActionPreference]::Stop
         }
+
+        # update parameters with source identity from relative path and source configuration container
+        $SyncADObjectProperties['SourceIdentity'] = '{0},{1}' -f $RelativePath, $SourceRootDSE.defaultNamingContext
+
+        # update parameters with target identity from relative path and target configuration container
+        $SyncADObjectProperties['TargetIdentity'] = '{0},{1}' -f $RelativePath, $TargetRootDSE.defaultNamingContext
+
+        # update parameters with attributes hashtable
+        $SyncADObjectProperties['AttributeTable'] = $DefaultNamingContextContainerObjects[$RelativePath]
 
         # if whatif requested...
         if ($WhatIfPreference -eq 'Continue') {
