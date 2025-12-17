@@ -54,6 +54,9 @@ begin {
 			[string]$ComputerName = 'windowsupdate.microsoft.com'
 		)
 
+		# set progress preference
+		$ProgressPreference = 'SilentlyContinue'
+
 		# report state
 		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Verifying connectivity to Windows Update...'
 
