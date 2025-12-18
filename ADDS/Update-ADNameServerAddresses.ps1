@@ -433,23 +433,44 @@ function Find-ADNameServerAddresses {
 
             # if last character is odd...
             if ($LastCharacter % 2 -eq 1) {
-                # set index to 1
-                $Index = 1
+                # set parity index to 1
+                $ParityIndex = 1
+                # set member index to 0
+                $MemberIndex = 0
             }
             # if last character is even or 0...
             else {
-                # set index to 0
-                $Index = 0
+                # set parity index to 0
+                $ParityIndex = 0
+                # set member index to 1
+                $MemberIndex = 1
             }
 
-            # retrieve peer domain controller by index
-            $PeerDomainController = $DomainControllersInPeerSite[$Index]
+            # retrieve peer domain controller by parity index
+            $PeerDomainController = $OtherGlobalCatalogsInNearestSite[$ParityIndex]
 
             # add IP address of peer to DNS server addresses
             $ServerAddresses.Add($PeerDomainController.IPAddress)
 
             # report state
             Write-Host "Added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+
+            # if only one server address found...
+            if ($ServerAddresses.Count -eq 1) {
+                # report state
+                Write-Host "Found one domain controller in DNS server addresses with multiple domain controllers available in nearest site; identifying second available domain controller"
+
+                # retrieve peer domain controller from list with custom sort
+                $PeerDomainController = $OtherGlobalCatalogsInNearestSite[$MemberIndex]
+
+                # add IP address of peer to DNS server addresses
+                $ServerAddresses.Add($PeerDomainController.IPAddress)
+
+                # report state
+                Write-Host "Added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+            }
+        }
+    }
 }
 
 # if domain controller mode requested...
