@@ -1,11 +1,11 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    # mode for script
-    [Parameter(Position = 0)][ValidateSet('DomainController', 'Member')]
-    [string]$Mode = 'DomainController',
     # network adapter name
-    [Parameter(Position = 1)]
+    [Parameter(Position = 0)]
     [string]$Name = 'Ethernet',
+    # switch for 
+    [Parameter(Position = 1)]
+    [switch]$ForceDomainControllerMode,
     # preferred site name
     [Parameter(Position = 2)]
     [string]$PreferredPeerSiteName = 'Default-First-Site-Name',
@@ -450,13 +450,12 @@ function Find-ADNameServerAddresses {
 
             # report state
             Write-Host "Added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
-        }
-    }
+}
 
-    # return if two server addresses added
-    if ($ServerAddresses.Count -eq 2) {
-        return
-    }
+# if domain controller mode requested...
+If ($ForceDomainControllerMode) {
+    # set domain role to 4
+    $DomainRole = 4
 }
 
 # retrieve the named physical network adapter
@@ -515,8 +514,8 @@ catch {
     throw $_
 }
 
-# if mode is domain controller...
-if ($Mode -eq 'DomainController') {
+# if domain role is domain controller...
+if ($DomainRole -ge 4) {
     # add localhost to DNS server addresses
     $ServerAddresses.Add('127.0.0.1')
 
