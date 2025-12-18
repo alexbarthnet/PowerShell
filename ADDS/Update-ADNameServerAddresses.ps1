@@ -62,12 +62,6 @@ function ConvertTo-ListSortedFromFirstObject {
 }
 
 function Find-ADNameServerAddresses {
-    param(
-        [object]$ComputerSite = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySite]::GetComputerSite(),
-        [string]$ComputerSiteName = $ComputerSite.Name,
-        [string]$ComputerSiteDistinguishedName = $ComputerSite.GetDirectoryEntry().DistinguishedName
-    )
-
     # retrieve other writeable global catalogs in current forest 
     $GlobalCatalogsInForest = $GlobalCatalogs.Where({ $_.OutboundConnections.Count -gt 0 -and $_.Name -ne $DnsHostName })
 
@@ -181,7 +175,7 @@ function Find-ADNameServerAddresses {
             # STATE: forest contains at least 2 other GCs, current site contains at least 2 other GCs
 
             # report state
-            Write-Host "Found '$($OtherGlobalCatalogsInSameSite.Count)' other domain controllers in same site; identifying first peer domain controller"
+            Write-Host "Found '$($OtherGlobalCatalogsInSameSite.Count)' available domain controllers in same site; identifying first available domain controller"
 
             # define sorted set for domain controllers in current site
             $DomainControllersForSameSite = [System.Collections.Generic.SortedSet[string]]::new()
@@ -195,7 +189,7 @@ function Find-ADNameServerAddresses {
             # add local computer to sorted set for custom sort
             $null = $DomainControllersForSameSite.Add($DnsHostName)
 
-            # convert sorted set to list with custom sort where current domain controller is first object
+            # convert sorted set to list with custom sort where local computer is first object
             try {
                 $ArrangedDomainControllerNames = ConvertTo-ListSortedFromFirstObject -InputObject $DomainControllersForSameSite -FirstObject $DnsHostName
             }
@@ -203,10 +197,10 @@ function Find-ADNameServerAddresses {
                 throw $_
             }
 
-            # retrieve peer domain controller from list with custom sort
+            # retrieve first peer domain controller from list with custom sort
             $PeerDomainController = $OtherGlobalCatalogsInSameSite | Where-Object { $_.Name -eq $ArrangedDomainControllerNames[1] }
 
-            # add IP address of peer to DNS server addresses
+            # add IP address of first peer domain controller to DNS server addresses
             $ServerAddresses.Add($PeerDomainController.IPAddress)
 
             # report state
@@ -233,7 +227,7 @@ function Find-ADNameServerAddresses {
                     return
                 }
                 1 {
-                    # STATE: forest contains at least 2 ` GCs, current site contains at least 2 other GCs, other sites contain 1 other GC
+                    # STATE: forest contains at least 2 other GCs, current site contains at least 2 other GCs, other sites contain 1 other GC
 
                     # report state
                     Write-Host 'Found one other writeable domain controllers in other sites; identifying last peer domain controller'
@@ -509,7 +503,7 @@ if ($Mode -eq 'DomainController') {
     $ServerAddresses.Add('127.0.0.1')
 
     # report state
-    Write-Host "Added '127.0.0.1' IP address for 'localhost' to DNS server addresses"
+    Write-Host "Added '127.0.0.1' IP address for 'localhost' to DNS server addresses for current or future domain controller"
 }
 
 # convert DNS server addresses list to string array
@@ -517,7 +511,7 @@ $ServerAddresses = $ServerAddresses -as [string[]]
 
 # define should process components
 $ShouldProcessTarget = $NetAdapter.Name
-$ShouldProcessAction = 'update DNS server addresses'
+$ShouldProcessAction = "set DNS server addresses: $($ServerAddresses -join ', ')"
 
 # if should process...
 if ($PSCmdlet.ShouldProcess($ShouldProcessTarget, $ShouldProcessAction)) {
