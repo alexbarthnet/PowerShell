@@ -426,7 +426,7 @@ function Find-ADNameServerAddresses {
         }
         Default {
             # report state
-            Write-Host "Found '$($OtherGlobalCatalogsInNearestSite.Count)' domain controllers in nearest site; selecting peer domain controller by parity of last character in local computer name"
+            Write-Host "Found '$($OtherGlobalCatalogsInNearestSite.Count)' domain controllers in nearest site; selecting domain controller by parity of last character in local computer name"
 
             # retrieve last character from computer name as byte
             $LastCharacter = $env:COMPUTERNAME[-1] -as [byte]
