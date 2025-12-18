@@ -416,7 +416,7 @@ function Find-ADNameServerAddresses {
             Write-Host 'Found one domain controller in nearest site; adding peer IP address to DNS server addresses'
 
             # retrieve peer domain controller
-            $PeerDomainController = $DomainControllersInPeerSite | Select-Object -First 1
+            $PeerDomainController = $OtherGlobalCatalogsInNearestSite | Select-Object -First 1
 
             # add IP address of peer to DNS server addresses
             $ServerAddresses.Add($PeerDomainController.IPAddress)
