@@ -206,6 +206,24 @@ function Find-ADNameServerAddresses {
             # report state
             Write-Host "Added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
 
+            # if domain role is member...
+            if ($DomainRole -lt 4) {
+                # report state
+                Write-Host "Found member domain role with multiple domain controllers available in same site; identifying second available domain controller"
+
+                # retrieve peer domain controller from list with custom sort
+                $PeerDomainController = $OtherGlobalCatalogsInSameSite | Where-Object { $_.Name -eq $ArrangedDomainControllerNames[2] }
+
+                # add IP address of peer to DNS server addresses
+                $ServerAddresses.Add($PeerDomainController.IPAddress)
+
+                # report state
+                Write-Host "Added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+
+                # return after updating DNS server addresses
+                return
+            }
+
             # switch on other global catalogs in other sites count
             switch ($OtherGlobalCatalogsInOtherSites.Count) {
                 0 {
