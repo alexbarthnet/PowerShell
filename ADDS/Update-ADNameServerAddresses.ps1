@@ -523,7 +523,7 @@ $ShouldProcessAction = 'update DNS server addresses'
 if ($PSCmdlet.ShouldProcess($ShouldProcessTarget, $ShouldProcessAction)) {
     # set DNS server addresses on network adapter
     try {
-        Set-DnsClientServerAddress -InputObject $NetAdapter -ServerAddresses $ServerAddresses
+        Set-DnsClientServerAddress -InterfaceAlias $NetAdapter.InterfaceAlias -ServerAddresses $ServerAddresses
     }
     catch {
         throw $_
