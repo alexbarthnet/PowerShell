@@ -338,7 +338,7 @@ function Find-ADNameServerAddresses {
                         Write-Host 'Found preferred site link, identifying peer sites'
 
                         # retrieve preferred site link
-                        $SiteLinkWithLowestCost = $SiteLinksWithLowestCost | Where-Object { $_.Name -eq $PreferredPeerSiteLinkName }
+                        $SiteLinkWithLowestCost = $SiteLinksWithLowestCost | Where-Object { $_.Name -eq $PreferredPeerSiteLinkName } | Select-Object -First 1
                     }
                     # if preferred peer site link name not found in site links with lowest cost...
                     else {
