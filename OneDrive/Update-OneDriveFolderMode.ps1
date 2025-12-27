@@ -201,6 +201,6 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 		}
 
 		# apply attributes to folder
-		Start-Process -Wait -NoNewWindow -FilePath 'attrib.exe' -ArgumentList $ArgumentList -
+		Start-Process -Wait -NoNewWindow -FilePath 'attrib.exe' -ArgumentList $ArgumentList -WorkingDirectory $Item.Directory.FullName
 	}
 }
