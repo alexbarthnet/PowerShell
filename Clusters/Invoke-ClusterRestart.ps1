@@ -13,6 +13,8 @@ Param(
 	[switch]$Suspend,
 	[Parameter(Mandatory, ParameterSetName = 'Resume')]
 	[switch]$Resume,
+	[Parameter(Mandatory, ParameterSetName = 'Report')]
+	[switch]$Report,
 	# mode to initiate process
 	[Parameter(ParameterSetName = 'Start')]
 	[switch]$Suspended,
@@ -25,6 +27,9 @@ Param(
 	# define cluster task name
 	[Parameter(DontShow)]
 	[string]$NodeTaskName = 'Unblock-ClusterRestart',
+	# switch to skip transcript logging
+	[Parameter(DontShow)]
+	[switch]$SkipClusteredStorageCheck,
 	# switch to skip transcript logging
 	[Parameter(DontShow)]
 	[switch]$SkipTranscript,
@@ -1504,34 +1509,37 @@ Process {
 			$Path = $MyInvocation.MyCommand.Path
 		}
 
-		# define boolean
-		$PathIsNotValid = $false
+		# if skip of cluster storage check not requested...
+		If (!$SkipClusteredStorageCheck) {
+			# define boolean
+			$PathIsNotValid = $false
 
-		# loop through cluster nodes
-		ForEach ($ClusterNode in $ClusterNodes) {
-			# if cluster node is not local computer...
-			If ($ClusterNode.NodeName -ne $env:COMPUTERNAME) {
-				# check remote computer for script
-				Try {
-					$NotFound = Invoke-Command -ComputerName $ClusterNode.NodeName -ScriptBlock { ![System.IO.File]::Exists($using:Path) }
-				}
-				Catch {
-					Write-Warning -Message "could not check '$($ClusterNode.NodeName)' cluster node for '$Path' path: $($_.Exception.Message)"
-					Return $_
-				}
+			# loop through cluster nodes
+			ForEach ($ClusterNode in $ClusterNodes) {
+				# if cluster node is not local computer...
+				If ($ClusterNode.NodeName -ne $env:COMPUTERNAME) {
+					# check remote computer for script
+					Try {
+						$NotFound = Invoke-Command -ComputerName $ClusterNode.NodeName -ScriptBlock { ![System.IO.File]::Exists($using:Path) }
+					}
+					Catch {
+						Write-Warning -Message "could not check '$($ClusterNode.NodeName)' cluster node for '$Path' path: $($_.Exception.Message)"
+						Return $_
+					}
 
-				# if script not found...
-				If ($NotFound) {
-					Write-Warning -Message "could not locate script on '$($ClusterNode.NodeName)' cluster node with '$Path' path"
-					$PathIsNotValid = $true
+					# if script not found...
+					If ($NotFound) {
+						Write-Warning -Message "could not locate script on '$($ClusterNode.NodeName)' cluster node with '$Path' path"
+						$PathIsNotValid = $true
+					}
 				}
 			}
-		}
 
-		# if path is not valid on one or more nodes...
-		If ($PathIsNotValid) {
-			Write-Warning -Message 'this script MUST be available on every cluster node to continue'
-			Return
+			# if path is not valid on one or more nodes...
+			If ($PathIsNotValid) {
+				Write-Warning -Message 'this script MUST be available on every cluster node to continue'
+				Return
+			}
 		}
 
 		################################################
@@ -1856,6 +1864,42 @@ Process {
 		# report and return
 		Write-Host "enabled '$ClusterTaskName' clustered scheduled task"
 		Return
+	}
+
+	# report
+	If ($PSCmdlet.ParameterSetName -eq 'Report') {
+		################################################
+		# check cluster scheduled task before starting
+		################################################
+
+		# retrieve clustered scheduled task for cluster
+		$ClusteredScheduledTask = $ClusteredScheduledTasks | Where-Object { $_.TaskName -eq $ClusterTaskName }
+
+		# if clustered scheduled task not found...
+		If (!$ClusteredScheduledTask) {
+			Write-Warning -Message "could not locate '$ClusterTaskName' clustered scheduled task"
+			Return
+		}
+
+		################################################
+		# retrieve stored state for cluster from task
+		################################################
+
+		# if description is empty...
+		If ([string]::IsNullOrEmpty($ClusteredScheduledTask.TaskDefinition.Description)) {
+			# warn and return
+			Write-Warning -Message "found empty description on '$ClusterTaskName' clustered scheduled task"
+			Return
+		}
+
+		# retrieve cluster state object from scheduled task description
+		Try {
+			$ClusterState = ConvertFrom-Json -InputObject $ClusteredScheduledTask.TaskDefinition.Description -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Warning -Message "could not convert description of scheduled task to JSON: $($_.Exception.Message)"
+			Return $_
+		}
 	}
 
 	# default
@@ -2521,7 +2565,7 @@ Process {
 
 End {
 	# if default parameter set...
-	If ($PSCmdlet.ParameterSetName -eq 'Default') {
+	If ($PSCmdlet.ParameterSetName -eq 'Default' -or $PSCmdlet.ParameterSetName -eq 'Report') {
 		# if current state found...
 		If ($null -eq $ClusterState) {
 			# report and display state
