@@ -1515,7 +1515,9 @@ Begin {
 			[Parameter()]
 			[uint32]$ClusterPriority,
 			[Parameter()]
-			[string[]]$ClusterAffinityRules
+			[string[]]$ClusterAffinityRules,
+			[Parameter()]
+			[bool]$DisableHeartbeat = $false
 		)
 
 		# get VM from parameters
@@ -1572,6 +1574,45 @@ Begin {
 
 			# declare state
 			Write-Host ("$Hostname,$ComputerName,$Name - ...added VM to cluster")
+		}
+
+		# if DisableHeartbeat provided...
+		if ($DisableHeartbeat) {
+			# define parameters for Get-ClusterResource
+			$GetClusterResource = @{
+				Cluster     = $ClusterName
+				VMId        = $VM.Id
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# retrieve existing cluster resource
+			try {
+				Write-Host ("$Hostname,$ComputerName,$Name - retrieving parameters for VM...")
+				$ClusterResource = Get-ClusterResource @GetClusterResource
+			}
+			catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: retrieving parameters for VM")
+				throw $_
+			}
+
+			# define parameters for Set-ClusterParameter
+			$SetClusterParameter = @{
+				Cluster     = $ClusterName
+				InputObject = $ClusterResource
+				Name        = 'CheckHeartbeat'
+				Value       = 0
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# disable heartbeat for cluster resource
+			try {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...disabling heartbeat for VM")
+				Set-ClusterParameter @SetClusterParameter
+			}
+			catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: disabling heartbeat for VM")
+				throw $_
+			}
 		}
 
 		# if cluster priority defined...
@@ -4846,6 +4887,9 @@ Process {
 				}
 				If ($null -ne $JsonData.$Name.ClusterAffinityRules) {
 					$AddVMToClusterName['ClusterAffinityRules'] = $JsonData.$Name.ClusterAffinityRules
+				}
+				if ($null -ne $JsonData.$Name.DisableHeartbeat) {
+					$AddVMToClusterName['DisableHeartbeat'] = $JsonData.$Name.DisableHeartbeat
 				}
 
 				# add VM to cluster
