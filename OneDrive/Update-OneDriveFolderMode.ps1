@@ -124,7 +124,7 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 			# if file is already pinned...
 			if ($Item.Attributes -band 0x80000 -and -not $Force.IsPresent) {
 				Write-Host "...found pinned: $OneDriveFolderPath"
-				continue NextOneDriveFolder
+				$ArgumentList = [string]::Empty
 			}
 			else {
 				Write-Host "...pinning: $OneDriveFolderPath"
@@ -135,7 +135,7 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 			# if file is already unpinned...
 			if ($Item.Attributes -band 0x100000 -and -not $Force.IsPresent) {
 				Write-Host "...found unpinned: $OneDriveFolderPath"
-				continue NextOneDriveFolder
+				$ArgumentList = [string]::Empty
 			}
 			else {
 				Write-Host "...unpinning: $OneDriveFolderPath"
@@ -147,12 +147,15 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 			$ArgumentList = '-p -u "{0}" /s /d' -f $OneDriveFolderPath
 		}
 		Default {
-			continue NextOneDriveFolder
+			$ArgumentList = [string]::Empty
 		}
 	}
 
-	# apply attributes to folder
-	Start-Process -Wait -NoNewWindow -FilePath 'attrib.exe' -ArgumentList $ArgumentList -WorkingDirectory $OneDriveFolderPath
+	# if argument list is not empty...
+	if (![string]::IsNullOrEmpty($ArgumentList)) {
+		# apply attributes to folder
+		Start-Process -Wait -NoNewWindow -FilePath 'attrib.exe' -ArgumentList $ArgumentList -WorkingDirectory $OneDriveFolderPath
+	}
 
 	# if folder only...
 	if ($FolderOnly.IsPresent) {
@@ -173,7 +176,7 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 				# if file is already pinned...
 				if ($Item.Attributes -band 0x80000 -and -not $Force.IsPresent) {
 					Write-Host "...found pinned: $Path"
-					continue NextOneDriveItem
+					$ArgumentList = [string]::Empty
 				}
 				else {
 					Write-Host "...pinning: $Path"
@@ -184,7 +187,7 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 				# if file is already unpinned...
 				if ($Item.Attributes -band 0x100000 -and -not $Force.IsPresent) {
 					Write-Host "...found unpinned: $Path"
-					continue NextOneDriveItem
+					$ArgumentList = [string]::Empty
 				}
 				else {
 					Write-Host "...unpinning: $Path"
@@ -196,11 +199,14 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 				$ArgumentList = '-p -u "{0}"' -f $Path
 			}
 			Default {
-				continue NextOneDriveItem
+				$ArgumentList = [string]::Empty
 			}
 		}
 
-		# apply attributes to folder
-		Start-Process -Wait -NoNewWindow -FilePath 'attrib.exe' -ArgumentList $ArgumentList -WorkingDirectory $Item.Directory.FullName
+		# if argument list is not empty...
+		if (![string]::IsNullOrEmpty($ArgumentList)) {
+			# apply attributes to folder
+			Start-Process -Wait -NoNewWindow -FilePath 'attrib.exe' -ArgumentList $ArgumentList -WorkingDirectory $Item.Directory.FullName
+		}
 	}
 }
