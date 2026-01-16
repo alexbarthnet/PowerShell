@@ -163,7 +163,7 @@ Write-Host "...found mounted OneDrive container: $($OneDrive.FullName)"
 	}
 
 	# get child items in OneDrive folder to list
-	$Items = Get-ChildItem -Path $OneDriveFolderPath -Recurse
+	$Items = Get-ChildItem -Path $OneDriveFolderPath -File
 
 	# loop through paths
 	:NextOneDriveItem foreach ($Item in $Items) {
