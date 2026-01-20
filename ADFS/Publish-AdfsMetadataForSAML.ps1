@@ -227,20 +227,31 @@ If ($MetadataFileUpdateNeeded) {
 
 # if signing certificate skip not requested...
 If (!$SkipSigningCertificate) {
-	# retrieve signing certificate text from ADFS metadata
+	# retrieve text of signing certificates from ADFS metadata
 	Try {
-		$SigningCertificateText = $XmlFromRestMethod.EntityDescriptor.IDPSSODescriptor.KeyDescriptor.Where({ $_.use -eq 'signing' })[0].KeyInfo.X509Data.X509Certificate
+		$SigningCertificatesText = $XmlFromRestMethod.EntityDescriptor.IDPSSODescriptor.KeyDescriptor.Where({ $_.use -eq 'signing' }).KeyInfo.X509Data.X509Certificate
 	}
 	Catch {
-		Write-Warning "could not retrieve X509Certificate of token signing certificate from metadata file to path: $FilePath"
+		Write-Warning "could not retrieve X509Certificate of token signing certificates from metadata file to path: $FilePath"
 		Return $_
 	}
 
-	# format signing certificate text with unix-style line breaks
-	$SigningCertificateTextWithLineBreaks = $SigningCertificateText -replace '.{64}', "`$&$NewLine"
+	# loop through text of signing certificates
+	ForEach ($SigningCertificateText in $SigningCertificatesText) {
+		# format signing certificate text with unix-style line breaks
+		$SigningCertificateTextWithLineBreaks = $SigningCertificateText -replace '.{64}', "`$&$NewLine"
 
-	# create PEM-compatible string from formatted signing certificate text
-	$SigningCertificateFileValue = '{0}{1}{2}{3}{4}' -f $Header, $NewLine, $SigningCertificateTextWithLineBreaks, $NewLine, $Footer
+		# if value is empty...
+		if ([string]::IsNullOrEmpty($SigningCertificateFileValue)) {
+			# create PEM-compatible string from formatted signing certificate text
+			$SigningCertificateFileValue = '{0}{1}{2}{3}{4}' -f $Header, $NewLine, $SigningCertificateTextWithLineBreaks, $NewLine, $Footer
+		}
+		# if value is not empty...
+		else {
+			# add PEM-compatible string from formatted signing certificate text
+			$SigningCertificateFileValue = '{0}{1}{2}{3}{4}{5}{6}' -f $SigningCertificateFileValue, $NewLine, $Header, $NewLine, $SigningCertificateTextWithLineBreaks, $NewLine, $Footer
+		}
+	}
 
 	# define signing certificate file path
 	$SigningCertificateFilePath = Join-Path -Path $Path -ChildPath $SigningCertificateFileName
@@ -283,20 +294,31 @@ If (!$SkipSigningCertificate) {
 
 # if encryption certificate skip not requested...
 If (!$SkipEncryptionCertificate) {
-	# retrieve encryption certificate text from ADFS metadata
+	# retrieve text of encryption certificates from ADFS metadata
 	Try {
-		$EncryptionCertificateText = $XmlFromRestMethod.EntityDescriptor.IDPSSODescriptor.KeyDescriptor.Where({ $_.use -eq 'encryption' })[0].KeyInfo.X509Data.X509Certificate
+		$EncryptionCertificatesText = $XmlFromRestMethod.EntityDescriptor.IDPSSODescriptor.KeyDescriptor.Where({ $_.use -eq 'encryption' }).KeyInfo.X509Data.X509Certificate
 	}
 	Catch {
-		Write-Warning "could not retrieve value for X509Certificate of token encryption certificate from metadata file to path: $FilePath"
+		Write-Warning "could not retrieve value for X509Certificate of token encryption certificates from metadata file to path: $FilePath"
 		Return $_
 	}
 
-	# format encryption certificate text with unix-style line breaks
-	$EncryptionCertificateTextWithLineBreaks = $EncryptionCertificateText -replace '.{64}', "`$&$NewLine"
+	# loop through text of encryption certificates
+	ForEach ($EncryptionCertificateText in $EncryptionCertificatesText) {
+		# format encryption certificate text with unix-style line breaks
+		$EncryptionCertificateTextWithLineBreaks = $EncryptionCertificateText -replace '.{64}', "`$&$NewLine"
 
-	# create PEM-compatible string from formatted encryption certificate text
-	$EncryptionCertificateFileValue = '{0}{1}{2}{3}{4}' -f $Header, $NewLine, $EncryptionCertificateTextWithLineBreaks, $NewLine, $Footer
+		# if value is empty...
+		if ([string]::IsNullOrEmpty($EncryptionCertificateFileValue)) {
+			# create PEM-compatible string from formatted encryption certificate text
+			$EncryptionCertificateFileValue = '{0}{1}{2}{3}{4}' -f $Header, $NewLine, $EncryptionCertificateTextWithLineBreaks, $NewLine, $Footer
+		}
+		# if value is not empty...
+		else {
+			# add PEM-compatible string from formatted encryption certificate text
+			$EncryptionCertificateFileValue = '{0}{1}{2}{3}{4}{5}{6}' -f $EncryptionCertificateFileValue, $NewLine, $Header, $NewLine, $EncryptionCertificateTextWithLineBreaks, $NewLine, $Footer
+		}
+	}
 
 	# define encryption certificate file path
 	$EncryptionCertificateFilePath = Join-Path -Path $Path -ChildPath $EncryptionCertificateFileName
