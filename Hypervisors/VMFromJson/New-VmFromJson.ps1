@@ -32,6 +32,8 @@ param(
 	[pscredential]$LocalAdminCredential,
 	[Parameter()]
 	[pscredential]$DomainJoinCredential,
+	[Parameter()]
+	[pscredential]$OperatorCredential,
 	[Parameter()][ValidateNotNull()]
 	[hashtable]$ExpandStrings = @{},
 	[Parameter(DontShow)]
@@ -3976,7 +3978,19 @@ begin {
 		# if administrator password not provided...
 		else {
 			# hide administrator password expand string from the expand strings loop
-			$String = $String -replace '%ADMINISTRATORPASSWORD%', '<%>ADMINISTRATORPASSWORD<%>'
+			$String = $String.Replace('%ADMINISTRATORPASSWORD%', '<%>ADMINISTRATORPASSWORD<%>')
+		}
+
+		# if operator password provided...
+		if ($ExpandStrings.ContainsKey('OperatorPassword')) {
+			# uncomment local accounts section in unattend file
+			$String = $String.Replace('<!-- <LocalAccounts>', '<LocalAccounts>')
+			$String = $String.Replace('</LocalAccounts> -->', '</LocalAccounts>')
+		}
+		# if operator password not provided...
+		else {
+			# hide operator password expand string from the expand strings loop
+			$String = $String.Replace('%OPERATORPASSWORD%', '<%>OPERATORPASSWORD<%>')
 		}
 
 		# if domain join username and password provided...
@@ -4808,6 +4822,47 @@ process {
 
 											# add plaintext unattended join password to expand strings hashtable
 											$ExpandStrings[$ExpandString] = $DomainJoinCredential.GetNetworkCredential().Password
+										}
+									}
+
+									# if power user credential provided...
+									if ($PSBoundParameters.ContainsKey('OperatorCredential')) {
+										# define epxand string source
+										$ExpandSource = 'OperatorCredential parameter'
+
+										# define expand string
+										$ExpandString = 'OperatorPassword'
+										
+										# if expand string already present in hashtable...
+										if ($ExpandStrings.ContainsKey($ExpandString)) {
+											# report state
+											Write-Host ("$Hostname,$ComputerName,$Name - ...skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
+										}
+										else {
+											# retrieve plaintext password from credential object
+											try {
+												$PlainText = $OperatorCredential.GetNetworkCredential().Password
+											}
+											catch {
+												throw $_
+											}
+
+											# append required string to plaintext password
+											$AppendedPlainText = '{0}Password' -f $PlainText
+
+											# encode appended password
+											try {
+												$EncodedPassword = [System.Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($AppendedPlainText))
+											}
+											catch {
+												throw $_
+											}
+
+											# report state
+											Write-Host ("$Hostname,$ComputerName,$Name - ...adding value of '$ExpandString' expand string from $ExpandSource")
+
+											# add encoded plaintext password to expand strings hashtable
+											$ExpandStrings[$ExpandString] = $EncodedPassword
 										}
 									}
 
