@@ -96,6 +96,18 @@
                     <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
+                    <Description>Set Default Console</Description>
+                    <Order>101</Order>
+                    <Path>%WINDIR%\System32\reg.exe add "HKLM\DEFAULT\Console\%%Startup" /v DelegationConsole /t REG_SZ /d "{B23D10C0-E52E-411E-9D5B-C09FDF709C7D}" /f</Path>
+                    <WillReboot>Never</WillReboot>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Description>Set Default Terminal</Description>
+                    <Order>102</Order>
+                    <Path>%WINDIR%\System32\reg.exe add "HKLM\DEFAULT\Console\%%Startup" /v DelegationTerminal /t REG_SZ /d "{B23D10C0-E52E-411E-9D5B-C09FDF709C7D}" /f</Path>
+                    <WillReboot>Never</WillReboot>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
                     <Description>Align Taskbar</Description>
                     <Order>101</Order>
                     <Path>%WINDIR%\System32\reg.exe add HKLM\DEFAULT\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced /v TaskbarAl /t REG_DWORD /d 0 /f</Path>
