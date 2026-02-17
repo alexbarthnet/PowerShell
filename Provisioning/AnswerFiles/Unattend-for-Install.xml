@@ -71,6 +71,17 @@
                         <Domain>%DOMAINNAME%</Domain>
                     </DomainAccountList>
                 </DomainAccounts> -->
+                <!-- <LocalAccounts>
+                    <LocalAccount wcm:action="add">
+                        <Password>
+                            <Value>%OPERATORPASSWORD%</Value>
+                            <PlainText>false</PlainText>
+                        </Password>
+                        <Description>A user account for operating the computer.</Description>
+                        <Group>Administrators</Group>
+                        <Name>Operator</Name>
+                    </LocalAccount>
+                </LocalAccounts> -->
             </UserAccounts>
         </component>
     </settings>
