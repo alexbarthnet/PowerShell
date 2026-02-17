@@ -114,6 +114,18 @@
                     <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
+                    <Description>Hide Widgets</Description>
+                    <Order>104</Order>
+                    <Path>%WINDIR%\System32\reg.exe add HKLM\DEFAULT\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced /v TaskbarDa /t REG_DWORD /d 0 /f</Path>
+                    <WillReboot>Never</WillReboot>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Description>Hide TaskView</Description>
+                    <Order>105</Order>
+                    <Path>%WINDIR%\System32\reg.exe add HKLM\DEFAULT\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced /v ShowTaskViewButton /t REG_DWORD /d 0 /f</Path>
+                    <WillReboot>Never</WillReboot>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
                     <Description>Hide Searchbox</Description>
                     <Order>102</Order>
                     <Path>%WINDIR%\System32\reg.exe add HKLM\DEFAULT\Software\Microsoft\Windows\CurrentVersion\Search /v SearchboxTaskbarMode /t REG_DWORD /d 0 /f</Path>
