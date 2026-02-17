@@ -109,7 +109,7 @@
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                     <Description>Align Taskbar</Description>
-                    <Order>101</Order>
+                    <Order>103</Order>
                     <Path>%WINDIR%\System32\reg.exe add HKLM\DEFAULT\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced /v TaskbarAl /t REG_DWORD /d 0 /f</Path>
                     <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>
@@ -127,13 +127,13 @@
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                     <Description>Hide Searchbox</Description>
-                    <Order>102</Order>
+                    <Order>106</Order>
                     <Path>%WINDIR%\System32\reg.exe add HKLM\DEFAULT\Software\Microsoft\Windows\CurrentVersion\Search /v SearchboxTaskbarMode /t REG_DWORD /d 0 /f</Path>
                     <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                     <Description>Cache Searchbox Taskbar Mode</Description>
-                    <Order>103</Order>
+                    <Order>107</Order>
                     <Path>%WINDIR%\System32\reg.exe add HKLM\DEFAULT\Software\Microsoft\Windows\CurrentVersion\Search /v SearchboxTaskbarModeCache /t REG_DWORD /d 1 /f</Path>
                     <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>
