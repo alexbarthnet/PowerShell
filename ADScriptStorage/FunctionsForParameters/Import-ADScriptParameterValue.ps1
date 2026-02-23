@@ -36,6 +36,14 @@ function Import-ADScriptParameterValue {
         throw $_
     }
 
+    # set variable for parameter
+    try {
+        New-Variable -Name $Parameter -Value $ParameterValue -Scope script -Force -
+    }
+    catch {
+        throw $_
+    }
+
     # update bound parameters
     try {
         $script:PSBoundParameters.Add($Parameter,$ParameterValue)
