@@ -38,10 +38,10 @@ Param(
 	# local computer name
 	[Parameter(DontShow)]
 	[string]$ComputerName = $env:COMPUTERNAME.ToLowerInvariant(),
-	# suffix for DNS client subnet
+	# name for DNS client subnet
 	[Parameter(DontShow)]
 	[string]$ClientSubnetName = "$ComputerName-subnets",
-	# suffix for DNS client subnet
+	# name for default query resolution policy
 	[Parameter(DontShow)]
 	[string]$QueryResolutionPolicyName = "$ComputerName-default",
 	# array of subnets
