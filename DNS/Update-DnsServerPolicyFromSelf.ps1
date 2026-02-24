@@ -253,8 +253,8 @@ Catch {
 }
 
 # verify DNS policy action
-If ($QueryResolutionPolicy.Action -ne 'DENY') {
-	Write-Host "Will remake '$QueryResolutionPolicyName' policy to fix invalie action: $($QueryResolutionPolicy.Action)"
+if ($QueryResolutionPolicy.Action -ne 'DENY') {
+	Write-Host "Will remake '$QueryResolutionPolicyName' policy to fix invalid action: $($QueryResolutionPolicy.Action)"
 	$RemakePolicy = $true
 }
 
