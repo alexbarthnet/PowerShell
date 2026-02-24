@@ -46,7 +46,9 @@ Param(
 	[string]$QueryResolutionPolicyName = "$ComputerName-default",
 	# array of subnets
 	[Parameter(Position = 1)]
-	[string[]]$Subnets = @('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16')
+	[string[]]$Subnets = @('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'),
+	# switch to create localhost policy
+	[switch]$IncludeLocalhostPolicy
 )
 
 # get primary DNS zones from server sorted by zone type and name
@@ -392,3 +394,157 @@ If ($UpdatePolicy -or $RemakePolicy) {
 
 # declare verified
 Write-Host "Verified '$QueryResolutionPolicyName' DNS policy"
+
+# if include localhost policy requested...
+if ($IncludeLocalhostPolicy.IsPresent) {
+	# define name for localhost policy
+	$QueryResolutionPolicyName = "$ComputerName-localhost"
+
+	# filter DNS query resolution policies
+	$QueryResolutionPolicy = $QueryResolutionPolicies | Where-Object { $_.Name -eq $QueryResolutionPolicyName }
+
+	# if DNS query resolution policy not found...
+	if (!$QueryResolutionPolicy) {
+		# define required parameters for default DNS policy
+		$AddDnsServerQueryResolutionPolicy = @{
+			Name            = $QueryResolutionPolicyName
+			ComputerName    = $ComputerName
+			Action          = 'IGNORE'
+			Fqdn            = 'EQ,domain.example'
+			ProcessingOrder = 0
+			PassThru        = $true
+			ErrorAction     = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# create default DNS policy
+		try {
+			$QueryResolutionPolicy = Add-DnsServerQueryResolutionPolicy @AddDnsServerQueryResolutionPolicy
+		}
+		catch {
+			Write-Warning -Message 'could not create default DNS Policy'
+			return $_
+		}
+
+		# declare default DNS policy created
+		Write-Host "Created '$($QueryResolutionPolicy.Name)' DNS policy with default values"
+	}
+
+	# join FQDN strings into FQDN criteria 
+	try {
+		$FqdnCriteria = $FqdnsForLocalhost -join ','
+	}
+	catch {
+		return $_
+	}
+
+	# verify DNS policy action
+	if ($QueryResolutionPolicy.Action -ne 'IGNORE') {
+		Write-Host "Will remake '$QueryResolutionPolicyName' policy to fix invalid action: $($QueryResolutionPolicy.Action)"
+		$RemakePolicy = $true
+	}
+
+	# verify DNS policy processing order
+	if ($QueryResolutionPolicy.ProcessingOrder -ne 0) {
+		Write-Host "Will update '$QueryResolutionPolicyName' policy to address invalid processsing order: $($QueryResolutionPolicy.ProcessingOrder)"
+		$UpdatePolicy = $true
+	}
+
+	# verify DNS policy contains FQDN criteria
+	if (!$QueryResolutionPolicy.Criteria.Where({ $_.CriteriaType -eq 'Fqdn' })) {
+		Write-Host "Will update '$QueryResolutionPolicyName' policy to add missing domain filter criteria"
+		$UpdatePolicy = $true
+	}
+	# verify DNS policy contains 1 FQDN criteria
+	elseif ($QueryResolutionPolicy.Criteria.Where({ $_.CriteriaType -eq 'Fqdn' }).Count -gt 1) {
+		Write-Host "Will update '$QueryResolutionPolicyName' policy to remove extra domain filter criteria"
+		$UpdatePolicy = $true
+	}
+	# verify DNS policy contains expected FQDN criteria
+	elseif ($QueryResolutionPolicy.Criteria.Where({ $_.CriteriaType -eq 'Fqdn' }).Criteria -ne "EQ,$FqdnCriteria") {
+		Write-Host "Will update '$QueryResolutionPolicyName' policy to refresh domain filter criteria"
+		$UpdatePolicy = $true
+		# retrieve FQDN criteria string
+		$Criteria = $QueryResolutionPolicy.Criteria.Where({ $_.CriteriaType -eq 'Fqdn' }).Criteria
+		# if equality operator found...
+		if ($Criteria.Contains('NE,')) {
+			Write-Host "Will update '$QueryResolutionPolicyName' policy to remove NE operator from FQDN criteria"
+		}
+		else {
+			# retrieve FQDNs in policy
+			$FqdnsFromCriteria = $Criteria.Split(',').Where({ $_ -ne 'EQ' })
+			# report FQDNs from policy to remove
+			:NextFqdn foreach ($Fqdn in $FqdnsFromCriteria) {
+				if ($Fqdn -notin $FqdnsFromZones) {
+					Write-Host "Will update '$QueryResolutionPolicyName' policy to remove FQDN criteria: 'EQ,$Fqdn'"
+				}
+				else {
+					Write-Host "Verified '$QueryResolutionPolicyName' policy contains effective FQDN criteria: 'EQ,$Fqdn'"
+				}
+			}
+			# report FQDNs from server to add
+			:NextFqdn foreach ($Fqdn in $FqdnsFromZones) {
+				if ($Fqdn -notin $FqdnsFromCriteria) {
+					Write-Host "Will update '$QueryResolutionPolicyName' policy to add FQDN criteria: 'EQ,$Fqdn'"
+				}
+			}
+		}
+	}
+	else {
+		foreach ($Fqdn in $LocalhostFqdns) {
+			Write-Host "Verified '$QueryResolutionPolicyName' policy contains effective FQDN criteria: 'EQ,$Fqdn'"
+		}
+	}
+
+	# if update to policy required...
+	if ($UpdatePolicy -or $RemakePolicy) {
+		# define parameters for DnsServerQueryResolutionPolicy
+		$DnsServerQueryResolutionPolicy = @{
+			Name            = $QueryResolutionPolicyName
+			ComputerName    = $ComputerName
+			Fqdn            = "EQ,$FqdnCriteria"
+			ProcessingOrder = 0
+			ErrorAction     = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# if remake required requested...
+		if ($RemakePolicy) {
+			# remove existing DNS server policy
+			try {
+				Remove-DnsServerQueryResolutionPolicy -ComputerName $ComputerName -Name $QueryResolutionPolicyName -Force
+			}
+			catch {
+				Write-Warning -Message 'could not remove existing DNS policy'
+				return $_
+			}
+
+			# add new DNS server policy
+			try {
+				Add-DnsServerQueryResolutionPolicy -Action 'IGNORE' @DnsServerQueryResolutionPolicy
+			}
+			catch {
+				Write-Warning -Message 'could not add new DNS policy'
+				return $_
+			}
+
+			# declare remade and return
+			Write-Host "Remade '$QueryResolutionPolicyName' DNS policy"
+			return
+		}
+
+		# if update required requested...
+		if ($UpdatePolicy) {
+			# update DNS server policy
+			try {
+				Set-DnsServerQueryResolutionPolicy @DnsServerQueryResolutionPolicy
+			}
+			catch {
+				Write-Warning -Message 'could not update existing DNS policy'
+				return $_
+			}
+
+			# declare updated and return
+			Write-Host "Updated '$QueryResolutionPolicyName' DNS policy"
+			return
+		}
+	}
+}
