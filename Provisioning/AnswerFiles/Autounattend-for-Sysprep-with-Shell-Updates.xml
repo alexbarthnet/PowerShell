@@ -90,6 +90,18 @@
                     <WillReboot>Never</WillReboot>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
+                    <Description>Hide Recommended Section</Description>
+                    <Order>3</Order>
+                    <Path>%WINDIR%\System32\reg.exe ADD HKLM\SOFTWARE\Policies\Microsoft\Windows\Explorer /v HideRecommendedSection /t REG_DWORD /d 1</Path>
+                    <WillReboot>Never</WillReboot>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Description>Set Education Environment</Description>
+                    <Order>4</Order>
+                    <Path>%WINDIR%\System32\reg.exe ADD HKLM\SOFTWARE\Microsoft\PolicyManager\current\Device\Education /v IsEducationEnvironment /t REG_DWORD /d 1</Path>
+                    <WillReboot>Never</WillReboot>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
                     <Description>Load Default User Registry</Description>
                     <Order>100</Order>
                     <Path>%WINDIR%\System32\reg.exe load HKLM\DEFAULT C:\Users\Default\ntuser.dat</Path>
