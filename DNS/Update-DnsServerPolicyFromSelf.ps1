@@ -622,26 +622,6 @@ if (!$SkipRecursionPolicy.IsPresent) {
 	}
 }
 
-# filter client subnets for old name
-$ClientSubnet = $ClientSubnets | Where-Object { $_.Name -eq "$ComputerName-subnets" }
-
-# if client subnets with old name found...
-If ($ClientSubnet) {
-	# refresh client subnet name
-	$ClientSubnetName = $ClientSubnet.Name
-
-	# remove client subnet
-	try {
-		Remove-DnsServerClientSubnet -Name $ClientSubnetName -Force
-	}
-	catch {
-		return $_
-	}
-
-	# declare removed
-	Write-Host "Removed legacy '$QueryResolutionPolicyName' client subnet"
-}
-
 # filter DNS query resolution policies for old name
 $QueryResolutionPolicy = $QueryResolutionPolicies | Where-Object { $_.Name -eq "$ComputerName-default" }
 
@@ -660,4 +640,24 @@ If ($QueryResolutionPolicy) {
 
 	# declare removed
 	Write-Host "Removed legacy '$QueryResolutionPolicyName' DNS policy"
+}
+
+# filter client subnets for old name
+$ClientSubnet = $ClientSubnets | Where-Object { $_.Name -eq "$ComputerName-subnets" }
+
+# if client subnets with old name found...
+If ($ClientSubnet) {
+	# refresh client subnet name
+	$ClientSubnetName = $ClientSubnet.Name
+
+	# remove client subnet
+	try {
+		Remove-DnsServerClientSubnet -Name $ClientSubnetName -Force
+	}
+	catch {
+		return $_
+	}
+
+	# declare removed
+	Write-Host "Removed legacy '$QueryResolutionPolicyName' client subnet"
 }
