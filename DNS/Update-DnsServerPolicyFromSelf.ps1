@@ -38,20 +38,40 @@ param(
 	# local computer name
 	[Parameter(DontShow)]
 	[string]$ComputerName = $env:COMPUTERNAME.ToLowerInvariant(),
-	# name for DNS client subnet
-	[Parameter(DontShow)]
-	[string]$ClientSubnetName = "$ComputerName-subnets",
-	# name for default query resolution policy
-	[Parameter(DontShow)]
-	[string]$QueryResolutionPolicyName = "$ComputerName-default",
 	# array of subnets
-	[Parameter(Position = 1)]
+	[Parameter(Position = 0)]
 	[string[]]$Subnets = @('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'),
 	# switch to skip localhost policy
 	[switch]$SkipLocalhostPolicy,
-	[switch]$SkipZoneBasedPolicy
-
+	# switch to skip recursion policy
+	[switch]$SkipRecursionPolicy
 )
+
+################################
+# DNS zones
+################################
+
+# get primary DNS zones from server sorted by zone type and name
+try {
+	$DnsServerZones = Get-DnsServerZone -ComputerName $ComputerName | Where-Object { $_.ZoneType -in $ZoneType -and -not $_.IsAutoCreated -and -not $_.IgnorePolicies } | Sort-Object -Property 'IsReverseLookupZone', 'ZoneType', 'ZoneName'
+}
+catch {
+	Write-Warning -Message "could not retrieve DNS server zones from computer: $ComputerName"
+	return $_
+}
+
+# if primary DNS zones not found...
+if (!$DnsServerZones) {
+	Write-Warning -Message "could not locate any DNS Server Zones matching zone types: $($ZoneType -join ',')"
+	return
+}
+
+# get forward primary DNS zones
+$ForwardDnsServerZones = $DnsServerZones | Where-Object { !$_.IsReverseLookupZone }
+
+################################
+# retrieve DNS policy objects
+################################
 
 # retrieve DNS client subnets
 try {
@@ -69,28 +89,6 @@ try {
 catch {
 	Write-Warning -Message 'could not retrieve DNS policies'
 	return $_
-}
-
-################################
-# DNS zones
-################################
-
-# get primary DNS zones from server sorted by zone type and name
-try {
-	$DnsServerZones = Get-DnsServerZone -ComputerName $ComputerName | Where-Object { $_.ZoneType -in $ZoneType -and -not $_.IsAutoCreated -and -not $_.IgnorePolicies } | Sort-Object -Property 'IsReverseLookupZone', 'ZoneType', 'ZoneName'
-}
-catch {
-	Write-Warning -Message "could not retrieve DNS server zones from computer: $ComputerName"
-	return $_
-}
-
-# get forward primary DNS zones
-$ForwardDnsServerZones = $DnsServerZones | Where-Object { !$_.IsReverseLookupZone }
-
-# if primary DNS zones not found...
-if (!$DnsServerZones) {
-	Write-Warning -Message "could not locate any DNS Server Zones matching zone types: $($ZoneType -join ',')"
-	return
 }
 
 # if skip localhost policy not requested...
@@ -279,10 +277,10 @@ if (!$SkipLocalhostPolicy.IsPresent) {
 	}
 }
 
-# if skip zone-based policy not requested...
-if (!$SkipZoneBasedPolicy.IsPresent) {
+# if skip recursion policy not requested...
+if (!$SkipRecursionPolicy.IsPresent) {
 	# define name for policy
-	$QueryResolutionPolicyName = "$ComputerName-default"
+	$QueryResolutionPolicyName = "$ComputerName-recursion"
 
 	# define action for query
 	$QueryAction = 'DENY'
@@ -319,6 +317,9 @@ if (!$SkipZoneBasedPolicy.IsPresent) {
 	################################
 	# create DNS client subnet
 	################################
+
+	# define name for DNS client subnet
+	$ClientSubnetName = "$ComputerName-recursion"
 
 	# filter DNS client subnets
 	$ClientSubnet = $ClientSubnets | Where-Object { $_.Name -eq $ClientSubnetName }
