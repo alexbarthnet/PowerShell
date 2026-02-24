@@ -31,7 +31,7 @@ This script creates and updates two DNS Policy objects on a DNS server:
  - A query resolution policy that blocks queries which do not originate from an IP address in the client subnet object or are not for records in an available DNS zone.
 #>
 
-Param(
+param(
 	# type for DNS zones
 	[Parameter(DontShow)]
 	[string[]]$ZoneType = @('Primary', 'Forwarder'),
@@ -52,36 +52,36 @@ Param(
 )
 
 # get primary DNS zones from server sorted by zone type and name
-Try {
-	$DnsServerZones = Get-DnsServerZone -ComputerName $ComputerName | Where-Object { $_.ZoneName -notmatch 'local$' -and $_.ZoneType -in $ZoneType -and -not $_.IsAutoCreated -and -not $_.IgnorePolicies} | Sort-Object -Property 'IsReverseLookupZone', 'ZoneType', 'ZoneName'
+try {
+	$DnsServerZones = Get-DnsServerZone -ComputerName $ComputerName | Where-Object { $_.ZoneName -notmatch 'local$' -and $_.ZoneType -in $ZoneType -and -not $_.IsAutoCreated -and -not $_.IgnorePolicies } | Sort-Object -Property 'IsReverseLookupZone', 'ZoneType', 'ZoneName'
 }
-Catch {
+catch {
 	Write-Warning -Message "could not retrieve DNS server zones from computer: $ComputerName"
-	Return $_
+	return $_
 }
 
 # if primary DNS zones not found...
-If (!$DnsServerZones) {
+if (!$DnsServerZones) {
 	Write-Warning -Message "could not locate any DNS Server Zones matching zone types: $($ZoneType -join ',')"
-	Return
+	return
 }
 
 ### retrieve DNS server objects
 
 # retrieve DNS client subnets
-Try {
+try {
 	$ClientSubnets = Get-DnsServerClientSubnet
 }
-Catch {
+catch {
 	Write-Warning -Message 'could not retrieve DNS subnets'
-	Return $_
+	return $_
 }
 
 # filter DNS client subnets
 $ClientSubnet = $ClientSubnets | Where-Object { $_.Name -eq $ClientSubnetName }
 
 # if DNS client subnet not found...
-If (!$ClientSubnet) {
+if (!$ClientSubnet) {
 	# define required parameters for default DNS subnets
 	$AddDnsServerClientSubnet = @{
 		Name         = $ClientSubnetName
@@ -93,12 +93,12 @@ If (!$ClientSubnet) {
 	}
 
 	# create default DNS subnets
-	Try {
+	try {
 		$ClientSubnet = Add-DnsServerClientSubnet @AddDnsServerClientSubnet
 	}
-	Catch {
+	catch {
 		Write-Warning -Message 'could not create default DNS subnet'
-		Return $_
+		return $_
 	}
 
 	# declare default DNS subnets created
@@ -109,19 +109,19 @@ If (!$ClientSubnet) {
 $ClientSubnetName = $ClientSubnet.Name
 
 # retrieve DNS query resolution policies
-Try {
+try {
 	$QueryResolutionPolicies = Get-DnsServerQueryResolutionPolicy
 }
-Catch {
+catch {
 	Write-Warning -Message 'could not retrieve DNS policies'
-	Return $_
+	return $_
 }
 
 # filter DNS query resolution policies
 $QueryResolutionPolicy = $QueryResolutionPolicies | Where-Object { $_.Name -eq $QueryResolutionPolicyName }
 
 # if DNS query resolution policy not found...
-If (!$QueryResolutionPolicy) {
+if (!$QueryResolutionPolicy) {
 	# define required parameters for default DNS policy
 	$AddDnsServerQueryResolutionPolicy = @{
 		Name            = $QueryResolutionPolicyName
@@ -136,12 +136,12 @@ If (!$QueryResolutionPolicy) {
 	}
 
 	# create default DNS policy
-	Try {
+	try {
 		$QueryResolutionPolicy = Add-DnsServerQueryResolutionPolicy @AddDnsServerQueryResolutionPolicy
 	}
-	Catch {
+	catch {
 		Write-Warning -Message 'could not create default DNS Policy'
-		Return $_
+		return $_
 	}
 
 	# declare default DNS policy created
@@ -162,7 +162,7 @@ $IPv4Subnets.Add('127.0.0.0/8')
 $IPv6Subnets.Add('::1/128')
 
 # add replication subnets to lists
-ForEach ($Subnet in $Subnets) {
+foreach ($Subnet in $Subnets) {
 	switch ($Subnet) {
 		{ $_.Contains('.') } { $IPv4Subnets.Add($_) }
 		{ $_.Contains(':') } { $IPv6Subnets.Add($_) }
@@ -170,51 +170,51 @@ ForEach ($Subnet in $Subnets) {
 }
 
 # check expected IPv4 DNS client subnets
-ForEach ($IPv4Subnet in $IPv4Subnets) {
-	If ($IPv4Subnet -notin $ClientSubnet.IPV4Subnet) {
+foreach ($IPv4Subnet in $IPv4Subnets) {
+	if ($IPv4Subnet -notin $ClientSubnet.IPV4Subnet) {
 		Write-Host "Will update '$ClientSubnetName' client subnet to add subnet: $IPv4Subnet"
 		$UpdateIPv4 = $true
 	}
-	Else {
+	else {
 		Write-Host "Verified '$ClientSubnetName' client subnet contains subnet: $IPv4Subnet"
 	}
 }
 
 # check expected IPv6 DNS client subnets
-ForEach ($IPv6Subnet in $IPv6Subnets) {
-	If ($IPv6Subnet -notin $ClientSubnet.IPV6Subnet) {
+foreach ($IPv6Subnet in $IPv6Subnets) {
+	if ($IPv6Subnet -notin $ClientSubnet.IPV6Subnet) {
 		Write-Host "Will update '$ClientSubnetName' client subnet to add subnet: $IPv6Subnet"
 		$UpdateIPv6 = $true
 	}
-	Else {
+	else {
 		Write-Host "Verified '$ClientSubnetName' client subnet contains subnet: $IPv6Subnet"
 	}
 }
 
 # check existing IPv4 DNS client subnets
-ForEach ($IPV4Subnet in $ClientSubnet.IPV4Subnet) {
-	If ($IPv4Subnet -notin $IPv4Subnets) {
+foreach ($IPV4Subnet in $ClientSubnet.IPV4Subnet) {
+	if ($IPv4Subnet -notin $IPv4Subnets) {
 		Write-Host "Will update '$ClientSubnetName' client subnet to remove subnet: $IPv4Subnet"
 		$UpdateIPv4 = $true
 	}
 }
 
 # check existing IPv6 DNS client subnets
-ForEach ($IPV6Subnet in $ClientSubnet.IPV6Subnet) {
-	If ($IPV6Subnet -notin $IPv6Subnets) {
+foreach ($IPV6Subnet in $ClientSubnet.IPV6Subnet) {
+	if ($IPV6Subnet -notin $IPv6Subnets) {
 		Write-Host "Will update '$ClientSubnetName' client subnet to remove subnet: $IPv6Subnet"
 		$UpdateIPv6 = $true
 	}
 }
 
 # if update to IPv4 subnets required...
-If ($UpdateIPv4) {
-	Try {
+if ($UpdateIPv4) {
+	try {
 		Set-DnsServerClientSubnet -ComputerName $ComputerName -Name $ClientSubnetName -IPv4Subnet $IPv4Subnets -Action 'REPLACE'
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "could not update IPv4 subnets in DNS client subnet: $ClientSubnetName"
-		Return $_
+		return $_
 	}
 
 	# declare DNS subnets created
@@ -222,13 +222,13 @@ If ($UpdateIPv4) {
 }
 
 # if update to IPv6 subnets required...
-If ($UpdateIPv6) {
-	Try {
+if ($UpdateIPv6) {
+	try {
 		Set-DnsServerClientSubnet -ComputerName $ComputerName -Name $ClientSubnetName -IPv6Subnet $IPv6Subnets -Action 'REPLACE'
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "could not update IPv6 subnets in DNS client subnet: $ClientSubnetName"
-		Return $_
+		return $_
 	}
 
 	# declare DNS subnets created
@@ -241,17 +241,17 @@ If ($UpdateIPv6) {
 $FqdnsFromZones = [System.Collections.Generic.List[System.String]]::new()
 
 # process DNS server zone names
-ForEach ($ZoneName in $DnsServerZones.ZoneName) {
+foreach ($ZoneName in $DnsServerZones.ZoneName) {
 	# create FQDN string as DNS server zone name with wildcard prefix and terminating suffix
 	$FqdnsFromZones.Add("*.$ZoneName.")
 }
 
 # join FQDN strings into FQDN criteria 
-Try {
+try {
 	$FqdnCriteria = $FqdnsFromZones -join ','
 }
-Catch {
-	Return $_
+catch {
+	return $_
 }
 
 # verify DNS policy action
@@ -261,84 +261,84 @@ if ($QueryResolutionPolicy.Action -ne 'DENY') {
 }
 
 # verify DNS policy processing order
-If ($QueryResolutionPolicy.ProcessingOrder -ne 1) {
+if ($QueryResolutionPolicy.ProcessingOrder -ne 1) {
 	Write-Host "Will update '$QueryResolutionPolicyName' policy to address invalid processsing order: $($QueryResolutionPolicy.ProcessingOrder)"
 	$UpdatePolicy = $true
 }
 
 # verify DNS policy condition
-If ($QueryResolutionPolicy.Condition -ne 'AND') {
+if ($QueryResolutionPolicy.Condition -ne 'AND') {
 	Write-Host "Will update '$QueryResolutionPolicyName' policy to address invalid condition: $($QueryResolutionPolicy.Condition)"
 	$UpdatePolicy = $true
 }
 
 # verify DNS policy contains client subnet criteria
-If (!$QueryResolutionPolicy.Criteria.Where({ $_.CriteriaType -eq 'ClientSubnet' })) {
+if (!$QueryResolutionPolicy.Criteria.Where({ $_.CriteriaType -eq 'ClientSubnet' })) {
 	Write-Host "Will update '$QueryResolutionPolicyName' policy to add missing client subnet criteria"
 	$UpdatePolicy = $true
 }
 # verify DNS policy contains 1 client subnet criteria
-ElseIf ($QueryResolutionPolicy.Criteria.Where({ $_.CriteriaType -eq 'ClientSubnet' }).Count -gt 1) {
+elseif ($QueryResolutionPolicy.Criteria.Where({ $_.CriteriaType -eq 'ClientSubnet' }).Count -gt 1) {
 	Write-Host "Will update '$QueryResolutionPolicyName' policy to remove extra client subnet criteria"
 	$UpdatePolicy = $true
 }
 # verify DNS policy contains expected client subnet criteria
-ElseIf ($QueryResolutionPolicy.Criteria.Where({ $_.CriteriaType -eq 'ClientSubnet' }).Criteria -ne "NE,$ClientSubnetName") {
+elseif ($QueryResolutionPolicy.Criteria.Where({ $_.CriteriaType -eq 'ClientSubnet' }).Criteria -ne "NE,$ClientSubnetName") {
 	Write-Host "Will update '$QueryResolutionPolicyName' policy to refresh client subnet criteria"
 	$UpdatePolicy = $true
 }
-Else {
+else {
 	Write-Host "Verified '$QueryResolutionPolicyName' policy contains client subnet criteria: 'NE,$ClientSubnetName'"
 }
 
 # verify DNS policy contains FQDN criteria
-If (!$QueryResolutionPolicy.Criteria.Where({ $_.CriteriaType -eq 'Fqdn' })) {
+if (!$QueryResolutionPolicy.Criteria.Where({ $_.CriteriaType -eq 'Fqdn' })) {
 	Write-Host "Will update '$QueryResolutionPolicyName' policy to add missing domain filter criteria"
 	$UpdatePolicy = $true
 }
 # verify DNS policy contains 1 FQDN criteria
-ElseIf ($QueryResolutionPolicy.Criteria.Where({ $_.CriteriaType -eq 'Fqdn' }).Count -gt 1) {
+elseif ($QueryResolutionPolicy.Criteria.Where({ $_.CriteriaType -eq 'Fqdn' }).Count -gt 1) {
 	Write-Host "Will update '$QueryResolutionPolicyName' policy to remove extra domain filter criteria"
 	$UpdatePolicy = $true
 }
 # verify DNS policy contains expected FQDN criteria
-ElseIf ($QueryResolutionPolicy.Criteria.Where({ $_.CriteriaType -eq 'Fqdn' }).Criteria -ne "NE,$FqdnCriteria") {
+elseif ($QueryResolutionPolicy.Criteria.Where({ $_.CriteriaType -eq 'Fqdn' }).Criteria -ne "NE,$FqdnCriteria") {
 	Write-Host "Will update '$QueryResolutionPolicyName' policy to refresh domain filter criteria"
 	$UpdatePolicy = $true
 	# retrieve FQDN criteria string
 	$Criteria = $QueryResolutionPolicy.Criteria.Where({ $_.CriteriaType -eq 'Fqdn' }).Criteria
 	# if equality operator found...
-	If ($Criteria.Contains('EQ,')) {
+	if ($Criteria.Contains('EQ,')) {
 		Write-Host "Will update '$QueryResolutionPolicyName' policy to remove EQ operator from FQDN criteria"
 	}
-	Else {
+	else {
 		# retrieve FQDNs in policy
 		$FqdnsFromCriteria = $Criteria.Split(',').Where({ $_ -ne 'NE' })
 		# report FQDNs from policy to remove
-		:NextFqdn ForEach ($Fqdn in $FqdnsFromCriteria) {
-			If ($Fqdn -notin $FqdnsFromZones) {
+		:NextFqdn foreach ($Fqdn in $FqdnsFromCriteria) {
+			if ($Fqdn -notin $FqdnsFromZones) {
 				Write-Host "Will update '$QueryResolutionPolicyName' policy to remove FQDN criteria: 'NE,$Fqdn'"
 			}
-			Else {
+			else {
 				Write-Host "Verified '$QueryResolutionPolicyName' policy contains effective FQDN criteria: 'NE,$Fqdn'"
 			}
 		}
 		# report FQDNs from server to add
-		:NextFqdn ForEach ($Fqdn in $FqdnsFromZones) {
-			If ($Fqdn -notin $FqdnsFromCriteria) {
+		:NextFqdn foreach ($Fqdn in $FqdnsFromZones) {
+			if ($Fqdn -notin $FqdnsFromCriteria) {
 				Write-Host "Will update '$QueryResolutionPolicyName' policy to add FQDN criteria: 'NE,$Fqdn'"
 			}
 		}
 	}
 }
-Else {
-	ForEach ($Fqdn in $FqdnsFromZones) {
+else {
+	foreach ($Fqdn in $FqdnsFromZones) {
 		Write-Host "Verified '$QueryResolutionPolicyName' policy contains effective FQDN criteria: 'NE,$Fqdn'"
 	}
 }
 
 # if update to policy required...
-If ($UpdatePolicy -or $RemakePolicy) {
+if ($UpdatePolicy -or $RemakePolicy) {
 	# define parameters for DnsServerQueryResolutionPolicy
 	$DnsServerQueryResolutionPolicy = @{
 		Name            = $QueryResolutionPolicyName
@@ -351,44 +351,44 @@ If ($UpdatePolicy -or $RemakePolicy) {
 	}
 
 	# if remake required requested...
-	If ($RemakePolicy) {
+	if ($RemakePolicy) {
 		# remove existing DNS server policy
-		Try {
+		try {
 			Remove-DnsServerQueryResolutionPolicy -ComputerName $ComputerName -Name $QueryResolutionPolicyName -Force
 		}
-		Catch {
+		catch {
 			Write-Warning -Message 'could not remove existing DNS policy'
-			Return $_
+			return $_
 		}
 
 		# add new DNS server policy
-		Try {
+		try {
 			Add-DnsServerQueryResolutionPolicy -Action 'DENY' @DnsServerQueryResolutionPolicy
 		}
-		Catch {
+		catch {
 			Write-Warning -Message 'could not add new DNS policy'
-			Return $_
+			return $_
 		}
 
 		# declare remade and return
 		Write-Host "Remade '$QueryResolutionPolicyName' DNS policy"
-		Return
+		return
 	}
 
 	# if update required requested...
-	If ($UpdatePolicy) {
+	if ($UpdatePolicy) {
 		# update DNS server policy
-		Try {
+		try {
 			Set-DnsServerQueryResolutionPolicy @DnsServerQueryResolutionPolicy
 		}
-		Catch {
+		catch {
 			Write-Warning -Message 'could not update existing DNS policy'
-			Return $_
+			return $_
 		}
 
 		# declare updated and return
 		Write-Host "Updated '$QueryResolutionPolicyName' DNS policy"
-		Return
+		return
 	}
 }
 
