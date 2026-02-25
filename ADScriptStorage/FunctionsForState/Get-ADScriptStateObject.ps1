@@ -1,4 +1,4 @@
-function Get-ADScriptState {
+function Get-ADScriptStateObject {
     [cmdletbinding()]
     param (
         # PDC of the domain
