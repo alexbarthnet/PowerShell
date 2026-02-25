@@ -52,12 +52,12 @@ begin {
 		}
 	}
 
-	# test access to Deleted Objects container on PDC
+	# test access to domain root on PDC
 	try {
-		$DomainRoot = Get-ADObject -Server $PdcRoleOwner -Identity $DomainNCName -IncludeDeletedObjects | Select-Object -ExpandProperty 'DistinguishedName'
+		$DomainRoot = Get-ADObject -Server $PdcRoleOwner -Identity $DomainNCName
 	}
 	catch {
-		Write-Warning -Message "could not access Deleted Objects container on server: $PdcRoleOwner"
+		Write-Warning -Message "could not access domain root on server: $PdcRoleOwner"
 		throw $_
 	}
 
