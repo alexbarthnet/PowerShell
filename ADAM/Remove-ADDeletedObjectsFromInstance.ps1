@@ -2,6 +2,9 @@
 
 [CmdletBinding(SupportsShouldProcess)]
 param (
+	# when changed time
+	[Parameter(Position = 0)]
+	[string]$WhenChanged,
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
