@@ -4,8 +4,6 @@ function Import-ADScriptParameterValue {
         # PDC of the domain
         [Parameter(DontShow)]
         [string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
-        # identity of the script parameters container
-        [string]$Identity = $script:ScriptParametersContainer,
         # name of parameter
         [Parameter(Mandatory)]
         [string]$Parameter
@@ -16,6 +14,9 @@ function Import-ADScriptParameterValue {
         Write-Warning -Message "found existing bound parameter for '$Parameter' parameter; skipping import from AD script storage"
         return
     }
+
+    # define identity of AD object
+    $Identity = 'CN={0},{1}' -f $Parameter, $script:ScriptParametersContainer
 
     # retrieve parameter object from AD
     try {
@@ -38,7 +39,7 @@ function Import-ADScriptParameterValue {
 
     # set variable for parameter
     try {
-        New-Variable -Name $Parameter -Value $ParameterValue -Scope script -Force -
+        New-Variable -Name $Parameter -Value $ParameterValue -Scope script -Force
     }
     catch {
         throw $_
