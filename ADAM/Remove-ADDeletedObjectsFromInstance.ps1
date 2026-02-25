@@ -217,11 +217,11 @@ process {
 	
 	# loop through deleted objects
 	:NextDeletedObject foreach ($DeletedObject in $DeletedObjects) {
-		# retrieve original object class from deleted object
-		$ObjectClass = $DeletedObject.objectClass
-		
-		# retrieve original object name from deleted object DN
-		$ExistingObjectIdentity = '{0},{1}' -f $DeletedObject.DistinguishedName.Split('\0ADEL:', 2)[0], $DeletedObject.LastKnownParent
+		# define deleted object RDN by using string array overload of split method
+		$ExistingObjectRDN = $DeletedObject.DistinguishedName.Split([string[]]'\0ADEL:', 2, [System.StringSplitOptions]::None + [System.StringSplitOptions]::RemoveEmptyEntries)[0]
+
+		# create target object DN from deleted object RDN and deleted object last known parent
+		$ExistingObjectIdentity = '{0},{1}' -f $ExistingObjectRDN, $DeletedObject.LastKnownParent
 
 		# report state
 		Write-Host "found deleted object in source: $($DeletedObject.DistinguishedName)"
