@@ -5,12 +5,15 @@ function Import-ADScriptParameterValue {
         [Parameter(DontShow)]
         [string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
         # name of parameter
-        [Parameter(Mandatory)]
-        [string]$Parameter
+        [Parameter(Mandatory, Position = 0)]
+        [string]$Parameter,
+        # value of parameter
+        [Parameter(Mandatory, Position = 1)]
+        [switch]$Force
     )
 
     # if parameter was already bound...
-    if ($script:PSBoundParameters.ContainsKey($Parameter)) {
+    if ($script:PSBoundParameters.ContainsKey($Parameter) -and -not $Force.IsPresent) {
         Write-Warning -Message "found existing bound parameter for '$Parameter' parameter; skipping import from AD script storage"
         return
     }
