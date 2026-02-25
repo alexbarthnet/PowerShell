@@ -183,6 +183,14 @@ begin {
 }
 
 process {
+	# define properties
+	$Properties = @(
+		'distinguishedName'
+		'lastKnownParent'
+		'objectClass'
+		'objectGuid'
+	)
+
 	# define LDAP filter
 	$LDAPFilter = "(&(!(objectClass=contact))(!(objectClass=computer))(|(objectClass=user)(objectClass=group))(whenChanged>=$WhenChanged))"
 
@@ -191,7 +199,7 @@ process {
 		Server                = $PdcRoleOwner
 		SearchBase            = $DeletedObjectsContainer
 		LDAPFilter            = $LDAPFilter
-		Properties            = 'objectGuid'
+		Properties            = $Properties
 		IncludeDeletedObjects = $true
 	}
 
