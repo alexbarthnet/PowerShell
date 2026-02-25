@@ -230,7 +230,7 @@ process {
 				Remove-ADObject -Server $Server -Identity $ExistingObjectIdentity -Confirm:$false
 			}
 			# continue to next deleted object if object not found
-			catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
+			catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
 				continue NextDeletedObject
 			}
 			# throw error if exception other than object not found
