@@ -106,7 +106,7 @@ begin {
 	catch {
 		# create ADAMSync Parent container in Services container
 		try {
-			New-ADObject -Type 'container' -Name $ServiceName -Path $ConfigServicesContainer
+			New-ADObject -Server $Server -Type 'container' -Name $ServiceName -Path $ConfigServicesContainer
 		}
 		catch {
 			Write-Warning -Message "could not create '$ServiceName' container in '$ConfigServicesContainer' on server: $Server"
@@ -121,7 +121,7 @@ begin {
 	catch {
 		# create ADAMSync Domain container in Parent container
 		try {
-			New-ADObject -Type 'container' -Name $ServiceGuid -Path $ADAMSyncParentContainer
+			New-ADObject -Server $Server -Type 'container' -Name $ServiceGuid -Path $ADAMSyncParentContainer
 		}
 		catch {
 			Write-Warning -Message "could not create '$ServiceGuid' container in '$ADAMSyncParentContainer' on server: $Server"
@@ -136,7 +136,7 @@ begin {
 	catch {
 		# create ADAMSync Status container in Domain container
 		try {
-			New-ADObject -Type 'container' -Name $ServiceMode -Path $ADAMSyncDomainContainer
+			New-ADObject -Server $Server -Type 'container' -Name $ServiceMode -Path $ADAMSyncDomainContainer
 		}
 		catch {
 			Write-Warning -Message "could not create '$ServiceMode' container in '$ADAMSyncDomainContainer' on server: $Server"
