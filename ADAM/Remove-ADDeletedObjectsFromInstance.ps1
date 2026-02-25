@@ -149,19 +149,36 @@ begin {
 		$ADAMSyncObject = Get-ADObject -Server $Server -Identity $ADAMSyncStatusContainer -Properties 'adminDescription', 'whenChanged', 'whenCreated'
 	}
 	catch {
-		Write-Warning -Message "could not retrieve '$ServiceMode' container in '$ADAMSyncDomainContainer' on server: $Server"
-		throw $_
+		# if WhatIf provided and ADAMSync services object not retrieved...
+		if ($PSCmdlet.ShouldProcess($ADAMSyncStatusContainer, 'Retrieve object')) {
+			Write-Warning -Message "could not retrieve '$ServiceMode' container in '$ADAMSyncDomainContainer' on server: $Server"
+			throw $_
+		}
+		else {
+			# declare properties
+			Write-Warning -Message "will use temporary object for missing '$ServiceMode' container in '$ADAMSyncDomainContainer' on server: $Server"
+
+			# define custom object with 
+			$ADAMSyncObject = @{
+				adminDescription = 'Test'
+				whenChanged      = $PartitionRoot.whenCreated
+				whenCreated      = $PartitionRoot.whenCreated
+			}
+		}
 	}
 
-	# if whenChanged matches whenCreated...
-	if ($ADAMSyncObject.whenChanged -eq $ADAMSyncObject.whenCreated) {
-		# set WhenChanged string to when partition was created
-		$WhenChanged = $PartitionRoot.whenCreated.ToString('yyyyMMddHHmmss.fZ')
-	}
-	# if whenChanged does not match whenCreated...
-	else {
-		# set WhenChanged string to when ADAMSync Services object was last updated was created
-		$WhenChanged = $ADAMSyncObject.whenChanged.ToString('yyyyMMddHHmmss.fZ')
+	# if WhenChanged not explicitly provided...
+	if (!$PSBoundParameters.ContainsKey('WhenChanged')) {
+		# if whenChanged matches whenCreated...
+		if ($ADAMSyncObject.whenChanged -eq $ADAMSyncObject.whenCreated) {
+			# set WhenChanged string to when partition was created
+			$WhenChanged = $PartitionRoot.whenCreated.ToString('yyyyMMddHHmmss.fZ')
+		}
+		# if whenChanged does not match whenCreated...
+		else {
+			# set WhenChanged string to when ADAMSync Services object was last updated was created
+			$WhenChanged = $ADAMSyncObject.whenChanged.ToString('yyyyMMddHHmmss.fZ')
+		}
 	}
 }
 
@@ -220,12 +237,27 @@ process {
 }
 
 end {
-	# update ADAMSync Services object
-	try {
-		Set-ADObject -Server $Server -Identity $ADAMSyncStatusContainer -Replace @{ adminDescription = "Completed '$ServiceMode' sync on $Server against '$PdcRoleOwner' domain controller" }
-	}
-	catch {
-		Write-Warning -Message "could not update 'adminDescription' property on '$ADAMSyncStatusContainer' container on server: $Server"
-		throw $_
+	# if WhatIf not provided...
+	if ($PSCmdlet.ShouldProcess($ADAMSyncStatusContainer, 'Update object')) {
+		# if WhenChanged provided...
+		if ($PSBoundParameters.ContainsKey('WhenCreated')) {
+			Write-Warning -Message "skipping update of 'adminDescription' property on '$ADAMSyncStatusContainer' container on server: $Server"
+		}
+		else {
+			# create admin description
+			$adminDescription = "Completed '$ServiceMode' sync on $Server against '$PdcRoleOwner' domain controller at {0}" -f [System.DateTime]::UtcNow.ToString('yyyyMMddHHmmss.fZ')
+			
+			# update ADAMSync Services object
+			try {
+				Set-ADObject -Server $Server -Identity $ADAMSyncStatusContainer -Replace @{ adminDescription = $adminDescription }
+			}
+			catch {
+				Write-Warning -Message "could not update 'adminDescription' property on '$ADAMSyncStatusContainer' container on server: $Server"
+				throw $_
+			}
+
+			# report state
+			Write-Host $adminDescription
+		}
 	}
 }
