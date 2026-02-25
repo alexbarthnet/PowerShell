@@ -183,6 +183,9 @@ begin {
 }
 
 process {
+	# report state
+	Write-Host "removing synced objects deleted after: $WhenChanged"
+
 	# define properties
 	$Properties = @(
 		'distinguishedName'
@@ -221,16 +224,18 @@ process {
 		$ExistingObjectIdentity = '{0},{1}' -f $DeletedObject.DistinguishedName.Split('\0ADEL:', 2)[0], $DeletedObject.LastKnownParent
 
 		# report state
-		Write-Host "found deleted '$ObjectClass' object in source with identity: $ExistingObjectIdentity"
+		Write-Host "found deleted object in source: $($DeletedObject.DistinguishedName)"
+		Write-Host "- constructed object in target: $ExistingObjectIdentity"
 
 		# if WhatIf provided...
-		if ($PSCmdlet.ShouldProcess($ExistingObjectIdentity)) {
+		if ($PSCmdlet.ShouldProcess($ExistingObjectIdentity, 'Remove object')) {
 			# remove existing object
 			try {
 				Remove-ADObject -Server $Server -Identity $ExistingObjectIdentity -Confirm:$false
 			}
 			# continue to next deleted object if object not found
 			catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
+				Write-Host "- missing the object in target: $ExistingObjectIdentity"
 				continue NextDeletedObject
 			}
 			# throw error if exception other than object not found
@@ -239,7 +244,7 @@ process {
 			}
 
 			# report state
-			Write-Host "removed '$ObjectClass' object in target with identity: $ExistingObjectIdentity"
+			Write-Host "- removed the object in target: $ExistingObjectIdentity"
 		}
 	}
 }
