@@ -10,7 +10,6 @@ function Export-ADScriptParameterValue {
         # value of parameter
         [Parameter(Mandatory)]
         [object]$Value
-
     )
 
     # define identity of AD object
