@@ -5,10 +5,10 @@ function Export-ADScriptParameterValue {
         [Parameter(DontShow)]
         [string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
         # name of parameter
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, Position = 0)]
         [string]$Parameter,
         # value of parameter
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, Position = 1)]
         [object]$Value
     )
 
