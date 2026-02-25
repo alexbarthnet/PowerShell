@@ -21,7 +21,7 @@ function Export-ADScriptParameterValue {
         $ParameterValueAsCliXml = [System.Management.Automation.PSSerializer]::Serialize($Value)
     }
     catch {
-        return $_
+        throw $_
     }
 
     # store parameter value as CLI XML in attribute on AD object
@@ -46,6 +46,6 @@ function Export-ADScriptParameterValue {
         Write-Host "Set '$Parameter' parameter value on new '$Identity' object"
     }
     catch {
-        return $_
+        throw $_
     }
 }
