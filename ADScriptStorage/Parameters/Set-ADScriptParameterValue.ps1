@@ -25,41 +25,69 @@ param (
     [string]$Parameter,
     # value of parameter
     [Parameter(ValueFromPipeline)]
-    [object]$Value,
-    # object for parameter
-    [Parameter(DontShow)]
-    [string]$ScriptParameterObject = "CN=$Parameter,$ScriptParametersContainer"
+    [object]$Value
 )
 
-# convert parameter value to CLI XML
-try {
-    $ParameterValueAsCliXml = [System.Management.Automation.PSSerializer]::Serialize($Value)
-}
-catch {
-    return $_
+begin {
+    function Export-ADScriptParameterValue {
+        [cmdletbinding()]
+        param (
+            # PDC of the domain
+            [Parameter(DontShow)]
+            [string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name,
+            # name of parameter
+            [Parameter(Mandatory, Position = 0)]
+            [string]$Parameter,
+            # value of parameter
+            [Parameter(Mandatory, Position = 1)]
+            [object]$Value
+        )
+
+        # define identity of AD object
+        $Identity = 'CN={0},{1}' -f $Parameter, $script:ScriptParametersContainer
+
+        # convert parameter value to CLI XML
+        try {
+            $ParameterValueAsCliXml = [System.Management.Automation.PSSerializer]::Serialize($Value)
+        }
+        catch {
+            throw $_
+        }
+
+        # store parameter value as CLI XML in attribute on AD object
+        try {
+            # update AD object with parameter value
+            Set-ADObject -Server $Server -Identity $Identity -Replace @{ 'notes' = $ParameterValueAsCliXml }
+
+            # report state
+            Write-Host "Set '$Parameter' parameter value on existing '$Identity' object"
+        }
+        catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
+            # create AD object with parameter value
+            try {
+                $null = New-ADObject -Server $Server -Name $Parameter -Path $script:ScriptParametersContainer -Type 'contact' -OtherAttributes @{ 'notes' = $ParameterValueAsCliXml }
+            }
+            catch {
+                Write-Warning -Message "could not create '$Identity' object for '$ScriptName' script: $($_.Exception.Message)"
+                throw $_
+            }
+
+            # report state
+            Write-Host "Set '$Parameter' parameter value on new '$Identity' object"
+        }
+        catch {
+            throw $_
+        }
+    }
 }
 
-# store parameter value as CLI XML in attribute on AD object
-try {
-    # update AD object with parameter value
-    Set-ADObject -Server $Server -Identity $ScriptParameterObject -Replace @{ 'notes' = $ParameterValueAsCliXml }
+process {
 
-    # report state
-    Write-Host "Set '$Parameter' parameter value on existing '$ScriptParameterObject' object"
-}
-catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
-    # create AD object with parameter value
+    # call function
     try {
-        $null = New-ADObject -Server $Server -Name $Parameter -Path $ScriptParametersContainer -Type 'contact' -OtherAttributes @{ 'notes' = $ParameterValueAsCliXml}
+        Export-ADScriptParameterValue -Parameter $Parameter -Value $Value
     }
     catch {
-        Write-Warning -Message "could not create '$ScriptParameterObject' object for '$ScriptName' script: $($_.Exception.Message)"
-        throw $_
+        return $_
     }
-
-    # report state
-    Write-Host "Set '$Parameter' parameter value on new '$ScriptParameterObject' object"
-}
-catch {
-    return $_
 }
