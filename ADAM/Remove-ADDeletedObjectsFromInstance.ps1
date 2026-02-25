@@ -2,9 +2,12 @@
 
 [CmdletBinding(SupportsShouldProcess)]
 param (
-	# when changed time
+	# when changed time (lower bound for query)
 	[Parameter(Position = 0)]
-	[string]$WhenChanged,
+	[datetime]$WhenChanged,
+	# last changed time (upper bound for query)
+	[Parameter(Position = 1)]
+	[datetime]$LastChanged = [datetime]::Now,
 	# local host name
 	[Parameter(DontShow)]
 	[string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
@@ -168,23 +171,29 @@ begin {
 	}
 
 	# if WhenChanged not explicitly provided...
-	if (!$PSBoundParameters.ContainsKey('WhenChanged')) {
+	if (!$PSBoundParameters.ContainsKey('WhenChanged')) { 
 		# if whenChanged matches whenCreated...
 		if ($ADAMSyncObject.whenChanged -eq $ADAMSyncObject.whenCreated) {
-			# set WhenChanged string to when partition was created
-			$WhenChanged = $PartitionRoot.whenCreated.ToString('yyyyMMddHHmmss.fZ')
+			# set WhenChanged to when partition was created
+			$WhenChanged = $PartitionRoot.whenCreated
 		}
 		# if whenChanged does not match whenCreated...
 		else {
-			# set WhenChanged string to when ADAMSync Services object was last updated was created
-			$WhenChanged = $ADAMSyncObject.whenChanged.ToString('yyyyMMddHHmmss.fZ')
+			# set WhenChanged to when ADAMSync Services object was last updated was created
+			$WhenChanged = $ADAMSyncObject.whenChanged
 		}
 	}
+
+	# create WhenChangedString from WhenChanged
+	$WhenChangedString = $WhenChanged.ToUniversalTime().ToString('yyyyMMddHHmmss.fZ')
+
+	# create LastChangedString from LastChanged
+	$LastChangedString = $LastChanged.ToUniversalTime().ToString('yyyyMMddHHmmss.fZ')
 }
 
 process {
 	# report state
-	Write-Host "removing synced objects deleted after: $WhenChanged"
+	Write-Host "removing synced objects deleted between '$WhenChangedString' ($($WhenChanged.ToString('o'))) and '$LastChangedString' ($($LastChanged.ToString('o')))"
 
 	# define properties
 	$Properties = @(
@@ -195,7 +204,7 @@ process {
 	)
 
 	# define LDAP filter
-	$LDAPFilter = "(&(!(objectClass=contact))(!(objectClass=computer))(|(objectClass=user)(objectClass=group))(whenChanged>=$WhenChanged))"
+	$LDAPFilter = "(&(!(objectClass=contact))(!(objectClass=computer))(|(objectClass=user)(objectClass=group))(whenChanged>=$WhenChangedString)(whenChanged<=$LastChangedString))"
 
 	# define parameters
 	$GetADObject = @{
@@ -211,7 +220,7 @@ process {
 		$DeletedObjects = Get-ADObject @GetADObject | Select-Object -Property $Properties
 	}
 	catch {
-		Write-Warning -Message "could not retrieve deleted objects since '$WhenChanged' from '$Domain' domain on server: $Server"
+		Write-Warning -Message "could not retrieve deleted objects between '$WhenChangedString' and '$LastChangedString' from '$Domain' domain on server: $Server"
 		throw $_
 	}
 	
