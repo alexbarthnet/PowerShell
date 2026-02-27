@@ -7,6 +7,9 @@ param(
     # name of principal with rights to the object
     [Parameter(Mandatory)]
     [string]$Principal,
+    # containers to create; default is all container types
+    [Parameter(Mandatory)][ValidateSet('Parameters', 'State')]
+    [string[]]$Container,
     # distinguished name of the domain
     [Parameter(DontShow)]
     [string]$DomainDistinguishedName = $([System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().GetDirectoryEntry().DistinguishedName),
@@ -72,74 +75,110 @@ catch {
     throw $_
 }
 
-# retrieve parameters container for named script
-try {
-    $null = Get-ADObject -Server $Server -Identity $ScriptParametersContainer -ErrorAction 'Stop'
-}
-catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
-    # create parameters container for named script
+# if container parameter not provided or container parameter contains Parameters...
+if (!$PSBoundParameters.ContainsKey('Container') -or $script:Container -contains 'Parameters') {
+    # retrieve parameters container for named script
     try {
-        New-ADObject -Server $Server -Name 'Parameters' -Path $ScriptObjectsContainer -Type 'Container' -ErrorAction 'Stop'
+        $null = Get-ADObject -Server $Server -Identity $ScriptParametersContainer -ErrorAction 'Stop'
+    }
+    catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
+        # create parameters container for named script
+        try {
+            New-ADObject -Server $Server -Name 'Parameters' -Path $ScriptObjectsContainer -Type 'Container' -ErrorAction 'Stop'
+        }
+        catch {
+            Write-Warning -Message "could not create parameters container for provided script name: $($_.Exception.Message)"
+            throw $_
+        }
+        # report state
+        Write-Host "created parameters container for provided script name: $ScriptParametersContainer"
     }
     catch {
-        Write-Warning -Message "could not create parameters container for provided script name: $($_.Exception.Message)"
+        Write-Warning -Message "could not retrieve parameters container for provided script name: $($_.Exception.Message)"
         throw $_
     }
-    # report state
-    Write-Host "created parameters container for provided script name: $ScriptParametersContainer"
-}
-catch {
-    Write-Warning -Message "could not retrieve parameters container for provided script name: $($_.Exception.Message)"
-    throw $_
-}
 
-# retrieve state container for named script
-try {
-    $null = Get-ADObject -Server $Server -Identity $ScriptStateContainer -ErrorAction 'Stop'
-}
-catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
-    # create state container for named script
+    # retrieve security identifier
     try {
-        New-ADObject -Server $Server -Name 'State' -Path $ScriptObjectsContainer -Type 'Container' -ErrorAction 'Stop'
+        $SecurityIdentifier = Get-ADSecurityIdentifier -Server $Server -Principal $Principal -ErrorAction 'Stop'
     }
     catch {
-        Write-Warning -Message "could not create state container for provided script name: $($_.Exception.Message)"
+        Write-Warning -Message "could not retrieve security identifier for principal: $($_.Exception.Message)"
         throw $_
     }
+
+    # create access rule
+    try {
+        $AccessRule = New-ADAccessRule -SecurityIdentifier $SecurityIdentifier -Preset 'Contact' -ErrorAction 'Stop'
+    }
+    catch {
+        Write-Warning -Message "could not create access rule for principal: $($_.Exception.Message)"
+        throw $_
+    }
+
+    # update state container security
+    try {
+        Update-ADSecurity -Server $Server -Identity $ScriptStateContainer -AccessRule $AccessRule -ErrorAction 'Stop'
+    }
+    catch {
+        Write-Warning -Message "could not update access rules on state container: $($_.Exception.Message)"
+        throw $_
+    }
+
     # report state
-    Write-Host "created state container for provided script name: $ScriptStateContainer"
-}
-catch {
-    Write-Warning -Message "could not retrieve state container for provided script name: $($_.Exception.Message)"
-    throw $_
+    Write-Host "granted '$Principal' principal rights to create contact objects in state container for provided script name: $ScriptStateContainer"
 }
 
-# retrieve security identifier
-try {
-    $SecurityIdentifier = Get-ADSecurityIdentifier -Server $Server -Principal $Principal -ErrorAction 'Stop'
-}
-catch {
-    Write-Warning -Message "could not retrieve security identifier for principal: $($_.Exception.Message)"
-    throw $_
-}
+# if container parameter not provided or container parameter contains State...
+if (!$PSBoundParameters.ContainsKey('Container') -or $script:Container -contains 'State') {
+    # retrieve state container for named script
+    try {
+        $null = Get-ADObject -Server $Server -Identity $ScriptStateContainer -ErrorAction 'Stop'
+    }
+    catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
+        # create state container for named script
+        try {
+            New-ADObject -Server $Server -Name 'State' -Path $ScriptObjectsContainer -Type 'Container' -ErrorAction 'Stop'
+        }
+        catch {
+            Write-Warning -Message "could not create state container for provided script name: $($_.Exception.Message)"
+            throw $_
+        }
+        # report state
+        Write-Host "created state container for provided script name: $ScriptStateContainer"
+    }
+    catch {
+        Write-Warning -Message "could not retrieve state container for provided script name: $($_.Exception.Message)"
+        throw $_
+    }
 
-# create access rule
-try {
-    $AccessRule = New-ADAccessRule -SecurityIdentifier $SecurityIdentifier -Preset 'Contact' -ErrorAction 'Stop'
-}
-catch {
-    Write-Warning -Message "could not create access rule for principal: $($_.Exception.Message)"
-    throw $_
-}
+    # retrieve security identifier
+    try {
+        $SecurityIdentifier = Get-ADSecurityIdentifier -Server $Server -Principal $Principal -ErrorAction 'Stop'
+    }
+    catch {
+        Write-Warning -Message "could not retrieve security identifier for principal: $($_.Exception.Message)"
+        throw $_
+    }
 
-# update state container security
-try {
-    Update-ADSecurity -Server $Server -Identity $ScriptStateContainer -AccessRule $AccessRule -ErrorAction 'Stop'
-}
-catch {
-    Write-Warning -Message "could not update access rules on state container: $($_.Exception.Message)"
-    throw $_
-}
+    # create access rule
+    try {
+        $AccessRule = New-ADAccessRule -SecurityIdentifier $SecurityIdentifier -Preset 'Contact' -ErrorAction 'Stop'
+    }
+    catch {
+        Write-Warning -Message "could not create access rule for principal: $($_.Exception.Message)"
+        throw $_
+    }
 
-# report state
-Write-Host "granted '$Principal' principal rights to create contact objects in state container for provided script name: $ScriptStateContainer"
+    # update state container security
+    try {
+        Update-ADSecurity -Server $Server -Identity $ScriptStateContainer -AccessRule $AccessRule -ErrorAction 'Stop'
+    }
+    catch {
+        Write-Warning -Message "could not update access rules on state container: $($_.Exception.Message)"
+        throw $_
+    }
+
+    # report state
+    Write-Host "granted '$Principal' principal rights to create contact objects in state container for provided script name: $ScriptStateContainer"
+}
