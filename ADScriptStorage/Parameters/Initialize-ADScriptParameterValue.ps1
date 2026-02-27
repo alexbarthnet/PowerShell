@@ -82,7 +82,6 @@ begin {
 }
 
 process {
-
     # call function
     try {
         Export-ADScriptParameterValue -Parameter $Parameter -Value $Value
