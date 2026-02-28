@@ -145,6 +145,8 @@ begin {
 
 			# report state
 			Write-Host "$InterfaceGuid; $InterfaceName; Assigned IP address"
+
+
 		}
 
 		# if default IPv4 route was on adapter and assigned by DHCP
@@ -182,6 +184,12 @@ begin {
 			# report state
 			Write-Host "$InterfaceGuid; $InterfaceName; Assigned DNS servers"
 		}
+
+		# wait after reconfiguring network
+		Start-Sleep -Seconds 3
+
+		# report state
+		Write-Host "$InterfaceGuid; $InterfaceName; Waited 3 second to re-establish network connection"
 	}
 
 	function Disable-NetAdapterNetbios {
