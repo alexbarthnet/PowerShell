@@ -2,15 +2,18 @@
 param(
     # network adapter name
     [Parameter(Position = 0)]
-    [string]$Name = 'Ethernet',
-    # switch for 
+    [string]$InterfaceAlias = 'Ethernet',
+    # switch for forcing domain controller behavior
     [Parameter(Position = 1)]
     [switch]$ForceDomainControllerMode,
-    # preferred site name
+    # switch for forcing promotion behavior
     [Parameter(Position = 2)]
-    [string]$PreferredPeerSiteName = 'Default-First-Site-Name',
+    [switch]$ForcePromotionMode,
     # preferred site name
     [Parameter(Position = 3)]
+    [string]$PreferredPeerSiteName = 'Default-First-Site-Name',
+    # preferred site name
+    [Parameter(Position = 4)]
     [string]$PreferredPeerSiteLinkName = 'DEFAULTIPSITELINK',
     # local host name
     [Parameter(DontShow)]
@@ -479,12 +482,39 @@ If ($ForceDomainControllerMode) {
     $DomainRole = 4
 }
 
-# retrieve the named physical network adapter
+# retrieve the default route
 try {
-    $NetAdapter = Get-NetAdapter -Physical -Name $Name -ErrorAction 'Stop'
+    $NetRoute = Get-NetRoute -DestinationPrefix '0.0.0.0/0'
 }
 catch {
-    Write-Warning -Message "could not locate '$Name' network adapter"
+    Write-Warning -Message "could not retrieve default route"
+    throw $_
+}
+
+# if net route not found...
+If ($null -eq $NetRoute) {
+    Write-Warning -Message "could not locate network route matching '0.0.0.0/0' destination prefix"
+    return
+}
+
+# if multiple default routes found...
+If ($NetRoute -is [array]) {
+    # filter network routes by interface alias
+    $NetRoute = $NetRoute | Where-Object { $_.InterfaceAlias -eq $InterfaceAlias }
+}
+
+# if net route not found...
+If ($null -eq $NetRoute) {
+    Write-Warning -Message "could not locate default route matching '$InterfaceAlias' interface alias"
+    return
+}
+
+# retrieve the physical network adapter for default route
+try {
+    $NetAdapter = Get-NetAdapter -Physical -InterfaceIndex $NetRoute.InterfaceIndex -ErrorAction 'Stop'
+}
+catch {
+    Write-Warning -Message 'could not locate network adapter for default route'
     throw $_
 }
 
@@ -547,6 +577,11 @@ if ($DomainRole -ge 4) {
 # convert DNS server addresses list to string array
 $ServerAddresses = $ServerAddresses -as [string[]]
 
+# if force promotion mode requested...
+If ($ForcePromotionMode) {
+    $ServerAddresses = $ServerAddresses | Select-Object -First 1
+}
+
 # define should process components
 $ShouldProcessTarget = $NetAdapter.Name
 $ShouldProcessAction = "set DNS server addresses: $($ServerAddresses -join ', ')"
@@ -562,5 +597,5 @@ if ($PSCmdlet.ShouldProcess($ShouldProcessTarget, $ShouldProcessAction)) {
     }
 
     # report state
-    Write-Host "Set DNS server addresses on '$Name' network adapter: $($ServerAddresses -join ', ')"
+    Write-Host "Set DNS server addresses on network adapter with default route: $($ServerAddresses -join ', ')"
 }
