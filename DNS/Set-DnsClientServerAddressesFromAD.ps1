@@ -4,6 +4,8 @@ param(
     [switch]$ForceDomainControllerMode,
     # switch for forcing promotion behavior
     [switch]$ForcePromotionMode,
+    # switch for forcing single site mode
+    [switch]$ForceSingleSiteMode,
     # network adapter name
     [Parameter(Position = 0)]
     [string]$InterfaceAlias = 'Ethernet',
@@ -211,6 +213,24 @@ function Find-ADNameServerAddresses {
             if ($DomainRole -lt 4) {
                 # report state
                 Write-Host "Found member domain role with multiple $Adjectives domain controllers available in same site; identifying second available domain controller"
+
+                # retrieve peer domain controller from list with custom sort
+                $PeerDomainController = $OtherGlobalCatalogsInSameSite | Where-Object { $_.Name -eq $ArrangedDomainControllerNames[2] }
+
+                # add IP address of peer to DNS server addresses
+                $ServerAddresses.Add($PeerDomainController.IPAddress)
+
+                # report state
+                Write-Host "Added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+
+                # return after updating DNS server addresses
+                return
+            }
+
+            # if single site mode requested...
+            if ($ForceSingleSiteMode) {
+                # report state
+                Write-Host "Found single site mode requested with multiple $Adjectives domain controllers available in same site; identifying second available domain controller"
 
                 # retrieve peer domain controller from list with custom sort
                 $PeerDomainController = $OtherGlobalCatalogsInSameSite | Where-Object { $_.Name -eq $ArrangedDomainControllerNames[2] }
