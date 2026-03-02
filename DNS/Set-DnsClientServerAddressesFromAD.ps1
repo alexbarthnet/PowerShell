@@ -70,12 +70,12 @@ function Find-ADNameServerAddresses {
     switch ($GlobalCatalogsInForest.Count) {
         0 {
             # report state and return
-            Write-Host 'Found no other writeable domain controllers in current forest; cannot add peer IP addresses to DNS server addresses'
+            Write-Host "Found no $Adjectives domain controllers in current forest; cannot add peer IP addresses to DNS server addresses"
             return
         }
         1 {
             # report state
-            Write-Host 'Found one other writeable domain controller in current forest; adding peer IP address to DNS server addresses'
+            Write-Host "Found one $Adjectives domain controller in current forest; adding peer IP address to DNS server addresses"
 
             # retrieve peer domain controller
             $PeerDomainController = $GlobalCatalogsInForest | Where-Object { $_.Name -ne $DnsHostName }
@@ -91,7 +91,7 @@ function Find-ADNameServerAddresses {
         }
         Default {
             # report state
-            Write-Host "Found '$($GlobalCatalogsInForest.Count)' other writeable domain controllers in current forest; checking for domain controllers in computer domain"
+            Write-Host "Found '$($GlobalCatalogsInForest.Count)' $Adjectives domain controllers in current forest; checking for domain controllers in computer domain"
         }
     }
 
@@ -106,7 +106,7 @@ function Find-ADNameServerAddresses {
             # STATE: forest contains at least 2 other GCs, domain contains 0 other GCs
 
             # report state
-            Write-Host 'Found no other writeable domain controllers in computer domain; checking other domains in the forest'
+            Write-Host "Found no $Adjectives domain controllers in computer domain; checking other domains in the forest"
 
             # define other global catalogs
             $OtherGlobalCatalogs = $GlobalCatalogsInForest
@@ -116,7 +116,7 @@ function Find-ADNameServerAddresses {
             # STATE: forest contains at least 2 other GCs, domain contains 1 other GC
 
             # report state
-            Write-Host 'Found one other writeable domain controller in computer domain; adding peer IP address to DNS server addresses'
+            Write-Host "Found one $Adjectives domain controller in computer domain; adding peer IP address to DNS server addresses"
 
             # retrieve peer domain controller
             $PeerDomainController = $GlobalCatalogsInDomain | Select-Object -First 1
@@ -135,7 +135,7 @@ function Find-ADNameServerAddresses {
             # STATE: forest contains at least 2 other GCs, domain contains at least 2 other GCs
 
             # report state
-            Write-Host "Found '$($GlobalCatalogsInDomain.Count)' other writeable domain controllers in computer domain; checking for domain controllers in same site"
+            Write-Host "Found '$($GlobalCatalogsInDomain.Count)' $Adjectives domain controllers in computer domain; checking for domain controllers in same site"
 
             # define other global catalogs
             $OtherGlobalCatalogs = $GlobalCatalogsInDomain
@@ -155,13 +155,13 @@ function Find-ADNameServerAddresses {
             # STATE: forest contains at least 2 other GCs, current site contains 0 other GCs
 
             # report state and return
-            Write-Host 'Found no other writeable domain controllers in same site; checking for domain controllers in next closest site'
+            Write-Host "Found no $Adjectives domain controllers in same site; checking for domain controllers in next closest site"
         }
         1 {
             # STATE: forest contains at least 2 other GCs, current site contains 1 other GC
 
             # report state
-            Write-Host 'Found one other writeable domain controller in same site; adding peer IP address to DNS server addresses'
+            Write-Host "Found one $Adjectives domain controller in same site; adding peer IP address to DNS server addresses"
 
             # retrieve peer domain controller
             $PeerDomainController = $OtherGlobalCatalogsInSameSite | Select-Object -First 1
@@ -176,7 +176,7 @@ function Find-ADNameServerAddresses {
             # STATE: forest contains at least 2 other GCs, current site contains at least 2 other GCs
 
             # report state
-            Write-Host "Found '$($OtherGlobalCatalogsInSameSite.Count)' available domain controllers in same site; identifying first available domain controller"
+            Write-Host "Found '$($OtherGlobalCatalogsInSameSite.Count)' $Adjectives domain controllers in same site; identifying first available domain controller"
 
             # define sorted set for domain controllers in current site
             $DomainControllersForSameSite = [System.Collections.Generic.SortedSet[string]]::new()
@@ -210,7 +210,7 @@ function Find-ADNameServerAddresses {
             # if domain role is member...
             if ($DomainRole -lt 4) {
                 # report state
-                Write-Host "Found member domain role with multiple domain controllers available in same site; identifying second available domain controller"
+                Write-Host "Found member domain role with multiple $Adjectives domain controllers available in same site; identifying second available domain controller"
 
                 # retrieve peer domain controller from list with custom sort
                 $PeerDomainController = $OtherGlobalCatalogsInSameSite | Where-Object { $_.Name -eq $ArrangedDomainControllerNames[2] }
@@ -231,7 +231,7 @@ function Find-ADNameServerAddresses {
                     # STATE: forest contains at least 2 other GCs, current site contains at least 2 other GCs, other sites contain 0 other GCs
 
                     # report state
-                    Write-Host 'Found no other writeable domain controllers in other sites; identifying next peer domain controller'
+                    Write-Host "Found no $Adjectives domain controllers in other sites; identifying next peer domain controller"
 
                     # retrieve next peer domain controller
                     $PeerDomainController = $OtherGlobalCatalogsInSameSite | Where-Object { $_.Name -eq $ArrangedDomainControllerNames[2] }
@@ -249,7 +249,7 @@ function Find-ADNameServerAddresses {
                     # STATE: forest contains at least 2 other GCs, current site contains at least 2 other GCs, other sites contain 1 other GC
 
                     # report state
-                    Write-Host 'Found one other writeable domain controllers in other sites; identifying last peer domain controller'
+                    Write-Host "Found one $Adjectives domain controllers in other sites; identifying last peer domain controller"
 
                     # retrieve next peer domain controller
                     $PeerDomainController = $OtherGlobalCatalogsInOtherSites | Select-Object -First 1
@@ -267,7 +267,7 @@ function Find-ADNameServerAddresses {
                     # STATE: forest contains at least 2 other GCs, current site contains at least 2 other GCs, other sites contains at least 2 other GCs
 
                     # report state
-                    Write-Host "Found '$($OtherGlobalCatalogsInOtherSites.Count)' writeable domain controllers in other sites; checking for domain controllers in next closest site"
+                    Write-Host "Found '$($OtherGlobalCatalogsInOtherSites.Count)' $Adjectives domain controllers in other sites; checking for domain controllers in next closest site"
 
                     # define other global catalogs
                     $OtherGlobalCatalogs = $GlobalCatalogsInDomain
@@ -478,6 +478,14 @@ function Find-ADNameServerAddresses {
 If ($ForceDomainControllerMode) {
     # set domain role to 4
     $DomainRole = 4
+}
+
+# if domain role is domain controller...
+if ($DomainRole -ge 4) {
+    $Adjectives = 'other writeable'
+}
+else {
+    $Adjectives = 'writeable'
 }
 
 # retrieve the default route
