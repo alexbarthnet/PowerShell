@@ -1,19 +1,17 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
+    # switch for forcing domain controller behavior
+    [switch]$ForceDomainControllerMode,
+    # switch for forcing promotion behavior
+    [switch]$ForcePromotionMode,
     # network adapter name
     [Parameter(Position = 0)]
     [string]$InterfaceAlias = 'Ethernet',
-    # switch for forcing domain controller behavior
-    [Parameter(Position = 1)]
-    [switch]$ForceDomainControllerMode,
-    # switch for forcing promotion behavior
-    [Parameter(Position = 2)]
-    [switch]$ForcePromotionMode,
     # preferred site name
-    [Parameter(Position = 3)]
+    [Parameter(Position = 1)]
     [string]$PreferredPeerSiteName = 'Default-First-Site-Name',
     # preferred site name
-    [Parameter(Position = 4)]
+    [Parameter(Position = 2)]
     [string]$PreferredPeerSiteLinkName = 'DEFAULTIPSITELINK',
     # local host name
     [Parameter(DontShow)]
