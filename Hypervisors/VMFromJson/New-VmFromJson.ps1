@@ -4695,7 +4695,7 @@ process {
 											# if expand string from JSON file is not a string or value type...
 											elseif ($ExpandStringsHashtable[$ExpandString] -isnot [string] -and -not $ExpandStringsHashtable[$ExpandString].GetType().IsValueType) {
 												# report state
-												Write-Host ("$Hostname,$ComputerName,$Name - ...skipping value of '$ExpandString' expand string from $ExpandSource; value is not string or value type")
+												Write-Host ("$Hostname,$ComputerName,$Name - ...skipping value of '$ExpandString' expand string from $ExpandSource; value is not a string or a 'value' type")
 											}
 											else {
 												# report state
@@ -4734,7 +4734,7 @@ process {
 											# if AD Computer property from JSON file is not a string or value type...
 											elseif ($ADComputerHashtable[$ExpandString] -isnot [string] -and -not $ADComputerHashtable[$ExpandString].GetType().IsValueType) {
 												# report state
-												Write-Host ("$Hostname,$ComputerName,$Name - ...skipping value of '$ExpandString' expand string from $ExpandSource; value is not string or value type")
+												Write-Host ("$Hostname,$ComputerName,$Name - ...skipping value of '$ExpandString' expand string from $ExpandSource; value is not a string or a 'value' type")
 											}
 											else {
 												# report state
