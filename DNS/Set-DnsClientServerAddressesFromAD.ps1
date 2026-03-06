@@ -17,15 +17,9 @@ param(
     # preferred site name
     [Parameter(Position = 2)]
     [string]$PreferredPeerSiteLinkName = 'DEFAULTIPSITELINK',
-    # local host name
-    [Parameter(DontShow)]
-    [string]$HostName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().HostName.ToLowerInvariant(),
-    # local domain name
-    [Parameter(DontShow)]
-    [string]$DomainName = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.ToLowerInvariant(),
-    # local DNS hostname
-    [Parameter(DontShow)]
-    [string]$DnsHostName = ($HostName, $DomainName -join '.').TrimEnd('.'),
+    # count of server addresses to retrieve
+    [Parameter(Position = 3)]
+    [uint16]$CountOfServerAddresses = 2,
     # domain role of current system
     [Parameter(DontShow)]
     [uint16]$DomainRole = (Get-CimInstance -ClassName 'Win32_ComputerSystem' -Property 'DomainRole').DomainRole
@@ -133,7 +127,11 @@ function Find-ADNameServerAddresses {
 
             # define other global catalogs
             $OtherGlobalCatalogs = $GlobalCatalogsInForest.Where({ $_.Domain.Name -ne $Domain.Name })
-            # $GlobalCatalogSource = 'current forest'
+
+            # if server addresses is at least requested count...
+            if ($ServerAddresses -ge $CountOfServerAddresses) {
+                return
+            }
         }
         Default {
             # STATE: forest contains at least 2 other GCs, domain contains at least 2 other GCs
@@ -143,7 +141,6 @@ function Find-ADNameServerAddresses {
 
             # define other global catalogs
             $OtherGlobalCatalogs = $GlobalCatalogsInDomain
-            # $GlobalCatalogSource = 'computer domain'
         }
     }
 
@@ -176,6 +173,10 @@ function Find-ADNameServerAddresses {
             # report state
             Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
 
+            # if server addresses is at least requested count...
+            if ($ServerAddresses -ge $CountOfServerAddresses) {
+                return
+            }
         }
         Default {
             # STATE: forest contains at least 2 other GCs, current site contains at least 2 other GCs
@@ -210,7 +211,12 @@ function Find-ADNameServerAddresses {
             $ServerAddresses.Add($PeerDomainController.IPAddress)
 
             # report state
-            Write-Host "Added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+            Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+
+            # if server addresses is at least requested count...
+            if ($ServerAddresses -ge $CountOfServerAddresses) {
+                return
+            }
 
             # if domain role is member...
             if ($DomainRole -lt 4) {
@@ -300,8 +306,8 @@ function Find-ADNameServerAddresses {
         }
     }
 
-    # return if two server addresses added
-    if ($ServerAddresses.Count -eq 2) {
+    # if server addresses is at least requested count...
+    if ($ServerAddresses -ge $CountOfServerAddresses) {
         return
     }
 
@@ -481,6 +487,11 @@ function Find-ADNameServerAddresses {
 
             # report state
             Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+
+            # if server addresses is at least requested count...
+            if ($ServerAddresses -ge $CountOfServerAddresses) {
+                return
+            }
 
             # if only one server address found...
             if ($ServerAddresses.Count -eq 1) {
