@@ -6,6 +6,8 @@ param(
     [switch]$ForcePromotionMode,
     # switch for forcing single site mode
     [switch]$ForceSingleSiteMode,
+    # switch for including RODCs in list of global catalogs
+    [switch]$IncludeReadOnlyDomainControllers,
     # network adapter name
     [Parameter(Position = 0)]
     [string]$InterfaceAlias = 'Ethernet',
@@ -562,8 +564,33 @@ catch {
     throw $_
 }
 
-# retrieve global catalogs in forest
-$GlobalCatalogs = $Forest.GlobalCatalogs
+# define initial collection for global catalogs
+$GlobalCatalogs = [System.Collections.Generic.List[object]]::new()
+
+# loop through global catalogs in forest
+:NextGlobalCatalog foreach ($GlobalCatalog in $Forest.GlobalCatalogs) {
+    # connect to RootDSE
+    try {
+        $DirectoryEntry = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$($GlobalCatalog.Name)/RootDSE")
+    }
+    catch {
+        Write-Warning -Message "[ ] excluding unreachable global catalog: $($GlobalCatalog.Name)"
+        continue NextGlobalCatalog
+    }
+
+    # if the global catalog is an RODC...
+    if ($DirectoryEntry.supportedCapabilities.Contains('1.2.840.113556.1.4.1920') -and -not $IncludeReadOnlyDomainControllers.IsPresent) {
+        # report and continue
+        Write-Verbose -Message "[ ] excluding read-only global catalog: $($GlobalCatalog.Name)"
+        continue NextGlobalCatalog
+    }
+
+    # report state
+    Write-Verbose -Message "[X] including global catalog: $($GlobalCatalog.Name)"
+
+    # add global catalog to collection
+    $GlobalCatalogs.Add($GlobalCatalog)
+}
 
 # if no global catalogs in forest found...
 if ($GlobalCatalogs.Count -eq 0) {
