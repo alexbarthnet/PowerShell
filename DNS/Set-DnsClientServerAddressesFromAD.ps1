@@ -385,7 +385,7 @@ function Find-ADNameServerAddresses {
             }
 
             # retrieve adjacent sites with lowest cost
-            $AdjacentSitesWithLowestCost = $AdjacentSites.Where({ $_.SiteLinks.Name -contains $SiteLinkWithLowestCost.Name })
+            $AdjacentSitesWithLowestCost = $AdjacentSites.Where({ $_.SiteLinks.Name -eq $SiteLinkWithLowestCost.Name })
 
             # switch on adjacent sites with lowest cost count
             switch ($AdjacentSitesWithLowestCost.Count) {
