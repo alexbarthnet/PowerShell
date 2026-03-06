@@ -74,12 +74,12 @@ function Find-ADNameServerAddresses {
     switch ($GlobalCatalogsInForest.Count) {
         0 {
             # report state and return
-            Write-Host "Found no $Adjectives domain controllers in current forest; cannot add peer IP addresses to DNS server addresses"
+            Write-Host "Found no $Adjectives domain controllers in '$ForestName' forest; cannot add peer IP addresses to DNS server addresses"
             return
         }
         1 {
             # report state
-            Write-Host "Found one $Adjectives domain controller in current forest; adding peer IP address to DNS server addresses"
+            Write-Host "Found one $Adjectives domain controller in '$ForestName' forest; adding peer IP address to DNS server addresses"
 
             # retrieve peer domain controller
             $PeerDomainController = $GlobalCatalogsInForest | Where-Object { $_.Name -ne $DnsHostName }
@@ -88,14 +88,14 @@ function Find-ADNameServerAddresses {
             $ServerAddresses.Add($PeerDomainController.IPAddress)
 
             # report state
-            Write-Host "Added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+            Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
 
             # return after updating DNS server addresses
             return
         }
         Default {
             # report state
-            Write-Host "Found '$($GlobalCatalogsInForest.Count)' $Adjectives domain controllers in current forest; checking for domain controllers in computer domain"
+            Write-Host "Found '$($GlobalCatalogsInForest.Count)' $Adjectives domain controllers in '$ForestName' forest; checking for domain controllers in computer domain"
         }
     }
 
@@ -110,7 +110,7 @@ function Find-ADNameServerAddresses {
             # STATE: forest contains at least 2 other GCs, domain contains 0 other GCs
 
             # report state
-            Write-Host "Found no $Adjectives domain controllers in computer domain; checking other domains in the forest"
+            Write-Host "Found no $Adjectives domain controllers in '$DomainName' domain; checking other domains in the forest"
 
             # define other global catalogs
             $OtherGlobalCatalogs = $GlobalCatalogsInForest
@@ -120,7 +120,7 @@ function Find-ADNameServerAddresses {
             # STATE: forest contains at least 2 other GCs, domain contains 1 other GC
 
             # report state
-            Write-Host "Found one $Adjectives domain controller in computer domain; adding peer IP address to DNS server addresses"
+            Write-Host "Found one $Adjectives domain controller in '$DomainName' domain; adding peer IP address to DNS server addresses"
 
             # retrieve peer domain controller
             $PeerDomainController = $GlobalCatalogsInDomain | Select-Object -First 1
@@ -129,7 +129,7 @@ function Find-ADNameServerAddresses {
             $ServerAddresses.Add($PeerDomainController.IPAddress)
 
             # report state
-            Write-Host "Added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+            Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
 
             # define other global catalogs
             $OtherGlobalCatalogs = $GlobalCatalogsInForest.Where({ $_.Domain.Name -ne $Domain.Name })
@@ -139,7 +139,7 @@ function Find-ADNameServerAddresses {
             # STATE: forest contains at least 2 other GCs, domain contains at least 2 other GCs
 
             # report state
-            Write-Host "Found '$($GlobalCatalogsInDomain.Count)' $Adjectives domain controllers in computer domain; checking for domain controllers in same site"
+            Write-Host "Found '$($GlobalCatalogsInDomain.Count)' $Adjectives domain controllers in '$DomainName' domain; checking for domain controllers in same site"
 
             # define other global catalogs
             $OtherGlobalCatalogs = $GlobalCatalogsInDomain
@@ -159,13 +159,13 @@ function Find-ADNameServerAddresses {
             # STATE: forest contains at least 2 other GCs, current site contains 0 other GCs
 
             # report state and return
-            Write-Host "Found no $Adjectives domain controllers in same site; checking for domain controllers in next closest site"
+            Write-Host "Found no $Adjectives domain controllers in '$ActiveDirectorySiteName' site; checking for domain controllers in next closest site"
         }
         1 {
             # STATE: forest contains at least 2 other GCs, current site contains 1 other GC
 
             # report state
-            Write-Host "Found one $Adjectives domain controller in same site; adding peer IP address to DNS server addresses"
+            Write-Host "Found one $Adjectives domain controller in '$ActiveDirectorySiteName' site; adding peer IP address to DNS server addresses"
 
             # retrieve peer domain controller
             $PeerDomainController = $OtherGlobalCatalogsInSameSite | Select-Object -First 1
@@ -174,13 +174,14 @@ function Find-ADNameServerAddresses {
             $ServerAddresses.Add($PeerDomainController.IPAddress)
 
             # report state
-            Write-Host "Added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+            Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+
         }
         Default {
             # STATE: forest contains at least 2 other GCs, current site contains at least 2 other GCs
 
             # report state
-            Write-Host "Found '$($OtherGlobalCatalogsInSameSite.Count)' $Adjectives domain controllers in same site; identifying first available domain controller"
+            Write-Host "Found '$($OtherGlobalCatalogsInSameSite.Count)' $Adjectives domain controllers in '$ActiveDirectorySiteName' site; identifying first available domain controller"
 
             # define sorted set for domain controllers in current site
             $DomainControllersForSameSite = [System.Collections.Generic.SortedSet[string]]::new()
@@ -214,7 +215,7 @@ function Find-ADNameServerAddresses {
             # if domain role is member...
             if ($DomainRole -lt 4) {
                 # report state
-                Write-Host "Found member domain role with multiple $Adjectives domain controllers available in same site; identifying second available domain controller"
+                Write-Host "Found member domain role with multiple $Adjectives domain controllers available in '$ActiveDirectorySiteName' site; identifying next available domain controller"
 
                 # retrieve peer domain controller from list with custom sort
                 $PeerDomainController = $OtherGlobalCatalogsInSameSite | Where-Object { $_.Name -eq $ArrangedDomainControllerNames[2] }
@@ -223,7 +224,7 @@ function Find-ADNameServerAddresses {
                 $ServerAddresses.Add($PeerDomainController.IPAddress)
 
                 # report state
-                Write-Host "Added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+                Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
 
                 # return after updating DNS server addresses
                 return
@@ -232,7 +233,7 @@ function Find-ADNameServerAddresses {
             # if single site mode requested...
             if ($ForceSingleSiteMode) {
                 # report state
-                Write-Host "Found single site mode requested with multiple $Adjectives domain controllers available in same site; identifying second available domain controller"
+                Write-Host "Found single site mode requested with multiple $Adjectives domain controllers available in '$ActiveDirectorySiteName' site; identifying next available domain controller"
 
                 # retrieve peer domain controller from list with custom sort
                 $PeerDomainController = $OtherGlobalCatalogsInSameSite | Where-Object { $_.Name -eq $ArrangedDomainControllerNames[2] }
@@ -241,7 +242,7 @@ function Find-ADNameServerAddresses {
                 $ServerAddresses.Add($PeerDomainController.IPAddress)
 
                 # report state
-                Write-Host "Added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+                Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
 
                 # return after updating DNS server addresses
                 return
@@ -262,7 +263,7 @@ function Find-ADNameServerAddresses {
                     $ServerAddresses.Add($PeerDomainController.IPAddress)
 
                     # report state
-                    Write-Host "Added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+                    Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
 
                     # return after adding second entry to list
                     return
@@ -280,7 +281,7 @@ function Find-ADNameServerAddresses {
                     $ServerAddresses.Add($PeerDomainController.IPAddress)
 
                     # report state
-                    Write-Host "Added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+                    Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
 
                     # return after adding second entry to list
                     return
@@ -339,26 +340,26 @@ function Find-ADNameServerAddresses {
                     # STATE: forest contains at least 2 other GCs, other sites contains at least 2 other GCs, current site has 0 adjacent sites with lowest cost
 
                     # warn and return
-                    Write-Warning 'Found no site links with lowest cost; review code to determine how this happened'
+                    Write-Warning 'Found no site links with lowest cost for '$ActiveDirectorySiteName' site; review code to determine how this happened'
                     return
                 }
                 1 {
                     # STATE: forest contains at least 2 other GCs, other sites contains at least 2 other GCs, current site has 1 adjacent site with lowest cost
 
                     # report state
-                    Write-Host 'Found one site link with the lowest cost site; identifying peer sites'
+                    Write-Host 'Found one site link with lowest cost for '$ActiveDirectorySiteName' site; identifying peer sites'
 
                     # retrieve site link from collection
                     $SiteLinkWithLowestCost = $SiteLinksWithLowestCost | Select-Object -First 1
                 }
                 Default {
                     # report state
-                    Write-Host "Found '$($SiteLinksWithLowestCost.Count)' site links with lowest cost for current site, checking for preferred site link: '$PreferredPeerSiteLinkName'"
+                    Write-Host "Found '$($SiteLinksWithLowestCost.Count)' site links with lowest cost for '$ActiveDirectorySiteName' site; checking for preferred site link: '$PreferredPeerSiteLinkName'"
 
                     # if preferred peer site link name found in site links with lowest cost...
                     if ($PreferredPeerSiteLinkName -in $SiteLinksWithLowestCost.Name) {
                         # report state
-                        Write-Host 'Found preferred site link, identifying peer sites'
+                        Write-Host 'Found '$PreferredPeerSiteLinkName' preferred site link, identifying peer sites'
 
                         # retrieve preferred site link
                         $SiteLinkWithLowestCost = $SiteLinksWithLowestCost | Where-Object { $_.Name -eq $PreferredPeerSiteLinkName } | Select-Object -First 1
@@ -403,7 +404,7 @@ function Find-ADNameServerAddresses {
                     # if preferred peer site name found in adjacent sites with lowest cost...
                     if ($PreferredPeerSiteName -in $AdjacentSitesWithLowestCost.Name) {
                         # report state
-                        Write-Host 'Found preferred peer site, identifying domain controllers in peer site'
+                        Write-Host 'Found '$PreferredPeerSiteName' preferred peer site, identifying domain controllers in peer site'
 
                         # retrieve nearest site from adjacent sites by preferred name
                         $NearestSite = $AdjacentSitesWithLowestCost | Where-Object { $_.Name -eq $PreferredPeerSiteName }
@@ -411,32 +412,35 @@ function Find-ADNameServerAddresses {
                     # if preferred peer site name not found in adjacent sites with lowest cost...
                     else {
                         # report state
-                        Write-Host 'Preferred peer site not found, selecting first site alphabetically'
+                        Write-Host 'Preferred '$PreferredPeerSiteName' peer site not found, selecting first site alphabetically'
 
                         # retrieve nearest site from adjacent sites alphabetically by name
                         $NearestSite = $AdjacentSitesWithLowestCost | Sort-Object -Property Name | Select-Object -First 1
 
                         # report state
-                        Write-Host "Selected '$($AdjacentSite.Name)' peer site, identifying domain controllers in peer site"
+                        Write-Host "Selected '$($NearestSite.Name)' peer site, identifying domain controllers in peer site"
                     }
                 }
             }
         }
     }
 
+    # define name of nearest site for reporting
+    $NearestSiteName = $NearestSite.Name
+
     # retrieve items for other global catalogs in nearest site
-    $OtherGlobalCatalogsInNearestSite = $OtherGlobalCatalogs.Where({ $_.SiteName -eq $NearestSite.Name })
+    $OtherGlobalCatalogsInNearestSite = $OtherGlobalCatalogs.Where({ $_.SiteName -eq $NearestSiteName })
 
     # switch on count of other global catalogs in nearest site
     switch ($OtherGlobalCatalogsInNearestSite.Count) {
         0 {
             # report state
-            Write-Host 'Found no domain controllers in nearest site; cannot add peer IP addresses to DNS server addresses'
+            Write-Host 'Found no domain controllers in '$NearestSiteName' site; cannot add peer IP addresses to DNS server addresses'
             return
         }
         1 {
             # report state
-            Write-Host 'Found one domain controller in nearest site; adding peer IP address to DNS server addresses'
+            Write-Host 'Found one domain controller in '$NearestSiteName' site; adding peer IP address to DNS server addresses'
 
             # retrieve peer domain controller
             $PeerDomainController = $OtherGlobalCatalogsInNearestSite | Select-Object -First 1
@@ -445,11 +449,11 @@ function Find-ADNameServerAddresses {
             $ServerAddresses.Add($PeerDomainController.IPAddress)
 
             # report state
-            Write-Host "Added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+            Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
         }
         Default {
             # report state
-            Write-Host "Found '$($OtherGlobalCatalogsInNearestSite.Count)' domain controllers in nearest site; selecting domain controller by parity of last character in local computer name"
+            Write-Host "Found '$($OtherGlobalCatalogsInNearestSite.Count)' domain controllers in '$NearestSiteName' site; selecting domain controller by parity of last character in local computer name"
 
             # retrieve last character from computer name as byte
             $LastCharacter = $env:COMPUTERNAME[-1] -as [byte]
@@ -476,12 +480,12 @@ function Find-ADNameServerAddresses {
             $ServerAddresses.Add($PeerDomainController.IPAddress)
 
             # report state
-            Write-Host "Added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+            Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
 
             # if only one server address found...
             if ($ServerAddresses.Count -eq 1) {
                 # report state
-                Write-Host "Found one domain controller in DNS server addresses with multiple domain controllers available in nearest site; identifying second available domain controller"
+                Write-Host "Found one domain controller in DNS server addresses with multiple domain controllers available in '$NearestSiteName' site; identifying second available domain controller"
 
                 # retrieve peer domain controller from list with custom sort
                 $PeerDomainController = $OtherGlobalCatalogsInNearestSite[$MemberIndex]
@@ -490,7 +494,7 @@ function Find-ADNameServerAddresses {
                 $ServerAddresses.Add($PeerDomainController.IPAddress)
 
                 # report state
-                Write-Host "Added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
+                Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
             }
         }
     }
@@ -515,7 +519,7 @@ try {
     $NetRoute = Get-NetRoute -DestinationPrefix '0.0.0.0/0'
 }
 catch {
-    Write-Warning -Message "could not retrieve default route"
+    Write-Warning -Message 'could not retrieve default route'
     throw $_
 }
 
@@ -549,15 +553,17 @@ catch {
 # retrieve forest
 try {
     $Forest = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest()
+    $ForestName = $Forest.Name
 }
 catch {
     Write-Warning -Message 'could not retrieve current forest'
     throw $_
 }
 
-# retrieve forest
+# retrieve domain
 try {
     $Domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain()
+    $DomainName = $Domain.Name
 }
 catch {
     Write-Warning -Message 'could not retrieve computer domain'
@@ -594,18 +600,22 @@ $GlobalCatalogs = [System.Collections.Generic.List[object]]::new()
 
 # if no global catalogs in forest found...
 if ($GlobalCatalogs.Count -eq 0) {
-    Write-Warning -Message 'could not locate any writeable domain controllers with global catalog role in current forest'
+    Write-Warning -Message "could not locate any writeable domain controllers with global catalog role in '$ForestName' forest"
     return
 }
 
 # retrieve computer site
 try {
     $ActiveDirectorySite = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySite]::GetComputerSite()
+    $ActiveDirectorySiteName = $ActiveDirectorySite.Name
 }
 catch {
     Write-Warning -Message 'could not retrieve computer site'
     throw $_
 }
+
+# define DNS host name
+$DnsHostName = '{0}.{1}' -f $env:COMPUTERNAME.ToLowerInvariant(), $DomainName
 
 # define list for DNS server addresses
 $ServerAddresses = [System.Collections.Generic.List[string]]::new()
@@ -624,7 +634,7 @@ if ($DomainRole -ge 4) {
     $ServerAddresses.Add('127.0.0.1')
 
     # report state
-    Write-Host "Added '127.0.0.1' IP address for 'localhost' to DNS server addresses for current or future domain controller"
+    Write-Host " - added '127.0.0.1' IP address for 'localhost' to DNS server addresses for current or future domain controller"
 }
 
 # convert DNS server addresses list to string array
