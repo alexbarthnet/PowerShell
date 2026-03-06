@@ -535,19 +535,19 @@ catch {
 }
 
 # if net route not found...
-If ($null -eq $NetRoute) {
+if ($null -eq $NetRoute) {
     Write-Warning -Message "could not locate network route matching '0.0.0.0/0' destination prefix"
     return
 }
 
 # if multiple default routes found...
-If ($NetRoute -is [array]) {
+if ($NetRoute -is [array]) {
     # filter network routes by interface alias
     $NetRoute = $NetRoute | Where-Object { $_.InterfaceAlias -eq $InterfaceAlias }
 }
 
 # if net route not found...
-If ($null -eq $NetRoute) {
+if ($null -eq $NetRoute) {
     Write-Warning -Message "could not locate default route matching '$InterfaceAlias' interface alias"
     return
 }
@@ -652,7 +652,7 @@ if ($DomainRole -ge 4) {
 $ServerAddresses = $ServerAddresses -as [string[]]
 
 # if force promotion mode requested...
-If ($ForcePromotionMode) {
+if ($ForcePromotionMode) {
     $ServerAddresses = $ServerAddresses | Select-Object -First 1
 }
 
