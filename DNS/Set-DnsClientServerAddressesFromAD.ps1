@@ -512,7 +512,7 @@ function Find-ADNameServerAddresses {
 }
 
 # if domain controller mode requested...
-If ($ForceDomainControllerMode) {
+if ($ForceDomainControllerMode) {
     # set domain role to 4
     $DomainRole = 4
 }
