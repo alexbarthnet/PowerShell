@@ -62,7 +62,7 @@ function ConvertTo-ListSortedFromFirstObject {
 
 function Find-ADNameServerAddresses {
     # retrieve other writeable global catalogs in current forest 
-    $GlobalCatalogsInForest = $GlobalCatalogs.Where({ $_.OutboundConnections.Count -gt 0 -and $_.Name -ne $DnsHostName })
+    $GlobalCatalogsInForest = $GlobalCatalogs.Where({ -and $_.Name -ne $DnsHostName })
 
     # switch on other writeable global catalogs in current forest count
     switch ($GlobalCatalogsInForest.Count) {
@@ -630,6 +630,8 @@ $DnsHostName = '{0}.{1}' -f $env:COMPUTERNAME.ToLowerInvariant(), $DomainName
 
 # define list for DNS server addresses
 $ServerAddresses = [System.Collections.Generic.List[string]]::new()
+
+# TODO: special modes for 
 
 # find DNS server addresses
 try {
