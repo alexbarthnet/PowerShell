@@ -79,7 +79,7 @@ function Find-DnsClientServerAddressesFromAD {
             $PeerDomainController = $GlobalCatalogsInForest | Where-Object { $_.Name -ne $DnsHostName }
 
             # add IP address of peer to DNS server addresses
-            $ServerAddresses.Add($PeerDomainController.IPAddress)
+            $DesiredServerAddresses.Add($PeerDomainController.IPAddress)
 
             # report state
             Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
@@ -120,7 +120,7 @@ function Find-DnsClientServerAddressesFromAD {
             $PeerDomainController = $GlobalCatalogsInDomain | Select-Object -First 1
 
             # add IP address of peer to DNS server addresses
-            $ServerAddresses.Add($PeerDomainController.IPAddress)
+            $DesiredServerAddresses.Add($PeerDomainController.IPAddress)
 
             # report state
             Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
@@ -129,7 +129,7 @@ function Find-DnsClientServerAddressesFromAD {
             $OtherGlobalCatalogs = $GlobalCatalogsInForest.Where({ $_.Domain.Name -ne $Domain.Name })
 
             # if server addresses is at least requested count...
-            if ($ServerAddresses -ge $CountOfServerAddresses) {
+            if ($DesiredServerAddresses -ge $CountOfServerAddresses) {
                 return
             }
         }
@@ -168,13 +168,13 @@ function Find-DnsClientServerAddressesFromAD {
             $PeerDomainController = $OtherGlobalCatalogsInSameSite | Select-Object -First 1
 
             # add IP address of peer to DNS server addresses
-            $ServerAddresses.Add($PeerDomainController.IPAddress)
+            $DesiredServerAddresses.Add($PeerDomainController.IPAddress)
 
             # report state
             Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
 
             # if server addresses is at least requested count...
-            if ($ServerAddresses -ge $CountOfServerAddresses) {
+            if ($DesiredServerAddresses -ge $CountOfServerAddresses) {
                 return
             }
         }
@@ -208,13 +208,13 @@ function Find-DnsClientServerAddressesFromAD {
             $PeerDomainController = $OtherGlobalCatalogsInSameSite | Where-Object { $_.Name -eq $ArrangedDomainControllerNames[1] }
 
             # add IP address of first peer domain controller to DNS server addresses
-            $ServerAddresses.Add($PeerDomainController.IPAddress)
+            $DesiredServerAddresses.Add($PeerDomainController.IPAddress)
 
             # report state
             Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
 
             # if server addresses is at least requested count...
-            if ($ServerAddresses -ge $CountOfServerAddresses) {
+            if ($DesiredServerAddresses -ge $CountOfServerAddresses) {
                 return
             }
 
@@ -227,7 +227,7 @@ function Find-DnsClientServerAddressesFromAD {
                 $PeerDomainController = $OtherGlobalCatalogsInSameSite | Where-Object { $_.Name -eq $ArrangedDomainControllerNames[2] }
 
                 # add IP address of peer to DNS server addresses
-                $ServerAddresses.Add($PeerDomainController.IPAddress)
+                $DesiredServerAddresses.Add($PeerDomainController.IPAddress)
 
                 # report state
                 Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
@@ -245,7 +245,7 @@ function Find-DnsClientServerAddressesFromAD {
                 $PeerDomainController = $OtherGlobalCatalogsInSameSite | Where-Object { $_.Name -eq $ArrangedDomainControllerNames[2] }
 
                 # add IP address of peer to DNS server addresses
-                $ServerAddresses.Add($PeerDomainController.IPAddress)
+                $DesiredServerAddresses.Add($PeerDomainController.IPAddress)
 
                 # report state
                 Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
@@ -266,7 +266,7 @@ function Find-DnsClientServerAddressesFromAD {
                     $PeerDomainController = $OtherGlobalCatalogsInSameSite | Where-Object { $_.Name -eq $ArrangedDomainControllerNames[2] }
 
                     # add IP address of next peer to DNS server addresses
-                    $ServerAddresses.Add($PeerDomainController.IPAddress)
+                    $DesiredServerAddresses.Add($PeerDomainController.IPAddress)
 
                     # report state
                     Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
@@ -284,7 +284,7 @@ function Find-DnsClientServerAddressesFromAD {
                     $PeerDomainController = $OtherGlobalCatalogsInOtherSites | Select-Object -First 1
 
                     # add IP address of next peer to DNS server addresses
-                    $ServerAddresses.Add($PeerDomainController.IPAddress)
+                    $DesiredServerAddresses.Add($PeerDomainController.IPAddress)
 
                     # report state
                     Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
@@ -307,7 +307,7 @@ function Find-DnsClientServerAddressesFromAD {
     }
 
     # if server addresses is at least requested count...
-    if ($ServerAddresses -ge $CountOfServerAddresses) {
+    if ($DesiredServerAddresses -ge $CountOfServerAddresses) {
         return
     }
 
@@ -452,7 +452,7 @@ function Find-DnsClientServerAddressesFromAD {
             $PeerDomainController = $OtherGlobalCatalogsInNearestSite | Select-Object -First 1
 
             # add IP address of peer to DNS server addresses
-            $ServerAddresses.Add($PeerDomainController.IPAddress)
+            $DesiredServerAddresses.Add($PeerDomainController.IPAddress)
 
             # report state
             Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
@@ -483,18 +483,18 @@ function Find-DnsClientServerAddressesFromAD {
             $PeerDomainController = $OtherGlobalCatalogsInNearestSite[$ParityIndex]
 
             # add IP address of peer to DNS server addresses
-            $ServerAddresses.Add($PeerDomainController.IPAddress)
+            $DesiredServerAddresses.Add($PeerDomainController.IPAddress)
 
             # report state
             Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
 
             # if server addresses is at least requested count...
-            if ($ServerAddresses -ge $CountOfServerAddresses) {
+            if ($DesiredServerAddresses -ge $CountOfServerAddresses) {
                 return
             }
 
             # if only one server address found...
-            if ($ServerAddresses.Count -eq 1) {
+            if ($DesiredServerAddresses.Count -eq 1) {
                 # report state
                 Write-Host "Found one domain controller in DNS server addresses with multiple domain controllers available in '$NearestSiteName' site; identifying second available domain controller"
 
@@ -502,7 +502,7 @@ function Find-DnsClientServerAddressesFromAD {
                 $PeerDomainController = $OtherGlobalCatalogsInNearestSite[$MemberIndex]
 
                 # add IP address of peer to DNS server addresses
-                $ServerAddresses.Add($PeerDomainController.IPAddress)
+                $DesiredServerAddresses.Add($PeerDomainController.IPAddress)
 
                 # report state
                 Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
@@ -525,39 +525,71 @@ else {
     $Adjectives = 'writeable'
 }
 
-# retrieve the default route
+# if interface alias explicitly provided...
+if ($PSBoundParameters.ContainsKey('InterfaceAlias')) {
+    # retrieve network adapter by interface alias
+    try {
+        $NetAdapter = Get-NetAdapter -InterfaceAlias $InterfaceAlias -ErrorAction 'ignore'
+    }
+    catch {
+        Write-Warning -Message "could not locate network adapter with '$InterfaceAlias' interface alias"
+        return
+    }
+
+    # if default route not found...
+    if ($null -eq $NetAdapter) {
+        Write-Warning -Message "could not locate network adapterwith '$InterfaceAlias' interface alias"
+        return
+    }
+}
+# if interface alias explicitly provided...
+else {
+    # retrieve the default route
+    try {
+        $NetRoute = Get-NetRoute -DestinationPrefix '0.0.0.0/0'
+    }
+    catch {
+        Write-Warning -Message 'could not retrieve default route'
+        throw $_
+    }
+
+    # if default route not found...
+    if ($null -eq $NetRoute) {
+        Write-Warning -Message "could not locate network route matching '0.0.0.0/0' destination prefix"
+        return
+    }
+
+    # if multiple default routes found...
+    if ($NetRoute -is [array]) {
+        # filter network routes by interface alias
+        $NetRoute = $NetRoute | Where-Object { $_.InterfaceAlias -eq $InterfaceAlias }
+    }
+
+    # if net route not found...
+    if ($null -eq $NetRoute) {
+        Write-Warning -Message "could not locate default route matching '$InterfaceAlias' interface alias"
+        return
+    }
+
+    # retrieve the physical network adapter for default route
+    try {
+        $NetAdapter = Get-NetAdapter -Physical -InterfaceIndex $NetRoute.InterfaceIndex -ErrorAction 'Stop'
+    }
+    catch {
+        Write-Warning -Message 'could not locate network adapter for default route'
+        throw $_
+    }
+
+    # define interface alias for reporting
+    $InterfaceAlias = $NetAdapter.InterfaceAlias
+}
+
+# retrieve current DNS server addresses
 try {
-    $NetRoute = Get-NetRoute -DestinationPrefix '0.0.0.0/0'
+    $CurrentServerAddresses = Get-DnsClientServerAddress -InterfaceIndex $NetAdapter.InterfaceIndex -AddressFamily IPv4 | Select-Object -ExpandProperty ServerAddresses
 }
 catch {
-    Write-Warning -Message 'could not retrieve default route'
-    throw $_
-}
-
-# if net route not found...
-if ($null -eq $NetRoute) {
-    Write-Warning -Message "could not locate network route matching '0.0.0.0/0' destination prefix"
-    return
-}
-
-# if multiple default routes found...
-if ($NetRoute -is [array]) {
-    # filter network routes by interface alias
-    $NetRoute = $NetRoute | Where-Object { $_.InterfaceAlias -eq $InterfaceAlias }
-}
-
-# if net route not found...
-if ($null -eq $NetRoute) {
-    Write-Warning -Message "could not locate default route matching '$InterfaceAlias' interface alias"
-    return
-}
-
-# retrieve the physical network adapter for default route
-try {
-    $NetAdapter = Get-NetAdapter -Physical -InterfaceIndex $NetRoute.InterfaceIndex -ErrorAction 'Stop'
-}
-catch {
-    Write-Warning -Message 'could not locate network adapter for default route'
+    Write-Warning -Message "could not retrieve current DNS client server addresses on '$InterfaceAlias' network adapter"
     throw $_
 }
 
@@ -611,7 +643,7 @@ $GlobalCatalogs = [System.Collections.Generic.List[object]]::new()
 
 # if no global catalogs in forest found...
 if ($GlobalCatalogs.Count -eq 0) {
-    Write-Warning -Message "could not locate any writeable domain controllers with global catalog role in '$ForestName' forest"
+    Write-Warning -Message "could not locate any domain controllers with global catalog role in '$ForestName' forest"
     return
 }
 
@@ -628,8 +660,8 @@ catch {
 # define DNS host name
 $DnsHostName = '{0}.{1}' -f $env:COMPUTERNAME.ToLowerInvariant(), $DomainName
 
-# define list for DNS server addresses
-$ServerAddresses = [System.Collections.Generic.List[string]]::new()
+# define list for desired DNS server addresses
+$DesiredServerAddresses = [System.Collections.Generic.List[string]]::new()
 
 # TODO: special modes for 
 
@@ -644,34 +676,44 @@ catch {
 # if domain role is domain controller...
 if ($DomainRole -ge 4) {
     # add localhost to DNS server addresses
-    $ServerAddresses.Add('127.0.0.1')
+    $DesiredServerAddresses.Add('127.0.0.1')
 
     # report state
-    Write-Host " - added '127.0.0.1' IP address for 'localhost' to DNS server addresses for current or future domain controller"
+    Write-Host " - added '127.0.0.1' IP address for 'localhost' to DNS server addresses"
 }
-
-# convert DNS server addresses list to string array
-$ServerAddresses = $ServerAddresses -as [string[]]
 
 # if force promotion mode requested...
 if ($ForcePromotionMode) {
-    $ServerAddresses = $ServerAddresses | Select-Object -First 1
+    $DesiredServerAddresses = $DesiredServerAddresses | Select-Object -First 1
 }
+
+# create strings
+$CurrentServerAddressesString = [System.String]::Join(', ', $CurrentServerAddresses)
+$DesiredServerAddressesString = [System.String]::Join(', ', $DesiredServerAddresses)
+
+# if strings match...
+if ($CurrentServerAddressesString -eq $DesiredServerAddressesString) {
+    Write-Host "Found DNS server addresses on '$InterfaceAlias' network adapter already set to desired server addresses: $DesiredServerAddressesString"
+    return
+}
+
+# convert desired DNS server addresses list to string array for Set-DnsClientServerAddress command
+$ServerAddresses = $DesiredServerAddresses -as [string[]]
 
 # define should process components
 $ShouldProcessTarget = $NetAdapter.Name
-$ShouldProcessAction = "set DNS server addresses: $($ServerAddresses -join ', ')"
+$ShouldProcessAction = "set DNS server addresses: $DesiredServerAddressesString"
 
 # if should process...
 if ($PSCmdlet.ShouldProcess($ShouldProcessTarget, $ShouldProcessAction)) {
     # set DNS server addresses on network adapter
     try {
-        Set-DnsClientServerAddress -InterfaceAlias $NetAdapter.InterfaceAlias -ServerAddresses $ServerAddresses
+        Set-DnsClientServerAddress -InterfaceIndex $NetAdapter.InterfaceIndex -ServerAddresses $ServerAddresses
     }
     catch {
         throw $_
     }
 
     # report state
-    Write-Host "Set DNS server addresses on network adapter with default route: $($ServerAddresses -join ', ')"
+    Write-Host "Set DNS server addresses on '$InterfaceAlias' network adapter: $DesiredServerAddressesString"
 }
