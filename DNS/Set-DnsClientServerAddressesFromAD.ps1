@@ -60,7 +60,7 @@ function ConvertTo-ListSortedFromFirstObject {
     return , $ListOfObjects
 }
 
-function Find-ADNameServerAddresses {
+function Find-DnsClientServerAddressesFromAD {
     # retrieve other writeable global catalogs in current forest 
     $GlobalCatalogsInForest = $GlobalCatalogs.Where({ -and $_.Name -ne $DnsHostName })
 
@@ -635,7 +635,7 @@ $ServerAddresses = [System.Collections.Generic.List[string]]::new()
 
 # find DNS server addresses
 try {
-    Find-ADNameServerAddresses
+    Find-DnsClientServerAddressesFromAD
 }
 catch {
     throw $_
