@@ -172,8 +172,61 @@ function Find-DnsClientServerAddressesFromAD {
                 return
             }
         }
-        Default {
-            # STATE: forest contains at least 2 other GCs, current site contains at least 2 other GCs
+        default {
+            # STATE: forest contains at least 2 other GCs, current site contains at least 2 other GCs, no DNS servers selected
+
+            # if domain role is member...
+            if ($DomainRole -lt 4) {
+                # report state
+                Write-Host "Found '$($OtherGlobalCatalogsInSameSite.Count)' $Adjectives domain controllers in '$ActiveDirectorySiteName' site; selecting first domain controller by parity of last character in local computer name"
+
+                # retrieve last character from computer name as byte
+                $LastCharacter = $env:COMPUTERNAME[-1] -as [byte]
+
+                # if last character is odd...
+                if ($LastCharacter % 2 -eq 1) {
+                    # set parity index to 1
+                    $ParityIndex = 1
+                    # set member index to 0
+                    $MemberIndex = 0
+                }
+                # if last character is even or 0...
+                else {
+                    # set parity index to 0
+                    $ParityIndex = 0
+                    # set member index to 1
+                    $MemberIndex = 1
+                }
+
+                # select global catalog by parity index
+                $SelectedGlobalCatalog = $OtherGlobalCatalogsInSameSite[$ParityIndex]
+
+                # add IP address of selected global catalog to DNS server addresses
+                $DesiredServerAddresses.Add($SelectedGlobalCatalog.IPAddress)
+
+                # report state
+                Write-Host " - added '$($SelectedGlobalCatalog.IPAddress)' IP address of '$($SelectedGlobalCatalog.Name)' domain controller to DNS server addresses"
+
+                # if server addresses is at least requested count...
+                if ($DesiredServerAddresses -ge $CountOfServerAddresses) {
+                    return
+                }
+
+                # report state
+                Write-Host "Found one DNS server selected; selecting next domain controller in '$ActiveDirectorySiteName' site by parity of last character in local computer name"
+
+                # select global catalog by member index
+                $SelectedGlobalCatalog = $OtherGlobalCatalogsInNearestSite[$MemberIndex]
+
+                # add IP address of selected global catalog to DNS server addresses
+                $DesiredServerAddresses.Add($SelectedGlobalCatalog.IPAddress)
+
+                # report state
+                Write-Host " - added '$($SelectedGlobalCatalog.IPAddress)' IP address of '$($SelectedGlobalCatalog.Name)' domain controller to DNS server addresses"
+
+                # return after adding second DNS server to list
+                return
+            }
 
             # report state
             Write-Host "Found '$($OtherGlobalCatalogsInSameSite.Count)' $Adjectives domain controllers in '$ActiveDirectorySiteName' site; identifying first available domain controller"
@@ -205,30 +258,7 @@ function Find-DnsClientServerAddressesFromAD {
             $DesiredServerAddresses.Add($PeerDomainController.IPAddress)
 
             # report state
-            Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
-
-            # if server addresses is at least requested count...
-            if ($DesiredServerAddresses -ge $CountOfServerAddresses) {
-                return
-            }
-
-            # if domain role is member...
-            if ($DomainRole -lt 4) {
-                # report state
-                Write-Host "Found member domain role with multiple $Adjectives domain controllers available in '$ActiveDirectorySiteName' site; identifying next available domain controller"
-
-                # retrieve peer domain controller from list with custom sort
-                $PeerDomainController = $OtherGlobalCatalogsInSameSite | Where-Object { $_.Name -eq $ArrangedDomainControllerNames[2] }
-
-                # add IP address of peer to DNS server addresses
-                $DesiredServerAddresses.Add($PeerDomainController.IPAddress)
-
-                # report state
-                Write-Host " - added '$($PeerDomainController.IPAddress)' IP address of '$($PeerDomainController.Name)' domain controller to DNS server addresses"
-
-                # return after updating DNS server addresses
-                return
-            }
+            Write-Host " - added '$($SelectedGlobalCatalog.IPAddress)' IP address of '$($SelectedGlobalCatalog.Name)' domain controller to DNS server addresses"
 
             # if single site mode requested...
             if ($ForceSingleSiteMode) {
