@@ -1563,7 +1563,6 @@ Process {
 
 		# define list for paths
 		$VMPaths = [System.Collections.Generic.List[string]]::new()
-		$VMPaths.Add("$Path\$Name")
 
 		# if VM has host...
 		If ($null -ne $ComputerName) {
@@ -1925,21 +1924,48 @@ Process {
 			}
 		}
 
-		# get VM paths
+		# if VM exists, retrieve paths
 		If ($null -ne $VM) {
-			# get path information
+			# add known child paths from VM information
 			$VMPaths.Add($VM.CheckpointFileLocation)
 			$VMPaths.Add($VM.ConfigurationLocation)
 			$VMPaths.Add($VM.SmartPagingFilePath)
 			$VMPaths.Add($VM.SnapshotFileLocation)
-			$VMPaths.Add($VM.Path)
-
-			# add known child paths
-			$VMPaths.Add(($VM.Path, 'Virtual Machines' -join '\'))
-			$VMPaths.Add(($VM.Path, 'Virtual Hard Disks' -join '\'))
 
 			# get GUID
 			$VMid = $VM.id
+
+			# declare and begin
+			Write-Host ("$Hostname,$ComputerName,$Name - retrieving VM parent path from VM...")
+
+			# define parent path from VM
+			$VMParentPath = $VM.Path
+
+			# report state
+			Write-Host ("$Hostname,$ComputerName,$Name - ...retrieved VM parent path: '$VMParentPath'")
+		}
+		# if VM not found, define parent path
+		else {
+			# declare and begin
+			Write-Host ("$Hostname,$ComputerName,$Name - creating expected VM paths from path: '$Path'")
+
+			# define parameters for Join-PathInSession
+			$JoinPathInSession = @{
+				ComputerName = $ComputerName
+				Path         = $Path
+				ChildPath    = $VMName
+			}
+
+			# create expected VM parent path
+			try {
+				$VMParentPath = Join-PathInSession @JoinPathInSession
+			}
+			catch {
+				Throw $_
+			}
+
+			# report state
+			Write-Host ("$Hostname,$ComputerName,$Name - ...created expected VM parent path: '$VMParentPath'")
 		}
 
 		# remove VM from host
@@ -1992,6 +2018,41 @@ Process {
 
 			# report state
 			Write-Host ("$Hostname,$ComputerName,$Name - ...VM removed")
+		}
+
+		# define expected child paths
+		if ($null -ne $VMParentPath) {
+			# define expected VM child paths
+			$VMChildPaths = @(
+				'Snapshots' # created by Hyper-V replication
+				'UndoLog Configuration' # created by Hyper-V replication
+				'Virtual Machines' # default folder for Hyper-V VM state
+				'Virtual Hard Disks' # default folder for Hyper-V VM storage
+			)
+
+			# loop through expected VM child paths
+			foreach ($VMChildPath in $VMChildPaths) {
+				# define parameters for Join-PathInSession
+				$JoinPathInSession = @{
+					ComputerName = $ComputerName
+					Path         = $VMParentPath
+					ChildPath    = $VMChildPath
+				}
+
+				# define expected VM path
+				try {
+					$VMExpectedPath = Join-PathInSession @JoinPathInSession
+				}
+				catch {
+					Throw $_
+				}
+
+				# add expected VM path to list
+				$VMPaths.Add($VMExpectedPath)
+			}
+
+			# add VM parent path to list
+			$VMPaths.Add($VMParentPath)
 		}
 
 		# remove files and folders from VM paths
