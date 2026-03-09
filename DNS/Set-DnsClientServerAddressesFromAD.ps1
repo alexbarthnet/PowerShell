@@ -61,9 +61,6 @@ function ConvertTo-ListSortedFromFirstObject {
 }
 
 function Find-DnsClientServerAddressesFromAD {
-    # retrieve other writeable global catalogs in current forest 
-    $GlobalCatalogsInForest = $GlobalCatalogs.Where({ -and $_.Name -ne $DnsHostName })
-
     # switch on other writeable global catalogs in current forest count
     switch ($GlobalCatalogsInForest.Count) {
         0 {
@@ -94,9 +91,6 @@ function Find-DnsClientServerAddressesFromAD {
     }
 
     # STATE: forest contains 2 other GCs 
-
-    # retrieve other writeable global catalogs in computer domain
-    $GlobalCatalogsInDomain = $GlobalCatalogs.Where({ $_.OutboundConnections.Count -gt 0 -and $_.Name -ne $DnsHostName -and $_.Domain.Name -eq $Domain.Name })
 
     # switch on other writeable global catalogs in computer domain count
     switch ($GlobalCatalogsInDomain.Count) {
@@ -651,11 +645,11 @@ $GlobalCatalogs = [System.Collections.Generic.List[object]]::new()
     $GlobalCatalogs.Add($GlobalCatalog)
 }
 
-# if no global catalogs in forest found...
-if ($GlobalCatalogs.Count -eq 0) {
-    Write-Warning -Message "could not locate any domain controllers with global catalog role in '$ForestName' forest"
-    return
-}
+# filter global catalogs to current forest
+$GlobalCatalogsInForest = $GlobalCatalogs.Where({ $_.Forest -eq $ForestName })
+
+# filter global catalogs to current domain
+$GlobalCatalogsInDomain = $GlobalCatalogs.Where({ $_.Forest -eq $DomainName })
 
 # retrieve computer site
 try {
