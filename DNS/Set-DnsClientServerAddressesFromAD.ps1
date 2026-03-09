@@ -511,20 +511,6 @@ function Find-DnsClientServerAddressesFromAD {
     }
 }
 
-# if domain controller mode requested...
-if ($ForceDomainControllerMode) {
-    # set domain role to 4
-    $DomainRole = 4
-}
-
-# if domain role is domain controller...
-if ($DomainRole -ge 4) {
-    $Adjectives = 'other writeable'
-}
-else {
-    $Adjectives = 'writeable'
-}
-
 # if interface alias explicitly provided...
 if ($PSBoundParameters.ContainsKey('InterfaceAlias')) {
     # retrieve network adapter by interface alias
@@ -613,6 +599,23 @@ catch {
     throw $_
 }
 
+# define DNS host name
+$DnsHostName = '{0}.{1}' -f $env:COMPUTERNAME.ToLowerInvariant(), $DomainName
+
+# if domain controller mode requested...
+if ($ForceDomainControllerMode) {
+    # set domain role to 4
+    $DomainRole = 4
+}
+
+# if domain role is domain controller...
+if ($DomainRole -ge 4) {
+    $Adjectives = 'other writeable'
+}
+else {
+    $Adjectives = 'writeable'
+}
+
 # define initial collection for global catalogs
 $GlobalCatalogs = [System.Collections.Generic.List[object]]::new()
 
@@ -656,9 +659,6 @@ catch {
     Write-Warning -Message 'could not retrieve computer site'
     throw $_
 }
-
-# define DNS host name
-$DnsHostName = '{0}.{1}' -f $env:COMPUTERNAME.ToLowerInvariant(), $DomainName
 
 # define list for desired DNS server addresses
 $DesiredServerAddresses = [System.Collections.Generic.List[string]]::new()
