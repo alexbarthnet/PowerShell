@@ -545,6 +545,57 @@ Begin {
 		}
 	}
 
+	Function Join-PathInSession {
+		[CmdletBinding()]
+		Param(
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName,
+			[Parameter(Mandatory = $true)]
+			[string]$Path,
+			[Parameter(Mandatory = $true)]
+			[string]$ChildPath
+		)
+
+		# get hashtable for InvokeCommand splat
+		Try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		Catch {
+			Throw $_
+		}
+
+		# update argument list for joining paths
+		$InvokeCommand['ArgumentList']['Path'] = $Path
+		$InvokeCommand['ArgumentList']['ChildPath'] = $ChildPath
+
+		# join paths
+		Try {
+			$JoinPath = Invoke-Command @InvokeCommand -ScriptBlock {
+				Param($ArgumentList)
+				# define parameters for Join-Path
+				$JoinPath = @{
+					Path        = $ArgumentList['Path']
+					ChildPath   = $ArgumentList['ChildPath']
+					ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+				}
+				# join paths
+				Join-Path @JoinPath
+			}
+		}
+		Catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not join provided paths")
+			Throw $_
+		}
+
+		# return the joined path
+		If ($null -ne $JoinPath) {
+			Return $JoinPath
+		}
+		Else {
+			Return [string]::Empty
+		}
+	}
+
 	Function Move-ClusterSharedVolumeForPath {
 		[CmdletBinding()]
 		Param(
