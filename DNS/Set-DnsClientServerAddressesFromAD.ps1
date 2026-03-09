@@ -621,18 +621,25 @@ $GlobalCatalogs = [System.Collections.Generic.List[object]]::new()
 
 # loop through global catalogs in forest
 :NextGlobalCatalog foreach ($GlobalCatalog in $Forest.GlobalCatalogs) {
+    # if the global catalog is the current host...
+    if ($GlobalCatalog.Name -eq $DnsHostName) {
+        # report exclusion and continue
+        Write-Warning -Message "[ ] excluding local global catalog: $($GlobalCatalog.Name)"
+        continue NextGlobalCatalog
+    }
+
     # connect to RootDSE
     try {
         $DirectoryEntry = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$($GlobalCatalog.Name)/RootDSE")
     }
     catch {
-        Write-Warning -Message "[ ] excluding unreachable global catalog: $($GlobalCatalog.Name)"
+        Write-Warning -Message "[ ] excluding unreachable global catalog: $($GlobalCatalog.Name): $($_.Exception.Message)"
         continue NextGlobalCatalog
     }
 
     # if the global catalog is an RODC...
     if ($DirectoryEntry.supportedCapabilities.Contains('1.2.840.113556.1.4.1920') -and -not $IncludeReadOnlyDomainControllers.IsPresent) {
-        # report and continue
+        # report exclusion and continue
         Write-Verbose -Message "[ ] excluding read-only global catalog: $($GlobalCatalog.Name)"
         continue NextGlobalCatalog
     }
