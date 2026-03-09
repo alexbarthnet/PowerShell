@@ -682,6 +682,12 @@ if ($DomainRole -ge 4) {
     Write-Host " - added '127.0.0.1' IP address for 'localhost' to DNS server addresses"
 }
 
+# if no desired DNS server addresses found...
+if ($DesiredServerAddresses.Count -eq 0) {
+    Write-Warning -Message "could not locate any $Adjectives domain controllers with global catalog role in '$ForestName' forest"
+    return
+}
+
 # if force promotion mode requested...
 if ($ForcePromotionMode) {
     $DesiredServerAddresses = $DesiredServerAddresses | Select-Object -First 1
