@@ -665,10 +665,10 @@ $GlobalCatalogs = [System.Collections.Generic.List[object]]::new()
 }
 
 # filter global catalogs to current forest
-$GlobalCatalogsInForest = $GlobalCatalogs.Where({ $_.Forest -eq $ForestName })
+$GlobalCatalogsInForest = $GlobalCatalogs.Where({ $_.Forest.Name -eq $ForestName })
 
 # filter global catalogs to current domain
-$GlobalCatalogsInDomain = $GlobalCatalogs.Where({ $_.Forest -eq $DomainName })
+$GlobalCatalogsInDomain = $GlobalCatalogs.Where({ $_.Domain.Name -eq $DomainName })
 
 # retrieve computer site
 try {
