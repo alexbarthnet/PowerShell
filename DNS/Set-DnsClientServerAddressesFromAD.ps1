@@ -121,11 +121,6 @@ function Find-DnsClientServerAddressesFromAD {
 
             # define other global catalogs
             $OtherGlobalCatalogs = $GlobalCatalogsInForest.Where({ $_.Domain.Name -ne $Domain.Name })
-
-            # if server addresses is at least requested count...
-            if ($DesiredServerAddresses -ge $CountOfServerAddresses) {
-                return
-            }
         }
         Default {
             # STATE: forest contains at least 2 other GCs, domain contains at least 2 other GCs
@@ -328,11 +323,6 @@ function Find-DnsClientServerAddressesFromAD {
                 }
             }
         }
-    }
-
-    # if server addresses is at least requested count...
-    if ($DesiredServerAddresses -ge $CountOfServerAddresses) {
-        return
     }
 
     # retrieve items for adjacent sites with domain controllers
