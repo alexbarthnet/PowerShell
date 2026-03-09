@@ -1953,7 +1953,7 @@ Process {
 			$JoinPathInSession = @{
 				ComputerName = $ComputerName
 				Path         = $Path
-				ChildPath    = $VMName
+				ChildPath    = $Name
 			}
 
 			# create expected VM parent path
