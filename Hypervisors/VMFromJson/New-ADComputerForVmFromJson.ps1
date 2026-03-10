@@ -211,4 +211,73 @@ catch {
 		# report state
 		Write-Host ("$Hostname,$Name - ...added computer to group")
 	}
+
+	# loop through silos
+	:NextSilo foreach ($Silo in $JsonData.$Name.ADComputer.Silos) {
+		# report state
+		Write-Host ("$Hostname,$Name - retrieving '$Silo' authentication policy silo...")
+
+		# define parameters
+		$GetADAuthenticationPolicySilo = @{
+			Server      = $Server
+			Identity    = $Silo
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# retrieve the authentication silo
+		try {
+			$AuthenticationPolicySilo = Get-ADAuthenticationPolicySilo @GetADAuthenticationPolicySilo
+		}
+		catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
+			Write-Warning -Message "could not locate authentication policy silo with '$Silo' name on '$Server' server in '$DomainName' domain"
+			continue NextGroup
+		}
+		catch {
+			Write-Warning -Message "could not retrieve authentication policy silo with '$Silo' name on '$Server' server in '$DomainName' domain"
+			continue NextGroup
+		}
+
+		# report state
+		Write-Host ("$Hostname,$Name - ...retrieved '$Silo' authentication policy silo; adding computer to silo...")
+
+		# define parameters
+		$GrantADAuthenticationPolicySiloAccess = @{
+			Server      = $Server
+			Identity    = $AuthenticationPolicySilo
+			Account     = $Identity
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# grant the computer access to the authentication silo:
+		try {
+			Grant-ADAuthenticationPolicySiloAccess @GrantADAuthenticationPolicySiloAccess
+		}
+		catch {
+			Write-Warning -Message "could not add computer to '$Silo' authentication policy silo on '$Server' server in '$DomainName' domain"
+			continue NextGroup
+		}
+
+		# report state
+		Write-Host ("$Hostname,$Name - ...added computer to silo; updating computer object...")
+
+		# define parameters
+		$SetADAccountAuthenticationPolicySilo = @{
+			Server                   = $Server
+			Identity                 = $Silo
+			AuthenticationPolicySilo = $AuthenticationPolicySilo
+			ErrorAction              = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# set the authentication silo property on the computer object:
+		try {
+			Set-ADAccountAuthenticationPolicySilo @SetADAccountAuthenticationPolicySilo
+		}
+		catch {
+			Write-Warning -Message "could not update computer object with '$Silo' authentication policy silo on '$Server' server in '$DomainName' domain"
+			continue NextGroup
+		}
+
+		# report state
+		Write-Host ("$Hostname,$Name - ...updated computer object")
+	}
 }
