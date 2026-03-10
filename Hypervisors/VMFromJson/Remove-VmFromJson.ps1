@@ -1947,7 +1947,7 @@ Process {
 		# if VM not found, define parent path
 		else {
 			# declare and begin
-			Write-Host ("$Hostname,$ComputerName,$Name - creating expected VM paths from path: '$Path'")
+			Write-Host ("$Hostname,$ComputerName,$Name - creating expected VM parent path from path: '$Path'")
 
 			# define parameters for Join-PathInSession
 			$JoinPathInSession = @{
