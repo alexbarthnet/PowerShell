@@ -204,7 +204,7 @@ catch {
 			Add-ADGroupMember @AddADGroupMember
 		}
 		catch {
-			Write-Warning -Message "could not add computer to  group with '$Group' name on '$Server' server in '$DomainName' domain"
+			Write-Warning -Message "could not add computer to group with '$Group' name on '$Server' server in '$DomainName' domain"
 			continue NextGroup
 		}
 
