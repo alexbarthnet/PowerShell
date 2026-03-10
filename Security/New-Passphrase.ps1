@@ -129,7 +129,7 @@ If ([System.IO.File]::Exists($Path) -and -not $script:Offline) {
 
 	# retrieve headers from URI
 	Try {
-		$WebRequest = Invoke-WebRequest -Uri $Uri -Method Head -ErrorAction 'Stop'
+		$WebRequest = Invoke-WebRequest -UseBasicParsing -Uri $Uri -Method Head -ErrorAction 'Stop'
 	}
 	Catch {
 		Write-Warning "could not download EFF wordlist: $($_.Exception.Message)"
