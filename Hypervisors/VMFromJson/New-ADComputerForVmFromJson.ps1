@@ -329,7 +329,7 @@ catch {
 	}
 	catch {
 		Write-Warning -Message "could not retrieve domain controllers for object sync: $($_.Exception.Message)"
-		Continue NextVMName
+		continue NextVMName
 	}
 
 	# loop through identities
@@ -337,13 +337,13 @@ catch {
 		# define object identity
 		$Object = $Identities[$ObjectName]
 
+		# report state
+		Write-Host ("$Hostname,$Name - syncing '$ObjectName' object from '$Server' server...")
+
 		# loop through domain controllers
 		foreach ($ADDomainController in $ADDomainControllers) {
 			# define destination
 			$Destination = $ADDomainController.Hostname
-
-			# report state
-			Write-Host ("$Hostname,$Name - syncing '$ObjectName' object from '$Server' server...")
 
 			# define parameters
 			$SyncADObject = @{
