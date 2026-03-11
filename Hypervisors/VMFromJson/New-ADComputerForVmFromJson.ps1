@@ -154,6 +154,12 @@ catch {
 		continue NextVMName
 	}
 
+	# define identities list
+	$Identities = [System.Collections.Generic.SortedDictionary[string, string]]::new()
+
+	# add computer to identities list
+	$Identities.Add($Name, $Identity)
+
 	# loop through groups
 	:NextGroup foreach ($Group in $JsonData.$Name.ADComputer.Groups) {
 		# report state
@@ -179,6 +185,9 @@ catch {
 			Write-Warning -Message "could not retrieve group with '$Group' name on '$Server' server in '$DomainName' domain"
 			continue NextGroup
 		}
+
+		# add group to identities list
+		$Identities.Add($Group, $GroupObject.DistinguishedName)
 
 		# report state
 		Write-Host ("$Hostname,$Name - ...retrieved group; checking members...")
@@ -237,6 +246,9 @@ catch {
 			Write-Warning -Message "could not retrieve authentication policy silo with '$Silo' name on '$Server' server in '$DomainName' domain"
 			continue NextGroup
 		}
+
+		# add silo to identities list
+		$Identities.Add($Silo, $AuthenticationPolicySilo.DistinguishedName)
 
 		# report state
 		Write-Host ("$Hostname,$Name - ...retrieved authentication policy silo; checking members...")
