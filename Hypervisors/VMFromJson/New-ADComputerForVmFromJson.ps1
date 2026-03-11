@@ -214,7 +214,7 @@ catch {
 			Add-ADGroupMember @AddADGroupMember
 		}
 		catch {
-			Write-Warning -Message "could not add computer to group with '$Group' name on '$Server' server in '$DomainName' domain"
+			Write-Warning -Message "could not add computer to group with '$Group' name on '$Server' server in '$DomainName' domain: $($_.Exception.Message)"
 			continue NextGroup
 		}
 
@@ -239,12 +239,12 @@ catch {
 			$AuthenticationPolicySilo = Get-ADAuthenticationPolicySilo @GetADAuthenticationPolicySilo
 		}
 		catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
-			Write-Warning -Message "could not locate authentication policy silo with '$Silo' name on '$Server' server in '$DomainName' domain"
-			continue NextGroup
+			Write-Warning -Message "could not locate authentication policy silo with '$Silo' name on '$Server' server in '$DomainName' domain: $($_.Exception.Message)"
+			continue NextSilo
 		}
 		catch {
-			Write-Warning -Message "could not retrieve authentication policy silo with '$Silo' name on '$Server' server in '$DomainName' domain"
-			continue NextGroup
+			Write-Warning -Message "could not retrieve authentication policy silo with '$Silo' name on '$Server' server in '$DomainName' domain: $($_.Exception.Message)"
+			continue NextSilo
 		}
 
 		# add silo to identities list
@@ -276,7 +276,7 @@ catch {
 				Grant-ADAuthenticationPolicySiloAccess @GrantADAuthenticationPolicySiloAccess
 			}
 			catch {
-				Write-Warning -Message "could not grant computer access to '$Silo' authentication policy silo on '$Server' server in '$DomainName' domain"
+				Write-Warning -Message "could not grant computer access to '$Silo' authentication policy silo on '$Server' server in '$DomainName' domain: $($_.Exception.Message)"
 				continue NextGroup
 			}
 
@@ -307,7 +307,7 @@ catch {
 				Set-ADAccountAuthenticationPolicySilo @SetADAccountAuthenticationPolicySilo
 			}
 			catch {
-				Write-Warning -Message "could not add computer object to '$Silo' authentication policy silo on '$Server' server in '$DomainName' domain"
+				Write-Warning -Message "could not add computer object to '$Silo' authentication policy silo on '$Server' server in '$DomainName' domain: $($_.Exception.Message)"
 				continue NextGroup
 			}
 
