@@ -238,7 +238,7 @@ catch {
 		}
 
 		# report state
-		Write-Host ("$Hostname,$Name - ...retrieved '$Silo' authentication policy silo; adding computer to silo...")
+		Write-Host ("$Hostname,$Name - ...retrieved authentication policy silo; adding computer to authentication policy silo...")
 
 		# define parameters
 		$GrantADAuthenticationPolicySiloAccess = @{
@@ -258,7 +258,7 @@ catch {
 		}
 
 		# report state
-		Write-Host ("$Hostname,$Name - ...added computer to silo; updating computer object...")
+		Write-Host ("$Hostname,$Name - ...added computer to authentication policy silo; updating computer object...")
 
 		# define parameters
 		$SetADAccountAuthenticationPolicySilo = @{
