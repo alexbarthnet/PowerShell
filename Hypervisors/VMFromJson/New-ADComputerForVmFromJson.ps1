@@ -315,4 +315,55 @@ catch {
 			Write-Host ("$Hostname,$Name - ...added computer object to authentication policy silo")
 		}
 	}
+
+	# define parameters
+	$GetADDomainControllers = @{
+		Server      = $Server
+		Filter      = 'IsGlobalCatalog -eq $true -and -not IsReadOnly -eq $true'
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+	}
+
+	# retrieve domain controllers
+	try {
+		$ADDomainControllers = Get-ADDomainController @GetADDomainControllers | Sort-Object -Property Name
+	}
+	catch {
+		Write-Warning -Message "could not retrieve domain controllers for object sync: $($_.Exception.Message)"
+		Continue NextVMName
+	}
+
+	# loop through identities
+	foreach ($Name in $Identities.Keys) {
+		# define object identity
+		$Object = $Identities[$Name]
+
+		# loop through domain controllers
+		foreach ($ADDomainController in $ADDomainControllers) {
+			# define destination
+			$Destination = $ADDomainController.Hostname
+
+			# report state
+			Write-Host ("$Hostname,$Name - syncing '$Name' object from '$Server' server to '$Destination' server...")
+
+			# define parameters
+			$SyncADObject = @{
+				Object      = $Object
+				Source      = $Server
+				Destination = $Destination
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# sync updated object 
+			try {
+				Sync-ADObject @SyncADObject
+			}
+			catch {
+				Write-Warning -Message "could not sync '$Name' object from '$Server' server to '$Destination' server: $($_.Exception.Message)"
+				continue NextGroup
+			}
+
+			# report state
+			Write-Host ("$Hostname,$Name - ...synced '$Name' object from '$Server' server to '$Destination' server")
+		}
+	}
 }
