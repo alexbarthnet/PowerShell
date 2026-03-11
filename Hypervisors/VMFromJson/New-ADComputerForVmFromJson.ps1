@@ -263,7 +263,7 @@ catch {
 		# define parameters
 		$SetADAccountAuthenticationPolicySilo = @{
 			Server                   = $Server
-			Identity                 = $Silo
+			Identity                 = $Identity
 			AuthenticationPolicySilo = $AuthenticationPolicySilo
 			ErrorAction              = [System.Management.Automation.ActionPreference]::Stop
 		}
