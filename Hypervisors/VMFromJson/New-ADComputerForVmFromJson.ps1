@@ -239,46 +239,68 @@ catch {
 		}
 
 		# report state
-		Write-Host ("$Hostname,$Name - ...retrieved authentication policy silo; adding computer to authentication policy silo...")
+		Write-Host ("$Hostname,$Name - ...retrieved authentication policy silo; checking members...")
 
-		# define parameters
-		$GrantADAuthenticationPolicySiloAccess = @{
-			Server      = $Server
-			Identity    = $AuthenticationPolicySilo
-			Account     = $Identity
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		# if computer already in silo...
+		if ($AuthenticationPolicySilo.Members -contains $Identity) {
+			# report state
+			Write-Host ("$Hostname,$Name - ...found computer already granted access to authentication policy silo; checking computer account...")
+		}
+		# if computer not yet in silo...
+		else {
+			# report state
+			Write-Host ("$Hostname,$Name - ...found computer not yet granted access to authentication policy silo; granting computer access to authentication policy silo...")
+
+			# define parameters
+			$GrantADAuthenticationPolicySiloAccess = @{
+				Server      = $Server
+				Identity    = $AuthenticationPolicySilo
+				Account     = $Identity
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# grant the computer access to the authentication silo:
+			try {
+				Grant-ADAuthenticationPolicySiloAccess @GrantADAuthenticationPolicySiloAccess
+			}
+			catch {
+				Write-Warning -Message "could not grant computer access to '$Silo' authentication policy silo on '$Server' server in '$DomainName' domain"
+				continue NextGroup
+			}
+
+			# report state
+			Write-Host ("$Hostname,$Name - ...granted computer access to authentication policy silo; checking computer account...")
 		}
 
-		# grant the computer access to the authentication silo:
-		try {
-			Grant-ADAuthenticationPolicySiloAccess @GrantADAuthenticationPolicySiloAccess
+		# if authentication policy silo already configured on computer object...
+		if ($AuthenticationPolicySilo.DistinguishedName -in $ComputerObject.AuthenticationPolicySilo) {
+			# report state
+			Write-Host ("$Hostname,$Name - ...found computer already in authentication policy silo")
 		}
-		catch {
-			Write-Warning -Message "could not add computer to '$Silo' authentication policy silo on '$Server' server in '$DomainName' domain"
-			continue NextGroup
-		}
+		# if authentication policy silo not yet configured on computer object...
+		else {
+			# report state
+			Write-Host ("$Hostname,$Name - ...found computer not yet in authentication policy silo; adding computer to authentication policy silo...")
 
-		# report state
-		Write-Host ("$Hostname,$Name - ...added computer to authentication policy silo; updating computer object...")
+			# define parameters
+			$SetADAccountAuthenticationPolicySilo = @{
+				Server                   = $Server
+				Identity                 = $Identity
+				AuthenticationPolicySilo = $AuthenticationPolicySilo
+				ErrorAction              = [System.Management.Automation.ActionPreference]::Stop
+			}
 
-		# define parameters
-		$SetADAccountAuthenticationPolicySilo = @{
-			Server                   = $Server
-			Identity                 = $Identity
-			AuthenticationPolicySilo = $AuthenticationPolicySilo
-			ErrorAction              = [System.Management.Automation.ActionPreference]::Stop
-		}
+			# set the authentication silo property on the computer object:
+			try {
+				Set-ADAccountAuthenticationPolicySilo @SetADAccountAuthenticationPolicySilo
+			}
+			catch {
+				Write-Warning -Message "could not add computer object to '$Silo' authentication policy silo on '$Server' server in '$DomainName' domain"
+				continue NextGroup
+			}
 
-		# set the authentication silo property on the computer object:
-		try {
-			Set-ADAccountAuthenticationPolicySilo @SetADAccountAuthenticationPolicySilo
+			# report state
+			Write-Host ("$Hostname,$Name - ...added computer object to authentication policy silo")
 		}
-		catch {
-			Write-Warning -Message "could not update computer object with '$Silo' authentication policy silo on '$Server' server in '$DomainName' domain"
-			continue NextGroup
-		}
-
-		# report state
-		Write-Host ("$Hostname,$Name - ...updated computer object")
 	}
 }
