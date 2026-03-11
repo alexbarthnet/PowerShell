@@ -111,6 +111,7 @@ catch {
 	$GetADComputer = @{
 		Server      = $Server
 		Identity    = $Identity
+		Properties  = 'AuthenticationPolicySilo'
 		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 	}
 
