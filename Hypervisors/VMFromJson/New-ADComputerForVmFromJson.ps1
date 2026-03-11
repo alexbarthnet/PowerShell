@@ -333,9 +333,9 @@ catch {
 	}
 
 	# loop through identities
-	foreach ($Name in $Identities.Keys) {
+	foreach ($ObjectName in $Identities.Keys) {
 		# define object identity
-		$Object = $Identities[$Name]
+		$Object = $Identities[$ObjectName]
 
 		# loop through domain controllers
 		foreach ($ADDomainController in $ADDomainControllers) {
@@ -343,7 +343,7 @@ catch {
 			$Destination = $ADDomainController.Hostname
 
 			# report state
-			Write-Host ("$Hostname,$Name - syncing '$Name' object from '$Server' server to '$Destination' server...")
+			Write-Host ("$Hostname,$Name - syncing '$ObjectName' object from '$Server' server...")
 
 			# define parameters
 			$SyncADObject = @{
@@ -358,12 +358,12 @@ catch {
 				Sync-ADObject @SyncADObject
 			}
 			catch {
-				Write-Warning -Message "could not sync '$Name' object from '$Server' server to '$Destination' server: $($_.Exception.Message)"
+				Write-Warning -Message "could not sync '$ObjectName' object from '$Server' server to '$Destination' server: $($_.Exception.Message)"
 				continue NextGroup
 			}
 
 			# report state
-			Write-Host ("$Hostname,$Name - ...synced '$Name' object from '$Server' server to '$Destination' server")
+			Write-Host ("$Hostname,$Name - ...synced '$ObjectName' object to '$Destination' server")
 		}
 	}
 }
