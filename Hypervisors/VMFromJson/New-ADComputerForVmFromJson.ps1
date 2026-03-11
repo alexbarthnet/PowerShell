@@ -319,7 +319,7 @@ catch {
 	# define parameters
 	$GetADDomainControllers = @{
 		Server      = $Server
-		Filter      = "IsGlobalCatalog -eq $true -and -not IsReadOnly -eq $true -and -not HostName -eq '$Server'"
+		Filter      = 'IsGlobalCatalog -eq $true -and -not IsReadOnly -eq $true -and -not HostName -eq "{0}"' -f $Server
 		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 	}
 
