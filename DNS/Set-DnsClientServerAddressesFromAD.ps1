@@ -210,7 +210,7 @@ function Find-DnsClientServerAddressesFromAD {
                 Write-Host "Found one DNS server selected; selecting next domain controller in '$ActiveDirectorySiteName' site by parity of last character in local computer name"
 
                 # select global catalog by member index
-                $SelectedGlobalCatalog = $OtherGlobalCatalogsInNearestSite[$MemberIndex]
+                $SelectedGlobalCatalog = $OtherGlobalCatalogsInSameSite[$MemberIndex]
 
                 # add IP address of selected global catalog to DNS server addresses
                 $DesiredServerAddresses.Add($SelectedGlobalCatalog.IPAddress)
