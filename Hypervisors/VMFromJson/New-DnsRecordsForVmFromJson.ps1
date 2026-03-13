@@ -514,4 +514,55 @@ catch {
 			Write-Host "$Hostname,$Name - updated access rules on AD object for DNS record with '$Name' name in '$ZoneName' zone on '$Server' server"
 		}
 	}
+
+	# define parameters
+	$GetADDomainControllers = @{
+		Server      = $Server
+		Filter      = 'IsGlobalCatalog -eq $true -and -not IsReadOnly -eq $true -and -not HostName -eq "{0}"' -f $Server
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+	}
+
+	# retrieve domain controllers
+	try {
+		$ADDomainControllers = Get-ADDomainController @GetADDomainControllers | Sort-Object -Property Name
+	}
+	catch {
+		Write-Warning -Message "could not retrieve domain controllers for object sync: $($_.Exception.Message)"
+		continue NextVMName
+	}
+
+	# loop through identities
+	foreach ($ObjectName in $Identities.Keys) {
+		# define object identity
+		$Object = $Identities[$ObjectName]
+
+		# report state
+		Write-Host ("$Hostname,$Name - syncing '$ObjectName' object from '$Server' server...")
+
+		# loop through domain controllers
+		foreach ($ADDomainController in $ADDomainControllers) {
+			# define destination
+			$Destination = $ADDomainController.Hostname
+
+			# define parameters
+			$SyncADObject = @{
+				Object      = $Object
+				Source      = $Server
+				Destination = $Destination
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# sync updated object 
+			try {
+				Sync-ADObject @SyncADObject
+			}
+			catch {
+				Write-Warning -Message "could not sync '$ObjectName' object from '$Server' server to '$Destination' server: $($_.Exception.Message)"
+				continue NextGroup
+			}
+
+			# report state
+			Write-Host ("$Hostname,$Name - ...synced '$ObjectName' object to '$Destination' server")
+		}
+	}
 }
