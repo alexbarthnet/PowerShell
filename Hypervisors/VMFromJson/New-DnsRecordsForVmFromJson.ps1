@@ -135,6 +135,9 @@ catch {
 		continue NextVMName
 	}
 
+	# define identities list
+	$Identities = [System.Collections.Generic.SortedDictionary[string, string]]::new()
+
 	# create list for IP address objects
 	$IPAddresses = [System.Collections.Generic.List[System.Net.IPAddress]]::new()
 
@@ -443,6 +446,9 @@ catch {
 
 	# if DNS object retrieved...
 	if ($ADObjectCount) {
+		# add computer to identities list
+		$Identities.Add($Name, $Identity)
+
 		# if nTSecurityDescriptor not found...
 		if ($null -eq $ADObject.nTSecurityDescriptor) {
 			# warn and return
