@@ -452,7 +452,7 @@ process {
 			Remove-CMDeviceByName -Name $Name -ComputerName $ComputerName
 		}
 		catch {
-			continue NextVMName
+			throw $_
 		}
 	}
 }
