@@ -480,38 +480,38 @@ catch {
 		if ($AccessRules.Where({ $_.IdentityReference -eq $ComputerObject.SID -and $_.ActiveDirectoryRights -eq $ActiveDirectoryRights })) {
 			# report and return
 			Write-Host "$Hostname,$Name - validated access rules on AD object for DNS record with '$Name' name in '$ZoneName' zone on '$Server' server"
-			continue NextVMName
 		}
+		else {
+			# retrieve access rules for DNS object where identity matches computer SID
+			$AccessRulesToRemove = $AccessRules.Where({ $_.IdentityReference -eq $ComputerObject.SID })
 
-		# retrieve access rules for DNS object where identity matches computer SID
-		$AccessRulesToRemove = $AccessRules.Where({ $_.IdentityReference -eq $ComputerObject.SID })
+			# loop through access rules to remove
+			foreach ($AccessRule in $AccessRulesToRemove) {
+				$nTSecurityDescriptor.RemoveAccessRuleSpecific($AccessRule)
+			}
 
-		# loop through access rules to remove
-		foreach ($AccessRule in $AccessRulesToRemove) {
-			$nTSecurityDescriptor.RemoveAccessRuleSpecific($AccessRule)
+			# add access rule to security descriptor
+			$nTSecurityDescriptor.AddAccessRule($AccessRule)
+
+			# define parameters
+			$SetADObject = @{
+				Server      = $Server
+				Identity    = $Identity
+				Replace     = @{ nTSecurityDescriptor = $nTSecurityDescriptor }
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# update security on DNS record object
+			try {
+				Set-ADObject @SetADObject
+			}
+			catch {
+				Write-Warning -Message "could not update security on AD object for DNS record with '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+				continue NextVMName
+			}
+
+			# report state
+			Write-Host "$Hostname,$Name - updated access rules on AD object for DNS record with '$Name' name in '$ZoneName' zone on '$Server' server"
 		}
-
-		# add access rule to security descriptor
-		$nTSecurityDescriptor.AddAccessRule($AccessRule)
-
-		# define parameters
-		$SetADObject = @{
-			Server      = $Server
-			Identity    = $Identity
-			Replace     = @{ nTSecurityDescriptor = $nTSecurityDescriptor }
-			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-		}
-
-		# update security on DNS record object
-		try {
-			Set-ADObject @SetADObject
-		}
-		catch {
-			Write-Warning -Message "could not update security on AD object for DNS record with '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
-			continue NextVMName
-		}
-
-		# report state
-		Write-Host "$Hostname,$Name - updated access rules on AD object for DNS record with '$Name' name in '$ZoneName' zone on '$Server' server"
 	}
 }
