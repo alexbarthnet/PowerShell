@@ -121,7 +121,7 @@ catch {
 	}
 
 	# report state
-	Write-Host ("$Hostname,$Name - computer object found; removing computer object...")
+	Write-Host "$Hostname,$Name - computer object found; removing computer object..."
 
 	# define required parameters
 	$RemoveADObject = @{
@@ -146,5 +146,5 @@ catch {
 	}
 
 	# report state
-	Write-Host ("$Hostname,$Name - ...computer object removed")
+	Write-Host "$Hostname,$Name - ...computer object removed"
 }
