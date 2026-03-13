@@ -243,10 +243,10 @@ begin {
 
 	function Remove-CMDeviceByName {
 		param (
-			# define VM parameters
+			# define VM name
 			[Parameter(Mandatory = $true)]
-			[object]$Name,
-			# define CM parameters
+			[string]$Name,
+			# define CM computer name
 			[string]$ComputerName
 		)
 
