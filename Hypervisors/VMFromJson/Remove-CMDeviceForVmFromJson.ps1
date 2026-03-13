@@ -307,6 +307,7 @@ begin {
 
 			# create objects for reporting
 			$Hostname = $ArgumentList['Hostname']
+			$ComputerName = $ArgumentList['ComputerName']
 			$Name = $ArgumentList['Name']
 
 			# import CM module
