@@ -10,7 +10,7 @@ param(
 	[Parameter(Position = 1, Mandatory, ValueFromPipeline)]
 	[string[]]$VMName,
 	[Parameter(Position = 2, Mandatory)]
-	[string[]]$ComputerName
+	[string]$ComputerName
 )
 
 begin {
