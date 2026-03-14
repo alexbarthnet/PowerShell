@@ -4419,16 +4419,30 @@ process {
 		# if VM has network adapters...
 		if ($null -ne $VM -and $null -ne $JsonData.$Name.VMNetworkAdapters) {
 			# loop through VM network adapters
-			foreach ($VMNetworkAdapterEntry in $JsonData.$Name.VMNetworkAdapters) {
+			:NextVMNetworkAdapterEntry foreach ($VMNetworkAdapterEntry in $JsonData.$Name.VMNetworkAdapters) {
+				# if network adapter name is missing...
+				if ($null -eq $VMNetworkAdapterEntry.NetworkAdapterName) {
+					# report state and continue
+					Write-Host ("$Hostname,$ComputerName,$Name - skipping VMNetworkAdapter with missing NetworkAdapterName")
+					continue NextVMNetworkAdapterEntry
+				}
+
+				# if skip deployment present...
+				if ($VMNetworkAdapterEntry.SkipDuringProvisioning -eq $true) {
+					# report state and continue
+					Write-Host ("$Hostname,$ComputerName,$Name - skipping VMNetworkAdapter with Name: '$($VMNetworkAdapterEntry.NetworkAdapterName)'")
+					continue NextVMNetworkAdapterEntry
+				}
+
+				# report state
+				Write-Host ("$Hostname,$ComputerName,$Name - checking VMNetworkAdapter with Name: '$($VMNetworkAdapterEntry.NetworkAdapterName)'")
+
 				# define required parameters for VMNetworkAdapter
 				$AddVMNetworkAdapterToVM = @{
 					ComputerName       = $ComputerName
 					VM                 = $VM
 					NetworkAdapterName = $VMNetworkAdapterEntry.NetworkAdapterName
 				}
-
-				# report state
-				Write-Host ("$Hostname,$ComputerName,$Name - checking VMNetworkAdapter with Name: '$($VMNetworkAdapterEntry.NetworkAdapterName)'")
 
 				# define optional parameters for VMNetworkAdapter
 				if ($null -ne $VMNetworkAdapterEntry.SwitchName) {
