@@ -669,6 +669,131 @@ begin {
 		}
 	}
 
+	function Get-VMHostCurrentMacAddress {
+		[CmdletBinding()]
+		param(
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName,
+			[string]$Path = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization\Worker'
+		)
+
+		# get hashtable for InvokeCommand splat
+		try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not get initial hashtable for Invoke-Command")
+			throw $_
+		}
+
+		# update argument list
+		$InvokeCommand['ArgumentList']['Path'] = $Path
+		$InvokeCommand['ArgumentList']['Name'] = 'CurrentMacAddress'
+
+		# retrieve current MAC address
+		try {
+			$CurrentMacAddress = Invoke-Command @InvokeCommand -ScriptBlock {
+				param($ArgumentList)
+				Get-ItemPropertyValue -Path $ArgumentList['Path'] -Name $ArgumentList['Name']
+			}
+		}
+		catch {
+			throw $_
+		}
+
+		# verify current MAC address
+		if ($CurrentMacAddress -isnot [byte[]]) {
+			Write-Host ("$Hostname,$ComputerName - ERROR: CurrentMacAddress registry value is not a byte array")
+			return $null
+		}
+
+		# define and increment updated MAC address
+		if ($CurrentMacAddress[-1] -eq 255) {
+			Write-Host ("$Hostname,$ComputerName - ERROR: CurrentMacAddress has reached the default limit")
+			return $null
+		}
+
+		# return current MAC address
+		try {
+			return [System.BitConverter]::ToString($CurrentMacAddress).Replace('-', $null)
+		}
+		catch {
+			throw $_
+		}
+	}
+
+	function Update-VMHostCurrentMacAddress {
+		[CmdletBinding()]
+		param(
+			[Parameter(Mandatory = $true)]
+			[string]$ComputerName,
+			[string]$Path = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization\Worker'
+		)
+
+		# get hashtable for InvokeCommand splat
+		try {
+			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
+		}
+		catch {
+			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not get initial hashtable for Invoke-Command")
+			throw $_
+		}
+
+		# update argument list
+		$InvokeCommand['ArgumentList']['Path'] = $Path
+		$InvokeCommand['ArgumentList']['Name'] = 'CurrentMacAddress'
+
+		# retrieve current MAC address
+		try {
+			$CurrentMacAddress = Invoke-Command @InvokeCommand -ScriptBlock {
+				param($ArgumentList)
+				Get-ItemPropertyValue -Path $ArgumentList['Path'] -Name $ArgumentList['Name']
+			}
+		}
+		catch {
+			throw $_
+		}
+
+		# verify current MAC address
+		if ($CurrentMacAddress -isnot [byte[]]) {
+			Write-Host ("$Hostname,$ComputerName - ERROR: CurrentMacAddress registry value is not a byte array")
+			return $null
+		}
+
+		# define and increment updated MAC address
+		if ($CurrentMacAddress[-1] -eq 255) {
+			Write-Host ("$Hostname,$ComputerName - ERROR: CurrentMacAddress has reached the default limit")
+			return $null
+		}
+
+		# update argument list
+		$InvokeCommand['ArgumentList']['CurrentMacAddress'] = $CurrentMacAddress
+
+		# update current MAC address
+		try {
+			$UpdateMacAddress = Invoke-Command @InvokeCommand -ScriptBlock {
+				param($ArgumentList)
+				# increment last byte in current MAC address
+				$ArgumentList['CurrentMacAddress'][-1]++
+				# update current MAC address property
+				$Value = Set-ItemProperty -Path $ArgumentList['Path'] -Name $ArgumentList['Name'] -Value $ArgumentList['CurrentMacAddress'] -PassThru
+				# return updated MAC address
+				try {
+					return [System.BitConverter]::ToString($Value.CurrentMacAddress).Replace('-', $null)
+				}
+				catch {
+					throw $_
+				}
+			}
+		}
+		catch {
+			throw $_
+		}
+
+		# report updated MAC address
+		Write-Host ("$Hostname,$ComputerName - updated CurrentMacAddress registry value: $UpdateMacAddress")
+	}
+
 	function Get-VMHostNextMacAddress {
 		[CmdletBinding()]
 		param(
