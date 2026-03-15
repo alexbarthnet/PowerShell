@@ -4543,8 +4543,14 @@ process {
 
 		# if VM has network adapters...
 		if ($null -ne $VM -and $null -ne $JsonData.$Name.VMNetworkAdapters) {
+			# retrieve all VM network adapters
+			$VMNetworkAdapters = $JsonData.$Name.VMNetworkAdapters
+
+			# filter named VM network adapters without skip provisioning configured
+			$VMNetworkAdapters = $VMNetworkAdapters | Where-Object { $_.SkipDuringProvisioning -eq $true }
+
 			# loop through VM network adapters
-			:NextVMNetworkAdapterEntry foreach ($VMNetworkAdapterEntry in $JsonData.$Name.VMNetworkAdapters) {
+			:NextVMNetworkAdapterEntry foreach ($VMNetworkAdapterEntry in $VMNetworkAdapters) {
 				# if network adapter name is missing...
 				if ($null -eq $VMNetworkAdapterEntry.NetworkAdapterName) {
 					# report state and continue
