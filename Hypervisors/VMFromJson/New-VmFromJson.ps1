@@ -4599,9 +4599,9 @@ process {
 				# if MAC address was provided via prefix and IP address...
 				elseif ($null -ne $VMNetworkAdapterEntry.MacAddressPrefix -and $null -ne $VMNetworkAdapterEntry.IPAddress) {
 					# create MAC address suffix by converting IPAddress octets to hexadecimal
-					$MacAddressSuffix = ($IPAddress.Split('.') | ForEach-Object { ([int]$_).ToString('X2') }) -join $null
+					$MacAddressSuffix = ($VMNetworkAdapterEntry.IPAddress.Split('.') | ForEach-Object { ([int]$_).ToString('X2') }) -join $null
 					# assign MAC address from prefix and suffix
-					$StaticMacAddress = ($MacAddressPrefix, $MacAddressSuffix) -join $null
+					$StaticMacAddress = ($VMNetworkAdapterEntry.MacAddressPrefix, $MacAddressSuffix) -join $null
 					# report MAC address and source
 					Write-Host ("$Hostname,$ComputerName,$Name - ...created MAC address from IP address and MAC address prefix: $StaticAddress")
 				}
