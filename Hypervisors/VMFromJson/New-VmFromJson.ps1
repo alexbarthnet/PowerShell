@@ -4594,7 +4594,7 @@ process {
 					# retrieve MAC address from JSON entry
 					$StaticMacAddress = $VMNetworkAdapterEntry.MacAddress
 					# report MAC address and source
-					Write-Host ("$Hostname,$ComputerName,$Name - ...retrieved MAC address from JSON: $StaticAddress")
+					Write-Host ("$Hostname,$ComputerName,$Name - ...retrieved MAC address from JSON: $StaticMacAddress")
 				}
 				# if MAC address was provided via prefix and IP address...
 				elseif ($null -ne $VMNetworkAdapterEntry.MacAddressPrefix -and $null -ne $VMNetworkAdapterEntry.IPAddress) {
@@ -4603,7 +4603,7 @@ process {
 					# assign MAC address from prefix and suffix
 					$StaticMacAddress = ($VMNetworkAdapterEntry.MacAddressPrefix, $MacAddressSuffix) -join $null
 					# report MAC address and source
-					Write-Host ("$Hostname,$ComputerName,$Name - ...created MAC address from IP address and MAC address prefix: $StaticAddress")
+					Write-Host ("$Hostname,$ComputerName,$Name - ...created MAC address from IP address and MAC address prefix: $StaticMacAddress")
 				}
 				# if MAC address not provided...
 				else {
@@ -4619,7 +4619,7 @@ process {
 					# update boolean
 					$CurrentMacAddressRetrieved = $true
 					# report MAC address and source
-					Write-Host ("$Hostname,$ComputerName,$Name - ...retrieved current MAC address from host: $StaticAddress")
+					Write-Host ("$Hostname,$ComputerName,$Name - ...retrieved current MAC address from host: $StaticMacAddress")
 				}
 
 				# if static MAC address is null...
