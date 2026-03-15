@@ -1907,7 +1907,7 @@ process {
 					# create MAC address suffix by converting IPAddress octets to hexadecimal
 					$MacAddressSuffix = ($VMNetworkAdapterEntry.IPAddress.Split('.') | ForEach-Object { ([int]$_).ToString('X2') }) -join $null
 					# assign MAC address from prefix and suffix
-					$StaticMacAddress = ($VMNetworkAdapterEntry.MacAddressPrefix, $MacAddressSuffix) -join $null
+					$StaticMacAddress = ($VMNetworkAdapterEntry.MacAddressPrefix.ToUpperInvariant(), $MacAddressSuffix) -join $null
 					# report MAC address and source
 					Write-Host ("$Hostname,$ComputerName,$Name - ...created MAC address from IP address and MAC address prefix: $StaticMacAddress")
 				}
