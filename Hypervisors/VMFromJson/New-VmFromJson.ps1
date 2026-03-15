@@ -2190,6 +2190,8 @@ begin {
 			# define VMNetworkAdapter parameters
 			[Parameter(Mandatory = $true)]
 			[string]$NetworkAdapterName,
+			[Parameter(Mandatory = $true)]
+			[string]$StaticMacAddress,
 			[string]$SwitchName,
 			[string]$MacAddressSpoofing,
 			[string]$AllowTeaming
@@ -2252,6 +2254,27 @@ begin {
 		if ($VMNetworkAdapter -is [Microsoft.HyperV.PowerShell.VMNetworkAdapter]) {
 			# declare and begin verifying adapter settings
 			Write-Host ("$Hostname,$ComputerName,$Name - ...found VMNetworkAdapter: '$NetworkAdapterName'")
+
+			# if static MAC address is not correct or dynamic MAC address enabled...
+			if ($VMNetworkAdapter.MacAddress -ne $StaticMacAddress -or $VMNetworkAdapter.DynamicMacAddressEnabled) {
+				# define parameters for Set-VMNetworkAdapter
+				$SetVMNetworkAdapter = @{
+					VMNetworkAdapter = $VMNetworkAdapter
+					StaticMacAddress = $StaticMacAddress
+					Passthru         = $true
+					ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# enable device naming on adapter
+				try {
+					Write-Host ("$Hostname,$ComputerName,$Name - ...setting static MAC address on VMNetworkAdapter: '$NetworkAdapterName'")
+					$VMNetworkAdapter = Set-VMNetworkAdapter @SetVMNetworkAdapter
+				}
+				catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not set static MAC address on VMNetworkAdapter for VM")
+					throw $_
+				}
+			}
 
 			# if device naming is not enabled...
 			if ($VMNetworkAdapter.DeviceNaming -ne 'On') {
@@ -2319,11 +2342,12 @@ begin {
 		else {
 			# define required parameters for Add-VMNetworkAdapter
 			$AddVMNetworkAdapter = @{
-				VM           = $VM
-				Name         = $NetworkAdapterName
-				DeviceNaming = 'On'
-				Passthru     = $true
-				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+				VM               = $VM
+				Name             = $NetworkAdapterName
+				StaticMacAddress = $StaticMacAddress
+				DeviceNaming     = 'On'
+				Passthru         = $true
+				ErrorAction      = [System.Management.Automation.ActionPreference]::Stop
 			}
 
 			# define optional parameters for Add-VMNetworkAdapter
@@ -4558,20 +4582,57 @@ process {
 					continue NextVMNetworkAdapterEntry
 				}
 
-				# if skip deployment present...
-				if ($VMNetworkAdapterEntry.SkipDuringProvisioning -eq $true) {
-					# report state and continue
-					Write-Host ("$Hostname,$ComputerName,$Name - skipping VMNetworkAdapter with Name: '$($VMNetworkAdapterEntry.NetworkAdapterName)'")
-					continue NextVMNetworkAdapterEntry
-				}
-
 				# report state
 				Write-Host ("$Hostname,$ComputerName,$Name - checking VMNetworkAdapter with Name: '$($VMNetworkAdapterEntry.NetworkAdapterName)'")
+
+				# reset the static address
+				$StaticMacAddress = $null
+				$CurrentMacAddressRetrieved = $false
+
+				# if MAC address was provided...
+				if ($null -ne $VMNetworkAdapterEntry.MacAddress) {
+					# retrieve MAC address from JSON entry
+					$StaticMacAddress = $VMNetworkAdapterEntry.MacAddress
+					# report MAC address and source
+					Write-Host ("$Hostname,$ComputerName,$Name - ...retrieved MAC address from JSON: $StaticAddress")
+				}
+				# if MAC address was provided via prefix and IP address...
+				elseif ($null -ne $VMNetworkAdapterEntry.MacAddressPrefix -and $null -ne $VMNetworkAdapterEntry.IPAddress) {
+					# create MAC address suffix by converting IPAddress octets to hexadecimal
+					$MacAddressSuffix = ($IPAddress.Split('.') | ForEach-Object { ([int]$_).ToString('X2') }) -join $null
+					# assign MAC address from prefix and suffix
+					$StaticMacAddress = ($MacAddressPrefix, $MacAddressSuffix) -join $null
+					# report MAC address and source
+					Write-Host ("$Hostname,$ComputerName,$Name - ...created MAC address from IP address and MAC address prefix: $StaticAddress")
+				}
+				# if MAC address not provided...
+				else {
+					# retrieve current MAC address from host
+					try {
+						Write-Host ("$Hostname,$ComputerName,$Name - ...retrieving current MAC address from host")
+						$StaticMacAddress = Get-VMHostCurrentMacAddress -ComputerName $ComputerName
+					}
+					catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve current MAC address from host")
+						throw $_
+					}
+					# update boolean
+					$CurrentMacAddressRetrieved = $true
+					# report MAC address and source
+					Write-Host ("$Hostname,$ComputerName,$Name - ...retrieved current MAC address from host: $StaticAddress")
+				}
+
+				# if static MAC address is null...
+				if ($null -eq $StaticMacAddress) {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve or create MAC address for '$($VMNetworkAdapterEntry.NetworkAdapterName)' network adapter")
+					throw $_
+				}
 
 				# define required parameters for VMNetworkAdapter
 				$AddVMNetworkAdapterToVM = @{
 					ComputerName       = $ComputerName
 					VM                 = $VM
+					StaticMacAddress   = $StaticMacAddress
 					NetworkAdapterName = $VMNetworkAdapterEntry.NetworkAdapterName
 				}
 
@@ -4594,6 +4655,21 @@ process {
 					throw $_
 				}
 
+				# if current MAC address retrieved...
+				if ($CurrentMacAddressRetrieved) {
+					# retrieve MAC address from host
+					try {
+						Write-Host ("$Hostname,$ComputerName,$Name - ...updating current MAC address from host")
+						Update-VMHostCurrentMacAddress -ComputerName $ComputerName
+					}
+					catch {
+						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve current MAC address from host")
+						throw $_
+					}
+					# report MAC address was updated
+					Write-Host ("$Hostname,$ComputerName,$Name - ...incremented current MAC address on host: $StaticAddress")
+				}
+
 				# define required parameters for VLAN
 				$SetVMNetworkAdapterVlanId = @{
 					VMNetworkAdapter = $VMNetworkAdapter
@@ -4613,30 +4689,6 @@ process {
 				# set VLAN on VMNetworkAdapter and get updated VMNetworkAdapter
 				try {
 					$VMNetworkAdapter = Set-VMNetworkAdapterVlanId @SetVMNetworkAdapterVlanId
-				}
-				catch {
-					throw $_
-				}
-
-				# define required parameters for MAC address
-				$SetVMNetworkAdapterMacAddress = @{
-					VMNetworkAdapter = $VMNetworkAdapter
-				}
-
-				# define optional parameters for MAC address
-				if ($null -ne $VMNetworkAdapterEntry.IPAddress) {
-					$SetVMNetworkAdapterMacAddress['IPAddress'] = $VMNetworkAdapterEntry.IPAddress
-				}
-				if ($null -ne $VMNetworkAdapterEntry.MacAddress) {
-					$SetVMNetworkAdapterMacAddress['MacAddress'] = $VMNetworkAdapterEntry.MacAddress
-				}
-				if ($null -ne $VMNetworkAdapterEntry.MacAddressPrefix) {
-					$SetVMNetworkAdapterMacAddress['MacAddressPrefix'] = $VMNetworkAdapterEntry.MacAddressPrefix
-				}
-
-				# set MAC address on VMNetworkAdapter and get updated VMNetworkAdapter
-				try {
-					$VMNetworkAdapter = Set-VMNetworkAdapterMacAddress @SetVMNetworkAdapterMacAddress
 				}
 				catch {
 					throw $_
