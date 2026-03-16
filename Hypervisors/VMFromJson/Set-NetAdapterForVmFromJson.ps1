@@ -4,6 +4,8 @@
 param(
 	[Parameter(Position = 0, Mandatory)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Json,
+	[Parameter(Position = 1)]
+	[string]$SkipLocalJson,
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 )
@@ -55,6 +57,9 @@ if ($null -eq $JsonData.$Name.VMNetworkAdapters) {
 	Write-Host ("$Hostname - Network Adapters not found for VM in Json")
 	return
 }
+
+# define array of local JSON data of VM network adapters
+$LocalJsonData = @()
 
 # retrieve all VM network adapters
 $VMNetworkAdapters = $JsonData.$Name.VMNetworkAdapters
@@ -134,6 +139,71 @@ if ($null -eq $VMNetworkAdapters) {
 
 	# report state
 	Write-Host ("$Hostname,$NetAdapterName - ...configured IP address")
-	{
+
+
+	# add network adapter configuration to local JSON data
+	$LocalJsonData += $VMNetworkAdapterEntry
+}
+
+# if no local JSON data defined...
+if ($LocalJsonData.Count -eq 0) {
+	Write-Host ("$Hostname - no Network Adapters configured for VM in Json")
+}
+
+# if skip local JSON not requested...
+if (!$SkipLocalJson.IsPresent) {
+	# convert local JSON data to JSON
+	try {
+		$LocalJson = $LocalJsonData | ConvertTo-Json -Depth 100 -ErrorAction 'Stop'
+	}
+	catch {
+		Write-Warning -Message "could not convert '`$LocalJsonData' object to JSON"
+		throw $_
+	}
+
+	# retrieve ProgramData directory
+	try {
+		$CommonApplicationDataFolderPath = [System.Environment]::GetFolderPath('CommonApplicationData')
+	}
+	catch {
+		Write-Warning -Message "could not retrieve 'CommonApplicationData' folder path from environment"
+		throw $_
+	}
+
+	# define folder path in ProgramData directory
+	$Path = Join-Path -Path $CommonApplicationDataFolderPath -ChildPath 'VmFromJson'
+
+	# if path not found...
+	if (![System.IO.Directory]::Exists($Path)) {
+		try {
+			$null = New-Item -Path $Path -ItemType Directory -Force -ErrorAction 'Stop'
+		}
+		catch {
+			Write-Warning -Message "could not create directory: $Path"
+			throw $_
+		}
+	}
+
+	# define file path in VmFromJson directory
+	$FilePath = Join-Path -Path $Path -ChildPath "$Hostname.json"
+
+	# if file path not found...
+	if (![System.IO.File]::Exists($FilePath)) {
+		try {
+			$null = New-Item -Path $FilePath -ItemType File -Force -ErrorAction 'Stop'
+		}
+		catch {
+			Write-Warning -Message "could not create file: $FilePath"
+			throw $_
+		}
+	}
+
+	# write JSON to file path
+	try {
+		$LocalJson | Set-Content -Path $FilePath -NoNewline -ErrorAction 'Stop'
+	}
+	catch {
+		Write-Warning -Message "could not write JSON to file: $FilePath"
+		throw $_
 	}
 }
