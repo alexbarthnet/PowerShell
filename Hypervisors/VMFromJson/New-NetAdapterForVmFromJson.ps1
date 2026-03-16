@@ -6,7 +6,7 @@ param(
 	[string]$Json,
 	[Parameter(Position = 1, Mandatory, ValueFromPipeline)]
 	[string[]]$VMName,
-	[Parameter(Position = 2, Mandatory)]
+	[Parameter(Position = 2)]
 	[string[]]$NetworkAdapterName,
 	[Parameter(Position = 3)]
 	[string]$ComputerName,
@@ -1883,8 +1883,14 @@ process {
 			# retrieve all VM network adapters
 			$VMNetworkAdapters = $JsonData.$Name.VMNetworkAdapters
 
-			# filter named VM network adapters
-			$VMNetworkAdapters = $VMNetworkAdapters | Where-Object { $_.NetworkAdapterName -in $NetworkAdapterName }
+			# exclude base VM network adapters
+			$VMNetworkAdapters = $VMNetworkAdapters | Where-Object { $null -ne $_.SkipDuringProvisioning -and $_.SkipDuringProvisioning -eq $true }
+
+			# if network adapter names provided...
+			if ($PSBoundParameters.ContainsKey('NetworkAdapterName')) {
+				# filter named VM network adapters
+				$VMNetworkAdapters = $VMNetworkAdapters | Where-Object { $_.NetworkAdapterName -in $NetworkAdapterName }
+			}
 
 			# loop through VM network adapters
 			:NextVMNetworkAdapterEntry foreach ($VMNetworkAdapterEntry in $VMNetworkAdapters) {
