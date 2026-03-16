@@ -42,10 +42,24 @@ if ($null -eq $JsonData.$Hostname) {
 }
 
 # if VM has network adapters...
-if ($null -eq $JsonData.$Name.VMNetworkAdapters) {
+if ($null -eq $JsonData.$Hostname.VMNetworkAdapters) {
 	# report and return
 	Write-Host ("$Hostname - no VMNetworkAdapter entries found for VM in Json")
 	return
+}
+
+# define array of local JSON data of VM network adapters
+$LocalJsonData = @()
+
+# retrieve all VM network adapters
+$VMNetworkAdapters = $JsonData.$Hostname.VMNetworkAdapters
+
+# exclude base VM network adapters
+$VMNetworkAdapters = $VMNetworkAdapters | Where-Object { $null -ne $_.SkipDuringProvisioning -and $_.SkipDuringProvisioning -eq $true }
+
+# if VM network adapters found after filtering...
+if ($null -eq $VMNetworkAdapters) {
+	Write-Host ("$Hostname - no additional VMNetworkAdapter entries found for VM in Json")
 }
 
 # retrieve network adapter advanced property sets
@@ -90,20 +104,6 @@ try {
 catch {
 	Write-Warning -Message 'could not retrieve NetAdapters'
 	throw $_
-}
-
-# define array of local JSON data of VM network adapters
-$LocalJsonData = @()
-
-# retrieve all VM network adapters
-$VMNetworkAdapters = $JsonData.$Name.VMNetworkAdapters
-
-# exclude base VM network adapters
-$VMNetworkAdapters = $VMNetworkAdapters | Where-Object { $null -ne $_.SkipDuringProvisioning -and $_.SkipDuringProvisioning -eq $true }
-
-# if VM network adapters found after filtering...
-if ($null -eq $VMNetworkAdapters) {
-	Write-Host ("$Hostname - no additional VMNetworkAdapter entries found for VM in Json")
 }
 
 # loop through VM network adapters
