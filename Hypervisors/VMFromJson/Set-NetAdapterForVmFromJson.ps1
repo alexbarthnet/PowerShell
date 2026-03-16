@@ -1,4 +1,4 @@
-#requires -Modules 'Hyper-V', FailoverClusters, DhcpServer
+#requires -Modules 'NetAdapter'
 
 [CmdletBinding(SupportsShouldProcess)]
 param(
@@ -50,79 +50,90 @@ if ($null -eq $JsonData.$Hostname) {
 }
 
 # if VM has network adapters...
-if ($null -ne $JsonData.$Name.VMNetworkAdapters) {
-	# retrieve all VM network adapters
-	$VMNetworkAdapters = $JsonData.$Name.VMNetworkAdapters
+if ($null -eq $JsonData.$Name.VMNetworkAdapters) {
+	# report and return
+	Write-Host ("$Hostname - Network Adapters not found for VM in Json")
+	return
+}
 
-	# filter named VM network adapters
-	$VMNetworkAdapters = $VMNetworkAdapters | Where-Object { $null -ne $_.SkipDuringProvisioning -and $_.SkipDuringProvisioning -eq $true }
+# retrieve all VM network adapters
+$VMNetworkAdapters = $JsonData.$Name.VMNetworkAdapters
 
-	# loop through VM network adapters
-	:NextVMNetworkAdapterEntry foreach ($VMNetworkAdapterEntry in $VMNetworkAdapters) {
-		# if network adapter name is missing...
-		if ($null -eq $VMNetworkAdapterEntry.NetworkAdapterName) {
-			# report state and continue
-			Write-Host ("$Hostname - skipping VMNetworkAdapter with missing NetworkAdapterName")
-			continue NextVMNetworkAdapterEntry
-		}
+# exclude base VM network adapters
+$VMNetworkAdapters = $VMNetworkAdapters | Where-Object { $null -ne $_.SkipDuringProvisioning -and $_.SkipDuringProvisioning -eq $true }
 
-		# if network adapter IP address is missing...
-		if ($null -eq $VMNetworkAdapterEntry.IPAddress) {
-			# report state and continue
-			Write-Host ("$Hostname - skipping VMNetworkAdapter with missing IPAddress")
-			continue NextVMNetworkAdapterEntry
-		}
+# if VM network adapters found after filtering...
+if ($null -eq $VMNetworkAdapters) {
+	Write-Host ("$Hostname - no additional Network Adapters not found for VM in Json")
+}
 
-		# if network adapter prefix lengthis missing...
-		if ($null -eq $VMNetworkAdapterEntry.PrefixLength) {
-			# report state and continue
-			Write-Host ("$Hostname - skipping VMNetworkAdapter with missing PrefixLength")
-			continue NextVMNetworkAdapterEntry
-		}
+# loop through VM network adapters
+:NextVMNetworkAdapterEntry foreach ($VMNetworkAdapterEntry in $VMNetworkAdapters) {
+	# if network adapter name is missing...
+	if ($null -eq $VMNetworkAdapterEntry.NetworkAdapterName) {
+		# report state and continue
+		Write-Host ("$Hostname - skipping VMNetworkAdapter with missing NetworkAdapterName")
+		continue NextVMNetworkAdapterEntry
+	}
 
-		# define network adapter name
-		$NetAdapterName = $VMNetworkAdapterEntry.NetworkAdapterName
+	# if network adapter IP address is missing...
+	if ($null -eq $VMNetworkAdapterEntry.IPAddress) {
+		# report state and continue
+		Write-Host ("$Hostname - skipping VMNetworkAdapter with missing IPAddress")
+		continue NextVMNetworkAdapterEntry
+	}
 
-		# report state
-		Write-Host ("$Hostname,$NetAdapterName - checking for NetAdapter by name...")
+	# if network adapter prefix length is missing...
+	if ($null -eq $VMNetworkAdapterEntry.PrefixLength) {
+		# report state and continue
+		Write-Host ("$Hostname - skipping VMNetworkAdapter with missing PrefixLength")
+		continue NextVMNetworkAdapterEntry
+	}
 
-		# filter network adapters
-		$NetAdapter = $NetAdapters | Where-Object { $_.InterfaceAlias -eq $VMNetworkAdapterEntry.NetworkAdapterName }
+	# define network adapter name
+	$NetAdapterName = $VMNetworkAdapterEntry.NetworkAdapterName
 
-		# if network adapter not found...
-		if ($null -eq $NetAdapter) {
-			# warn and continue
-			Write-Warning -Message ("$Hostname,$NetAdapterName - NetAdapter not found with name: '$($VMNetworkAdapterEntry.NetworkAdapterName)'")
-			continue NextVMNetworkAdapterEntry
-		}
+	# report state
+	Write-Host ("$Hostname,$NetAdapterName - checking for NetAdapter by name...")
 
-		# report state
-		Write-Host ("$Hostname,$NetAdapterName - ...found VMNetworkAdapter by name; disabling DNS client registration...")
+	# filter network adapters
+	$NetAdapter = $NetAdapters | Where-Object { $_.InterfaceAlias -eq $VMNetworkAdapterEntry.NetworkAdapterName }
 
-		# disable DNS registration for network adapter
-		try {
-			$NetAdapter | Set-DnsClient -RegisterThisConnectionsAddress $false
-		}
-		catch {
-			# warn and continue
-			Write-Warning -Message ("$Hostname,$NetAdapterName - could not disable DNS client registration: $($_.Exception.Message)")
-			continue NextVMNetworkAdapterEntry
-		}
+	# if network adapter not found...
+	if ($null -eq $NetAdapter) {
+		# warn and continue
+		Write-Warning -Message ("$Hostname,$NetAdapterName - NetAdapter not found with name: '$($VMNetworkAdapterEntry.NetworkAdapterName)'")
+		continue NextVMNetworkAdapterEntry
+	}
 
-		# report state
-		Write-Host ("$Hostname,$NetAdapterName - ...disabled DNS client registration; configuring IP address...")
+	# report state
+	Write-Host ("$Hostname,$NetAdapterName - ...found VMNetworkAdapter by name; disabling DNS client registration...")
 
-		# configure IP address and prefix on network adapter
-		try {
-			$NetAdapter | New-NetIPAddress -IPAddress $VMNetworkAdapterEntry.IPAddress -PrefixLength $VMNetworkAdapterEntry.PrefixLength
-		}
-		catch {
-			# warn and continue
-			Write-Warning -Message ("$Hostname,$NetAdapterName - could not configure IP address: $($_.Exception.Message)")
-			continue NextVMNetworkAdapterEntry
-		}
+	# disable DNS registration for network adapter
+	try {
+		$NetAdapter | Set-DnsClient -RegisterThisConnectionsAddress $false
+	}
+	catch {
+		# warn and continue
+		Write-Warning -Message ("$Hostname,$NetAdapterName - could not disable DNS client registration: $($_.Exception.Message)")
+		continue NextVMNetworkAdapterEntry
+	}
 
-		# report state
-		Write-Host ("$Hostname,$NetAdapterName - ...configured IP address")
+	# report state
+	Write-Host ("$Hostname,$NetAdapterName - ...disabled DNS client registration; configuring IP address...")
+
+	# configure IP address and prefix on network adapter
+	try {
+		$NetAdapter | New-NetIPAddress -IPAddress $VMNetworkAdapterEntry.IPAddress -PrefixLength $VMNetworkAdapterEntry.PrefixLength
+	}
+	catch {
+		# warn and continue
+		Write-Warning -Message ("$Hostname,$NetAdapterName - could not configure IP address: $($_.Exception.Message)")
+		continue NextVMNetworkAdapterEntry
+	}
+
+	# report state
+	Write-Host ("$Hostname,$NetAdapterName - ...configured IP address")
+	{
 	}
 }
