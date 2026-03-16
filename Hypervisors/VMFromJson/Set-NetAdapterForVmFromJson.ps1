@@ -150,10 +150,9 @@ catch {
 
 	# disable DNS registration for network adapter
 	try {
-		$NetAdapter | Set-DnsClient -RegisterThisConnectionsAddress $false
+		Set-DnsClient -InterfaceIndex $NetAdapter.InterfaceIndex -RegisterThisConnectionsAddress $false
 	}
 	catch {
-		# warn and continue
 		Write-Warning -Message ("$Hostname,$NetAdapterName - could not disable DNS client registration: $($_.Exception.Message)")
 		continue NextVMNetworkAdapterEntry
 	}
@@ -161,19 +160,42 @@ catch {
 	# report state
 	Write-Host ("$Hostname,$NetAdapterName - ...disabled DNS client registration; configuring IP address...")
 
-	# configure IP address and prefix on network adapter
+	# retrieve current IP address and prefix on network adapter
 	try {
-		$NetAdapter | New-NetIPAddress -IPAddress $VMNetworkAdapterEntry.IPAddress -PrefixLength $VMNetworkAdapterEntry.PrefixLength
+		$NetIPAddress = Get-NetIPAddress -InterfaceIndex $NetAdapter.InterfaceIndex -AddressFamily 'IPv4' -ErrorAction 'Stop'
 	}
 	catch {
-		# warn and continue
-		Write-Warning -Message ("$Hostname,$NetAdapterName - could not configure IP address: $($_.Exception.Message)")
+		Write-Warning -Message ("$Hostname,$NetAdapterName - could not retrieve current IP addresses: $($_.Exception.Message)")
 		continue NextVMNetworkAdapterEntry
 	}
 
-	# report state
-	Write-Host ("$Hostname,$NetAdapterName - ...configured IP address")
+	# if BOTH current IP address and prefix length match defined values...
+	if ($NetIPAddress.IPAddress -eq $VMNetworkAdapterEntry.IPAddress -and $NetIPAddress.PrefixLength -eq $VMNetworkAdapterEntry.PrefixLength) {
+		# report state
+		Write-Host ("$Hostname,$NetAdapterName - ...found current IP address and prefix length match defined values")
+	}
+	else {
+		# remove current IP address
+		try {
+			$null = Remove-NetIPAddress -InterfaceIndex $NetAdapter.InterfaceIndex -AddressFamily 'IPv4' -ErrorAction 'Stop'
+		}
+		catch {
+			Write-Warning -Message ("$Hostname,$NetAdapterName - could not remove existing IP address: $($_.Exception.Message)")
+			continue NextVMNetworkAdapterEntry
+		}
 
+		# configure IP address and prefix on network adapter
+		try {
+			$null = New-NetIPAddress -InterfaceIndex $NetAdapter.InterfaceIndex -IPAddress $VMNetworkAdapterEntry.IPAddress -PrefixLength $VMNetworkAdapterEntry.PrefixLength -ErrorAction 'Stop'
+		}
+		catch {
+			Write-Warning -Message ("$Hostname,$NetAdapterName - could not add defined IP address: $($_.Exception.Message)")
+			continue NextVMNetworkAdapterEntry
+		}
+
+		# report state
+		Write-Host ("$Hostname,$NetAdapterName - ...configured IP address")
+	}
 
 	# add network adapter configuration to local JSON data
 	$LocalJsonData += $VMNetworkAdapterEntry
