@@ -7,7 +7,7 @@ Create placeholder PTR records in a reverse lookup zone on a Microsoft Windows D
 .DESCRIPTION
 Create placeholder PTR records in a reverse lookup zone on a Microsoft Windows DNS server and create matching A records for the placeholder PTR records. Includes options to create custom PTR records using the ReservedHosts parameter, reset the PTR records in an existing zone to placeholder records, and create the matching A records in custom subdomains,
 
-.PARAMETER Zone
+.PARAMETER ZoneName
 Specifies the reverse lookup zone that will be added and populated with placeholder PTR records.
 
 .PARAMETER Reset
@@ -38,13 +38,13 @@ Specifies the forward lookup zone to create matching A records. This parameter w
 Specifies the computer where the zones and records will be created. The default value is the current primary domain controller.
 
 .INPUTS
-System.String. One or more reverse lookup zones can be submitted to Add-DnsServerReverseLookupZone as an array or list via the pipeline.
+System.String. One or more reverse lookup zones can be submitted to Update-DnsServerReverseZoneRecords as an array or list via the pipeline.
 
 .OUTPUTS
 None. The script merely reports on actions taken and does not provide any actionable output.
 
 .EXAMPLE
-.\Add-DnsServerReverseLookupZone.ps1 -Zone '128-25.0.0.10.in-addr.arpa' -ReservedHosts @{ '10.0.0.129' = 'gateway.example.com'; '10.0.0.130' = 'firewall-a.example.com'; '10.0.0.131' = 'firewall-b.example.com' }
+.\Update-DnsServerReverseZoneRecords.ps1 -ZoneName '128-25.0.0.10.in-addr.arpa' -ReservedHosts @{ '10.0.0.129' = 'gateway.example.com'; '10.0.0.130' = 'firewall-a.example.com'; '10.0.0.131' = 'firewall-b.example.com' }
 
 #>
 
