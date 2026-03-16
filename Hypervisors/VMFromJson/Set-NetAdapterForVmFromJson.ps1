@@ -210,7 +210,7 @@ if ($LocalJsonData.Count -eq 0) {
 if (!$SkipLocalJson.IsPresent) {
 	# convert local JSON data to JSON
 	try {
-		$LocalJson = $LocalJsonData | ConvertTo-Json -Depth 100 -ErrorAction 'Stop'
+		$LocalJson = ConvertTo-Json -InputObject $LocalJsonData -Depth 100 -ErrorAction 'Stop'
 	}
 	catch {
 		Write-Warning -Message "could not convert '`$LocalJsonData' object to JSON"
