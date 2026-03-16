@@ -177,7 +177,7 @@ catch {
 	else {
 		# remove current IP address
 		try {
-			$null = Remove-NetIPAddress -InterfaceIndex $NetAdapter.InterfaceIndex -AddressFamily 'IPv4' -ErrorAction 'Stop'
+			$null = Remove-NetIPAddress -InterfaceIndex $NetAdapter.InterfaceIndex -AddressFamily 'IPv4' -Confirm:$false -ErrorAction 'Stop'
 		}
 		catch {
 			Write-Warning -Message ("$Hostname,$NetAdapterName - could not remove existing IP address: $($_.Exception.Message)")
