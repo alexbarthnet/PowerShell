@@ -10,16 +10,6 @@ param(
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant()
 )
 
-# retrieve all network adapters
-try {
-	$NetAdapters = Get-NetAdapter -Physical -ErrorAction 'Stop'
-}
-catch {
-	# warn and continue
-	Write-Warning -Message ("$Hostname - could not retrieve NetAdapters: $($_.Exception.Message)")
-	throw $_
-}
-
 # if Json is not an absolute path...
 if (![System.IO.Path]::IsPathRooted($Json)) {
 	# get unresolved absolute path
@@ -54,8 +44,52 @@ if ($null -eq $JsonData.$Hostname) {
 # if VM has network adapters...
 if ($null -eq $JsonData.$Name.VMNetworkAdapters) {
 	# report and return
-	Write-Host ("$Hostname - Network Adapters not found for VM in Json")
+	Write-Host ("$Hostname - no VMNetworkAdapter entries found for VM in Json")
 	return
+}
+
+# retrieve network adapter advanced property sets
+try {
+	$NetAdapterAdvancedPropertySets = Get-NetAdapterAdvancedProperty -RegistryKeyword 'HyperVNetworkAdapterName' -ErrorAction 'Stop' | Where-Object { -not [string]::IsNullOrEmpty($_.DisplayValue) }
+}
+catch {
+	Write-Warning -Message 'could not retrieve NetAdapterAdavancedProperty sets'
+	throw $_
+}
+
+# loop through network adapter advanced property sets
+:NextNetAdapterAdvancedPropertySet foreach ($NetAdapterAdvancedPropertySet in $NetAdapterAdvancedPropertySets) {
+	# define network adapter names
+	$NetAdapterOldName = $NetAdapterAdvancedPropertySet.Name
+	$NetAdapterNewName = $NetAdapterAdvancedPropertySet.DisplayValue
+	
+	# if network adapter names match...
+	if ($NetAdapterOldName -eq $NetAdapterNewName) {
+		# report state and continue
+		Write-Host ("$Hostname - found '$NetAdapterOldName' NetAdapter matches HyperVNetworkAdapterName value")
+		continue NextNetAdapterAdvancedPropertySet
+	}
+
+	# rename network adapter from old name to Hyper-V network adapter name
+	try {
+		Rename-NetAdapter -Name $NetAdapterOldName -NewName $NetAdapterNewName -ErrorAction 'Stop'
+	}
+	catch {
+		Write-Warning -Message "could not rename '$NetAdapterOldName' NetAdapter to '$NetAdapterNewName' name from HyperVNetworkAdapterName"
+		throw $_
+	}
+
+	# report state and sleep
+	Write-Host ("$Hostname - renamed '$NetAdapterOldName' NetAdapter to '$NetAdapterNewName' name from HyperVNetworkAdapterName")
+}
+
+# retrieve all network adapters AFTER renaming
+try {
+	$NetAdapters = Get-NetAdapter -Physical -ErrorAction 'Stop'
+}
+catch {
+	Write-Warning -Message 'could not retrieve NetAdapters'
+	throw $_
 }
 
 # define array of local JSON data of VM network adapters
@@ -69,7 +103,7 @@ $VMNetworkAdapters = $VMNetworkAdapters | Where-Object { $null -ne $_.SkipDuring
 
 # if VM network adapters found after filtering...
 if ($null -eq $VMNetworkAdapters) {
-	Write-Host ("$Hostname - no additional Network Adapters not found for VM in Json")
+	Write-Host ("$Hostname - no additional VMNetworkAdapter entries found for VM in Json")
 }
 
 # loop through VM network adapters
