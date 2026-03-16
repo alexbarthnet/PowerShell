@@ -146,19 +146,75 @@ catch {
 	}
 
 	# report state
-	Write-Host ("$Hostname,$NetAdapterName - ...found VMNetworkAdapter by name; disabling DNS client registration...")
+	Write-Host ("$Hostname,$NetAdapterName - ...found VMNetworkAdapter by name; checking DNS client registration...")
 
-	# disable DNS registration for network adapter
+	########################
+	# DNS registration
+	########################
+
+	# retrieve current DNS client settings
 	try {
-		Set-DnsClient -InterfaceIndex $NetAdapter.InterfaceIndex -RegisterThisConnectionsAddress $false
+		$DnsClient = Get-DnsClient -InterfaceIndex $NetAdapter.InterfaceIndex
 	}
 	catch {
-		Write-Warning -Message ("$Hostname,$NetAdapterName - could not disable DNS client registration: $($_.Exception.Message)")
+		Write-Warning -Message ("$Hostname,$NetAdapterName - could not retrieve current DNS client addresses: $($_.Exception.Message)")
 		continue NextVMNetworkAdapterEntry
 	}
 
-	# report state
-	Write-Host ("$Hostname,$NetAdapterName - ...disabled DNS client registration; configuring IP address...")
+	# if DNS registration already disabled...
+	if ($DnsClient.RegisterThisConnectionsAddress -eq $false) {
+		# report state
+		Write-Host ("$Hostname,$NetAdapterName - ...found DNS client registration already disabled; checking NetBT transport...")
+	}
+	else {
+		# disable DNS registration for network adapter
+		try {
+			Set-DnsClient -InterfaceIndex $NetAdapter.InterfaceIndex -RegisterThisConnectionsAddress $false
+		}
+		catch {
+			Write-Warning -Message ("$Hostname,$NetAdapterName - could not disable DNS client registration: $($_.Exception.Message)")
+			continue NextVMNetworkAdapterEntry
+		}
+
+		# report state
+		Write-Host ("$Hostname,$NetAdapterName - ...disabled DNS client registration; checking NetBT transport...")
+	}
+
+	########################
+	# NetBT transport
+	########################
+
+	# define path and name for NetBT settings on interface
+	$RegistryValuePath = 'HKLM:\SYSTEM\CurrentControlSet\Services\NetBT\Parameters\Interfaces\Tcpip_{0}' -f $NetAdapter.InterfaceGuid
+	$RegistryValueName = 'NetbiosOptions'
+
+	# retrieve current value
+	try {
+		$RegistryValue = Get-ItemPropertyValue -Path $RegistryValuePath -Name $RegistryValueName -ErrorAction 'Stop'
+	}
+	catch {
+		Write-Error -Message ("$Hostname,$NetAdapterName - could not retrieve NetBT options for adapter: $($_.Exception.Message)")
+		continue NextVMNetworkAdapterEntry
+	}
+
+	# if NetBIOS transport already disabled...
+	if ($RegistryValue -eq 2) {
+		# report state
+		Write-Host ("$Hostname,$NetAdapterName - ...found NetBT transport already disabled; checking IP address...")
+	}
+	else {
+		# disable NetBIOS transport
+		try {
+			$null = Set-ItemProperty -Path $RegistryValuePath -Name $RegistryValueName -Value 2 -ErrorAction 'Stop'
+		}
+		catch {
+			Write-Warning -Message ("$Hostname,$NetAdapterName - could not disable NetBT on adapter: $($_.Exception.Message)")
+			continue NextVMNetworkAdapterEntry
+		}
+
+		# report state
+		Write-Host ("$Hostname,$NetAdapterName - ...disabled NetBT transport; checking IP address...")
+	}
 
 	# retrieve current IP address and prefix on network adapter
 	try {
@@ -168,6 +224,10 @@ catch {
 		Write-Warning -Message ("$Hostname,$NetAdapterName - could not retrieve current IP addresses: $($_.Exception.Message)")
 		continue NextVMNetworkAdapterEntry
 	}
+
+	########################
+	# IP address
+	########################
 
 	# if BOTH current IP address and prefix length match defined values...
 	if ($NetIPAddress.IPAddress -eq $VMNetworkAdapterEntry.IPAddress -and $NetIPAddress.PrefixLength -eq $VMNetworkAdapterEntry.PrefixLength) {
@@ -197,6 +257,10 @@ catch {
 		Write-Host ("$Hostname,$NetAdapterName - ...configured IP address")
 	}
 
+	########################
+	# local JSON data
+	########################
+	
 	# add network adapter configuration to local JSON data
 	$LocalJsonData += $VMNetworkAdapterEntry
 }
