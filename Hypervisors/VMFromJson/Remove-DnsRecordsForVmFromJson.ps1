@@ -1,5 +1,6 @@
 #requires -Modules ActiveDirectory,DnsServer,DnsClient
 
+[CmdletBinding(SupportsShouldProcess)]
 param(
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
@@ -204,17 +205,23 @@ catch {
 					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 				}
 
-				# retrieve existing DNS record
-				try {
-					Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
-				}
-				catch {
-					Write-Warning -Message "could not remove '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
-					return $_
-				}
+				# define should process target
+				$ShouldProcessTarget = '{0}.{1}' -f $Name, $ZoneName
+				
+				# if WhatIf provided...
+				if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
+					# retrieve existing DNS record
+					try {
+						Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
+					}
+					catch {
+						Write-Warning -Message "could not remove '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+						return $_
+					}
 
-				# report state
-				Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
+					# report state
+					Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
+				}
 			}
 			'AAAA' {
 				# get existing IPv6 address as string for reporting
@@ -275,17 +282,23 @@ catch {
 					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 				}
 
-				# retrieve existing DNS record
-				try {
-					Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
-				}
-				catch {
-					Write-Warning -Message "could not remove '$RRType' DNS record for '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
-					return $_
-				}
+				# define should process target
+				$ShouldProcessTarget = '{0}.{1}' -f $Name, $ZoneName
+				
+				# if WhatIf provided...
+				if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
+					# retrieve existing DNS record
+					try {
+						Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
+					}
+					catch {
+						Write-Warning -Message "could not remove '$RRType' DNS record for '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+						return $_
+					}
 
-				# report state
-				Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name in '$ZoneName' zone on '$Server' server"
+					# report state
+					Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name in '$ZoneName' zone on '$Server' server"
+				}
 			}
 		}
 	}
@@ -389,17 +402,23 @@ catch {
 						ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 					}
 
-					# retrieve existing DNS record
-					try {
-						Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
-					}
-					catch {
-						Write-Warning -Message "could not remove '$RRType' DNS record with '$RRName' name for '$Name' computer in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
-						return $_
-					}
+					# define should process target
+					$ShouldProcessTarget = '{0}.{1}' -f $RRName, $ZoneName
+				
+					# if WhatIf provided...
+					if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
+						# retrieve existing DNS record
+						try {
+							Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
+						}
+						catch {
+							Write-Warning -Message "could not remove '$RRType' DNS record with '$RRName' name for '$Name' computer in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+							return $_
+						}
 
-					# report state
-					Write-Host "$Hostname,$Name - removed '$RRType' DNS record with '$RRName' name for '$Name' computer in '$ZoneName' zone on '$Server' server"
+						# report state
+						Write-Host "$Hostname,$Name - removed '$RRType' DNS record with '$RRName' name for '$Name' computer in '$ZoneName' zone on '$Server' server"
+					}
 				}
 			}
 		}
@@ -483,17 +502,23 @@ catch {
 					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 				}
 
-				# retrieve existing DNS record
-				try {
-					Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
-				}
-				catch {
-					Write-Warning -Message "could not remove '$RRType' DNS record with '$RRName' name for '$Name' computer in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
-					return $_
-				}
+				# define should process target
+				$ShouldProcessTarget = '{0}.{1}' -f $RRName, $ZoneName
+				
+				# if WhatIf provided...
+				if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
+					# retrieve existing DNS record
+					try {
+						Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
+					}
+					catch {
+						Write-Warning -Message "could not remove '$RRType' DNS record with '$RRName' name for '$Name' computer in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+						return $_
+					}
 
-				# report state
-				Write-Host "$Hostname,$Name - removed '$RRType' DNS record with '$RRName' name for '$Name' computer in '$ZoneName' zone on '$Server' server"
+					# report state
+					Write-Host "$Hostname,$Name - removed '$RRType' DNS record with '$RRName' name for '$Name' computer in '$ZoneName' zone on '$Server' server"
+				}
 			}
 		}
 	}
