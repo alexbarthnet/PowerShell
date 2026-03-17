@@ -81,6 +81,21 @@ catch {
 	# retrieve server from domain object
 	$Server = $DomainObject.PDCEmulator
 
+	# define parameters
+	$GetDnsServerZone = @{
+		ComputerName = $Server
+		ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+	}
+
+	# retrieve DNS zone for looking up zones
+	try {
+		$DnsServerZones = Get-DnsServerZone @GetDnsServerZone
+	}
+	catch {
+		Write-Warning -Message "could not retrieve zones on '$Server' server: $($_.Exception.Message)"
+		continue NextVMName
+	}
+
 	# create list for IP address objects
 	$IPAddresses = [System.Collections.Generic.List[System.Net.IPAddress]]::new()
 
@@ -111,24 +126,14 @@ catch {
 	# forward records
 	####################
 
-	# define parameters
-	$GetDnsServerZone = @{
-		ComputerName = $Server
-		Name         = $DomainName
-		ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
-	}
-
-	# retrieve DNS zone for looking up zones
-	try {
-		$DnsServerZone = Get-DnsServerZone @GetDnsServerZone
-	}
-	catch {
-		Write-Warning -Message "could not retrieve zone for '$DomainName' domain on '$Server' server"
-		continue NextGroup
+	# if domain name not found in zones...
+	if ($DomainName -notin $DnsServerZones.ZoneName) {
+		Write-Warning -Message "could not find zone for '$DomainName' domain on '$Server' server"
+		continue NextVMName
 	}
 
 	# assign zone name
-	$ZoneName = $DnsServerZone.ZoneName
+	$ZoneName = $DomainName
 
 	# define parameters
 	$GetDnsServerResourceRecord = @{
