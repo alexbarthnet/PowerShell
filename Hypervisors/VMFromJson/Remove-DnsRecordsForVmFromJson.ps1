@@ -371,6 +371,22 @@ catch {
 					$RecordName, $ZoneName = $DnsRecord.Name.Split('.', 2)
 
 					# define parameters
+					$GetDnsServerZone = @{
+						ComputerName = $Server
+						Name         = $ZoneName
+						ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+					}
+
+					# validate zone exists
+					try {
+						$null = Get-DnsServerZone -ComputerName $Server -Name $ZoneName -ErrorAction 'Stop'
+					}
+					catch {
+						Write-Warning -Message "could not locate '$ZoneName' zone on '$Server' server"
+						continue NextReverseDnsRecord
+					}
+
+					# define parameters
 					$RemoveDnsServerResourceRecord = @{
 						ComputerName = $Server
 						ZoneName     = $ZoneName
