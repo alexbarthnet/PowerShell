@@ -412,4 +412,92 @@ catch {
 			}
 		}
 	}
+
+	####################
+	# service records
+	####################
+
+	# if domain name not found in zones...
+	if ($DomainName -notin $DnsServerZones.ZoneName) {
+		Write-Warning -Message "could not find zone for '$DomainName' domain on '$Server' server"
+		continue NextVMName
+	}
+
+	# assign zone name
+	$ZoneName = $DomainName
+
+	# define DNS host name with dot-terminator
+	$DnsHostNameWithDot = '{0}.{1}.' -f $Name, $DomainName
+
+	# define parameters
+	$GetDnsServerResourceRecord = @{
+		ComputerName = $Server
+		ZoneName     = $ZoneName
+		RRType       = 'SRV'
+		ErrorAction  = [System.Management.Automation.ActionPreference]::Ignore
+	}
+
+	# retrieve existing DNS records from DNS
+	try {
+		$DnsServerResourceRecords = Get-DnsServerResourceRecord @GetDnsServerResourceRecord | Where-Object { $_.RecordData.DomainName -eq $DnsHostNameWithDot }
+	}
+	catch {
+		Write-Warning -Message "could not retrieve service DNS records for '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+		return $_
+	}
+
+	# get count of DNS records
+	try {
+		$DnsServerResourceRecordCount = Measure-Object -InputObject $DnsServerResourceRecords | Select-Object -ExpandProperty 'Count'
+	}
+	catch {
+		Write-Warning -Message "could not retrieve count of service DNS records for '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+		continue NextVMName
+	}
+
+	# report count
+	Write-Host "$Hostname,$Name - found '$DnsServerResourceRecordCount' service DNS records for '$Name' name in '$ZoneName' zone on '$Server' server"
+
+	# create lists for IPv4 and IPv6 addresses
+	$IPAddressesFromDnsRecords = [System.Collections.Generic.List[string]]::new()
+
+	# loop through DNS records to remove expired DNS records
+	:NextDnsServerResourceRecord foreach ($DnsServerResourceRecord in $DnsServerResourceRecords) {
+		# assign record name to object
+		$RRName = $DnsServerResourceRecord.Name
+
+		# assign record type to object
+		$RRType = $DnsServerResourceRecord.RecordType
+
+		# define record data array
+		$RecordData = @(
+			$DnsServerResourceRecord.RecordData.Priority
+			$DnsServerResourceRecord.RecordData.Weight
+			$DnsServerResourceRecord.RecordData.Port
+			$DnsServerResourceRecord.RecordData.DomainName
+		)
+
+		# define parameters
+		$RemoveDnsServerResourceRecord = @{
+			ComputerName = $Server
+			ZoneName     = $ZoneName
+			Name         = $RRName
+			RRType       = $RRType
+			RecordData   = $RecordData
+			Force        = $true
+			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# retrieve existing DNS record
+		try {
+			Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
+		}
+		catch {
+			Write-Warning -Message "could not remove '$RRType' DNS record with '$RRName' name for '$Name' computer in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+			return $_
+		}
+
+		# report state
+		Write-Host "$Hostname,$Name - removed '$RRType' DNS record with '$RRName' name for '$Name' computer in '$ZoneName' zone on '$Server' server"
+	}
 }
