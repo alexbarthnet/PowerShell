@@ -145,30 +145,30 @@ catch {
 
 	# retrieve existing DNS records from DNS
 	try {
-		$DnsServerResourceRecords = Get-DnsServerResourceRecord @GetDnsServerResourceRecord
+		$ForwardDnsServerResourceRecords = Get-DnsServerResourceRecord @GetDnsServerResourceRecord
 	}
 	catch {
-		Write-Warning -Message "could not retrieve DNS records for '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+		Write-Warning -Message "could not retrieve forward DNS records for '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
 		return $_
 	}
 
 	# get count of DNS records
 	try {
-		$DnsServerResourceRecordCount = Measure-Object -InputObject $DnsServerResourceRecords | Select-Object -ExpandProperty 'Count'
+		$ForwardDnsServerResourceRecordCount = Measure-Object -InputObject $ForwardDnsServerResourceRecords | Select-Object -ExpandProperty 'Count'
 	}
 	catch {
-		Write-Warning -Message "could not retrieve count of DNS records for '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
-		continue NextADObject
+		Write-Warning -Message "could not retrieve count of forward DNS records for '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+		continue NextVMName
 	}
 
 	# report count
-	Write-Host "$Hostname,$Name - found '$DnsServerResourceRecordCount' DNS records for '$Name' name in '$ZoneName' zone on '$Server' server"
+	Write-Host "$Hostname,$Name - found '$ForwardDnsServerResourceRecordCount' forward DNS records for '$Name' name in '$ZoneName' zone on '$Server' server"
 
 	# create lists for IPv4 and IPv6 addresses
 	$IPAddressesFromDnsRecords = [System.Collections.Generic.List[string]]::new()
 
 	# loop through DNS records to remove expired DNS records
-	:NextDnsServerResourceRecord foreach ($DnsServerResourceRecord in $DnsServerResourceRecords) {
+	:NextForwardDnsServerResourceRecord foreach ($DnsServerResourceRecord in $ForwardDnsServerResourceRecords) {
 		# assign record type to object
 		$RRType = $DnsServerResourceRecord.RecordType
 
@@ -262,7 +262,7 @@ catch {
 				# if no IP addresses retrieved from network adapters...
 				if ($IPAddresses.Count -eq 0 -or -not $RemoveOtherRecords) {
 					Write-Host "$Hostname,$Name - found existing '$RRType' DNS record for '$Name' name in '$ZoneName' zone on '$Server' server"
-					continue NextDnsServerResourceRecord
+					continue NextForwardDnsServerResourceRecord
 				}
 
 				# define parameters
@@ -359,7 +359,7 @@ catch {
 		}
 
 		# loop through DNS names
-		:NextDnsRecord foreach ($DnsRecord in $DnsRecords) {
+		:NextReverseDnsRecord foreach ($DnsRecord in $DnsRecords) {
 			# assign record type and data to objects
 			$RRType = $DnsRecord.Type
 			$RecordData = $DnsRecord.NameHost
