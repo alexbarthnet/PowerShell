@@ -132,7 +132,7 @@ catch {
 	}
 
 	# define optional parameters
-	If ($script:Force) {
+	if ($script:Force) {
 		$RemoveADObject['Confirm'] = $false
 	}
 
