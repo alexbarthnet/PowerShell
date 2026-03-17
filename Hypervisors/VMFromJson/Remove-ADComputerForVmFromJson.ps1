@@ -103,6 +103,9 @@ catch {
 		ErrorAction = 'Stop'
 	}
 
+	# report state
+	Write-Host "$Hostname,$Name - checking computer object..."
+
 	# retrieve computer object
 	try {
 		$ComputerObject = Get-ADComputer @GetADComputer
