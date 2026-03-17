@@ -116,8 +116,20 @@ catch {
 		continue NextVMName
 	}
 	catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
-		Write-Warning -Message "could not locate computer with '$Name' name on '$Server' server for '$DomainName' domain"
-		continue NextVMName
+		# report state
+		Write-Host "$Hostname,$Name - ...computer object not found in expected container; checking for computer object in default container..."
+
+		# redefine identity for computer object in default computer container
+		$GetADComputer['Identity'] = 'CN={0},{1}' -f $Name, $DomainObject.ComputersContainer
+		
+		# retrieve computer object in default computer container
+		try {
+			$ComputerObject = Get-ADComputer @GetADComputer
+		}
+		catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
+			Write-Warning -Message "could not locate computer with '$Name' name on '$Server' server for '$DomainName' domain"
+			continue NextVMName
+		}
 	}
 	catch {
 		Write-Warning -Message "could not retrieve computer with '$Name' name on '$Server' server for '$DomainName' domain: $($_.Exception.Message)"
