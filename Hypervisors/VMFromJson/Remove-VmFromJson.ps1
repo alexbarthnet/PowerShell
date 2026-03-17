@@ -2024,6 +2024,7 @@ Process {
 		if ($null -ne $VMParentPath) {
 			# define expected VM child paths
 			$VMChildPaths = @(
+				'Planned Virtual Machines' # created by Hyper-V replication
 				'Snapshots' # created by Hyper-V replication
 				'UndoLog Configuration' # created by Hyper-V replication
 				'Virtual Machines' # default folder for Hyper-V VM state
