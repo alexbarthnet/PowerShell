@@ -100,6 +100,7 @@ catch {
 	$GetADComputer = @{
 		Identity    = $Identity
 		Server      = $Server
+		Properties  = 'ServerReferenceBL'
 		ErrorAction = 'Stop'
 	}
 
@@ -124,7 +125,44 @@ catch {
 	}
 
 	# report state
-	Write-Host "$Hostname,$Name - computer object found; removing computer object..."
+	Write-Host "$Hostname,$Name - ...computer object found; checking properties..."
+
+	# if server reference present...
+	if ($ADComputer.ServerReferenceBL.Count) {
+		# report state
+		Write-Host "$Hostname,$Name - ...server references found; removing server references..."
+
+		# loop through server references...
+		:NextServerReference foreach ($ServerReference in $ADComputer.ServerReferenceBL) {
+			# define required parameters
+			$RemoveADObject = @{
+				Identity    = $ServerReference
+				Server      = $Server
+				Recursive   = $true
+				ErrorAction = 'Stop'
+			}
+
+			# define optional parameters
+			if ($script:Force) {
+				$RemoveADObject['Confirm'] = $false
+			}
+
+			# remove computer object
+			try {
+				Remove-ADObject @RemoveADObject
+			}
+			catch {
+				Write-Warning -Message "could not remove '$ServerReference' object on '$Server' server for '$DomainName' domain"
+				continue NextServerReference
+			}
+
+			# report state
+			Write-Host "$Hostname,$Name - ...removed server reference: $ServerReference"
+		}
+	}
+
+	# report state
+	Write-Host "$Hostname,$Name - ...properties checked; removing computer object..."
 
 	# define required parameters
 	$RemoveADObject = @{
