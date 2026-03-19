@@ -1,5 +1,6 @@
 #requires -Modules ActiveDirectory,DnsServer
 
+[CmdletBinding(SupportsShouldProcess)]
 param(
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
@@ -150,26 +151,28 @@ catch {
 			$RemoveADObject = @{
 				Identity    = $ServerReference
 				Server      = $Server
+				Confirm     = $false
 				Recursive   = $true
 				ErrorAction = 'Stop'
 			}
 
-			# define optional parameters
-			if ($script:Force) {
-				$RemoveADObject['Confirm'] = $false
-			}
+			# define should process target
+			$ShouldProcessTarget = $ServerReference
+				
+			# if WhatIf provided...
+			if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
+				# remove computer object
+				try {
+					Remove-ADObject @RemoveADObject
+				}
+				catch {
+					Write-Warning -Message "could not remove '$ServerReference' object on '$Server' server for '$DomainName' domain"
+					continue NextServerReference
+				}
 
-			# remove computer object
-			try {
-				Remove-ADObject @RemoveADObject
+				# report state
+				Write-Host "$Hostname,$Name - ...removed server reference: $ServerReference"
 			}
-			catch {
-				Write-Warning -Message "could not remove '$ServerReference' object on '$Server' server for '$DomainName' domain"
-				continue NextServerReference
-			}
-
-			# report state
-			Write-Host "$Hostname,$Name - ...removed server reference: $ServerReference"
 		}
 	}
 
@@ -180,24 +183,26 @@ catch {
 	$RemoveADObject = @{
 		Identity    = $ComputerObject
 		Server      = $Server
+		Confirm     = $false
 		Recursive   = $true
 		ErrorAction = 'Stop'
 	}
 
-	# define optional parameters
-	if ($script:Force) {
-		$RemoveADObject['Confirm'] = $false
-	}
+	# define should process target
+	$ShouldProcessTarget = $ComputerObject
+				
+	# if WhatIf provided...
+	if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
+		# remove computer object
+		try {
+			Remove-ADObject @RemoveADObject
+		}
+		catch {
+			Write-Warning -Message "could not remove computer object with '$Name' name on '$Server' server for '$DomainName' domain"
+			continue NextVMName
+		}
 
-	# remove computer object
-	try {
-		Remove-ADObject @RemoveADObject
+		# report state
+		Write-Host "$Hostname,$Name - ...computer object removed"
 	}
-	catch {
-		Write-Warning -Message "could not remove computer object with '$Name' name on '$Server' server for '$DomainName' domain"
-		continue NextVMName
-	}
-
-	# report state
-	Write-Host "$Hostname,$Name - ...computer object removed"
 }

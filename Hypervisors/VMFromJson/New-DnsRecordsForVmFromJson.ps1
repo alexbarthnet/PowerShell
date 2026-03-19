@@ -135,6 +135,12 @@ catch {
 		continue NextVMName
 	}
 
+	# retrieve all VM network adapters
+	$VMNetworkAdapters = $JsonData.$Name.VMNetworkAdapters
+
+	# filter named VM network adapters without skip provisioning configured
+	$VMNetworkAdapters = $VMNetworkAdapters | Where-Object { $null -eq $_.SkipDuringProvisioning -or $_.SkipDuringProvisioning -eq $false }
+
 	# define identities list
 	$Identities = [System.Collections.Generic.SortedDictionary[string, string]]::new()
 
@@ -142,7 +148,7 @@ catch {
 	$IPAddresses = [System.Collections.Generic.List[System.Net.IPAddress]]::new()
 
 	# loop through VMNetwork adapters
-	:NextVMNetworkAdapter foreach ($VMNetworkAdapter in $JsonData.$Name.VMNetworkAdapters) {
+	:NextVMNetworkAdapter foreach ($VMNetworkAdapter in $VMNetworkAdapters) {
 		# if VM network adapter does not have a name or an IP address...
 		if ([string]::IsNullOrEmpty($VMNetworkAdapter.NetworkAdapterName) -or [string]::IsNullOrEmpty($VMNetworkAdapter.IPAddress)) {
 			continue NextVMNetworkAdapter

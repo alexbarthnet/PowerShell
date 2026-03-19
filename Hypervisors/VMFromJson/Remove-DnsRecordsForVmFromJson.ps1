@@ -1,5 +1,6 @@
 #requires -Modules ActiveDirectory,DnsServer,DnsClient
 
+[CmdletBinding(SupportsShouldProcess)]
 param(
 	[Parameter(DontShow)]
 	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
@@ -126,14 +127,14 @@ catch {
 	# forward records
 	####################
 
-	# if domain name not found in zones...
-	if ($DomainName -notin $DnsServerZones.ZoneName) {
-		Write-Warning -Message "could not find zone for '$DomainName' domain on '$Server' server"
+	# assign zone name from domain name
+	$ZoneName = $DomainName
+
+	# if zone name not found in zones...
+	if ($ZoneName -notin $DnsServerZones.ZoneName) {
+		Write-Warning -Message "could not find zone for '$ZoneName' domain on '$Server' server"
 		continue NextVMName
 	}
-
-	# assign zone name
-	$ZoneName = $DomainName
 
 	# define parameters
 	$GetDnsServerResourceRecord = @{
@@ -204,17 +205,23 @@ catch {
 					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 				}
 
-				# retrieve existing DNS record
-				try {
-					Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
-				}
-				catch {
-					Write-Warning -Message "could not remove '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
-					return $_
-				}
+				# define should process target
+				$ShouldProcessTarget = '{0}.{1}' -f $Name, $ZoneName
+				
+				# if WhatIf provided...
+				if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
+					# retrieve existing DNS record
+					try {
+						Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
+					}
+					catch {
+						Write-Warning -Message "could not remove '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+						return $_
+					}
 
-				# report state
-				Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
+					# report state
+					Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
+				}
 			}
 			'AAAA' {
 				# get existing IPv6 address as string for reporting
@@ -258,7 +265,7 @@ catch {
 				# report state
 				Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
 			}
-			Default {
+			default {
 				# if no IP addresses retrieved from network adapters...
 				if ($IPAddresses.Count -eq 0 -or -not $RemoveOtherRecords) {
 					Write-Host "$Hostname,$Name - found existing '$RRType' DNS record for '$Name' name in '$ZoneName' zone on '$Server' server"
@@ -275,17 +282,23 @@ catch {
 					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 				}
 
-				# retrieve existing DNS record
-				try {
-					Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
-				}
-				catch {
-					Write-Warning -Message "could not remove '$RRType' DNS record for '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
-					return $_
-				}
+				# define should process target
+				$ShouldProcessTarget = '{0}.{1}' -f $Name, $ZoneName
+				
+				# if WhatIf provided...
+				if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
+					# retrieve existing DNS record
+					try {
+						Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
+					}
+					catch {
+						Write-Warning -Message "could not remove '$RRType' DNS record for '$Name' name in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+						return $_
+					}
 
-				# report state
-				Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name in '$ZoneName' zone on '$Server' server"
+					# report state
+					Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name in '$ZoneName' zone on '$Server' server"
+				}
 			}
 		}
 	}
@@ -324,7 +337,7 @@ catch {
 				continue NextIPAddressFromDnsRecord
 
 			}
-			Default {
+			default {
 				Write-Warning -Message "found unknown '$($IPAddress.AddressFamily)' address family for '$IPAddressFromDnsRecord' IP address: $($_.Exception.Message)"
 				continue NextIPAddressFromDnsRecord
 			}
@@ -360,29 +373,21 @@ catch {
 
 		# loop through DNS names
 		:NextReverseDnsRecord foreach ($DnsRecord in $DnsRecords) {
-			# assign record type and data to objects
+			# assign record data to object
+			$RRData = $DnsRecord.NameHost
+
+			# assign record type to object
 			$RRType = $DnsRecord.Type
-			$RecordData = $DnsRecord.NameHost
 
 			# switch on record type
 			switch ($RRType) {
 				'PTR' {
-					# extract actual record name and zone
-					$RecordName, $ZoneName = $DnsRecord.Name.Split('.', 2)
+					# extract record name and zone name from resolved DNS name
+					$RRName, $ZoneName = $DnsRecord.Name.Split('.', 2)
 
-					# define parameters
-					$GetDnsServerZone = @{
-						ComputerName = $Server
-						Name         = $ZoneName
-						ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
-					}
-
-					# validate zone exists
-					try {
-						$null = Get-DnsServerZone -ComputerName $Server -Name $ZoneName -ErrorAction 'Stop'
-					}
-					catch {
-						Write-Warning -Message "could not locate '$ZoneName' zone on '$Server' server"
+					# if zone name not found in zones...
+					if ($ZoneName -notin $DnsServerZones.ZoneName) {
+						Write-Host "$Hostname,$Name - skipping removal of '$RRType' DNS records with '$RRName' name for '$Name' computer; could not find '$ZoneName' zone on '$Server' server"
 						continue NextReverseDnsRecord
 					}
 
@@ -390,24 +395,30 @@ catch {
 					$RemoveDnsServerResourceRecord = @{
 						ComputerName = $Server
 						ZoneName     = $ZoneName
-						Name         = $Name
+						Name         = $RRName
 						RRType       = $RRType
-						RecordData   = $RecordData
+						RecordData   = $RRData
 						Force        = $true
 						ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 					}
 
-					# retrieve existing DNS record
-					try {
-						Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
-					}
-					catch {
-						Write-Warning -Message "could not remove '$RRType' DNS record for '$Name' name with '$RecordData' value in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
-						return $_
-					}
+					# define should process target
+					$ShouldProcessTarget = '{0}.{1}' -f $RRName, $ZoneName
+				
+					# if WhatIf provided...
+					if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
+						# retrieve existing DNS record
+						try {
+							Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
+						}
+						catch {
+							Write-Warning -Message "could not remove '$RRType' DNS record with '$RRName' name for '$Name' computer in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+							return $_
+						}
 
-					# report state
-					Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name with '$RecordData' value in '$ZoneName' zone on '$Server' server"
+						# report state
+						Write-Host "$Hostname,$Name - removed '$RRType' DNS record with '$RRName' name for '$Name' computer in '$ZoneName' zone on '$Server' server"
+					}
 				}
 			}
 		}
@@ -417,14 +428,14 @@ catch {
 	# service records
 	####################
 
-	# if domain name not found in zones...
-	if ($DomainName -notin $DnsServerZones.ZoneName) {
-		Write-Warning -Message "could not find zone for '$DomainName' domain on '$Server' server"
+	# assign zone name from domain name
+	$ZoneName = $DomainName
+
+	# if zone name not found in zones...
+	if ($ZoneName -notin $DnsServerZones.ZoneName) {
+		Write-Warning -Message "could not find zone for '$ZoneName' domain on '$Server' server"
 		continue NextVMName
 	}
-
-	# assign zone name
-	$ZoneName = $DomainName
 
 	# define DNS host name with dot-terminator
 	$DnsHostNameWithDot = '{0}.{1}.' -f $Name, $DomainName
@@ -469,35 +480,46 @@ catch {
 		# assign record type to object
 		$RRType = $DnsServerResourceRecord.RecordType
 
-		# define record data array
-		$RecordData = @(
-			$DnsServerResourceRecord.RecordData.Priority
-			$DnsServerResourceRecord.RecordData.Weight
-			$DnsServerResourceRecord.RecordData.Port
-			$DnsServerResourceRecord.RecordData.DomainName
-		)
+		# switch on record type
+		switch ($RRType) {
+			'SRV' {
+				# define record data array
+				$RecordData = @(
+					$DnsServerResourceRecord.RecordData.Priority
+					$DnsServerResourceRecord.RecordData.Weight
+					$DnsServerResourceRecord.RecordData.Port
+					$DnsServerResourceRecord.RecordData.DomainName
+				)
 
-		# define parameters
-		$RemoveDnsServerResourceRecord = @{
-			ComputerName = $Server
-			ZoneName     = $ZoneName
-			Name         = $RRName
-			RRType       = $RRType
-			RecordData   = $RecordData
-			Force        = $true
-			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
-		}
+				# define parameters
+				$RemoveDnsServerResourceRecord = @{
+					ComputerName = $Server
+					ZoneName     = $ZoneName
+					Name         = $RRName
+					RRType       = $RRType
+					RecordData   = $RecordData
+					Force        = $true
+					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+				}
 
-		# retrieve existing DNS record
-		try {
-			Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
-		}
-		catch {
-			Write-Warning -Message "could not remove '$RRType' DNS record with '$RRName' name for '$Name' computer in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
-			return $_
-		}
+				# define should process target
+				$ShouldProcessTarget = '{0}.{1}' -f $RRName, $ZoneName
+				
+				# if WhatIf provided...
+				if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
+					# retrieve existing DNS record
+					try {
+						Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
+					}
+					catch {
+						Write-Warning -Message "could not remove '$RRType' DNS record with '$RRName' name for '$Name' computer in '$ZoneName' zone on '$Server' server: $($_.Exception.Message)"
+						return $_
+					}
 
-		# report state
-		Write-Host "$Hostname,$Name - removed '$RRType' DNS record with '$RRName' name for '$Name' computer in '$ZoneName' zone on '$Server' server"
+					# report state
+					Write-Host "$Hostname,$Name - removed '$RRType' DNS record with '$RRName' name for '$Name' computer in '$ZoneName' zone on '$Server' server"
+				}
+			}
+		}
 	}
 }
