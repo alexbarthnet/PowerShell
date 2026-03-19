@@ -1,7 +1,9 @@
 [CmdletBinding(SupportsShouldProcess)]
 Param(
-	[Parameter(Position = 0)]
-	[string]$Url
+	[Parameter(Position = 0, Mandatory)]
+	[string]$Url,
+	[Parameter(Position = 1)]
+	[string]$Name = '*'
 )
 
 Function Assert-ItemPropertyValue {
@@ -64,8 +66,17 @@ Function Assert-ItemPropertyValue {
 
 }
 
+# retrieve child items from registry
+$Configurations = Get-ChildItem -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\CertSvc\Configuration' | Where-Object { $_.PSChildName -like $Name }
+
+# if configurations is an array...
+if ($Configurations -is [array]) {
+	Write-Warning -Message "multiple configurations found; use 'Name' parameter to define a single configuration"
+	return
+}
+
 # retrieve required values from registry
-$Path = (Get-ChildItem -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\CertSvc\Configuration').PSPath
+$Path = $Configurations.PSPath
 
 # if URL not provided...
 if (!$PSBoundParameters.ContainsKey('Url')) {
