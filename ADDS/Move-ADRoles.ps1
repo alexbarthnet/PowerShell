@@ -55,7 +55,7 @@ If ($ADDomainController.OperationMasterRoles.Count -eq 0) {
 
 # get other domain controller in same site
 Try {
-	$ADDomainControllersInSite = Get-ADDomainController -Filter "Site -eq '$SiteName'" | Where-Object { $_.HostName -ne $DnsHostName } | Sort-Object -Property Name
+	$ADDomainControllersInSite = Get-ADDomainController -Filter "Site -eq '$SiteName'" | Where-Object { $_.HostName -ne $DnsHostName -and -not $_.IsReadOnly } | Sort-Object -Property Name
 }
 Catch {
 	Return $_
@@ -64,7 +64,7 @@ Catch {
 # if other domain controllers not found...
 If ($null -eq $ADDomainControllersInSite) {
 	# warn and return
-	Write-Warning -Message "no other domain controllers found in site: '$($ADDomainController.Site)'"
+	Write-Warning -Message "no other writable domain controllers found in site: '$($ADDomainController.Site)'"
 	Return
 }
 
