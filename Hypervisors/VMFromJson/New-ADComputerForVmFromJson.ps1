@@ -164,6 +164,10 @@ catch {
 	# add computer to identities list
 	$Identities.Add($Name, $Identity)
 
+	################################
+	# add computer to groups
+	################################
+
 	# loop through groups
 	:NextGroup foreach ($Group in $JsonData.$Name.ADComputer.Groups) {
 		# report state
