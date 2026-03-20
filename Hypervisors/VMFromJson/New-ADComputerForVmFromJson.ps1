@@ -101,6 +101,10 @@ catch {
 	# report state
 	Write-Host ("$Hostname,$Name - ...located PDCEmulator: $Server")
 
+	################################
+	# create computer object
+	################################
+
 	# report state
 	Write-Host ("$Hostname,$Name - checking computer object...")
 
@@ -222,6 +226,10 @@ catch {
 		Write-Host ("$Hostname,$Name - ...added computer to group")
 	}
 
+	################################
+	# add computer to silos
+	################################
+
 	# loop through silos
 	:NextSilo foreach ($Silo in $JsonData.$Name.ADComputer.Silos) {
 		# report state
@@ -322,6 +330,10 @@ catch {
 		Filter      = 'IsGlobalCatalog -eq $true -and -not IsReadOnly -eq $true -and -not HostName -eq "{0}"' -f $Server
 		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 	}
+
+	################################
+	# sync objects across domain
+	################################
 
 	# retrieve domain controllers
 	try {
