@@ -1,5 +1,265 @@
 #Requires -Modules ActiveDirectory
 
+function Convert-GuidToOctetString {
+	<#
+	.SYNOPSIS
+	Converts a GUID into an escaped octet string for LDAP queries against Active Directory.
+
+	.DESCRIPTION
+	Converts a GUID into an escaped octet string for LDAP queries against Active Directory.
+
+	.PARAMETER Guid
+	The GUID to convert to an escaped octet string.
+
+	.PARAMETER Server
+	Specifies the server to query for the control access right.
+
+	.INPUTS
+	System.Guid.
+
+	.OUTPUTS
+	System.String
+
+	.EXAMPLE
+	PS> Convert-GuidToOctetString -Guid '00000000-0000-0000-0000-000000000000'
+	#>
+
+	[CmdletBinding()]
+	param (
+		# string for the display name of the control access right object
+		[Parameter(Mandatory = $true, Position = 0, ValueFromPipeline)]
+		[guid]$Guid
+	)
+
+	# define empty octet string
+	$OctetString = [string]::Empty
+
+	# convert GUID to byte array
+	$ByteArray = $Guid.ToByteArray()
+
+	# loop through byte array
+	foreach ($Byte in $ByteArray) {
+		# format byte as hexadecimal with backslash as the escape character
+		$OctetString += '\{0:X2}' -f $Byte
+	}
+
+	# return populated octet string
+	return $OctetString
+}
+
+function Get-ADControlAccessRight {
+	<#
+	.SYNOPSIS
+	Retrieve a control access right in Active Directory.
+
+	.DESCRIPTION
+	Retrieve a control access right in Active Directory.
+
+	.PARAMETER DisplayName
+	Specifies the value of the ldapDisplayName attribute of the control access right object.
+
+	.PARAMETER Server
+	Specifies the server to query for the control access right.
+
+	.INPUTS
+	System.String, System.Guid.
+
+	.OUTPUTS
+	None.
+
+	.EXAMPLE
+	PS> Get-ADControlAccessRight -DisplayName 'Account Restrictions'
+	#>
+
+	[CmdletBinding(DefaultParameterSetName = 'DisplayName')]
+	param (
+		# string for the display name of the control access right object
+		[Parameter(Mandatory = $true, Position = 0, ValueFromPipeline, ParameterSetName = 'DisplayName')]
+		[string]$DisplayName,
+		# string for the name of the control access right object
+		[Parameter(Mandatory = $true, Position = 0, ValueFromPipeline, ParameterSetName = 'Name')]
+		[string]$Name,
+		# string for the server to query for GUIDs of schema objects and extended rights, the default server is the current PDC role owner
+		[Parameter(Mandatory = $false)]
+		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
+	)
+
+	# build directory context from server
+	try {
+		$DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::new([System.DirectoryServices.ActiveDirectory.DirectoryContextType]::DirectoryServer, $Server)
+	}
+	catch {
+		throw $_
+	}
+
+	# retrieve schema from directory context
+	try {
+		$Schema = [System.DirectoryServices.ActiveDirectory.ActiveDirectorySchema]::GetSchema($DirectoryContext)
+	}
+	catch {
+		throw $_
+	}
+
+	# define parameters
+	$GetADObject = @{
+		Server      = $Server
+		SearchBase  = 'CN=Extended-Rights,{0}' -f $Schema.Name.Split(',', 2)[1]
+		Properties  = 'DisplayName', 'appliesTo', 'rightsGUID', 'validAccesses'
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+	}
+
+	# switch on parameter set
+	switch ($PSCmdlet.ParameterSetName) {
+		'DisplayName' {
+			# add filter to parameters
+			$GetADObject['Filter'] = 'displayName -eq "{0}"' -f $DisplayName
+		}
+		'Name' {
+			# add filter to parameters
+			$GetADObject['Filter'] = 'name -eq "{0}"' -f $Name
+		}
+	}
+
+	# reset 
+
+	# search for control access right
+	try {
+		$ControlAccessRight = Get-ADObject @GetADObject
+	}
+	catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
+		Write-Warning 'could not locate Control Access Right with provided parameters'
+		return
+	}
+	catch {
+		throw $_
+	}
+
+	# switch on valid accesses
+	# reference: https://learn.microsoft.com/en-us/windows/win32/ad/control-access-rights
+	switch ($ControlAccessRight.validAccesses) {
+		8 {
+			$ControlAccessRightType = 'Validated Write'
+		}
+		48 {
+			$ControlAccessRightType = 'Property Set'
+		}
+		256 {
+			$ControlAccessRightType = 'Extended Right'
+		}
+		default {
+			$ControlAccessRightType = 'Unknown'
+		}
+	}
+
+	# update control access right with type
+	try {
+		$ControlAccessRight.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('controlAccessRightType', $ControlAccessRightType))
+	}
+	catch {
+		throw $_
+	}
+
+	# convert GUID in rightsGUID to octet string for LDAP query
+	try {
+		$attributeSecurityGUID = Convert-GuidToOctetString -Guid $ControlAccessRight.rightsGUID
+	}
+	catch {
+		throw $_
+	}
+
+	# define parameters
+	$GetADObjectsWithRightsGuid = @{
+		Server      = $Server
+		SearchBase  = $Schema.Name
+		Filter      = 'attributeSecurityGUID -eq "{0}"' -f $attributeSecurityGUID
+		Properties  = 'ldapDisplayName'
+		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+	}
+
+	# retrieve schema objects with attribute security GUID matching rights GUID on control access right object
+	try {
+		$SchemaObjects = Get-ADObject @GetADObjectsWithRightsGuid
+	}
+	catch {
+		throw $_
+	}
+
+	# define list for LDAP display name of objects with attribute security GUID matching rights GUID on control access right object
+	$rightsGUIDattributes = [System.Collections.Generic.List[string]]::new()
+
+	# loop through schema objects
+	foreach ($SchemaObject in $SchemaObjects) {
+		# add LDAP display name of schema object to list
+		$rightsGUIDattributes.Add($SchemaObject.ldapDisplayName)
+	}
+
+	# if objects with rightsGUID as attribute security GUID found...
+	if ($rightsGUIDattributes.Count) {
+		# update control access right with type
+		try {
+			$ControlAccessRight.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('rightsGUIDattributes', $rightsGUIDattributes -as [string[]]))
+		}
+		catch {
+			throw $_
+		}
+	}
+
+	# define list for LDAP display name of appliesTo values
+	$appliesToObjects = [System.Collections.Generic.List[string]]::new()
+
+	# loop through appliesTo values
+	:NextAppliesToValue foreach ($AppliesToValue in $ControlAccessRight.appliesTo) {
+		# convert GUID in appliesTo value to octet string for LDAP query
+		try {
+			$schemaIDGUID = Convert-GuidToOctetString -Guid $AppliesToValue
+		}
+		catch {
+			throw $_
+		}
+
+		# define parameters
+		$GetADObject = @{
+			Server      = $Server
+			SearchBase  = $Schema.Name
+			Filter      = 'schemaIDGUID -eq "{0}"' -f $schemaIDGUID
+			Properties  = 'ldapDisplayName'
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# retrieve display name
+		try {
+			$SchemaObject = Get-ADObject @GetADObject
+		}
+		catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
+			Write-Warning -Message "could not locate schema object for '$AppliesToValue' GUID in 'appliesTo' property on '$($ControlAccessRight.DistinguishedName)' object"
+			continue NextAppliesToValue
+		}
+		catch {
+			throw $_
+		}
+
+		# if schema object found...
+		if ($null -ne $SchemaObject) {
+			# add LDAP display name of schema object to list
+			$appliesToObjects.Add($SchemaObject.ldapDisplayName)
+		}
+	}
+
+	# if objects in appliesTo attribute found...
+	if ($appliesToObjects.Count) {
+		# update control access right with type
+		try {
+			$ControlAccessRight.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('appliesToObjects', $appliesToObjects -as [string[]]))
+		}
+		catch {
+			throw $_
+		}
+	}
+
+	# return updated control access right object
+	return $ControlAccessRight
+}
+
 function Get-ADObjectTypeDefaultAccessRule {
 	<#
 	.SYNOPSIS
