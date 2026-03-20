@@ -1053,6 +1053,72 @@ function New-ADAccessRule {
 				# create ACE and add to array
 				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
+			'ComputerJoinSelf' {
+				# define ACE: allow 'WriteProperty' on the 'Account Restrictions' property set on 'this object only'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'WriteProperty'
+					type                = 'Allow'
+					objectType          = $Schema.FindControlAccessRight('User-Account-Restrictions').RightsGuid
+					inheritanceType     = 'None'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'Reset Password' on 'this object only'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'ExtendedRight'
+					type                = 'Allow'
+					objectType          = $Schema.FindControlAccessRight('User-Force-Change-Password').RightsGuid
+					inheritanceType     = 'None'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'Validated write to computer attributes' rights on 'this object only'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'Self'
+					type                = 'Allow'
+					objectType          = $Schema.FindControlAccessRight('DS-Validated-Write-Computer').RightsGuid
+					inheritanceType     = 'None'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'Validated write to DNS host name' rights on 'this object only'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'Self'
+					type                = 'Allow'
+					objectType          = $Schema.FindControlAccessRight('Validated-DNS-Host-Name').RightsGuid
+					inheritanceType     = 'None'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'Validated write to service principal name' rights on 'this object only'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'Self'
+					type                = 'Allow'
+					objectType          = $Schema.FindControlAccessRight('Validated-SPN').RightsGuid
+					inheritanceType     = 'None'
+					inheritedObjectType = [guid]::empty
+				}
+
+				# create ACE and add to array
+				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+			}
 			'ComputerRename' {
 				# define ACE: allow 'ReadProperty','WriteProperty' on the 'cn' attribute on descendent 'computer' objects
 				$Ace = @{
@@ -1127,6 +1193,85 @@ function New-ADAccessRule {
 					objectType          = $Schema.FindControlAccessRight('Validated-SPN').RightsGuid
 					inheritanceType     = 'Descendents'
 					inheritedObjectType = $Schema.FindClass('computer').SchemaGuid
+				}
+
+				# create ACE and add to array
+				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+			}
+			'ComputerRenameSelf' {
+				# define ACE: allow 'ReadProperty','WriteProperty' on the 'cn' attribute on 'this object only'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'WriteProperty'
+					type                = 'Allow'
+					objectType          = $Schema.FindProperty('cn').SchemaGuid
+					inheritanceType     = 'None'
+					inheritedObjectType = [guid]::Empty
+				}
+
+				# create ACE and add to array
+				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'ReadProperty','WriteProperty' on the 'sAMAccountName' attribute on 'this object only'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'WriteProperty'
+					type                = 'Allow'
+					objectType          = $Schema.FindProperty('sAMAccountName').SchemaGuid
+					inheritanceType     = 'None'
+					inheritedObjectType = [guid]::Empty
+				}
+
+				# create ACE and add to array
+				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'WriteProperty' on the 'Account Restrictions' property set on 'this object only'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'WriteProperty'
+					type                = 'Allow'
+					objectType          = $Schema.FindControlAccessRight('User-Account-Restrictions').RightsGuid
+					inheritanceType     = 'None'
+					inheritedObjectType = [guid]::Empty
+				}
+
+				# create ACE and add to array
+				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'Validated write to computer attributes' rights on 'this object only'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'Self'
+					type                = 'Allow'
+					objectType          = $Schema.FindControlAccessRight('DS-Validated-Write-Computer').RightsGuid
+					inheritanceType     = 'None'
+					inheritedObjectType = [guid]::Empty
+				}
+
+				# create ACE and add to array
+				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'Validated write to DNS host name' rights on 'this object only'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'Self'
+					type                = 'Allow'
+					objectType          = $Schema.FindControlAccessRight('Validated-DNS-Host-Name').RightsGuid
+					inheritanceType     = 'None'
+					inheritedObjectType = [guid]::Empty
+				}
+
+				# create ACE and add to array
+				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
+
+				# define ACE: allow 'Validated write to service principal name' rights on 'this object only'
+				$Ace = @{
+					objectSid           = $SecurityIdentifier
+					adRights            = 'Self'
+					type                = 'Allow'
+					objectType          = $Schema.FindControlAccessRight('Validated-SPN').RightsGuid
+					inheritanceType     = 'None'
+					inheritedObjectType = [guid]::Empty
 				}
 
 				# create ACE and add to array
