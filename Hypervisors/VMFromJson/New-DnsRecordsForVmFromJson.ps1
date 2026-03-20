@@ -267,7 +267,7 @@ catch {
 				}
 
 				# report state
-				Write-Host "$Hostname,$Name - removed '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
+				Write-Host "$Hostname,$Name - removed unexpected '$RRType' DNS record for '$Name' name with '$IPAddress' address in '$ZoneName' zone on '$Server' server"
 			}
 			'AAAA' {
 				# get existing IPv6 address as string for reporting
