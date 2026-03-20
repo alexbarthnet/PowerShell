@@ -210,7 +210,7 @@ catch {
 				
 				# if WhatIf provided...
 				if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
-					# retrieve existing DNS record
+					# remove existing DNS record
 					try {
 						Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
 					}
@@ -287,7 +287,7 @@ catch {
 				
 				# if WhatIf provided...
 				if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
-					# retrieve existing DNS record
+					# remove existing DNS record
 					try {
 						Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
 					}
@@ -407,7 +407,7 @@ catch {
 				
 					# if WhatIf provided...
 					if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
-						# retrieve existing DNS record
+						# remove existing DNS record
 						try {
 							Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
 						}
@@ -507,7 +507,7 @@ catch {
 				
 				# if WhatIf provided...
 				if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
-					# retrieve existing DNS record
+					# remove existing DNS record
 					try {
 						Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
 					}
