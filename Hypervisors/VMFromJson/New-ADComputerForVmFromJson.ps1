@@ -165,6 +165,82 @@ catch {
 	$Identities.Add($Name, $Identity)
 
 	################################
+	# update computer object
+	################################
+
+	# if join account present...
+	if (![string]::IsNullOrEmpty($JsonData.$Name.ADComputer.DomainJoinAccount)) {
+		# report state
+		Write-Host ("$Hostname,$Name - checking domain join account...")
+
+		# define identity for domain join account
+		$DomainJoinIdentity = $JsonData.$Name.ADComputer.DomainJoinAccount
+
+		# define parameters
+		$GetADUser = @{
+			Server      = $Server
+			Identity    = $DomainJoinIdentity
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# retrieve user object for domain join account
+		try {
+			$ADUser = Get-ADUser @GetADUser
+		}
+		catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
+			Write-Warning -Message "could not locate user with '$DomainJoinIdentity' identity on '$Server' server for '$DomainName' domain"
+			continue NextVMName
+		}
+		catch {
+			Write-Warning -Message "could not retrieve user with '$DomainJoinIdentity' identity on '$Server' server for '$DomainName' domain: $($_.Exception.Message)"
+			continue NextVMName
+		}
+
+		# report state
+		Write-Host ("$Hostname,$Name - ...domain join account retrieved, creating access rules...")
+
+		# define parameters
+		$NewADAccessRule = @{
+			Server             = $Server
+			SecurityIdentifier = $ADUser.SID
+			Preset             = 'ComputerJoinThisObjectOnly'
+			ErrorAction        = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# create access rules
+		try {
+			$AccessRule = New-ADAccessRule @NewADAccessRule
+		}
+		catch {
+			Write-Warning -Message "could not create 'ComputerJoinThisObjectOnly' access rules for '$DomainJoinIdentity' identity: $($_.Exception.Message)"
+			continue NextVMName
+		}
+
+		# report state
+		Write-Host ("$Hostname,$Name - ...access rules created, applying access rules...")
+
+		# define parameters
+		$UpdateADAccessRule = @{
+			Server      = $Server
+			Identity    = $Identity
+			AccessRule  = $AccessRule
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# update access rules
+		try {
+			Update-ADAccessRule @UpdateADAccessRule
+		}
+		catch {
+			Write-Warning -Message "could not apply 'ComputerJoinThisObjectOnly' access rules for '$DomainJoinIdentity' identity to computer with '$Name' name on '$Server' server for '$DomainName' domain: $($_.Exception.Message)"
+			continue NextVMName
+		}
+
+		# report state
+		Write-Host ("$Hostname,$Name - ...access rules applied")
+	}
+
+	################################
 	# add computer to groups
 	################################
 
