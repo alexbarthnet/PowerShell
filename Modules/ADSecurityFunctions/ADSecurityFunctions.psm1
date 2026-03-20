@@ -1053,7 +1053,7 @@ function New-ADAccessRule {
 				# create ACE and add to array
 				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
-			'ComputerJoinSelf' {
+			'ComputerJoinThisObjectOnly' {
 				# define ACE: allow 'WriteProperty' on the 'Account Restrictions' property set on 'this object only'
 				$Ace = @{
 					objectSid           = $SecurityIdentifier
@@ -1198,7 +1198,7 @@ function New-ADAccessRule {
 				# create ACE and add to array
 				$AccessRule.Add([System.DirectoryServices.ActiveDirectoryAccessRule]::new($Ace['objectSid'], $Ace['adrights'], $Ace['type'], $Ace['objectType'], $Ace['inheritanceType'], $Ace['inheritedObjectType']))
 			}
-			'ComputerRenameSelf' {
+			'ComputerRenameThisObjectOnly' {
 				# define ACE: allow 'ReadProperty','WriteProperty' on the 'cn' attribute on 'this object only'
 				$Ace = @{
 					objectSid           = $SecurityIdentifier
