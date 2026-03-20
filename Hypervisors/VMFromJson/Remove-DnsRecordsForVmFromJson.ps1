@@ -469,9 +469,6 @@ catch {
 	# report count
 	Write-Host "$Hostname,$Name - found '$DnsServerResourceRecordCount' service DNS records for '$Name' name in '$ZoneName' zone on '$Server' server"
 
-	# create lists for IPv4 and IPv6 addresses
-	$IPAddressesFromDnsRecords = [System.Collections.Generic.List[string]]::new()
-
 	# loop through DNS records to remove expired DNS records
 	:NextDnsServerResourceRecord foreach ($DnsServerResourceRecord in $DnsServerResourceRecords) {
 		# assign record name to object
