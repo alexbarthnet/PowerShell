@@ -1,6 +1,6 @@
 #Requires -Modules ActiveDirectory
 
-function Convert-GuidToOctetString {
+function Format-GuidAsOctetString {
 	<#
 	.SYNOPSIS
 	Converts a GUID into an escaped octet string for LDAP queries against Active Directory.
@@ -21,7 +21,7 @@ function Convert-GuidToOctetString {
 	System.String
 
 	.EXAMPLE
-	PS> Convert-GuidToOctetString -Guid '00000000-0000-0000-0000-000000000000'
+	PS> Format-GuidAsOctetString -Guid '00000000-0000-0000-0000-000000000000'
 	#>
 
 	[CmdletBinding()]
@@ -161,7 +161,7 @@ function Get-ADControlAccessRight {
 
 	# convert GUID in rightsGUID to octet string for LDAP query
 	try {
-		$attributeSecurityGUID = Convert-GuidToOctetString -Guid $ControlAccessRight.rightsGUID
+		$attributeSecurityGUID = Format-GuidAsOctetString -Guid $ControlAccessRight.rightsGUID
 	}
 	catch {
 		throw $_
@@ -211,7 +211,7 @@ function Get-ADControlAccessRight {
 	:NextAppliesToValue foreach ($AppliesToValue in $ControlAccessRight.appliesTo) {
 		# convert GUID in appliesTo value to octet string for LDAP query
 		try {
-			$schemaIDGUID = Convert-GuidToOctetString -Guid $AppliesToValue
+			$schemaIDGUID = Format-GuidAsOctetString -Guid $AppliesToValue
 		}
 		catch {
 			throw $_
