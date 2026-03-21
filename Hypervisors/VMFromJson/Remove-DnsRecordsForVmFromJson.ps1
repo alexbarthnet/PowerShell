@@ -100,8 +100,14 @@ catch {
 	# create list for IP address objects
 	$IPAddresses = [System.Collections.Generic.List[System.Net.IPAddress]]::new()
 
+	# retrieve all VM network adapters
+	$VMNetworkAdapters = $JsonData.$Name.VMNetworkAdapters
+
+	# filter named VM network adapters without skip provisioning configured
+	$VMNetworkAdapters = $VMNetworkAdapters | Where-Object { $null -eq $_.SkipDuringProvisioning -or $_.SkipDuringProvisioning -eq $false }
+
 	# loop through VMNetwork adapters
-	:NextVMNetworkAdapter foreach ($VMNetworkAdapter in $JsonData.$Name.VMNetworkAdapters) {
+	:NextVMNetworkAdapter foreach ($VMNetworkAdapter in $VMNetworkAdapters) {
 		# if VM network adapter does not have a name or an IP address...
 		if ([string]::IsNullOrEmpty($VMNetworkAdapter.NetworkAdapterName) -or [string]::IsNullOrEmpty($VMNetworkAdapter.IPAddress)) {
 			continue NextVMNetworkAdapter
@@ -210,7 +216,7 @@ catch {
 				
 				# if WhatIf provided...
 				if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
-					# retrieve existing DNS record
+					# remove existing DNS record
 					try {
 						Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
 					}
@@ -287,7 +293,7 @@ catch {
 				
 				# if WhatIf provided...
 				if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
-					# retrieve existing DNS record
+					# remove existing DNS record
 					try {
 						Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
 					}
@@ -407,7 +413,7 @@ catch {
 				
 					# if WhatIf provided...
 					if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
-						# retrieve existing DNS record
+						# remove existing DNS record
 						try {
 							Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
 						}
@@ -469,9 +475,6 @@ catch {
 	# report count
 	Write-Host "$Hostname,$Name - found '$DnsServerResourceRecordCount' service DNS records for '$Name' name in '$ZoneName' zone on '$Server' server"
 
-	# create lists for IPv4 and IPv6 addresses
-	$IPAddressesFromDnsRecords = [System.Collections.Generic.List[string]]::new()
-
 	# loop through DNS records to remove expired DNS records
 	:NextDnsServerResourceRecord foreach ($DnsServerResourceRecord in $DnsServerResourceRecords) {
 		# assign record name to object
@@ -507,7 +510,7 @@ catch {
 				
 				# if WhatIf provided...
 				if ($PSCmdlet.ShouldProcess($ShouldProcessTarget)) {
-					# retrieve existing DNS record
+					# remove existing DNS record
 					try {
 						Remove-DnsServerResourceRecord @RemoveDnsServerResourceRecord
 					}
