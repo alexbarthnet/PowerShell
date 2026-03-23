@@ -32,29 +32,6 @@ param (
 )
 
 begin {
-	function Remove-ADDeletedObject {
-		[CmdletBinding(SupportsShouldProcess)]
-		param(
-			[string]$Identity
-		)
-
-		# if WhatIf provided...
-		if ($PSCmdlet.ShouldProcess($ExistingObjectIdentity)) {
-			# remove existing object
-			try {
-				Remove-ADObject -Server $Server -Identity $ExistingObjectIdentity -Confirm:$false
-			}
-			# continue to next deleted object if object not found
-			catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectNotFoundException] {
-				continue NextDeletedObject
-			}
-			# throw error if exception other than object not found
-			catch {
-				throw $_
-			}
-		}
-	}
-
 	# test access to domain root on PDC
 	try {
 		$DomainRoot = Get-ADObject -Server $PdcRoleOwner -Identity $DomainNCName
