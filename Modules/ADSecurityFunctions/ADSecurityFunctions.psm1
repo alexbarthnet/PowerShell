@@ -968,13 +968,13 @@ function New-ADAccessRule {
 			throw [System.Management.Automation.ErrorRecord]::new($Exception, $Exception.GetType().Name, [System.Management.Automation.ErrorCategory]::NotSpecified, $null)
 		}
 		# create custom control access right object
-		$ControlAccessRight = [pscustomobject]@{ 
+		$ControlAccessRight = [pscustomobject]@{
 			Name              = [string]$DirectoryEntry.Name[0]
 			DisplayName       = [string]$DirectoryEntry.DisplayName[0]
 			DistinguishedName = [string]$DirectoryEntry.DistinguishedName
 			AppliesTo         = [guid[]]$DirectoryEntry.appliesTo
 			RightsGuid        = [guid]$DirectoryEntry.rightsGUID[0]
-			
+
 		}
 		# return custom control access right object
 		return $ControlAccessRight
