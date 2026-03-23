@@ -1,5 +1,99 @@
 #Requires -Modules ActiveDirectory
 
+function Format-GuidAsBindableString {
+	<#
+	.SYNOPSIS
+	Converts a GUID into an octet string for LDAP binds to objects in Active Directory.
+
+	.DESCRIPTION
+	Converts a GUID into an octet string for LDAP binds to objects in Active Directory.
+
+	.PARAMETER Guid
+	The GUID to convert to an octet string.
+
+	.PARAMETER NamingContext
+	The naming context to append to the octet string.
+
+	.INPUTS
+	System.Guid.
+
+	.OUTPUTS
+	System.String
+
+	.EXAMPLE
+	PS> Format-GuidAsBindableString -Guid '00000000-0000-0000-0000-000000000000'
+	#>
+
+	[CmdletBinding()]
+	param (
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline)]
+		[guid]$Guid,
+		[Parameter(Position = 1)]
+		[string]$NamingContext
+	)
+
+	# format GUID as octet string
+	try {
+		$OctetString = Format-GuidAsOctetString -Guid $Guid
+	}
+	catch {
+		throw $_
+	}
+
+	# if naming context is present...
+	if ($PSBoundParameters.ContainsKey('NamingContext')) {
+		# format as a well-known GUID with the required naming context suffix
+		$BindableString = '<WKGUID={0},{1}>' -f $OctetString, $NamingContext
+	}
+	# if naming context is not present...
+	else {
+		# format as a standard GUID without any suffix
+		$BindableString = '<GUID={0}>' -f $OctetString
+	}
+
+	# return string
+	return $BindableString
+}
+
+function Format-GuidAsFindableString {
+	<#
+	.SYNOPSIS
+	Converts a GUID into an octet string for LDAP queries against Active Directory.
+
+	.DESCRIPTION
+	Converts a GUID into an octet string for LDAP queries against Active Directory.
+
+	.PARAMETER Guid
+	The GUID to convert to an octet string.
+
+	.INPUTS
+	System.Guid.
+
+	.OUTPUTS
+	System.String
+
+	.EXAMPLE
+	PS> Format-GuidAsBindableString -Guid '00000000-0000-0000-0000-000000000000'
+	#>
+
+	[CmdletBinding()]
+	param (
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline)]
+		[guid]$Guid
+	)
+
+	# format GUID as octet string with escape character
+	try {
+		$FindableString = Format-GuidAsOctetString -Guid $Guid -AsEscapedString
+	}
+	catch {
+		throw $_
+	}
+
+	# return string
+	return $FindableString
+}
+
 function Format-GuidAsOctetString {
 	<#
 	.SYNOPSIS
@@ -136,8 +230,6 @@ function Get-ADControlAccessRight {
 		}
 	}
 
-	# reset 
-
 	# search for control access right
 	try {
 		$ControlAccessRight = Get-ADObject @GetADObject
@@ -177,7 +269,7 @@ function Get-ADControlAccessRight {
 
 	# convert GUID in rightsGUID to octet string for LDAP query
 	try {
-		$attributeSecurityGUID = Format-GuidAsOctetString -Guid $ControlAccessRight.rightsGUID
+		$attributeSecurityGUID = Format-GuidAsFindableString -Guid $ControlAccessRight.rightsGUID
 	}
 	catch {
 		throw $_
@@ -227,7 +319,7 @@ function Get-ADControlAccessRight {
 	:NextAppliesToValue foreach ($AppliesToValue in $ControlAccessRight.appliesTo) {
 		# convert GUID in appliesTo value to octet string for LDAP query
 		try {
-			$schemaIDGUID = Format-GuidAsOctetString -Guid $AppliesToValue
+			$schemaIDGUID = Format-GuidAsFindableString -Guid $AppliesToValue
 		}
 		catch {
 			throw $_
@@ -458,6 +550,158 @@ function Get-ADObjectTypeGuid {
 
 	# return guid
 	return $Guid
+}
+
+function Get-ADWellKnownObjectGuid {
+	<#
+	.SYNOPSIS
+	Retrieve the GUID for a well-known object in Active Directory.
+
+	.DESCRIPTION
+	Retrieve the GUID for a well-known object in Active Directory.
+
+	.PARAMETER WellKnownObject
+	Specifies the well-known object to return. Must be the RDN of a well-known object.
+
+	.PARAMETER NamingContext
+	Specifices the naming context to query for the well-known object. The default value is 'defaultNamingContext'
+
+	.PARAMETER AsBindableString
+	Switch parameter to return GUID as a bindable string.
+
+	.PARAMETER Server
+	Specifies the server to query for the control access right.
+
+	.LINK
+	https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/5a00c890-6be5-4575-93c4-8bf8be0ca8d8
+
+	#>
+
+	[CmdletBinding(DefaultParameterSetName = 'NamingContext')]
+	param(
+		[Parameter(Position = 0, Mandatory)]
+		[string]$WellKnownObject,
+		[Parameter(Position = 1)][ValidateSet('defaultNamingContext', 'configurationNamingContext', 'schemaNamingContext', 'rootDomainNamingContext')]
+		[string]$NamingContext = 'defaultNamingContext',
+		[Parameter(Position = 2)]
+		[switch]$AsBindableString,
+		[Parameter(DontShow)]
+		[string]$Server = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
+	)
+
+	# define directory entry for root DSE on server
+	try {
+		$DirectoryEntryForRootDSE = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/rootDSE")
+	}
+	catch {
+		throw $_
+	}
+
+	# retrieve distinguished name for naming context from root DSE
+	try {
+		$DistinguishedNameForNamingContext = $DirectoryEntryForRootDSE.InvokeGet($NamingContext)
+	}
+	catch {
+		throw $_
+	}
+
+	# define directory entry for naming context on server
+	try {
+		$DirectoryEntryForNamingContext = [System.DirectoryServices.DirectoryEntry]::new("LDAP://$Server/$DistinguishedNameForNamingContext")
+	}
+	catch {
+		throw $_
+	}
+
+	# define list for well-known objects
+	$List = [System.Collections.Generic.List[object]]::new()
+
+	# retrieve well-known objects from naming context
+	try {
+		$WellKnownObjects = $DirectoryEntryForNamingContext.InvokeGet('wellKnownObjects')
+	}
+	catch {
+		throw $_
+	}
+
+	# loop through well-known objects
+	foreach ($Object in $WellKnownObjects) {
+		# add well-known objects to list
+		$List.Add($Object)
+	}
+
+	# retrieve other well-known objects from naming context
+	try {
+		$OtherWellKnownObjects = $DirectoryEntryForNamingContext.InvokeGet('otherWellKnownObjects')
+	}
+	catch {
+		throw $_
+	}
+
+	# loop other through well-known objects
+	foreach ($Object in $OtherWellKnownObjects) {
+		# add other well-known objects to list
+		$List.Add($Object)
+	}
+
+	# loop through objects in list
+	foreach ($Object in $List) {
+		# retrieve type for object in directory entry
+		$Type = $Object.GetType()
+
+		# retrieve distinguished name for well-known object
+		try {
+			$DistinguishedName = $Type.InvokeMember('DNString', [System.Reflection.BindingFlags]::GetProperty, $null, $Object, $null)
+		}
+		catch {
+			throw $_
+		}
+
+		# retrieve RDN from distinguished name
+		$RelativeDN = $DistinguishedName.Split(',', 2)[0].Split('=', 2)[1]
+
+		# if RDN matches requested well-known object
+		if ($RelativeDN -eq $WellKnownObject) {
+			# report matchj
+			Write-Verbose -Message "mapped '$WellKnownObject' input to '$DistinguishedName' object"
+
+			# retrieve byte array of well-known object
+			try {
+				$ByteArray = $Type.InvokeMember('BinaryValue', [System.Reflection.BindingFlags]::GetProperty, $null, $Object, $null)
+			}
+			catch {
+				throw $_
+			}
+
+			# create GUID from byte array
+			try {
+				$Guid = [System.Guid]::new($ByteArray)
+			}
+			catch {
+				throw $_
+			}
+
+			# if AsBindableString requested...
+			if ($AsBindableString.IsPresent) {
+				# format GUID as bindable string
+				try {
+					$BindableString = Format-GuidAsBindableString -Guid $Guid -NamingContext $DistinguishedNameForNamingContext
+				}
+				catch {
+					throw $_
+				}
+
+				# return bindable string
+				return $BindableString
+			}
+
+			# return GUID
+			return $Guid
+		}
+	}
+
+	# write warning if no GUID has been returned
+	Write-Warning -Message "the '$WellKnownObject' well-known object was not found on the '$NamingContext' naming context: $DistinguishedNameForNamingContext"
 }
 
 function Get-ADPrincipal {
