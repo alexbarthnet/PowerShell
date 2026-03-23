@@ -9,7 +9,13 @@ function Format-GuidAsOctetString {
 	Converts a GUID into an escaped octet string for LDAP queries against Active Directory.
 
 	.PARAMETER Guid
-	The GUID to convert to an escaped octet string.
+	The GUID to convert to an octet string.
+
+	.PARAMETER AsEscapedString
+	Switch parameter to add an escape character in front of each octet in the string.
+
+	.PARAMETER EscapeCharacter
+	Specifies the escape character when AsEscapedString is present. The default value is the backslash character.
 
 	.PARAMETER Server
 	Specifies the server to query for the control access right.
@@ -26,9 +32,13 @@ function Format-GuidAsOctetString {
 
 	[CmdletBinding()]
 	param (
-		# string for the display name of the control access right object
-		[Parameter(Mandatory = $true, Position = 0, ValueFromPipeline)]
-		[guid]$Guid
+		# guid to format as an octet string
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline)]
+		[guid]$Guid,
+		[Parameter(Position = 1)]
+		[switch]$AsEscapedString,
+		[Parameter(Position = 2)]
+		[string]$EscapeCharacter = '\'
 	)
 
 	# define empty octet string
@@ -39,8 +49,14 @@ function Format-GuidAsOctetString {
 
 	# loop through byte array
 	foreach ($Byte in $ByteArray) {
-		# format byte as hexadecimal with backslash as the escape character
-		$OctetString += '\{0:X2}' -f $Byte
+		# if AsEscapedString provided...
+		if ($AsEscapedString.IsPresent) {
+			# add escape character to string before formatted byte
+			$OctetString += $EscapeCharacter
+		}
+
+		# add byte to string as as hexadecimal
+		$OctetString += '{0:X2}' -f $Byte
 	}
 
 	# return populated octet string
