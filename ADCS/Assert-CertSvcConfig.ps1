@@ -66,14 +66,11 @@ Function Assert-ItemPropertyValue {
 
 }
 
-# retrieve child items from registry
-$Configurations = Get-ChildItem -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\CertSvc\Configuration' | Where-Object { $_.PSChildName -like $Name }
+# retrieve active CA configuration
+$CAName = Get-ItemPropertyValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\CertSvc\Configuration' -Name 'Active'
 
-# if configurations is an array...
-if ($Configurations -is [array]) {
-	Write-Warning -Message "multiple configurations found; use 'Name' parameter to define a single configuration"
-	return
-}
+# define path from active CA configuration
+$Path = 'HKLM:\SYSTEM\CurrentControlSet\Services\CertSvc\Configuration\{0}' -f $CAName
 
 # retrieve required values from registry
 $Path = $Configurations.PSPath
