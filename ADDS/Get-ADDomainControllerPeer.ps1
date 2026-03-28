@@ -188,7 +188,7 @@ function Get-ADDomainControllerAndPeers {
 	$AdjacentSites = $ActiveDirectorySite.AdjacentSites.Where({ $_.Servers.Count })
 
 	# switch on count of adjacent sites with domain controllers
-	switch ($AdjacentSites.Count) { 
+	switch ($AdjacentSites.Count) {
 		0 {
 			# warn about state
 			Write-Warning -Message "found '$($AdjacentSites.Count)' adjacent sites with domain controllers; how did this happen?"
@@ -464,15 +464,15 @@ $DomainControllerPeers = [System.Collections.Generic.List[object]]::new()
 	if ($PSBoundParameters.ContainsKey('CountPerSite')) {
 		# define count in current site as count of domain controllers already in list and in same site as current domain controller
 		$CountInCurrentSite = $DomainControllerPeers.Where({ $_.SiteName -eq $OrderedDomainController.SiteName }).Count
-	
+
 		# if count in current site is greater than or equal to requested count per site...
 		if ($CountInCurrentSite -ge $CountPerSite) {
 			# report skip and continue
 			Write-Verbose -Message "[ ] skipping excessive domain controller: $($OrderedDomainController.Name) (list already contains '$CountInCurrentSite' domain controller(s) from same site)"
 			continue NextDomainController
 		}
-	}	
-	
+	}
+
 	# if count parameter provided...
 	if ($PSBoundParameters.ContainsKey('Count')) {
 		# if count of domain controllers in list is greater than or equal to requested count...
