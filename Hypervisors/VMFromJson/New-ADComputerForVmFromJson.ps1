@@ -201,7 +201,6 @@ catch {
 
 		# define parameters
 		$NewADAccessRule = @{
-			Server             = $Server
 			SecurityIdentifier = $ADUser.SID
 			Preset             = 'ComputerJoinThisObjectOnly'
 			ErrorAction        = [System.Management.Automation.ActionPreference]::Stop
