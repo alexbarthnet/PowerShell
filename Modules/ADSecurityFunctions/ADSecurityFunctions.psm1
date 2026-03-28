@@ -2704,8 +2704,13 @@ function Update-ADSecurity {
 
 # define functions to export
 $FunctionsToExport = @(
+	'Format-GuidAsBindableString'
+	'Format-GuidAsFindableString'
+	'Format-GuidAsOctetString'
+	'Get-ADControlAccessRight'
 	'Get-ADObjectTypeDefaultAccessRule'
 	'Get-ADObjectTypeGuid'
+	'Get-ADWellKnownObjectGuid'
 	'Get-ADPrincipal'
 	'Get-ADSecurityIdentifier'
 	'Get-ADAccessRule'
