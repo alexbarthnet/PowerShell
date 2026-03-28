@@ -228,7 +228,7 @@ catch {
 
 		# update access rules
 		try {
-			Update-ADAccessRule @UpdateADAccessRule
+			Update-ADSecurity @UpdateADAccessRule
 		}
 		catch {
 			Write-Warning -Message "could not apply 'ComputerJoinThisObjectOnly' access rules for '$DomainJoinIdentity' identity to computer with '$Name' name on '$Server' server for '$DomainName' domain: $($_.Exception.Message)"
