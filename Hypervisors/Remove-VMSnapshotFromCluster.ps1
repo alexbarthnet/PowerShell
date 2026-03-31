@@ -375,7 +375,7 @@ begin {
 
 				# retrieve deduplication jobs to stop before stopping jobs
 				try {
-					$DedupJobs = ([array](Get-DedupJob -Volume $Volume)).Where({ $_.State -notin $States })
+					$DedupJobs = ([array](Get-DedupJob)).Where({ $_.Volume -eq $Volume -and $_.State -notin $States })
 				}
 				catch {
 					throw $_
@@ -433,7 +433,7 @@ begin {
 
 				# retrieve deduplication jobs to stop before stopping jobs
 				try {
-					$DedupJobs = ([array](Get-DedupJob -Volume $Volume)).Where({ $_.State -notin $States })
+					$DedupJobs = ([array](Get-DedupJob)).Where({ $_.Volume -eq $Volume -and $_.State -notin $States })
 				}
 				catch {
 					throw $_
@@ -468,7 +468,7 @@ begin {
 					Active     = $true # boolean of while loop state
 					Action     = 'deduplication jobs to stop' # action being waited for
 					Warning    = 'check deduplication jobs on hypervisor' # warning text when action not completed within allocated time
-					Expression = '([array](Get-DedupJob -Volume $Volume)).Where({ $_.State -notin $States }).Count -gt 0' # expression that evaluates true while action is in progress and false when action is complete
+					Expression = '([array](Get-DedupJob)).Where({ $_.Volume -eq $Volume -and $_.State -notin $States }).Count -gt 0' # expression that evaluates true while action is in progress and false when action is complete
 					Multiplier = [int32]0 # counter for current loop
 					WaitTime   = [int32]0 # counter for total seconds in while loop
 					Seconds    = [int32]5 # sleep time for each pass of while loop; multiplied by loop counter to gradually add time to each loop
