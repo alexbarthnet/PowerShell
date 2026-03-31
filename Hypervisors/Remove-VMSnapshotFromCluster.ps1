@@ -834,14 +834,14 @@ process {
 		$MoveClusterVirtualMachineRole = @{
 			VMId          = $VM.Id
 			Node          = $Node
-			ClusterName   = $ClusterName
+			Cluster       = $ClusterName
 			MigrationType = [Microsoft.FailoverClusters.NativeHelp.NativeGroupHelp+VmMigrationType]::Live
 			ErrorAction   = [System.Management.Automation.ActionPreference]::Stop
 		}
 
 		# move virtual machine
 		try {
-			Move-ClusterVirtualMachineRole @MoveClusterVirtualMachineRole
+			$null = Move-ClusterVirtualMachineRole @MoveClusterVirtualMachineRole
 		}
 		catch {
 			Write-Host ("$ComputerName,$Name - ERROR: could not move VM to '$Node' node")
