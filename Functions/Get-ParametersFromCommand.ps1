@@ -65,11 +65,8 @@ Function Get-ParametersFromCommand {
 		$ParametersFromScript = $ParametersFromScript.Where({ $_.Name -notin $ExcludeParameterSetNames })
 	}
 
-	# get parameters with position
-	$ParametersWithPosition = $ParametersFromScript.Where({ $_.Attributes.Position -ge 0 })
-
-	# get parameters with position
-	$ParametersWithOutPosition = $ParametersFromScript.Where({ $_.Attributes.Position -lt 0 })
+	# get parameters with and without position
+	$ParametersWithPosition, $ParametersWithOutPosition = $ParametersFromScript.Where({ $_.Attributes.Position -ge 0 }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
 
 	# process each parameter for script
 	ForEach ($Parameter in $ParametersWithPosition | Sort-Object -Property { $_.Attributes.Position } ) {
