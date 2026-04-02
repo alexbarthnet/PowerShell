@@ -1,5 +1,5 @@
-Function Get-ParametersFromCommand {
-	Param(
+function Get-ParametersFromCommand {
+	param(
 		[Parameter(Mandatory = $true)]
 		[string]$CommandName,
 		[string]$ParameterSetName = $PSCmdlet.ParameterSetName,
@@ -10,16 +10,16 @@ Function Get-ParametersFromCommand {
 	)
 
 	# verify command
-	Try {
+	try {
 		$Command = Get-Command -Name $CommandName -ErrorAction ([System.Management.Automation.ActionPreference]::Stop)
 	}
-	Catch {
+	catch {
 		Write-Host "ERROR: '$CommandName' not found"
-		Return $_
+		return $_
 	}
 
 	# verify parameter set name
-	If ([string]::IsNullOrEmpty($ParameterSetName)) {
+	if ([string]::IsNullOrEmpty($ParameterSetName)) {
 		$LimitToParameterSet = $false
 		$ExcludeParameterSetName = $false
 	}
@@ -32,36 +32,36 @@ Function Get-ParametersFromCommand {
 	$ParametersFromScript = $Command.Parameters.Values
 	
 	# filter parameters to parameter set
-	If ($ExcludeParameterSets) {
-		ForEach ($ExcludeParameterSet in $ExcludeParameterSets) {
-			ForEach ($ExcludedParameterSetName in ($ParametersFromScript.Where({ $_.Attributes.ParameterSetName -eq $ExcludeParameterSet }).Name) ) {
+	if ($ExcludeParameterSets) {
+		foreach ($ExcludeParameterSet in $ExcludeParameterSets) {
+			foreach ($ExcludedParameterSetName in ($ParametersFromScript.Where({ $_.Attributes.ParameterSetName -eq $ExcludeParameterSet }).Name) ) {
 				$ExcludeParameterSetNames.Add($ExcludedParameterSetName)
 			}
 		}
 	}
 
 	# filter parameters to parameter set
-	If ($LimitToParameterSet) {
+	if ($LimitToParameterSet) {
 		$ParametersFromScript = $ParametersFromScript.Where({ $_.Attributes.ParameterSetName -eq $ParameterSetName })
 	}
 
 	# filter out parameter set name
-	If ($ExcludeParameterSetName) {
+	if ($ExcludeParameterSetName) {
 		$ParametersFromScript = $ParametersFromScript.Where({ $_.Name -ne $ParameterSetName })
 	}
 
 	# filter out excluded parameters
-	If ($ExcludeParameters) {
+	if ($ExcludeParameters) {
 		$ParametersFromScript = $ParametersFromScript.Where({ $_.Name -notin $ExcludeParameters })
 	}
 
 	# filter out default excluded parameters
-	If ($ExcludeParametersDefault) {
+	if ($ExcludeParametersDefault) {
 		$ParametersFromScript = $ParametersFromScript.Where({ $_.Name -notin $ExcludeParametersDefault })
 	}
 
 	# filter parameters to parameter set
-	If ($ExcludeParameterSets) {
+	if ($ExcludeParameterSets) {
 		$ParametersFromScript = $ParametersFromScript.Where({ $_.Name -notin $ExcludeParameterSetNames })
 	}
 
@@ -69,23 +69,23 @@ Function Get-ParametersFromCommand {
 	$ParametersWithPosition, $ParametersWithOutPosition = $ParametersFromScript.Where({ $_.Attributes.Position -ge 0 }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
 
 	# process each parameter for script
-	ForEach ($Parameter in $ParametersWithPosition | Sort-Object -Property { $_.Attributes.Position } ) {
+	foreach ($Parameter in $ParametersWithPosition | Sort-Object -Property { $_.Attributes.Position } ) {
 		# if parameter has a name and name not in ExcludeParameters or ExcludeParametersDefault...
-		If ($null -ne $Parameter.Name) {
+		if ($null -ne $Parameter.Name) {
 			# add parameter name to list
 			$ParametersList.Add($Parameter.Name)
 		}
 	}
 
 	# process each parameter for script
-	ForEach ($Parameter in $ParametersWithOutPosition | Sort-Object -Property { $_.Name } ) {
+	foreach ($Parameter in $ParametersWithOutPosition | Sort-Object -Property { $_.Name } ) {
 		# if parameter has a name and name not in ExcludeParameters or ExcludeParametersDefault...
-		If ($null -ne $Parameter.Name) {
+		if ($null -ne $Parameter.Name) {
 			# add parameter name to list
 			$ParametersList.Add($Parameter.Name)
 		}
 	}
 
 	# return list
-	Return $ParametersList
+	return $ParametersList
 }
