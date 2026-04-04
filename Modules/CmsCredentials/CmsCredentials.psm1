@@ -1,4 +1,5 @@
 Function Invoke-Function {
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param(
 		[Parameter(Mandatory = $true, ValueFromPipeline = $true)]
 		[string[]]$ComputerName,
@@ -497,6 +498,7 @@ Function Test-CmsInvalidIdentity {
 
 	#>
 
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param (
 		[Parameter(Mandatory = $true, Position = 0)]
 		[string]$Identity,
@@ -537,6 +539,7 @@ Function Test-CmsInvalidSubject {
 
 	#>
 
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param (
 		[Parameter(Mandatory = $true, Position = 0)]
 		[string]$Subject,
@@ -839,7 +842,7 @@ Function New-CmsCredentialCertificate {
 
 	#>
 
-	[CmdletBinding()]
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param (
 		[Parameter(Mandatory = $true, Position = 0)]
 		[string]$Identity,
@@ -2966,6 +2969,7 @@ Function Show-CmsCredentialAccess {
 }
 
 Function Initialize-CmsCredentialSettings {
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param(
 		[Parameter(DontShow)]
 		[string]$HostName = ([System.Environment]::Machinename).ToLowerInvariant()
@@ -3032,9 +3036,13 @@ Function Initialize-CmsCredentialSettings {
 		Write-Warning -Message "could not create object while initializing CmsCredentials on host: $local:Hostname"
 		Return $_
 	}
+
+	# report state
+	Write-Verbose -Message "Initialized CmsCredentials variable on host: $local:Hostname"
 }
 
 Function Show-CmsCredentialSettings {
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	Param(
 		[Parameter(Mandatory = $false)]
 		[string[]]$ComputerName,

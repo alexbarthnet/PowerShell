@@ -299,7 +299,7 @@ process {
 
 			# define arguments
 			# reference: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/oscdimg-command-line-options?view=windows-11
-			$ArgumentList = "-l$FileSystemLabel -bootdata:$Bootdata -u2 -udfver102 -o $TemporaryPathForISO $ImagePath"
+			$ArgumentList = "-l$FileSystemLabel -bootdata:$Bootdata -u2 -udfver102 $TemporaryPathForISO $ImagePath"
 
 			# define parameters for Start-Process
 			$StartProcess = @{
