@@ -13,7 +13,7 @@ param(
     [Parameter(Position = 3)]
     [switch]$ForcePrimaryMember, 
     [Parameter(Position = 4)]
-    [switch]$AddContentPathAcl
+    [switch]$SkipContentPathPermissions
 )
 
 # define error preference
@@ -267,89 +267,6 @@ if ($UpdateMembership) {
     Write-Host "Updated DFS-R membership: set '$ContentPath' on '$ComputerName' as content path for '$GroupName' folder in '$GroupName' DFS-R group"
 }
 
-# if add content path ACL requested and account name provided...
-if ($AddContentPathAcl -and $PSBoundParameters.ContainsKey('AccountName')) {
-    # set update content path to true
-    $UpdateContentPath = $true
-    # report state
-    Write-Host "Will update ACL for '$ContentPath' content path: switch parameter provided"
-}
-# if computer is primary member and account name provided...
-elseif ($PrimaryMember -and $PSBoundParameters.ContainsKey('AccountName')) {
-    # set update content path to true
-    $UpdateContentPath = $true
-    # report state
-    Write-Host "Will update ACL for '$ContentPath' content path: computer is primary member"
-}
-# if add content path ACL requested and account name not provided...
-elseif ($AddContentPathAcl -and -not $PSBoundParameters.ContainsKey('AccountName')) {
-    # do not update content path
-    $UpdateContentPath = $false
-    # report state
-    Write-Host "Skipping ACL update for '$ContentPath' content path: AccountName parameter not provided"
-}
-# if no conditions met...
-else {
-    # do not update content path
-    $UpdateContentPath = $false
-    # report state
-    Write-Host "Skipping ACL update for '$ContentPath' content path"
-}
-
-# if content path ACL update required...
-if ($UpdateContentPath) {
-    # retrieve SID for account name
-    try {
-        $SecurityIdentifier = [System.Security.Principal.NTAccount]::new($AccountName).Translate([System.Security.Principal.SecurityIdentifier])
-    }
-    catch {
-        Write-Warning -Message "could not translate '$AccountName' account name to security identifier: $($_.Exception.Message)"
-        return $_
-    }
-
-    # create access rule
-    try {
-        $AccessRule = [System.Security.AccessControl.FileSystemAccessRule]::new($SecurityIdentifier, 'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow')
-    }
-    catch {
-        Write-Warning -Message "could not create file system access rule for '$AccountName' account name: $($_.Exception.Message)"
-        return $_
-    }
-
-    # retrieve ACL
-    try {
-        $Acl = Get-Acl -Path $ContentPath
-    }
-    catch {
-        Write-Warning -Message "could not retrieve ACL for '$ContentPath' content path: $($_.Exception.Message)"
-        return $_
-    }
-
-    # if ACL does not contain access rule...
-    if ($Acl.Access -notcontains $AccessRule) {
-        # add access rule to ACL
-        try {
-            $Acl.AddAccessRule($AccessRule)
-        }
-        catch {
-            Write-Warning -Message "could not update ACL for '$ContentPath' content path: $($_.Exception.Message)"
-            return $_
-        }
-
-        # update ACL
-        try {
-            $Acl | Set-Acl -Path $ContentPath
-        }
-        catch {
-            Write-Warning -Message "could not apply ACL to '$ContentPath' content path: $($_.Exception.Message)"
-            return $_
-        }
-
-        # report state
-        Write-Host "Granted '$AccountName' account name full control on '$ContentPath' path"
-    }
-}
-
 # retrieve DFS-R connections
 try {
     $DfsrConnections = Get-DfsrConnection @Dfsr
@@ -407,4 +324,149 @@ if ($DestinationComputers -and -not $PrimaryMember) {
 
     # start service on current computer
     Start-Service -Name 'DFSR'
+
+    # if no DFSR local connections exist...
+    if (!$DfsrLocalConnections) {
+        # report state
+        Write-Host "Waiting for initial replication to complete"
+
+        # define values for while loop and reporting
+        $While = @{
+            Active     = $true # boolean of while loop state
+            Action     = 'initial replication to complete' # action being waited for
+            Warning    = 'check DFS-R event logs' # warning text when action not completed within allocated time
+            Expression = '([array](Get-EventLog -LogName "DFS Replication")).Where({ $_.EventId -eq 4104 }).Count -eq 0' # expression that evaluates true while action is in progress and false when action is complete
+            Multiplier = [int32]0 # counter for current loop
+            WaitTime   = [int32]0 # counter for total seconds in while loop
+            Seconds    = [int32]5 # sleep time for each pass of while loop; multiplied by loop counter to gradually add time to each loop
+            Limit      = [int32]8 # maximum passes to complete; default limit of 8 with 5 seconds allows 180 seconds for the action to complete
+        }
+
+        # declare state
+        Write-Host "...waiting for $($While.Action)..."
+
+        # evaluate expression before while loop
+        $While.Active = Invoke-Expression -Command $While.Expression
+
+        # while expression is not resolved to false or limit not reached...
+        while ($While.Active -and $While.Multiplier -lt $While.Limit) {
+            # increment multiplier
+            $While.Multiplier++
+
+            # record total time
+            $While.WaitTime += ($While.Seconds * $While.Multiplier)
+
+            # declare updated wait time then sleep
+            Write-Host "...waiting an additional '$($While.Seconds * $While.Multiplier)' seconds"
+            Start-Sleep -Seconds ($While.Seconds * $While.Multiplier)
+
+            # re-evaluate expression
+            $While.Active = Invoke-Expression -Command $While.Expression
+        }
+
+        # if expression last resolved to true...
+        if ($While.Active) {
+            # ...declare wait time and return
+            Write-Host -ForegroundColor Yellow "WARNING: waited '$($While.WaitTime)' for $($While.Action) without success; $($While.Warning)"
+        }
+        # if expression last resolved to false...
+        else {
+            # ...declare wait time and continue
+            Write-Host "...waited '$($While.WaitTime)' seconds for $($While.Action)"
+        }
+    }
+}
+
+# if account name not provided and skip content path permissions not present...
+if ($PSBoundParameters.ContainsKey('AccountName') -and -not $SkipContentPathPermissions.IsPresent) {
+    # retrieve identity reference for account name via SID translation
+    try {
+        $IdentityReference = [System.Security.Principal.NTAccount]::new($AccountName).Translate([System.Security.Principal.SecurityIdentifier]).Translate([System.Security.Principal.NTAccount])
+    }
+    catch {
+        Write-Warning -Message "could not translate '$AccountName' account name to security identifier: $($_.Exception.Message)"
+        return $_
+    }
+
+    # create new access rule
+    try {
+        $NewAccessRule = [System.Security.AccessControl.FileSystemAccessRule]::new($IdentityReference, 'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow')
+    }
+    catch {
+        Write-Warning -Message "could not create file system access rule for '$AccountName' account name: $($_.Exception.Message)"
+        return $_
+    }
+
+    # retrieve ACL
+    try {
+        $Acl = Get-Acl -Path $ContentPath
+    }
+    catch {
+        Write-Warning -Message "could not retrieve ACL for '$ContentPath' content path: $($_.Exception.Message)"
+        return $_
+    }
+
+    # loop through access rules
+    :NextAccessRule foreach ($AccessRule in $Acl.Access) {
+        # if FileSystemRights on access rule do not match new access rule...
+        if ($AccessRule.FileSystemRights -ne $NewAccessRule.FileSystemRights) {
+            continue NextAccessRule
+        }
+
+        # if AccessControlType on access rule do not match new access rule...
+        if ($AccessRule.AccessControlType -ne $NewAccessRule.AccessControlType) {
+            continue NextAccessRule
+        }
+
+        # if IdentityReference on access rule do not match new access rule...
+        if ($AccessRule.IdentityReference -ne $NewAccessRule.IdentityReference) {
+            continue NextAccessRule
+        }
+
+        # if IsInherited on access rule do not match new access rule...
+        if ($AccessRule.IsInherited -ne $NewAccessRule.IsInherited) {
+            continue NextAccessRule
+        }
+
+        # if InheritanceFlags on access rule do not match new access rule...
+        if ($AccessRule.InheritanceFlags -ne $NewAccessRule.InheritanceFlags) {
+            continue NextAccessRule
+        }
+
+        # if PropagationFlags on access rule do not match new access rule...
+        if ($AccessRule.PropagationFlags -ne $NewAccessRule.PropagationFlags) {
+            continue NextAccessRule
+        }
+
+        # report state
+        Write-Host "Found '$AccountName' account has full control on '$ContentPath' path"
+
+        # clear new access rule and break loop
+        $NewAccessRule = $null
+        break NextAccessRule
+    }
+
+    # if new access rule still exists...
+    if ($null -ne $NewAccessRule) {
+        # add access rule to ACL
+        try {
+            $Acl.AddAccessRule($AccessRule)
+        }
+        catch {
+            Write-Warning -Message "could not update ACL for '$ContentPath' content path: $($_.Exception.Message)"
+            return $_
+        }
+
+        # update ACL
+        try {
+            $Acl | Set-Acl -Path $ContentPath
+        }
+        catch {
+            Write-Warning -Message "could not apply ACL to '$ContentPath' content path: $($_.Exception.Message)"
+            return $_
+        }
+
+        # report state
+        Write-Host "Granted '$AccountName' account full control on '$ContentPath' path"
+    }
 }
