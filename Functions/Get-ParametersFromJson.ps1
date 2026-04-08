@@ -1,9 +1,12 @@
 function Get-ParametersFromJson {
     [CmdletBinding()]
     param(
-        # Parameter help description
+        # path to parameters JSON file
         [Parameter(Position = 0, Mandatory)][ValidateScript({ Test-Path -Path $_ -PathType 'Leaf' })]
-        [string]$Path
+        [string]$Path,
+        # name of command; default value is current command path
+        [Parameter(Position = 1)]
+        [string]$CommandName = $PSCommandPath
     )
 
     # inherit verbose preference from script scope
@@ -27,7 +30,7 @@ function Get-ParametersFromJson {
 
     # retrieve command from script scope
     try {
-        $Command = Get-Command -Name $script:PSCommandPath
+        $Command = Get-Command -Name $CommandName
     }
     catch {
         throw $_
