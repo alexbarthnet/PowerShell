@@ -218,12 +218,16 @@ catch {
 
 # if primary member is set but member is not primary...
 if ($PrimaryMember -and -not $DfsrMembership.PrimaryMember) {
+    # set check content path to false
+    $CheckContentPath = $false
     # set update membership to true
     $UpdateMembership = $true
     # report state
     Write-Host "Will update membership of '$ComputerName' in '$GroupName' DFS-R group to set computer as primary member"
 }
 elseif ($ContentPath -ne $DfsrMembership.ContentPath) {
+    # set check content path to true
+    $CheckContentPath = $true
     # set update membership to true
     $UpdateMembership = $true
     # report state
@@ -231,10 +235,21 @@ elseif ($ContentPath -ne $DfsrMembership.ContentPath) {
 }
 # if no conditions met...
 else {
-    # do not update DFS-R membership
+    # set check content path to false
+    $CheckContentPath = $false
+    # set update membership to false
     $UpdateMembership = $false
     # report state
     Write-Host "Found expected membership of '$ComputerName' in '$GroupName' DFS-R group"
+}
+
+# if content path check required...
+if ($CheckContentPath) {
+    # if content path contains child items...
+    if (Get-ChildItem -Path $ContentPath) {
+        Write-Warning -Message "found existing items in '$ContentPath' content path when adding new member or updating existing member"
+        return
+    }
 }
 
 # if membership update required...
