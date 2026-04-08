@@ -341,7 +341,7 @@ begin {
 		}
 
 		# append required string to plaintext password
-		$AppendedPlainText = '{0}?AdministratorPassword' -f $PlainText
+		$AppendedPlainText = '{0}AdministratorPassword' -f $PlainText
 
 		# encode appended password
 		try {
