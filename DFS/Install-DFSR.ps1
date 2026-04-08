@@ -379,35 +379,32 @@ foreach ($DestinationComputerName in $DestinationComputers.ComputerName) {
     Write-Host "Created DFS-R connection between '$ComputerName' and '$DestinationComputerName' computer in '$GroupName' DFS-R group"
 }
 
-# if primary member or no destination computers found...
-if ($PrimaryMember -or -not $DestinationComputers) {
-    # return
-    return
-}
+# if destination computers exist and not the primary member...
+if ($DestinationComputers -and -not $PrimaryMember) {
+    # stop service on current computer
+    Stop-Service -Name 'DFSR'
 
-# stop service on current computer
-Stop-Service -Name 'DFSR'
+    # report state and allow 30 seconds for AD replication
+    Write-Host 'Pausing 30 seconds for AD replication of new connections'
+    Start-Sleep -Seconds 30
 
-# report state and allow 30 seconds for AD replication
-Write-Host 'Pausing 30 seconds for AD replication of new connections'
-Start-Sleep -Seconds 30
-
-# loop through destination computers
-foreach ($ComputerName in $DestinationComputers.ComputerName) {
-    # update configuration on remote computers
-    try {
-        Update-DfsrConfigurationFromAD -ComputerName $ComputerName
+    # loop through destination computers
+    foreach ($ComputerName in $DestinationComputers.ComputerName) {
+        # update configuration on remote computers
+        try {
+            Update-DfsrConfigurationFromAD -ComputerName $ComputerName
+        }
+        catch {
+            Write-Warning -Message "could not update '$ComputerName' with DFS-R configuration from AD: $($_.Exception.Message)"
+        }
+        # report state
+        Write-Host "Updated '$ComputerName' with DFS-R configuration from AD"
     }
-    catch {
-        Write-Warning -Message "could not update '$ComputerName' with DFS-R configuration from AD: $($_.Exception.Message)"
-    }
-    # report state
-    Write-Host "Updated '$ComputerName' with DFS-R configuration from AD"
+
+    # report state and allow 30 seconds for existing DFS-R member to update
+    Write-Host 'Pausing 30 seconds for existing DFS-R member to update'
+    Start-Sleep -Seconds 30
+
+    # start service on current computer
+    Start-Service -Name 'DFSR'
 }
-
-# report state and allow 30 seconds for existing DFS-R member to update
-Write-Host 'Pausing 30 seconds for existing DFS-R member to update'
-Start-Sleep -Seconds 30
-
-# start service on current computer
-Start-Service -Name 'DFSR'
