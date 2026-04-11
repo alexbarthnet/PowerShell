@@ -662,6 +662,8 @@ Begin {
 			[object]$VM,
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName,
+			[Parameter(Mandatory = $false)][ValidateSet('PlannedVM', 'RealizedVM', 'VM')]
+			[string]$Mode = 'VM',
 			# number of attempts to assert path action; default is 6 attempts
 			[uint16]$Attempts = 6
 		)
@@ -685,26 +687,32 @@ Begin {
 		# locate VMs before removal
 		################################################
 
-		# retrieve CIM instance for planned VM by Id
-		Try {
-			$PlannedVM = Invoke-Command @InvokeCommand -ScriptBlock {
-				Param($ArgumentList)
-				Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_PlannedComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
+		# if planned VM requested by mode...
+		if ($Mode -eq 'PlannedVM' -or $Mode -eq 'VM') {
+			# retrieve CIM instance for planned VM by Id
+			Try {
+				$PlannedVM = Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
+					Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_PlannedComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
+				}
 			}
-		}
-		Catch {
-			Throw $_
+			Catch {
+				Throw $_
+			}
 		}
 
-		# retrieve CIM instance for realized VM by Id
-		Try {
-			$RealizedVM = Invoke-Command @InvokeCommand -ScriptBlock {
-				Param($ArgumentList)
-				Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_ComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
+		# if realized VM requested by mode...
+		if ($Mode -eq 'RealizedVM' -or $Mode -eq 'VM') {
+			# retrieve CIM instance for realized VM by Id
+			Try {
+				$RealizedVM = Invoke-Command @InvokeCommand -ScriptBlock {
+					Param($ArgumentList)
+					Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_ComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
+				}
 			}
-		}
-		Catch {
-			Throw $_
+			Catch {
+				Throw $_
+			}
 		}
 
 		# if planned VM and realized VM not found before first attempt to remove VM...
