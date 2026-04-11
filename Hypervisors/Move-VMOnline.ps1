@@ -27,6 +27,8 @@ param (
 	[string]$VirtualMachinePath,
 	# array of hashtables for VHDs
 	[object[]]$VHDs = @(),
+	# switch to remove planned VMs on destination before move
+	[switch]$RemovePlannedVMs,
 	# switch to skip CSV storage check
 	[switch]$SkipClusteredStorageCheck
 )
@@ -1671,6 +1673,24 @@ Process {
 	ForEach ($TargetComputerName in $TargetComputerNames) {
 		# declare state
 		Write-Host "$([datetime]::Now.ToString('s')),$TargetComputerName,$Name - checking $HostType for VM..."
+
+		# if remove planned VM is present...
+		if ($RemovePlannedVMs.IsPresent) {
+			# define required parameters
+			$AssertVMRemoved = @{
+				VM           = $VM
+				ComputerName = $DestinationHost
+				Mode         = 'PlannedVM'
+			}
+
+			# ensure VM not found on destination host
+			Try {
+				$VMNotFound = Assert-VMRemoved @AssertVMRemoved
+			}
+			Catch {
+				Throw $_
+			}
+		}
 
 		# define required parameters
 		$AssertVMNotFound = @{
