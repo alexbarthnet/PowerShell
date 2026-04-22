@@ -928,6 +928,58 @@ Function New-CmsCredentialCertificate {
 	Return $Certificate
 }
 
+Function New-CmsCredential {
+	<#
+	.SYNOPSIS
+	Creates a PSCredential object that allows characters in the Username which are not permitted by the Get-Credential cmdlet.
+
+	.DESCRIPTION
+	Creates a PSCredential object that allows characters in the Username which are not permitted by the Get-Credential cmdlet.
+
+	.PARAMETER Username
+	Specifies the username for the PSCredential object.
+
+	.PARAMETER Password
+	Specifies the password for the PSCredential object. Must be a secure string.
+
+	.INPUTS
+	None.
+
+	.OUTPUTS
+	System.Management.Automation.PSCredential
+
+	#>
+
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
+	Param (
+		[Parameter(Position = 0, Mandatory = $true)]
+		[string]$Username,
+		[Parameter(Position = 1, Mandatory = $true)]
+		[securestring]$Password
+	)
+
+	# if password not provided...
+	If (!$PSBoundParameters.ContainsKey('Password')) {
+		try {
+			$Password = Read-Host -AsSecureString -Prompt 'Password'
+		}
+		catch {
+			throw $_
+		}
+	}
+
+	# create the PSCredential object
+	try {
+		$PSCredential = [System.Management.Automation.PSCredential]::new($local:Username, $local:Password)
+	}
+	catch {
+		throw $_
+	}
+
+	# return PSCredential object
+	return $PSCredential
+}
+
 Function Get-CmsCredential {
 	<#
 	.SYNOPSIS
@@ -3263,6 +3315,7 @@ $FunctionsToExport = @(
 	'Find-CmsCertificate'
 	'Export-CmsCredentialCertificate'
 	'New-CmsCredentialCertificate'
+	'New-CmsCredential'
 	'Get-CmsCredential'
 	'Export-CmsCredential'
 	'Import-CmsCredential'
