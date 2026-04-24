@@ -1,7 +1,7 @@
 #requires -Module FailoverClusters
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
-Param(
+param(
 	# mode switches
 	[Parameter(Mandatory, ParameterSetName = 'Start')]
 	[switch]$Start,
@@ -44,12 +44,12 @@ Begin {
 		$StorageJobsFound = $false
 
 		# retrieve storage jobs for storage pool
-		Try {
+		try {
 			$StorageJobs = Get-StorageJob | Where-Object { $_.JobState -ne 'Completed' }
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not retrieve storage jobs on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# loop through storage jobs
@@ -72,19 +72,19 @@ Begin {
 
 	}
 
-	Function Test-ClusterForIncorrectStateOrStatus {
-		Param(
+	function Test-ClusterForIncorrectStateOrStatus {
+		param(
 			[Microsoft.FailoverClusters.PowerShell.ClusterNodeState]$State,
 			[Microsoft.FailoverClusters.PowerShell.ClusterNodeStatusInformation]$Status,
 			[string]$NodeName
 		)
 
 		# if node name provided...
-		If ($PSBoundParameters.ContainsKey('NodeName')) {
+		if ($PSBoundParameters.ContainsKey('NodeName')) {
 			# test specific cluster node
 			$ClusterNodesToTest = $ClusterNodes | Where-Object { $_.NodeName -eq $NodeName }
 		}
-		Else {
+		else {
 			# test all cluster nodes
 			$ClusterNodesToTest = $ClusterNodes
 		}
@@ -93,8 +93,8 @@ Begin {
 		$IncorrectState = $false
 
 		# check state against cluster nodes
-		ForEach ($ClusterNode in $ClusterNodesToTest) {
-			If ($ClusterNode.State -ne $State) {
+		foreach ($ClusterNode in $ClusterNodesToTest) {
+			if ($ClusterNode.State -ne $State) {
 				# warn and update boolean
 				Write-Warning -Message "found '$($ClusterNode.NodeName)' cluster node in $($ClusterNode.State) state instead of requested '$State' state"
 				$IncorrectState = $true
@@ -105,8 +105,8 @@ Begin {
 		$IncorrectStatus = $false
 
 		# check status against cluster nodes
-		ForEach ($ClusterNode in $ClusterNodesToTest) {
-			If ($ClusterNode.StatusInformation -ne $Status) {
+		foreach ($ClusterNode in $ClusterNodesToTest) {
+			if ($ClusterNode.StatusInformation -ne $Status) {
 				# warn and update boolean
 				Write-Warning -Message "found '$($ClusterNode.NodeName)' cluster node with $($ClusterNode.StatusInformation) status instead of requested '$Status' status"
 				$IncorrectStatus = $true
@@ -114,21 +114,21 @@ Begin {
 		}
 
 		# if state or status are incorrect...
-		If ($IncorrectState -or $IncorrectStatus) {
-			Return $true
+		if ($IncorrectState -or $IncorrectStatus) {
+			return $true
 		}
-		Else {
-			Return $false
+		else {
+			return $false
 		}
 	}
 
 	# if default parameter set and skip transcript not requested...
-	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $SkipTranscript) {
+	if ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $SkipTranscript) {
 		################################################
 		# begin TranscriptForCommand module
 		################################################
 
-		Function Start-TranscriptForCommand {
+		function Start-TranscriptForCommand {
 			<#
 			.SYNOPSIS
 			Starts a PowerShell transcript with the given parameters in a defined folder structure.
@@ -167,7 +167,7 @@ Begin {
 			None. The function does not generate any output.
 			#>
 
-			Param(
+			param(
 				# name for transcript items; default is sanitized name of calling script or function
 				[Parameter(Position = 0)]
 				[string]$TranscriptName = (Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$',
@@ -195,7 +195,7 @@ Begin {
 			)
 
 			# verify transcript path
-			If (!(Test-Path -Path $TranscriptPath -PathType 'Container')) {
+			if (!(Test-Path -Path $TranscriptPath -PathType 'Container')) {
 				# define parameters for New-Item
 				$NewItem = @{
 					Path        = $TranscriptPath
@@ -204,11 +204,11 @@ Begin {
 				}
 
 				# create transcript path
-				Try {
+				try {
 					$null = New-Item @NewItem
 				}
-				Catch {
-					Throw $_
+				catch {
+					throw $_
 				}
 			}
 
@@ -227,18 +227,18 @@ Begin {
 			$script:TranscriptParameters[$TranscriptName] = $StartTranscript
 
 			# start transcript quietly
-			Try	{
+			try	{
 				$null = Start-Transcript @StartTranscript
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 
 			# if skip text requested...
-			If ($SkipTextOutput) {
+			if ($SkipTextOutput) {
 				# clear path of active text output file and return
 				$script:TextOutputActivePath = [string]::Empty
-				Return
+				return
 			}
 
 			# define parameters for New-TextOutputFile
@@ -250,15 +250,15 @@ Begin {
 			}
 
 			# create text output file
-			Try	{
+			try	{
 				New-TextOutputFile @NewTextOutputFile
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 		}
 
-		Function Stop-TranscriptForCommand {
+		function Stop-TranscriptForCommand {
 			<#
 			.SYNOPSIS
 			Stops a PowerShell transcript after removing old transcript and text output files.
@@ -297,7 +297,7 @@ Begin {
 			None. The function does not generate any output.
 			#>
 
-			Param(
+			param(
 				# name for transcript items; default is sanitized name of calling script or function
 				[Parameter()]
 				[string]$TranscriptName = (Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$',
@@ -330,14 +330,14 @@ Begin {
 			}
 
 			# define optional parameters for Remove-TextOutputFiles
-			If ($PSBoundParameters.ContainsKey('TimeSpan')) { $RemoveTextOutputFiles['TimeSpan'] = $TimeSpan }
-			If ($PSBoundParameters.ContainsKey('MinimumFileCount')) { $RemoveTextOutputFiles['MinimumFileCount'] = $MinimumFileCount }
+			if ($PSBoundParameters.ContainsKey('TimeSpan')) { $RemoveTextOutputFiles['TimeSpan'] = $TimeSpan }
+			if ($PSBoundParameters.ContainsKey('MinimumFileCount')) { $RemoveTextOutputFiles['MinimumFileCount'] = $MinimumFileCount }
 
 			# remove text output files
-			Try {
+			try {
 				Remove-TextOutputFiles @RemoveTextOutputFiles
 			}
-			Catch {
+			catch {
 				Write-Warning -Message $_.ToString()
 			}
 
@@ -347,27 +347,27 @@ Begin {
 			}
 
 			# define optional parameters for Remove-TranscriptFiles
-			If ($PSBoundParameters.ContainsKey('TimeSpan')) { $RemoveTranscriptFiles['TimeSpan'] = $TimeSpan }
-			If ($PSBoundParameters.ContainsKey('MinimumFileCount')) { $RemoveTranscriptFiles['MinimumFileCount'] = $MinimumFileCount }
+			if ($PSBoundParameters.ContainsKey('TimeSpan')) { $RemoveTranscriptFiles['TimeSpan'] = $TimeSpan }
+			if ($PSBoundParameters.ContainsKey('MinimumFileCount')) { $RemoveTranscriptFiles['MinimumFileCount'] = $MinimumFileCount }
 
 			# remove transcript files
-			Try {
+			try {
 				Remove-TranscriptFiles @RemoveTranscriptFiles
 			}
-			Catch {
+			catch {
 				Write-Warning -Message $_.ToString()
 			}
 
 			# stop transcript quietly
-			Try {
+			try {
 				$null = Stop-Transcript
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 		}
 
-		Function Resume-TranscriptForCommand {
+		function Resume-TranscriptForCommand {
 			<#
 			.SYNOPSIS
 			Resumes a PowerShell transcript created by Start-TranscriptForCommand and stored in the module hashtable.
@@ -385,52 +385,52 @@ Begin {
 			None. The function does not generate any output.
 			#>
 
-			Param(
+			param(
 				# name for transcript items; default is sanitized name of calling script or function
 				[Parameter(Position = 0)]
 				[string]$TranscriptName = (Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$'
 			)
 
 			# if module hashtable does not have a key for calling script or function...
-			If (!$script:TranscriptParameters.ContainsKey($TranscriptName)) {
+			if (!$script:TranscriptParameters.ContainsKey($TranscriptName)) {
 				Write-Warning -Message 'could not resume original transcript: the module hashtable does not have a key for the calling script or function'
-				Return
+				return
 			}
 
 			# if value in module hashtable is not a hashtable...
-			If ($script:TranscriptParameters[$TranscriptName] -isnot [System.Collections.Hashtable]) {
+			if ($script:TranscriptParameters[$TranscriptName] -isnot [System.Collections.Hashtable]) {
 				Write-Warning -Message 'could not resume original transcript: the value in the module hashtable for the calling script or function is not a hashtable'
-				Return
+				return
 			}
 
 			# retrieve parameters from script variable
 			$StartTranscript = $script:TranscriptParameters[$TranscriptName]
 
 			# start transcript quietly
-			Try	{
+			try	{
 				$null = Start-Transcript @StartTranscript
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 
 			# if module hashtable does not have a key for calling script or function...
-			If (!$script:TextOutputParameters.ContainsKey($TranscriptName)) {
+			if (!$script:TextOutputParameters.ContainsKey($TranscriptName)) {
 				Write-Warning -Message 'could not resume original transcript: the module hashtable does not have a key for the calling script or function'
-				Return
+				return
 			}
 
 			# if value in module hashtable is not a string...
-			If ($script:TextOutputParameters[$TranscriptName] -isnot [System.String]) {
+			if ($script:TextOutputParameters[$TranscriptName] -isnot [System.String]) {
 				Write-Warning -Message 'could not resume original transcript: the value in the module hashtable for the calling script or function is not a string'
-				Return
+				return
 			}
 
 			# update path of active text output file to value from module hashtable
 			$script:TextOutputActivePath = $script:TextOutputParameters[$TranscriptName]
 		}
 
-		Function Suspend-TranscriptForCommand {
+		function Suspend-TranscriptForCommand {
 			<#
 			.SYNOPSIS
 			Suspends a PowerShell transcript created by Start-TranscriptForCommand and stored in the module hashtable.
@@ -445,37 +445,37 @@ Begin {
 			None. The function does not generate any output.
 			#>
 
-			Param(
+			param(
 				# name for transcript items; default is sanitized name of calling script or function
 				[Parameter(Position = 0)]
 				[string]$TranscriptName = (Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$'
 			)
 
 			# if module hashtable does not have a key for calling script or function...
-			If (!$script:TranscriptParameters.ContainsKey($TranscriptName)) {
+			if (!$script:TranscriptParameters.ContainsKey($TranscriptName)) {
 				Write-Warning -Message 'will not suspend current transcript: the module hashtable does not have a key for the calling script or function'
-				Return
+				return
 			}
 
 			# if value in module hashtable variable is not a hashtable...
-			If ($script:TranscriptParameters[$TranscriptName] -isnot [System.Collections.Hashtable]) {
+			if ($script:TranscriptParameters[$TranscriptName] -isnot [System.Collections.Hashtable]) {
 				Write-Warning -Message 'will not suspend current transcript: the value in the module hashtable for the calling script or function is not a hashtable'
-				Return
+				return
 			}
 
 			# clear path of active text output file
 			$script:TextOutputActivePath = [string]::Empty
 
 			# stop transcript quietly
-			Try	{
+			try	{
 				$null = Stop-Transcript
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 		}
 
-		Function Remove-TranscriptFiles {
+		function Remove-TranscriptFiles {
 			<#
 			.SYNOPSIS
 			Stops a PowerShell transcript after removing old transcript files from the defined transcript folder.
@@ -514,7 +514,7 @@ Begin {
 			None. The function does not generate any output.
 			#>
 
-			Param(
+			param(
 				# name for transcript items; default is sanitized name of calling script or function
 				[Parameter()]
 				[string]$TranscriptName = (Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$',
@@ -542,13 +542,13 @@ Begin {
 			)
 
 			# if transcript path does not exist...
-			If (![System.IO.Directory]::Exists($TranscriptPath)) {
+			if (![System.IO.Directory]::Exists($TranscriptPath)) {
 				Write-Warning "could not locate path: $TranscriptPath"
-				Return
+				return
 			}
 
 			# if time span is negative...
-			If ($TimeSpan -lt [timespan]::Zero) {
+			if ($TimeSpan -lt [timespan]::Zero) {
 				# flip timespan with negate method
 				$TimeSpan = $TimeSpan.Negate()
 			}
@@ -563,46 +563,46 @@ Begin {
 			Write-Verbose -Message "Removing transcript files from '$TranscriptPath' matching '$TranscriptFilter' with a LastWriteTime before '$($TranscriptDate.ToString('s'))' provided that '$MinimumFileCount' files remain"
 
 			# get transcript files matching filter
-			Try {
+			try {
 				$TranscriptFiles = Get-ChildItem -Path $TranscriptPath -Filter $TranscriptFilter -ErrorAction 'Stop'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message 'could not retrieve transcript files'
-				Return $_
+				return $_
 			}
 
 			# split transcript files into files-to-remain and files-to-remove based upon LastWriteTime
-			Try {
+			try {
 				$FilesToRemain, $FilesToRemove = $TranscriptFiles.Where({ $_.LastWriteTime -ge $TranscriptDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
 			}
-			Catch {
+			catch {
 				Write-Warning -Message 'could not split transcript files by LastWriteTime'
-				Return $_
+				return $_
 			}
 
 			# if count of files-to-remain is than minimum file count...
-			If ($FilesToRemain.Count -lt $MinimumFileCount) {
+			if ($FilesToRemain.Count -lt $MinimumFileCount) {
 				# declare skip and return
 				Write-Verbose -Message "Skipping transcript cleanup: only '$($FilesToRemain.Count)' files would remain"
-				Return
+				return
 			}
 
 			# sort files-to-remove by name then process files
-			ForEach ($FileToRemove in ($FilesToRemove | Sort-Object -Property FullName)) {
+			foreach ($FileToRemove in ($FilesToRemove | Sort-Object -Property FullName)) {
 				# remove file
-				Try {
+				try {
 					Remove-Item -Path $FileToRemove.FullName -Force -ErrorAction 'Stop'
 				}
-				Catch {
+				catch {
 					Write-Warning -Message "could not remove transcript file: $($FileToRemove.FullName)"
-					Return $_
+					return $_
 				}
 				# report complete
 				Write-Verbose -Message "Removed transcript file: $($FileToRemove.FullName)"
 			}
 		}
 
-		Function Remove-TextOutputFiles {
+		function Remove-TextOutputFiles {
 			<#
 			.SYNOPSIS
 			Removes old text output files from the defined text output folder.
@@ -641,7 +641,7 @@ Begin {
 			None. The function does not generate any output.
 			#>
 
-			Param(
+			param(
 				# name for text output items; default is sanitized name of calling script or function
 				[Parameter()]
 				[string]$TextOutputName = (Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$',
@@ -669,13 +669,13 @@ Begin {
 			)
 
 			# if text output path does not exist...
-			If (![System.IO.Directory]::Exists($TextOutputPath)) {
+			if (![System.IO.Directory]::Exists($TextOutputPath)) {
 				Write-Warning "could not locate path: $TextOutputPath"
-				Return
+				return
 			}
 
 			# if time span is negative...
-			If ($TimeSpan -lt [timespan]::Zero) {
+			if ($TimeSpan -lt [timespan]::Zero) {
 				# flip timespan with negate method
 				$TimeSpan = $TimeSpan.Negate()
 			}
@@ -690,46 +690,46 @@ Begin {
 			Write-Verbose -Message "Removing text output files from '$TextOutputPath' matching '$TextOutputFilter' with a LastWriteTime before '$($TextOutputDate.ToString('s'))' provided that '$MinimumFileCount' files remain"
 
 			# get text output files matching filter
-			Try {
+			try {
 				$TextOutputFiles = Get-ChildItem -Path $TextOutputPath -Filter $TextOutputFilter -ErrorAction 'Stop'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message 'could not retrieve text output files'
-				Return $_
+				return $_
 			}
 
 			# split text output files into files-to-remain and files-to-remove based upon LastWriteTime
-			Try {
+			try {
 				$FilesToRemain, $FilesToRemove = $TextOutputFiles.Where({ $_.LastWriteTime -ge $TextOutputDate }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
 			}
-			Catch {
+			catch {
 				Write-Warning -Message 'could not split text output files by LastWriteTime'
-				Return $_
+				return $_
 			}
 
 			# if count of files-to-remain is than minimum file count...
-			If ($FilesToRemain.Count -lt $MinimumFileCount) {
+			if ($FilesToRemain.Count -lt $MinimumFileCount) {
 				# declare skip and return
 				Write-Verbose -Message "Skipping text output cleanup: only '$($FilesToRemain.Count)' files would remain"
-				Return
+				return
 			}
 
 			# sort files-to-remove by name then process files
-			ForEach ($FileToRemove in ($FilesToRemove | Sort-Object -Property FullName)) {
+			foreach ($FileToRemove in ($FilesToRemove | Sort-Object -Property FullName)) {
 				# remove file
-				Try {
+				try {
 					Remove-Item -Path $FileToRemove.FullName -Force -ErrorAction 'Stop'
 				}
-				Catch {
+				catch {
 					Write-Warning -Message "could not remove text output file: $($FileToRemove.FullName)"
-					Return $_
+					return $_
 				}
 				# report complete
 				Write-Verbose -Message "Removed text output file: $($FileToRemove.FullName)"
 			}
 		}
 
-		Function New-TextOutputFile {
+		function New-TextOutputFile {
 			<#
 			.SYNOPSIS
 			Creates a file containing text output from a PowerShell transcript session with the given parameters in a defined folder structure.
@@ -765,7 +765,7 @@ Begin {
 			None. The function does not generate any output.
 			#>
 
-			Param(
+			param(
 				# name for text output files; default is sanitized name of calling script or function
 				[Parameter(Position = 0)]
 				[string]$TextOutputName = (Get-PSCallStack)[0].Command -replace '^<|\.ps1$|>$',
@@ -790,7 +790,7 @@ Begin {
 			)
 
 			# verify text output path
-			If (!(Test-Path -Path $TextOutputPath -PathType 'Container')) {
+			if (!(Test-Path -Path $TextOutputPath -PathType 'Container')) {
 				# define parameters for New-Item
 				$NewItem = @{
 					Path        = $TextOutputPath
@@ -799,11 +799,11 @@ Begin {
 				}
 
 				# create text output path
-				Try {
+				try {
 					$null = New-Item @NewItem
 				}
-				Catch {
-					Throw $_
+				catch {
+					throw $_
 				}
 			}
 
@@ -814,7 +814,7 @@ Begin {
 			$TextOutputFilePath = Join-Path -Path $TextOutputPath -ChildPath $TextOutputFileName
 
 			# verify text output file
-			If (!(Test-Path -Path $TextOutputFilePath -PathType 'Leaf')) {
+			if (!(Test-Path -Path $TextOutputFilePath -PathType 'Leaf')) {
 				# define parameters for New-Item
 				$NewItem = @{
 					Path        = $TextOutputFilePath
@@ -823,11 +823,11 @@ Begin {
 				}
 
 				# create text output file
-				Try {
+				try {
 					$null = New-Item @NewItem
 				}
-				Catch {
-					Throw $_
+				catch {
+					throw $_
 				}
 			}
 
@@ -838,7 +838,7 @@ Begin {
 			$script:TextOutputActivePath = $TextOutputFilePath
 		}
 
-		Function Write-TextOutputFile {
+		function Write-TextOutputFile {
 			<#
 			.SYNOPSIS
 			Writes text output from a PowerShell session to a file.
@@ -871,7 +871,7 @@ Begin {
 			None. The function does not generate any output.
 			#>
 
-			Param(
+			param(
 				# original text output
 				[Parameter(Position = 0, Mandatory = $true)]
 				[string]$Message,
@@ -896,31 +896,31 @@ Begin {
 			)
 
 			# remove new lines from message
-			Try {
+			try {
 				$MessageWithoutNewLines = $Message.Replace("`r`n", ' ').Replace("`n", ' ').Replace("`r", ' ')
 			}
-			Catch {
+			catch {
 				$PSCmdlet.ThrowTerminatingError($_)
 			}
 
 			# update message with information prefix and new line suffix
-			Try {
+			try {
 				$MessageWithInformation = 'datetime="{0}" hostname="{1}" username="{2}" command="{3}" stream="{4}" message="{5}"{6}' -f $Datetime, $Hostname, $Username, $Command, $Stream, $MessageWithoutNewLines, [System.Environment]::NewLine
 			}
-			Catch {
+			catch {
 				$PSCmdlet.ThrowTerminatingError($_)
 			}
 
 			# append message to file
-			Try {
+			try {
 				[System.IO.File]::AppendAllText($Path, $MessageWithInformation)
 			}
-			Catch {
+			catch {
 				$PSCmdlet.ThrowTerminatingError($_)
 			}
 		}
 
-		Function Write-Host {
+		function Write-Host {
 			# [System.Management.Automation.ProxyCommand]::Create([System.Management.Automation.CommandMetaData]::new((Get-Command -Name Write-Host)))
 
 			<#
@@ -929,7 +929,7 @@ Begin {
 			#>
 
 			[CmdletBinding(HelpUri = 'https://go.microsoft.com/fwlink/?LinkID=113426', RemotingCapability = 'None')]
-			Param(
+			param(
 				[Parameter(Position = 0, ValueFromPipeline = $true, ValueFromRemainingArguments = $true)]
 				[System.Object]
 				${Object},
@@ -947,9 +947,9 @@ Begin {
 				${BackgroundColor}
 			)
 
-			Begin {
+			begin {
 				# create steppable pipeline
-				Try {
+				try {
 					# get command information from execution context
 					$Command = $ExecutionContext.InvokeCommand.GetCommand('Microsoft.PowerShell.Utility\Write-Host', [System.Management.Automation.CommandTypes]::Cmdlet)
 
@@ -957,7 +957,7 @@ Begin {
 					$OutBuffer = $null
 
 					# if bound parameters contains 'OutBuffer' parameter...
-					If ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$OutBuffer)) {
+					if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$OutBuffer)) {
 						# set OutBuffer to 1
 						$PSBoundParameters['OutBuffer'] = 1
 					}
@@ -971,65 +971,65 @@ Begin {
 					# start steppable pipeline
 					$SteppablePipeline.Begin($PSCmdlet)
 				}
-				Catch {
+				catch {
 					$PSCmdlet.ThrowTerminatingError($_)
 				}
 			}
 
-			Process {
+			process {
 				# if text output file exists...
-				If ([System.IO.File]::Exists($script:TextOutputActivePath)) {
+				if ([System.IO.File]::Exists($script:TextOutputActivePath)) {
 					# if separator provided...
-					If ($PSBoundParameters.ContainsKey('Separator')) {
+					if ($PSBoundParameters.ContainsKey('Separator')) {
 						# define message as Object joined with Separator
-						Try {
+						try {
 							$Message = [System.String]::Join($Separator, $Object)
 						}
-						Catch {
+						catch {
 							$Message = 'could not join Object with Separator'
 						}
 					}
 					# if separater not provided...
-					Else {
+					else {
 						# define message as Object cast to string
-						Try {
+						try {
 							$Message = $Object -as [System.String]
 						}
-						Catch {
+						catch {
 							$Message = 'could not cast Object to string'
 						}
 					}
 
 					# write message to text output file
-					Try {
+					try {
 						Write-TextOutputFile -Message $Message -Stream 'Information'
 					}
-					Catch {
+					catch {
 						# do nothing
 					}
 				}
 
 				# process steppable pipeline
-				Try {
+				try {
 					$SteppablePipeline.Process($_)
 				}
-				Catch {
+				catch {
 					$PSCmdlet.ThrowTerminatingError($_)
 				}
 			}
 
-			End {
+			end {
 				# stop steppable pipeline
-				Try {
+				try {
 					$SteppablePipeline.End()
 				}
-				Catch {
+				catch {
 					$PSCmdlet.ThrowTerminatingError($_)
 				}
 			}
 		}
 
-		Function Write-Information {
+		function Write-Information {
 			# [System.Management.Automation.ProxyCommand]::Create([System.Management.Automation.CommandMetaData]::new((Get-Command -Name Write-Information)))
 
 			<#
@@ -1038,7 +1038,7 @@ Begin {
 			#>
 
 			[CmdletBinding(HelpUri = 'https://go.microsoft.com/fwlink/?LinkId=525909', RemotingCapability = 'None')]
-			Param(
+			param(
 				[Parameter(Mandatory = $true, Position = 0)]
 				[Alias('Msg')]
 				[System.Object]
@@ -1049,9 +1049,9 @@ Begin {
 				${Tags}
 			)
 
-			Begin {
+			begin {
 				# create steppable pipeline
-				Try {
+				try {
 					# get command information from execution context
 					$Command = $ExecutionContext.InvokeCommand.GetCommand('Microsoft.PowerShell.Utility\Write-Information', [System.Management.Automation.CommandTypes]::Cmdlet)
 
@@ -1059,7 +1059,7 @@ Begin {
 					$OutBuffer = $null
 
 					# if bound parameters contains 'OutBuffer' parameter...
-					If ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$OutBuffer)) {
+					if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$OutBuffer)) {
 						# set OutBuffer to 1
 						$PSBoundParameters['OutBuffer'] = 1
 					}
@@ -1073,52 +1073,52 @@ Begin {
 					# start steppable pipeline
 					$SteppablePipeline.Begin($PSCmdlet)
 				}
-				Catch {
+				catch {
 					$PSCmdlet.ThrowTerminatingError($_)
 				}
 			}
 
-			Process {
+			process {
 				# if text output file exists...
-				If ([System.IO.File]::Exists($script:TextOutputActivePath)) {
+				if ([System.IO.File]::Exists($script:TextOutputActivePath)) {
 					# define message as message data cast to string
-					Try {
+					try {
 						$Message = $MessageData -as [System.String]
 					}
-					Catch {
+					catch {
 						$Message = 'could not convert MessageData to string'
 					}
 
 					# write message to text output file
-					Try {
+					try {
 						Write-TextOutputFile -Message $Message -Stream 'Information'
 					}
-					Catch {
+					catch {
 						# do nothing
 					}
 				}
 
 				# process steppable pipeline
-				Try {
+				try {
 					$SteppablePipeline.Process($_)
 				}
-				Catch {
+				catch {
 					$PSCmdlet.ThrowTerminatingError($_)
 				}
 			}
 
-			End {
+			end {
 				# stop steppable pipeline
-				Try {
+				try {
 					$SteppablePipeline.End()
 				}
-				Catch {
+				catch {
 					$PSCmdlet.ThrowTerminatingError($_)
 				}
 			}
 		}
 
-		Function Write-Verbose {
+		function Write-Verbose {
 			# [System.Management.Automation.ProxyCommand]::Create([System.Management.Automation.CommandMetaData]::new((Get-Command -Name Write-Verbose)))
 
 			<#
@@ -1127,7 +1127,7 @@ Begin {
 			#>
 
 			[CmdletBinding(HelpUri = 'https://go.microsoft.com/fwlink/?LinkID=113429', RemotingCapability = 'None')]
-			Param(
+			param(
 				[Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
 				[Alias('Msg')]
 				[AllowEmptyString()]
@@ -1135,9 +1135,9 @@ Begin {
 				${Message}
 			)
 
-			Begin {
+			begin {
 				# create steppable pipeline
-				Try {
+				try {
 					# get command information from execution context
 					$Command = $ExecutionContext.InvokeCommand.GetCommand('Microsoft.PowerShell.Utility\Write-Verbose', [System.Management.Automation.CommandTypes]::Cmdlet)
 
@@ -1145,7 +1145,7 @@ Begin {
 					$OutBuffer = $null
 
 					# if bound parameters contains 'OutBuffer' parameter...
-					If ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$OutBuffer)) {
+					if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$OutBuffer)) {
 						# set OutBuffer to 1
 						$PSBoundParameters['OutBuffer'] = 1
 					}
@@ -1159,44 +1159,44 @@ Begin {
 					# start steppable pipeline
 					$SteppablePipeline.Begin($PSCmdlet)
 				}
-				Catch {
+				catch {
 					$PSCmdlet.ThrowTerminatingError($_)
 				}
 			}
 
-			Process {
+			process {
 				# if text output file exists...
-				If ([System.IO.File]::Exists($script:TextOutputActivePath)) {
+				if ([System.IO.File]::Exists($script:TextOutputActivePath)) {
 					# write message to text output file
-					Try {
+					try {
 						Write-TextOutputFile -Message $Message -Stream 'Verbose'
 					}
-					Catch {
+					catch {
 						# do nothing
 					}
 				}
 
 				# process steppable pipeline
-				Try {
+				try {
 					$SteppablePipeline.Process($_)
 				}
-				Catch {
+				catch {
 					$PSCmdlet.ThrowTerminatingError($_)
 				}
 			}
 
-			End {
+			end {
 				# stop steppable pipeline
-				Try {
+				try {
 					$SteppablePipeline.End()
 				}
-				Catch {
+				catch {
 					$PSCmdlet.ThrowTerminatingError($_)
 				}
 			}
 		}
 
-		Function Write-Warning {
+		function Write-Warning {
 			# [System.Management.Automation.ProxyCommand]::Create([System.Management.Automation.CommandMetaData]::new((Get-Command -Name Write-Warning)))
 
 			<#
@@ -1205,7 +1205,7 @@ Begin {
 			#>
 
 			[CmdletBinding(HelpUri = 'https://go.microsoft.com/fwlink/?LinkID=113430', RemotingCapability = 'None')]
-			Param(
+			param(
 				[Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
 				[Alias('Msg')]
 				[AllowEmptyString()]
@@ -1213,9 +1213,9 @@ Begin {
 				${Message}
 			)
 
-			Begin {
+			begin {
 				# create steppable pipeline
-				Try {
+				try {
 					# get command information from execution context
 					$Command = $ExecutionContext.InvokeCommand.GetCommand('Microsoft.PowerShell.Utility\Write-Warning', [System.Management.Automation.CommandTypes]::Cmdlet)
 
@@ -1223,7 +1223,7 @@ Begin {
 					$OutBuffer = $null
 
 					# if bound parameters contains 'OutBuffer' parameter...
-					If ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$OutBuffer)) {
+					if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$OutBuffer)) {
 						# set OutBuffer to 1
 						$PSBoundParameters['OutBuffer'] = 1
 					}
@@ -1237,44 +1237,44 @@ Begin {
 					# start steppable pipeline
 					$SteppablePipeline.Begin($PSCmdlet)
 				}
-				Catch {
+				catch {
 					$PSCmdlet.ThrowTerminatingError($_)
 				}
 			}
 
-			Process {
+			process {
 				# if text output file exists...
-				If ([System.IO.File]::Exists($script:TextOutputActivePath)) {
+				if ([System.IO.File]::Exists($script:TextOutputActivePath)) {
 					# write message to text output file
-					Try {
+					try {
 						Write-TextOutputFile -Message $Message -Stream 'Warning'
 					}
-					Catch {
+					catch {
 						# do nothing
 					}
 				}
 
 				# process steppable pipeline
-				Try {
+				try {
 					$SteppablePipeline.Process($_)
 				}
-				Catch {
+				catch {
 					$PSCmdlet.ThrowTerminatingError($_)
 				}
 			}
 
-			End {
+			end {
 				# stop steppable pipeline
-				Try {
+				try {
 					$SteppablePipeline.End()
 				}
-				Catch {
+				catch {
 					$PSCmdlet.ThrowTerminatingError($_)
 				}
 			}
 		}
 
-		Function Write-Error {
+		function Write-Error {
 			# [System.Management.Automation.ProxyCommand]::Create([System.Management.Automation.CommandMetaData]::new((Get-Command -Name Write-Error)))
 
 			<#
@@ -1335,9 +1335,9 @@ Begin {
 				${CategoryTargetType}
 			)
 
-			Begin {
+			begin {
 				# create steppable pipeline
-				Try {
+				try {
 					# get command information from execution context
 					$Command = $ExecutionContext.InvokeCommand.GetCommand('Microsoft.PowerShell.Utility\Write-Error', [System.Management.Automation.CommandTypes]::Cmdlet)
 
@@ -1345,7 +1345,7 @@ Begin {
 					$OutBuffer = $null
 
 					# if bound parameters contains 'OutBuffer' parameter...
-					If ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$OutBuffer)) {
+					if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$OutBuffer)) {
 						# set OutBuffer to 1
 						$PSBoundParameters['OutBuffer'] = 1
 					}
@@ -1359,65 +1359,65 @@ Begin {
 					# start steppable pipeline
 					$SteppablePipeline.Begin($PSCmdlet)
 				}
-				Catch {
+				catch {
 					$PSCmdlet.ThrowTerminatingError($_)
 				}
 			}
 
-			Process {
+			process {
 				# if text output file exists...
-				If ([System.IO.File]::Exists($script:TextOutputActivePath)) {
+				if ([System.IO.File]::Exists($script:TextOutputActivePath)) {
 					# if Message provided...
-					If ($PSCmdlet.ParameterSetName -eq 'NoException') {
+					if ($PSCmdlet.ParameterSetName -eq 'NoException') {
 						$ErrorMessage = $Message
 					}
 					# if Exception provided...
-					ElseIf ($PSCmdlet.ParameterSetName -eq 'WithException') {
+					elseif ($PSCmdlet.ParameterSetName -eq 'WithException') {
 						# if Exception contains an inner exception...
-						If ($Exception.InnerException) {
+						if ($Exception.InnerException) {
 							$ErrorMessage = '[{0}]; {1}' -f $Exception.InnerException.GetType().FullName, $Exception.InnerException.Message
 						}
 						# if Exception does not contain an inner exception...
-						Else {
+						else {
 							$ErrorMessage = '[{0}]; {1}' -f $Exception.GetType().FullName, $Exception.Message
 						}
 					}
 					# if ErrorRecord provided...
-					ElseIf ($PSCmdlet.ParameterSetName -eq 'ErrorRecord') {
+					elseif ($PSCmdlet.ParameterSetName -eq 'ErrorRecord') {
 						# if exception in ErrorRecord contains an inner exception...
-						If ($ErrorRecord.Exception.InnerException) {
+						if ($ErrorRecord.Exception.InnerException) {
 							$ErrorMessage = '[{0}]; {1}' -f $ErrorRecord.Exception.InnerException.GetType().FullName, $ErrorRecord.Exception.InnerException.Message
 						}
 						# if exception in ErrorRecord does not contain an inner exception...
-						Else {
+						else {
 							$ErrorMessage = '[{0}]; {1}' -f $ErrorRecord.Exception.GetType().FullName, $ErrorRecord.Exception.Message
 						}
 					}
 
 					# write message to text output file
-					Try {
+					try {
 						Write-TextOutputFile -Message $ErrorMessage -Stream 'Error'
 					}
-					Catch {
+					catch {
 						# do nothing
 					}
 				}
 
 				# process steppable pipeline
-				Try {
+				try {
 					$SteppablePipeline.Process($_)
 				}
-				Catch {
+				catch {
 					$PSCmdlet.ThrowTerminatingError($_)
 				}
 			}
 
-			End {
+			end {
 				# stop steppable pipeline
-				Try {
+				try {
 					$SteppablePipeline.End()
 				}
-				Catch {
+				catch {
 					$PSCmdlet.ThrowTerminatingError($_)
 				}
 			}
@@ -1437,36 +1437,36 @@ Begin {
 		################################################
 
 		# start transcript with default parameters and skip text output if requested
-		Try {
+		try {
 			Start-TranscriptForCommand -SkipTextOutput:$SkipTextOutput
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 	}
 
 	# retrieve cluster nodes
-	Try {
+	try {
 		$ClusterNodes = Get-ClusterNode -ErrorAction 'Stop' | Sort-Object -Property NodeName
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "could not retrieve local cluster nodes: $($_.Exception.Message)"
 		$PSCmdlet.ThrowTerminatingError($_)
 	}
 
 	# retrieve clustered scheduled tasks
-	Try {
+	try {
 		$ClusteredScheduledTasks = Get-ClusteredScheduledTask -TaskName $ClusterTaskName -ErrorAction 'Stop'
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "could not retrieve clustered scheduled tasks: $($_.Exception.Message)"
 		$PSCmdlet.ThrowTerminatingError($_)
 	}
 }
 
-Process {
+process {
 	# start
-	If ($PSCmdlet.ParameterSetName -eq 'Start') {
+	if ($PSCmdlet.ParameterSetName -eq 'Start') {
 		################################################
 		# check cluster scheduled task before starting
 		################################################
@@ -1475,9 +1475,9 @@ Process {
 		$ClusteredScheduledTask = $ClusteredScheduledTasks | Where-Object { $_.TaskName -eq $ClusterTaskName }
 
 		# if clustered scheduled task found...
-		If ($ClusteredScheduledTask) {
+		if ($ClusteredScheduledTask) {
 			Write-Warning -Message "found existing '$ClusterTaskName' clustered scheduled task, run this script with the Restart or Stop parameters to reset or remove the scheduled task"
-			Return
+			return
 		}
 
 		################################################
@@ -1485,18 +1485,18 @@ Process {
 		################################################
 
 		# test cluster for incorrect state or status
-		Try {
+		try {
 			$IncorrectStateOrStatus = Test-ClusterForIncorrectStateOrStatus -State 'Up' -Status 'Normal'
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not test cluster for incorrect state or status: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# if incorrect state or status...
-		If ($IncorrectStateOrStatus) {
+		if ($IncorrectStateOrStatus) {
 			# return as warnings were issued by function
-			Return
+			return
 		}
 
 		################################################
@@ -1504,31 +1504,31 @@ Process {
 		################################################
 
 		# if Path not provided...
-		If (!$PSBoundParameters.ContainsKey('Path')) {
+		if (!$PSBoundParameters.ContainsKey('Path')) {
 			# retrieve script path
 			$Path = $MyInvocation.MyCommand.Path
 		}
 
 		# if skip of cluster storage check not requested...
-		If (!$SkipClusteredStorageCheck) {
+		if (!$SkipClusteredStorageCheck) {
 			# define boolean
 			$PathIsNotValid = $false
 
 			# loop through cluster nodes
-			ForEach ($ClusterNode in $ClusterNodes) {
+			foreach ($ClusterNode in $ClusterNodes) {
 				# if cluster node is not local computer...
-				If ($ClusterNode.NodeName -ne $env:COMPUTERNAME) {
+				if ($ClusterNode.NodeName -ne $env:COMPUTERNAME) {
 					# check remote computer for script
-					Try {
+					try {
 						$NotFound = Invoke-Command -ComputerName $ClusterNode.NodeName -ScriptBlock { ![System.IO.File]::Exists($using:Path) }
 					}
-					Catch {
+					catch {
 						Write-Warning -Message "could not check '$($ClusterNode.NodeName)' cluster node for '$Path' path: $($_.Exception.Message)"
-						Return $_
+						return $_
 					}
 
 					# if script not found...
-					If ($NotFound) {
+					if ($NotFound) {
 						Write-Warning -Message "could not locate script on '$($ClusterNode.NodeName)' cluster node with '$Path' path"
 						$PathIsNotValid = $true
 					}
@@ -1536,9 +1536,9 @@ Process {
 			}
 
 			# if path is not valid on one or more nodes...
-			If ($PathIsNotValid) {
+			if ($PathIsNotValid) {
 				Write-Warning -Message 'this script MUST be available on every cluster node to continue'
-				Return
+				return
 			}
 		}
 
@@ -1546,17 +1546,17 @@ Process {
 		# create state objects
 		################################################
 
-		# create list for state objects
-		Try {
+		# create list for cluster node state objects
+		try {
 			$ClusterState = [System.Collections.Generic.List[object]]::new()
 		}
-		Catch {
-			Write-Warning -Message "could not create list for state objects: $($_.Exception.Message)"
-			Return $_
+		catch {
+			Write-Warning -Message "could not create list for cluster node state objects: $($_.Exception.Message)"
+			return $_
 		}
 
 		# loop through cluster nodes
-		ForEach ($ClusterNode in $ClusterNodes) {
+		foreach ($ClusterNode in $ClusterNodes) {
 			# create state object for cluster node with initial 'Ready' state
 			$ClusterNodeState = [PSCustomObject]@{
 				Name  = $ClusterNode.NodeName
@@ -1568,12 +1568,12 @@ Process {
 		}
 
 		# create task description from state object
-		Try {
-			$Description = $ClusterState | Sort-Object -Property 'Name' | ConvertTo-Json -Compress -Depth 100
+		try {
+			$Description = $ClusterState | ConvertTo-Json -Compress -Depth 100
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not convert cluster state object to JSON: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		################################################
@@ -1587,12 +1587,12 @@ Process {
 		}
 
 		# create task action
-		Try {
+		try {
 			$Action = New-ScheduledTaskAction @ScheduledTaskAction
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not create scheduled task action object: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# define task action
@@ -1603,18 +1603,18 @@ Process {
 		}
 
 		# if suspended start requested...
-		If ($PSBoundParameters.ContainsKey('Suspended')) {
+		if ($PSBoundParameters.ContainsKey('Suspended')) {
 			# define task settings with task disabled
 			$ScheduledTaskSettingsSet['Disable'] = $true
 		}
 
 		# create task settings
-		Try {
+		try {
 			$Settings = New-ScheduledTaskSettingsSet @ScheduledTaskSettingsSet
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not create scheduled task settings object: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# define task trigger
@@ -1630,12 +1630,12 @@ Process {
 		}
 
 		# create task trigger
-		Try {
+		try {
 			$Trigger = New-ScheduledTaskTrigger @ScheduledTaskTrigger
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not create scheduled task trigger object: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# define parameters
@@ -1649,21 +1649,21 @@ Process {
 		}
 
 		# create scheduled task
-		Try {
+		try {
 			$null = Register-ClusteredScheduledTask @ClusteredScheduledTask
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not register '$ClusterTaskName' clustered scheduled task: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# report state and return
 		Write-Host "created '$ClusterTaskName' clustered scheduled task"
-		Return
+		return
 	}
 
 	# stop
-	If ($PSCmdlet.ParameterSetName -eq 'Stop') {
+	if ($PSCmdlet.ParameterSetName -eq 'Stop') {
 		################################################
 		# check cluster scheduled task before starting
 		################################################
@@ -1672,9 +1672,9 @@ Process {
 		$ClusteredScheduledTask = $ClusteredScheduledTasks | Where-Object { $_.TaskName -eq $ClusterTaskName }
 
 		# if clustered scheduled task not found...
-		If (!$ClusteredScheduledTask) {
+		if (!$ClusteredScheduledTask) {
 			Write-Warning -Message "could not locate '$ClusterTaskName' clustered scheduled task"
-			Return
+			return
 		}
 
 		################################################
@@ -1682,32 +1682,32 @@ Process {
 		################################################
 
 		# remove scheduled task
-		Try {
+		try {
 			$null = Unregister-ClusteredScheduledTask -TaskName $ClusterTaskName -ErrorAction 'Stop'
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not unregister '$ClusterTaskName' clustered scheduled task: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# report state and return
 		Write-Host "removed '$ClusterTaskName' clustered scheduled task"
-		Return
+		return
 	}
 
 	# restart
-	If ($PSCmdlet.ParameterSetName -eq 'Restart') {
+	if ($PSCmdlet.ParameterSetName -eq 'Restart') {
 		################################################
-		# check cluster scheduled task before starting
+		# check cluster scheduled task before restarting
 		################################################
 
 		# retrieve clustered scheduled task for cluster
 		$ClusteredScheduledTask = $ClusteredScheduledTasks | Where-Object { $_.TaskName -eq $ClusterTaskName }
 
 		# if clustered scheduled task not found...
-		If (!$ClusteredScheduledTask) {
+		if (!$ClusteredScheduledTask) {
 			Write-Warning -Message "could not locate '$ClusterTaskName' clustered scheduled task"
-			Return
+			return
 		}
 
 		################################################
@@ -1715,35 +1715,35 @@ Process {
 		################################################
 
 		# test cluster for incorrect state or status
-		Try {
+		try {
 			$IncorrectStateOrStatus = Test-ClusterForIncorrectStateOrStatus -State 'Up' -Status 'Normal'
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not test cluster for incorrect state or status: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# if incorrect state or status...
-		If ($IncorrectStateOrStatus) {
+		if ($IncorrectStateOrStatus) {
 			# return as warnings were issued by function
-			Return
+			return
 		}
 
 		################################################
 		# create state objects
 		################################################
 
-		# create list for state objects
-		Try {
+		# create list for cluster node state objects
+		try {
 			$ClusterState = [System.Collections.Generic.List[object]]::new()
 		}
-		Catch {
-			Write-Warning -Message "could not create list for state objects: $($_.Exception.Message)"
-			Return $_
+		catch {
+			Write-Warning -Message "could not create list for cluster node state objects: $($_.Exception.Message)"
+			return $_
 		}
 
 		# loop through cluster nodes
-		ForEach ($ClusterNode in $ClusterNodes) {
+		foreach ($ClusterNode in $ClusterNodes) {
 			# create state object for cluster node with initial 'Ready' state
 			$ClusterNodeState = [PSCustomObject]@{
 				Name  = $ClusterNode.NodeName
@@ -1755,21 +1755,21 @@ Process {
 		}
 
 		# create task description from state object
-		Try {
+		try {
 			$Description = $ClusterState | Sort-Object -Property 'Name' | ConvertTo-Json -Compress -Depth 100
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not convert cluster state object to JSON: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# update description of clustered scheduled task
-		Try {
+		try {
 			$null = Set-ClusteredScheduledTask -TaskName $ClusterTaskName -Description $Description -ErrorAction 'Stop'
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not update '$ClusterTaskName' clustered scheduled task: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# report and return
@@ -1777,24 +1777,24 @@ Process {
 	}
 
 	# suspend
-	If ($PSCmdlet.ParameterSetName -eq 'Suspend') {
+	if ($PSCmdlet.ParameterSetName -eq 'Suspend') {
 		################################################
-		# check cluster scheduled task before starting
+		# check cluster scheduled task before suspending
 		################################################
 
 		# retrieve clustered scheduled task for cluster
 		$ClusteredScheduledTask = $ClusteredScheduledTasks | Where-Object { $_.TaskName -eq $ClusterTaskName }
 
 		# if clustered scheduled task not found...
-		If (!$ClusteredScheduledTask) {
+		if (!$ClusteredScheduledTask) {
 			Write-Warning -Message "could not locate '$ClusterTaskName' clustered scheduled task"
-			Return
+			return
 		}
 
 		# if clustered scheduled task is disabled...
-		If ($ClusteredScheduledTask.TaskDefinition.Settings.Enabled -eq $false) {
+		if ($ClusteredScheduledTask.TaskDefinition.Settings.Enabled -eq $false) {
 			Write-Warning -Message "found '$ClusterTaskName' clustered scheduled task already disabled"
-			Return
+			return
 		}
 
 		################################################
@@ -1803,43 +1803,43 @@ Process {
 
 		# retrieve clustered scheduled task settings
 		$Settings = $ClusteredScheduledTask.TaskDefinition.Settings
-		
+
 		# update clustered scheduled task settings
 		$Settings.Enabled = $false
 
 		# update scheduled task
-		Try {
+		try {
 			$null = Set-ClusteredScheduledTask -TaskName $ClusterTaskName -Settings $Settings -ErrorAction 'Stop'
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not disable '$ClusterTaskName' clustered scheduled task: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# report and return
 		Write-Host "disabled '$ClusterTaskName' clustered scheduled task"
-		Return
+		return
 	}
 
 	# resume
-	If ($PSCmdlet.ParameterSetName -eq 'Resume') {
+	if ($PSCmdlet.ParameterSetName -eq 'Resume') {
 		################################################
-		# check cluster scheduled task before starting
+		# check cluster scheduled task before resuming
 		################################################
 
 		# retrieve clustered scheduled task for cluster
 		$ClusteredScheduledTask = $ClusteredScheduledTasks | Where-Object { $_.TaskName -eq $ClusterTaskName }
 
 		# if clustered scheduled task not found...
-		If (!$ClusteredScheduledTask) {
+		if (!$ClusteredScheduledTask) {
 			Write-Warning -Message "could not locate '$ClusterTaskName' clustered scheduled task"
-			Return
+			return
 		}
 
 		# if clustered scheduled task is enabled...
-		If ($ClusteredScheduledTask.TaskDefinition.Settings.Enabled -eq $true) {
+		if ($ClusteredScheduledTask.TaskDefinition.Settings.Enabled -eq $true) {
 			Write-Warning -Message "found '$ClusterTaskName' clustered scheduled task already enabled"
-			Return
+			return
 		}
 
 		################################################
@@ -1848,37 +1848,37 @@ Process {
 
 		# retrieve clustered scheduled task settings
 		$Settings = $ClusteredScheduledTask.TaskDefinition.Settings
-		
+
 		# update clustered scheduled task settings
 		$Settings.Enabled = $true
 
 		# update scheduled task
-		Try {
+		try {
 			$null = Set-ClusteredScheduledTask -TaskName $ClusterTaskName -Settings $Settings -ErrorAction 'Stop'
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not enable '$ClusterTaskName' clustered scheduled task: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# report and return
 		Write-Host "enabled '$ClusterTaskName' clustered scheduled task"
-		Return
+		return
 	}
 
 	# report
-	If ($PSCmdlet.ParameterSetName -eq 'Report') {
+	if ($PSCmdlet.ParameterSetName -eq 'Report') {
 		################################################
-		# check cluster scheduled task before starting
+		# check cluster scheduled task before reporting
 		################################################
 
 		# retrieve clustered scheduled task for cluster
 		$ClusteredScheduledTask = $ClusteredScheduledTasks | Where-Object { $_.TaskName -eq $ClusterTaskName }
 
 		# if clustered scheduled task not found...
-		If (!$ClusteredScheduledTask) {
+		if (!$ClusteredScheduledTask) {
 			Write-Warning -Message "could not locate '$ClusterTaskName' clustered scheduled task"
-			Return
+			return
 		}
 
 		################################################
@@ -1886,35 +1886,35 @@ Process {
 		################################################
 
 		# if description is empty...
-		If ([string]::IsNullOrEmpty($ClusteredScheduledTask.TaskDefinition.Description)) {
+		if ([string]::IsNullOrEmpty($ClusteredScheduledTask.TaskDefinition.Description)) {
 			# warn and return
 			Write-Warning -Message "found empty description on '$ClusterTaskName' clustered scheduled task"
-			Return
+			return
 		}
 
 		# retrieve cluster state object from scheduled task description
-		Try {
+		try {
 			$ClusterState = ConvertFrom-Json -InputObject $ClusteredScheduledTask.TaskDefinition.Description -ErrorAction 'Stop'
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not convert description of scheduled task to JSON: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 	}
 
 	# default
-	If ($PSCmdlet.ParameterSetName -eq 'Default') {
+	if ($PSCmdlet.ParameterSetName -eq 'Default') {
 		################################################
-		# check cluster scheduled task before starting
+		# check cluster scheduled task before running
 		################################################
 
 		# retrieve clustered scheduled task for cluster
 		$ClusteredScheduledTask = $ClusteredScheduledTasks | Where-Object { $_.TaskName -eq $ClusterTaskName }
 
 		# if clustered scheduled task not found...
-		If (!$ClusteredScheduledTask) {
+		if (!$ClusteredScheduledTask) {
 			Write-Warning -Message "could not locate '$ClusterTaskName' clustered scheduled task"
-			Return
+			return
 		}
 
 		################################################
@@ -1922,30 +1922,30 @@ Process {
 		################################################
 
 		# if description is empty...
-		If ([string]::IsNullOrEmpty($ClusteredScheduledTask.TaskDefinition.Description)) {
+		if ([string]::IsNullOrEmpty($ClusteredScheduledTask.TaskDefinition.Description)) {
 			# warn and return
 			Write-Warning -Message "found empty description on '$ClusterTaskName' clustered scheduled task"
-			Return
+			return
 		}
 
 		# retrieve cluster state object from scheduled task description
-		Try {
+		try {
 			$ClusterState = ConvertFrom-Json -InputObject $ClusteredScheduledTask.TaskDefinition.Description -ErrorAction 'Stop'
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not convert description of scheduled task to JSON: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		################################################
 		# validate stored state
 		################################################
 
-		# define boolean
+		# define boolean for state object
 		$StateIsNotValid = $false
 
 		# loop through cluster nodes
-		ForEach ($ClusterNode in $ClusterNodes) {
+		foreach ($ClusterNode in $ClusterNodes) {
 			# get stored state of cluster node
 			$Node = $ClusterState | Where-Object { $_.Name -eq $ClusterNode.NodeName }
 
@@ -1953,13 +1953,13 @@ Process {
 			$Count = Measure-Object -InputObject $Node | Select-Object -ExpandProperty 'Count'
 
 			# if node not found in state object...
-			If ($Count -eq 0) {
+			if ($Count -eq 0) {
 				Write-Warning -Message "could not locate entry for '$($ClusterNode.NodeName)' cluster node in state object"
 				$StateIsNotValid = $true
 			}
 
 			# if node found multiple times in state object...
-			If ($Count -gt 1) {
+			if ($Count -gt 1) {
 				Write-Warning -Message "found multiple entries for '$($ClusterNode.NodeName)' cluster node in state object"
 				$StateIsNotValid = $true
 			}
@@ -1970,10 +1970,10 @@ Process {
 
 		}
 
-		# if state is not valid...
+		# if state object is not valid...
 		If ($StateIsNotValid) {
 			Write-Warning -Message 'the state object is not valid'
-			Return
+			return
 		}
 
 		################################################
@@ -1984,49 +1984,49 @@ Process {
 		$StateIsComplete = $true
 
 		# loop through cluster nodes
-		ForEach ($ClusterNode in $ClusterNodes) {
+		foreach ($ClusterNode in $ClusterNodes) {
 			# get stored state of cluster node that has not reached the Complete state
 			$Node = $ClusterState | Where-Object { $_.Name -eq $ClusterNode.NodeName }
 
 			# if state of node is not complete...
-			If ($Node.State -ne 'Complete') {
+			if ($Node.State -ne 'Complete') {
 				$StateIsComplete = $false
 			}
 		}
 
 		# if all nodes are complete...
-		If ($StateIsComplete) {
+		if ($StateIsComplete) {
 			# declare complete and return
 			Write-Host 'all cluster nodes have restarted'
 
 			# retrieve owner of Cluster Group
-			Try {
+			try {
 				$ClusterGroupNode = Get-ClusterGroup -Name 'Cluster Group' -ErrorAction 'Stop' | Select-Object -ExpandProperty OwnerNode | Select-Object -ExpandProperty Name
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not retrieve current owner of 'Cluster Group' cluster group on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# if cluster group not on current node...
-			If ($ClusterGroupNode -ne $env:COMPUTERNAME) {
-				Return
+			if ($ClusterGroupNode -ne $env:COMPUTERNAME) {
+				return
 			}
 
 			# remove scheduled task
-			Try {
+			try {
 				$null = Unregister-ClusteredScheduledTask -TaskName $ClusterTaskName -ErrorAction 'Stop'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not unregister '$ClusterTaskName' clustered scheduled task: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# report state
 			Write-Host "removed '$ClusterTaskName' clustered scheduled task"
 
 			# loop through cluster state
-			ForEach ($ClusterNode in $ClusterNodes) {
+			foreach ($ClusterNode in $ClusterNodes) {
 				# get stored state of cluster node that has not reached the Complete state
 				$Node = $ClusterState | Where-Object { $_.Name -eq $ClusterNode.NodeName }
 
@@ -2035,7 +2035,7 @@ Process {
 			}
 
 			# return
-			Return
+			return
 		}
 
 		################################################
@@ -2046,10 +2046,10 @@ Process {
 		$StoredClusterNode = $ClusterState | Sort-Object -Property 'Name' | Where-Object { $_.State -ne 'Complete' } | Select-Object -First 1
 
 		# if current node name is not local computer name...
-		If ($StoredClusterNode.Name -ne $env:COMPUTERNAME) {
+		if ($StoredClusterNode.Name -ne $env:COMPUTERNAME) {
 			# declare not current and return
 			Write-Host 'local computer is not current node'
-			Return
+			return
 		}
 
 		################################################
@@ -2057,35 +2057,35 @@ Process {
 		################################################
 
 		# if stored state of current node is Ready...
-		If ($StoredClusterNode.State -eq 'Ready') {
+		if ($StoredClusterNode.State -eq 'Ready') {
 			# test cluster for incorrect state or status
-			Try {
+			try {
 				$IncorrectStateOrStatus = Test-ClusterForIncorrectStateOrStatus -State 'Up' -Status 'Normal' -NodeName $env:COMPUTERNAME
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not test cluster for incorrect state or status on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# if incorrect state or status...
-			If ($IncorrectStateOrStatus) {
+			if ($IncorrectStateOrStatus) {
 				# return as warnings were issued by function
-				Return
+				return
 			}
 
 			# test cluster for storage jobs
-			Try {
+			try {
 				$StorageJobsFound = Test-ClusterForStorageJobs
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not test cluster for storage jobs on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# if any storage jobs found...
-			If ($StorageJobsFound) {
+			if ($StorageJobsFound) {
 				Write-Host "exiting: waiting for storage jobs to complete on '$env:COMPUTERNAME' cluster node"
-				Return
+				return
 			}
 		}
 
@@ -2094,14 +2094,14 @@ Process {
 		################################################
 
 		# if stored state of current node is Ready...
-		If ($StoredClusterNode.State -eq 'Ready') {
+		if ($StoredClusterNode.State -eq 'Ready') {
 			# suspend current node
-			Try {
+			try {
 				$null = Suspend-ClusterNode -Drain -ForceDrain -RetryDrainOnFailure -ErrorAction 'Stop'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not suspend '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# declare state
@@ -2111,26 +2111,26 @@ Process {
 			$StoredClusterNode.State = 'Paused'
 
 			# create task description from state object
-			Try {
-				$Description = $ClusterState | Sort-Object -Property 'Name' | ConvertTo-Json -Compress -Depth 100
+			try {
+				$Description = $ClusterState | ConvertTo-Json -Compress -Depth 100
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not convert cluster state object to JSON: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# update description of clustered scheduled task
-			Try {
+			try {
 				$null = Set-ClusteredScheduledTask -TaskName $ClusterTaskName -Description $Description -ErrorAction 'Stop'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not update '$ClusterTaskName' clustered scheduled task: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# report state and return
 			Write-Host "updated state for '$ClusterTaskName' clustered scheduled task: '$env:COMPUTERNAME' cluster node is now in '$($StoredClusterNode.State)' state"
-			Return
+			return
 		}
 
 		################################################
@@ -2138,20 +2138,20 @@ Process {
 		################################################
 
 		# if stored state of current node is Paused...
-		If ($StoredClusterNode.State -eq 'Paused') {
+		if ($StoredClusterNode.State -eq 'Paused') {
 			# test cluster for incorrect state or status
-			Try {
+			try {
 				$IncorrectStateOrStatus = Test-ClusterForIncorrectStateOrStatus -State 'Paused' -Status 'DrainCompleted' -NodeName $env:COMPUTERNAME
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not test cluster for incorrect state or status on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
-			
+
 			# if incorrect state or status...
-			If ($IncorrectStateOrStatus) {
+			if ($IncorrectStateOrStatus) {
 				# return as warnings were issued by function
-				Return
+				return
 			}
 		}
 
@@ -2160,25 +2160,25 @@ Process {
 		################################################
 
 		# if stored state of current node is Paused...
-		If ($StoredClusterNode.State -eq 'Paused') {
+		if ($StoredClusterNode.State -eq 'Paused') {
 			# retrieve scheduled task
-			Try {
+			try {
 				$ScheduledTask = Get-ScheduledTask -ErrorAction 'Stop' | Where-Object { $_.TaskName -eq $NodeTaskName }
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not retrieve and filter scheduled tasks on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# if scheduled task found...
-			If ($ScheduledTask) {
+			if ($ScheduledTask) {
 				# remove scheduled task
-				Try {
+				try {
 					$null = Unregister-ScheduledTask -InputObject $ScheduledTask -Confirm:$false -ErrorAction 'Stop'
 				}
-				Catch {
+				catch {
 					Write-Warning -Message "could not unregister '$NodeTaskName' scheduled task on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-					Return $_
+					return $_
 				}
 			}
 
@@ -2190,12 +2190,12 @@ Process {
 			}
 
 			# create task action
-			Try {
+			try {
 				$Action = New-ScheduledTaskAction @ScheduledTaskAction
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not create scheduled task action object: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# define task principal
@@ -2207,12 +2207,12 @@ Process {
 			}
 
 			# create task principal
-			Try {
+			try {
 				$Principal = New-ScheduledTaskPrincipal @ScheduledTaskPrincial
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not create scheduled task action object: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# define task settings
@@ -2223,12 +2223,12 @@ Process {
 			}
 
 			# create task settings
-			Try {
+			try {
 				$Settings = New-ScheduledTaskSettingsSet @ScheduledTaskSettingsSet
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not create scheduled task settings object: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# define task trigger
@@ -2238,12 +2238,12 @@ Process {
 			}
 
 			# create task trigger
-			Try {
+			try {
 				$Trigger = New-ScheduledTaskTrigger @ScheduledTaskTrigger
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not create scheduled task trigger object: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# define parameters
@@ -2258,12 +2258,12 @@ Process {
 			}
 
 			# create scheduled task
-			Try {
+			try {
 				$null = Register-ScheduledTask @ScheduledTask
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not register '$NodeTaskName' scheduled task on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# report state
@@ -2273,26 +2273,26 @@ Process {
 			$StoredClusterNode.State = 'ReadyToRestart'
 
 			# create task description from state object
-			Try {
+			try {
 				$Description = $ClusterState | Sort-Object -Property 'Name' | ConvertTo-Json -Compress -Depth 100
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not convert cluster state object to JSON: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# update description of clustered scheduled task
-			Try {
+			try {
 				$null = Set-ClusteredScheduledTask -TaskName $ClusterTaskName -Description $Description -ErrorAction 'Stop'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not update '$ClusterTaskName' clustered scheduled task: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# report state
 			Write-Host "updated state for '$ClusterTaskName' clustered scheduled task: '$env:COMPUTERNAME' cluster node is now in '$($StoredClusterNode.State)' state"
-			Return
+			return
 		}
 
 		################################################
@@ -2300,35 +2300,35 @@ Process {
 		################################################
 
 		# if stored state of current node is ReadyToRestart...
-		If ($StoredClusterNode.State -eq 'ReadyToRestart') {
+		if ($StoredClusterNode.State -eq 'ReadyToRestart') {
 			# test cluster for incorrect state or status
-			Try {
+			try {
 				$IncorrectStateOrStatus = Test-ClusterForIncorrectStateOrStatus -State 'Paused' -Status 'DrainComplete' -NodeName $env:COMPUTERNAME
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not test cluster for incorrect state or status on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# if incorrect state or status...
-			If ($IncorrectStateOrStatus) {
+			if ($IncorrectStateOrStatus) {
 				# return as warnings were issued by function
-				Return
+				return
 			}
 
 			# retrieve scheduled task
-			Try {
+			try {
 				$ScheduledTask = Get-ScheduledTask -ErrorAction 'Stop' | Where-Object { $_.TaskName -eq $NodeTaskName }
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not retrieve and filter scheduled tasks on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# if scheduled task not found...
-			If (!$ScheduledTask) {
+			if (!$ScheduledTask) {
 				Write-Warning -Message "could not find '$NodeTaskName' scheduled task on '$env:COMPUTERNAME' cluster node"
-				Return
+				return
 			}
 		}
 
@@ -2337,7 +2337,7 @@ Process {
 		################################################
 
 		# if stored state of current node is ReadyToRestart...
-		If ($StoredClusterNode.State -eq 'ReadyToRestart') {
+		if ($StoredClusterNode.State -eq 'ReadyToRestart') {
 			# declare state
 			Write-Host "restarting '$env:COMPUTERNAME' cluster node"
 
@@ -2345,37 +2345,37 @@ Process {
 			$StoredClusterNode.State = 'Restarted'
 
 			# create task description from state object
-			Try {
+			try {
 				$Description = $ClusterState | Sort-Object -Property 'Name' | ConvertTo-Json -Compress -Depth 100
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not convert cluster state object to JSON: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# update description of clustered scheduled task
-			Try {
+			try {
 				$null = Set-ClusteredScheduledTask -TaskName $ClusterTaskName -Description $Description -ErrorAction 'Stop'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not update '$ClusterTaskName' clustered scheduled task: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# report state
 			Write-Host "updated state for '$ClusterTaskName' clustered scheduled task: '$env:COMPUTERNAME' cluster node is now in '$($StoredClusterNode.State)' state"
 
 			# restart computer AFTER updating state
-			Try {
+			try {
 				Restart-Computer -Force -ErrorAction 'Stop'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not restart '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# return
-			Return
+			return
 		}
 
 		################################################
@@ -2383,44 +2383,44 @@ Process {
 		################################################
 
 		# if stored state of current node is Restarted...
-		If ($StoredClusterNode.State -eq 'Restarted') {
+		if ($StoredClusterNode.State -eq 'Restarted') {
 			# test cluster for incorrect state or status
-			Try {
+			try {
 				$IncorrectStateOrStatus = Test-ClusterForIncorrectStateOrStatus -State 'Paused' -Status 'Normal' -NodeName $env:COMPUTERNAME
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not test cluster for incorrect state or status on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# if incorrect state or status...
-			If ($IncorrectStateOrStatus) {
+			if ($IncorrectStateOrStatus) {
 				# return as warnings were issued by function
-				Return
+				return
 			}
 
 			# retrieve clustered scheduled task start time
-			Try {
+			try {
 				$StartBoundary = $ClusteredScheduledTask.TaskDefinition.Triggers.StartBoundary -as [datetime]
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not retrieve start boundary as datetime for '$ClusterTaskName' clustered scheduled task: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# retrieve last boot time
-			Try {
+			try {
 				$LastBootUpTime = (Get-CimInstance -ClassName 'Win32_OperatingSystem' -Property 'LastBootUpTime').LastBootUpTime
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not retrieve last boot time for '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# if last boot time is before scheduled task start time...
-			If ($LastBootUpTime -lt $StartBoundary) {
+			if ($LastBootUpTime -lt $StartBoundary) {
 				Write-Warning -Message "found '$env:COMPUTERNAME' cluster node in 'Restarted' state despite a last boot up time of '$LastBootUpTime' which is before the start time for '$ClusterTaskName' clustered scheduled task of '$StartBoundary'"
-				Return
+				return
 			}
 		}
 
@@ -2429,14 +2429,14 @@ Process {
 		################################################
 
 		# if stored state of current node is Restarting...
-		If ($StoredClusterNode.State -eq 'Restarted') {
+		if ($StoredClusterNode.State -eq 'Restarted') {
 			# resume current node
-			Try {
+			try {
 				$null = Resume-ClusterNode -Failback 'NoFailback' -ErrorAction 'Stop'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not suspend '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# declare state
@@ -2446,26 +2446,26 @@ Process {
 			$StoredClusterNode.State = 'Resumed'
 
 			# create task description from state object
-			Try {
+			try {
 				$Description = $ClusterState | Sort-Object -Property 'Name' | ConvertTo-Json -Compress -Depth 100
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not convert cluster state object to JSON: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# update description of clustered scheduled task
-			Try {
+			try {
 				$null = Set-ClusteredScheduledTask -TaskName $ClusterTaskName -Description $Description -ErrorAction 'Stop'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not update '$ClusterTaskName' clustered scheduled task: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# report state and return
 			Write-Host "updated state for '$ClusterTaskName' clustered scheduled task: '$env:COMPUTERNAME' cluster node is now in '$($StoredClusterNode.State)' state"
-			Return
+			return
 		}
 
 		################################################
@@ -2473,35 +2473,35 @@ Process {
 		################################################
 
 		# if stored state of current node is Resumed...
-		If ($StoredClusterNode.State -eq 'Resumed') {
+		if ($StoredClusterNode.State -eq 'Resumed') {
 			# test cluster for incorrect state or status
-			Try {
+			try {
 				$IncorrectStateOrStatus = Test-ClusterForIncorrectStateOrStatus -State 'Up' -Status 'Normal' -NodeName $env:COMPUTERNAME
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not test cluster for incorrect state or status on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# if incorrect state or status...
-			If ($IncorrectStateOrStatus) {
+			if ($IncorrectStateOrStatus) {
 				# return as warnings were issued by function
-				Return
+				return
 			}
 
 			# test cluster for storage jobs
-			Try {
+			try {
 				$StorageJobsFound = Test-ClusterForStorageJobs
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not test cluster for storage jobs on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# if any storage jobs found...
-			If ($StorageJobsFound) {
+			if ($StorageJobsFound) {
 				Write-Host "exiting: waiting for storage jobs to complete on '$env:COMPUTERNAME' cluster node"
-				Return
+				return
 			}
 		}
 
@@ -2510,68 +2510,68 @@ Process {
 		################################################
 
 		# if stored state of current node is Resumed...
-		If ($StoredClusterNode.State -eq 'Resumed') {
+		if ($StoredClusterNode.State -eq 'Resumed') {
 			# retrieve scheduled task
-			Try {
+			try {
 				$ScheduledTask = Get-ScheduledTask -ErrorAction 'Stop' | Where-Object { $_.TaskName -eq $NodeTaskName }
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not retrieve and filter scheduled tasks on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# if scheduled task found...
-			If ($ScheduledTask) {
+			if ($ScheduledTask) {
 				# remove scheduled task
-				Try {
+				try {
 					$null = Unregister-ScheduledTask -InputObject $ScheduledTask -Confirm:$false -ErrorAction 'Stop'
 				}
-				Catch {
+				catch {
 					Write-Warning -Message "could not unregister '$NodeTaskName' scheduled task on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
-					Return $_
+					return $_
 				}
 			}
 
-			# declare state
+			# report state
 			Write-Host "cleaned up after restart of '$env:COMPUTERNAME' cluster node"
 
 			# update state of current node
 			$StoredClusterNode.State = 'Complete'
 
 			# create task description from state object
-			Try {
+			try {
 				$Description = $ClusterState | Sort-Object -Property 'Name' | ConvertTo-Json -Compress -Depth 100
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not convert cluster state object to JSON: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# update description of clustered scheduled task
-			Try {
+			try {
 				$null = Set-ClusteredScheduledTask -TaskName $ClusterTaskName -Description $Description -ErrorAction 'Stop'
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not update '$ClusterTaskName' clustered scheduled task: $($_.Exception.Message)"
-				Return $_
+				return $_
 			}
 
 			# report state and return
 			Write-Host "updated state for '$ClusterTaskName' clustered scheduled task: '$env:COMPUTERNAME' cluster node is now in '$($StoredClusterNode.State)' state"
-			Return
+			return
 		}
 	}
 }
 
-End {
+end {
 	# if default parameter set...
-	If ($PSCmdlet.ParameterSetName -eq 'Default' -or $PSCmdlet.ParameterSetName -eq 'Report') {
+	if ($PSCmdlet.ParameterSetName -eq 'Default' -or $PSCmdlet.ParameterSetName -eq 'Report') {
 		# if current state found...
-		If ($null -eq $ClusterState) {
+		if ($null -eq $ClusterState) {
 			# report and display state
 			Write-Host 'cluster state - not found'
 		}
-		Else {
+		else {
 			# loop through cluster state
 			ForEach ($ClusterNode in $ClusterState) {
 				# report node name and state
@@ -2581,13 +2581,13 @@ End {
 	}
 
 	# if default parameter set and skip transcript not requested...
-	If ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $SkipTranscript) {
+	if ($PSCmdlet.ParameterSetName -eq 'Default' -and -not $SkipTranscript) {
 		# stop transcript with default parameters
-		Try {
+		try {
 			Stop-TranscriptForCommand
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 	}
 }
