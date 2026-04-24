@@ -1,75 +1,63 @@
 function Get-ParametersFromCommand {
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	param(
-		[Parameter(Mandatory = $true)]
-		[string]$CommandName,
+		# name of command; default value is current command path
+		[Parameter(Position = 0)]
+		[string]$CommandName = $PSCommandPath,
+		# name of parameter set; default value is parameter set in calling scope
+		[Parameter(Position = 1, ParameterSetName = 'Default')]
 		[string]$ParameterSetName = $PSCmdlet.ParameterSetName,
-		[switch]$LimitToParameterSet,
-		[switch]$ExcludeParameterSetName,
-		[string[]]$ExcludeParameters,
-		[string[]]$ExcludeParameterSets
+		# switch parameter to return all parameters from all parameter sets
+		[Parameter(Position = 1, ParameterSetName = 'All')]
+		[switch]$All
 	)
 
-	# verify command
+	# retrieve command from script scope
 	try {
-		$Command = Get-Command -Name $CommandName -ErrorAction ([System.Management.Automation.ActionPreference]::Stop)
+		$Command = Get-Command -Name $CommandName -ErrorAction 'Stop'
 	}
 	catch {
-		Write-Host "ERROR: '$CommandName' not found"
-		return $_
+		throw $_
 	}
 
-	# verify parameter set name
-	if ([string]::IsNullOrEmpty($ParameterSetName)) {
-		$LimitToParameterSet = $false
-		$ExcludeParameterSetName = $false
-	}
-
-	# define lists
-	$ParametersList = [System.Collections.Generic.List[string]]::new()
-	$ExcludeParameterSetNames = [System.Collections.Generic.List[string]]::new()
-
-	# retrieve parameters for script
-	$ParametersFromScript = $Command.Parameters.Values
-	
-	# filter parameters to parameter set
-	if ($ExcludeParameterSets) {
-		foreach ($ExcludeParameterSet in $ExcludeParameterSets) {
-			foreach ($ExcludedParameterSetName in ($ParametersFromScript.Where({ $_.Attributes.ParameterSetName -eq $ExcludeParameterSet }).Name) ) {
-				$ExcludeParameterSetNames.Add($ExcludedParameterSetName)
+	# switch on function parameter set2
+	switch ($PSCmdlet.ParameterSetName) {
+		'Default' {
+			# if parameter set name not in parameter sets...
+			if ($ParameterSetName -notin $Command.ParameterSets.Name) {
+				# warn and return
+				Write-Warning -Message "could not locate '$ParameterSetName' parameter set in '$CommandName' command"
+				return $null
 			}
+		}
+		'All' {
+			# override parameter set name
+			$ParameterSetName = '__AllParameterSets'
 		}
 	}
 
-	# filter parameters to parameter set
-	if ($LimitToParameterSet) {
-		$ParametersFromScript = $ParametersFromScript.Where({ $_.Attributes.ParameterSetName -eq $ParameterSetName })
+	# retrieve parameters from command
+	try {
+		$Parameters = $Command.Parameters.Values
+	}
+	catch {
+		throw $_
 	}
 
-	# filter out parameter set name
-	if ($ExcludeParameterSetName) {
-		$ParametersFromScript = $ParametersFromScript.Where({ $_.Name -ne $ParameterSetName })
-	}
+	# define filter script
+	$FilterScript = { ($_.Attributes.Mandatory -eq $true -and $_.Attributes.ParameterSetName -eq '__AllParameterSets') -or $_.Attributes.ParameterSetName -eq $ParameterSetName }
 
-	# filter out excluded parameters
-	if ($ExcludeParameters) {
-		$ParametersFromScript = $ParametersFromScript.Where({ $_.Name -notin $ExcludeParameters })
-	}
+	# filter parameters to named parameter set
+	$Parameters = $Parameters.Where($FilterScript)
 
-	# filter out default excluded parameters
-	if ($ExcludeParametersDefault) {
-		$ParametersFromScript = $ParametersFromScript.Where({ $_.Name -notin $ExcludeParametersDefault })
-	}
-
-	# filter parameters to parameter set
-	if ($ExcludeParameterSets) {
-		$ParametersFromScript = $ParametersFromScript.Where({ $_.Name -notin $ExcludeParameterSetNames })
-	}
+	# define lists
+	$ParametersList = [System.Collections.Generic.List[string]]::new()
 
 	# get parameters with and without position
-	$ParametersWithPosition, $ParametersWithOutPosition = $ParametersFromScript.Where({ $_.Attributes.Position -ge 0 }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
+	$ParametersWithPosition, $ParametersWithOutPosition = $Parameters.Where({ ($FilterScript).Position -ge 0 }, [System.Management.Automation.WhereOperatorSelectionMode]::Split)
 
 	# process each parameter for script
-	foreach ($Parameter in $ParametersWithPosition | Sort-Object -Property { $_.Attributes.Position } ) {
+	foreach ($Parameter in $ParametersWithPosition ) {
 		# if parameter has a name and name not in ExcludeParameters or ExcludeParametersDefault...
 		if ($null -ne $Parameter.Name) {
 			# add parameter name to list
@@ -78,7 +66,7 @@ function Get-ParametersFromCommand {
 	}
 
 	# process each parameter for script
-	foreach ($Parameter in $ParametersWithOutPosition | Sort-Object -Property { $_.Name } ) {
+	foreach ($Parameter in $ParametersWithOutPosition ) {
 		# if parameter has a name and name not in ExcludeParameters or ExcludeParametersDefault...
 		if ($null -ne $Parameter.Name) {
 			# add parameter name to list
