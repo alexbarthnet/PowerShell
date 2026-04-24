@@ -25,6 +25,7 @@ param(
 	# options to pass to clustered scheduled task
 	[Parameter(ParameterSetName = 'Start')]
 	[Parameter(ParameterSetName = 'Restart')]
+	[ValidateSet('FailBackToPreferredOwners')]
 	[string[]]$Options,
 	# time between scheduled task runs; default is 1 minute and must be 1 minute or greater
 	[Parameter(ParameterSetName = 'Start')]
@@ -2612,6 +2613,94 @@ process {
 
 			# report state
 			Write-Host "cleaned up after restart of '$env:COMPUTERNAME' cluster node"
+
+			# if move to preferred owner requested...
+			if ($ClusterState.Options -contains 'FailBackToPreferredOwners') {
+				# report state
+				Write-Host "checking for cluster groups with '$env:COMPUTERNAME' cluster node as preferred owner"
+
+				# retrieve all cluster groups
+				try {
+					$ClusterGroups = Get-ClusterGroup
+				}
+				catch {
+					Write-Warning -Message "could not retrieve cluster groups on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
+					return $_
+				}
+				
+				# loop through cluster groups
+				:NextClusterGroup foreach ($ClusterGroup in $ClusterGroups) {
+					# retrieve owner node for cluster group
+					try {
+						$ClusterOwnerNode = Get-ClusterOwnerNode -Group $ClusterGroup
+					}
+					catch {
+						Write-Warning -Message "could not retrieve cluster owner nodes for '$($ClusterGroup.Name)' cluster group on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
+						return $_
+					}
+
+					# if preferred owners not defined...
+					if ($ClusterOwnerNode.OwnerNodes.Count -eq 0) {
+						continue NextClusterGroup
+					}
+
+					# if preferred owners contains current owner...
+					if ($ClusterOwnerNode.OwnerNodes.Name -contains $ClusterGroup.OwnerNode.Name) {
+						continue NextClusterGroup
+					}
+
+					# if preferred owners does not contain current node...
+					if ($ClusterOwnerNode.OwnerNodes.Name -notcontains $env:COMPUTERNAME) {
+						continue NextClusterGroup
+					}
+
+					# switch on cluster group type
+					switch ($ClusterGroup.GroupType) {
+						'VirtualMachine' {
+							# if cluster group is online...
+							if ($ClusterGroup.State -eq 'Online') {
+								# move clustered VM to current node
+								try {
+									$null = Move-ClusterVirtualMachineRole -InputObject $ClusterGroup -Node $env:COMPUTERNAME -MigrationType Live -ErrorAction 'Stop'
+								}
+								catch {
+									Write-Warning -Message "could not live migrate '$($ClusterGroup.Name)' virtual machine to '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
+									return $_
+								}
+
+								# report state
+								Write-Host "live migrated '$($ClusterGroup.Name)' virtual machine to '$env:COMPUTERNAME' cluster node"
+							}
+							else {
+								# move clustered VM to current node
+								try {
+									$null = Move-ClusterVirtualMachineRole -InputObject $ClusterGroup -Node $env:COMPUTERNAME -MigrationType Quick -ErrorAction 'Stop'
+								}
+								catch {
+									Write-Warning -Message "could not quick migrate '$($ClusterGroup.Name)' virtual machine to '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
+									return $_
+								}
+
+								# report state
+								Write-Host "quick migrated '$($ClusterGroup.Name)' virtual machine to '$env:COMPUTERNAME' cluster node"
+							}
+						}
+						default {
+							# move cluster group to current node
+							try {
+								$null = Move-ClusterGroup -Node $env:COMPUTERNAME -ErrorAction 'Stop'
+							}
+							catch {
+								Write-Warning -Message "could not move '$($ClusterGroup.Name)' cluster group to '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
+								return $_
+							}
+
+							# report state
+							Write-Host "moved '$($ClusterGroup.Name)' cluster group to '$env:COMPUTERNAME' cluster node"
+						}
+					}
+				}
+			}
 
 			# update state of current node
 			$StoredClusterNode.State = 'Complete'
