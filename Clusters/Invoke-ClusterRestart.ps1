@@ -1983,7 +1983,7 @@ process {
 		################################################
 
 		# define boolean for state object
-		$StateIsNotValid = $false
+		$StateObjectIsNotValid = $false
 
 		# loop through cluster nodes
 		foreach ($ClusterNode in $ClusterNodes) {
@@ -1996,23 +1996,36 @@ process {
 			# if node not found in state object...
 			if ($Count -eq 0) {
 				Write-Warning -Message "could not locate entry for '$($ClusterNode.NodeName)' cluster node in state object"
-				$StateIsNotValid = $true
+				$StateObjectIsNotValid = $true
 			}
 
 			# if node found multiple times in state object...
 			if ($Count -gt 1) {
 				Write-Warning -Message "found multiple entries for '$($ClusterNode.NodeName)' cluster node in state object"
-				$StateIsNotValid = $true
+				$StateObjectIsNotValid = $true
 			}
 		}
 
-		# loop through cluster state
-		ForEach ($Entry in $ClusterState) {
+		# valid states
+		$ValidStates = @('Ready', 'Paused', 'ReadyToRestart', 'Restarted', 'Resumed', 'Complete')
 
+		# loop through entries in state object
+		foreach ($Entry in $ClusterState.Nodes) {
+			# if name from entry not in cluster...
+			if ($Entry.Name -notin $ClusterNodes.NodeName) {
+				Write-Warning -Message "found invalid cluster node name in state object: $($Entry.Name)"
+				$StateObjectIsNotValid = $true
+			}
+
+			# if state from entry not valid...
+			if ($Entry.State -notin $ValidStates) {
+				Write-Warning -Message "found invalid cluster node state in state object: $($Entry.State)"
+				$StateObjectIsNotValid = $true
+			}
 		}
 
 		# if state object is not valid...
-		If ($StateIsNotValid) {
+		if ($StateObjectIsNotValid) {
 			Write-Warning -Message 'the state object is not valid'
 			return
 		}
