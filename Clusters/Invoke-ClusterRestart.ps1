@@ -22,6 +22,11 @@ param(
 	[Parameter(ParameterSetName = 'Start')]
 	[Parameter(ParameterSetName = 'Restart')]
 	[switch]$Suspended,
+	# time between scheduled task runs; default is 1 minute and must be 1 minute or greater
+	[Parameter(ParameterSetName = 'Start')]
+	[Parameter(ParameterSetName = 'Restart')]
+	[ValidateScript({ $_ -ge [timespan]::FromMinutes(1) })]
+	[timespan]$RepetitionInterval = [timespan]::FromMinutes(1),
 	# define cluster task name
 	[Parameter(DontShow)]
 	[string]$ClusterTaskName = 'Invoke-ClusterRestart',
@@ -1622,10 +1627,10 @@ process {
 			Once               = $true
 			# run immediately
 			At                 = [System.Datetime]::Now
-			# run every minute
-			RepetitionInterval = [System.Timespan]::FromMinutes(1)
 			# run for (node count * days) to permit a day for storage jobs
 			RepetitionDuration = [System.Timespan]::FromDays($ClusterNodes.Count)
+			# run every interval
+			RepetitionInterval = $RepetitionInterval
 		}
 
 		# create task trigger
