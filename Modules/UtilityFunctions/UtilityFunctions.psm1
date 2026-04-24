@@ -138,7 +138,7 @@ Function Get-RandomAlpha {
 	# create random string
 	While ($StringBuilder.Length -lt $Length) {
 		# append random character to string from list
-		$null = $StringBuilder.Append($List[(Get-Random -Max $List.Count)])
+		$null = $StringBuilder.Append($List[(Get-RandomNumber -UpperBound $List.Count)])
 		# remove excluded strings
 		ForEach ($String in $ExcludeStrings) { $null = $StringBuilder.Replace($String,$null) }
 	}
@@ -164,20 +164,45 @@ Function Get-RandomHex {
 	)
 
 	# create string builder
-	$string = [System.Text.StringBuilder]::new()
+	$StringBuilder = [System.Text.StringBuilder]::new()
 
 	# create random string
 	While ($StringBuilder.Length -lt $Length) {
-		$null = $string.Append('{0:x}' -f (Get-Random -Max 15))
+		$null = $StringBuilder.Append('{0:x}' -f (Get-RandomNumber -UpperBound 16))
 	}
 
 	# return random string
 	If ($UpperCase) {
-		Return $string.ToString().ToUpperInvariant()
+		Return $StringBuilder.ToString().ToUpperInvariant()
 	}
 	Else {
-		Return $string.ToString()
+		Return $StringBuilder.ToString()
 	}
+}
+
+Function Get-RandomNumber {
+	[CmdletBinding()]
+	Param(
+		[uint64]$UpperBound = ([System.UInt64]::MaxValue)
+	)
+
+	# define an empty 64-bit byte array
+	$Bytes = [byte[]]::new(8)
+
+	# create a RandomNumberGenerator object
+	$RandomNumberGenerator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+
+	# populate byte array with random bytes
+	$RandomNumberGenerator.GetBytes($Bytes)
+
+	# convert byte array to 64-bit integer
+	$RandomInteger = [BitConverter]::ToUInt64($Bytes, 0)
+
+	# define random number as remainder of dividing 64-bit integer by upperbound
+	$RandomNumber = $RandomInteger % $UpperBound
+
+	# return random number
+	Return $RandomNumber
 }
 
 Function Get-StringHash {
@@ -205,6 +230,7 @@ $FunctionsToExport = @(
 	'ConvertTo-SecurityIdentifier'
 	'Get-RandomAlpha'
 	'Get-RandomHex'
+	'Get-RandomNumber'
 	'Get-StringHash'
 )
 
