@@ -75,45 +75,66 @@ Function Get-RandomNumber {
 	Return $RandomNumber
 }
 
-Function Resolve-PresetToParameters {
-	# resolve IncludeNumbers
-	If (!$script:PSBoundParameters.ContainsKey('IncludeNumbers')) {
-		If ($script:Preset -in 'WithNumbers', 'WithNumbersAndDelimiter', 'WithNumbersWithRandomDelimiters') {
-			$script:IncludeNumbers = $true
-		}
-		Else {
-			$script:IncludeNumbers = $false
-		}
-	}
+Function Assert-ParameterValuesForPreset {
+	Param(
+		[Parameter(Mandatory, Position = 0)]
+		[hashtable]$ParameterValues
+	)
+	
+	# loop through parameters for preset
+	ForEach ($Parameter in $ParameterValues.Keys) {
+		# if parameter not explicitly provided...
+		If (!$script:PSBoundParameters.ContainsKey($Parameter)) {
+			# set value of parameter for preset
+			Try {
+				Set-Variable -Scope 'script' -Name $Parameter -Value $ParameterValues[$Parameter]
+			}
+			Catch {
+				Write-Warning -Message "could not set value of '$Parameter' script variable from '$Preset' preset"
+				throw $_
+			}
 
-	# resolve IncludeDelimiters
-	If (!$script:PSBoundParameters.ContainsKey('IncludeDelimiters')) {
-		If ($script:Preset -in 'WithNumbersAndDelimiter', 'WithNumbersWithRandomDelimiters', 'WithRandomDelimiters') {
-			$script:IncludeDelimiters = $true
-		}
-		Else {
-			$script:IncludeDelimiters = $false
-		}
-	}
-
-	# resolve RandomizeDelimiters
-	If (!$script:PSBoundParameters.ContainsKey('RandomizeDelimiters')) {
-		If ($script:Preset -in 'WithNumbersWithRandomDelimiters', 'WithRandomDelimiters') {
-			$script:RandomizeDelimiters = $true
-		}
-		Else {
-			$script:RandomizeDelimiters = $false
+			# set value of parameter for preset
+			Try {
+				$script:PSBoundParameters[$Parameter] = $ParameterValues[$Parameter]
+			}
+			Catch {
+				Write-Warning -Message "could not set value of '$Parameter' bound parameter from '$Preset' preset"
+				throw $_
+			}
 		}
 	}
 }
 
-# resolve preset to parameters
-Try {
-	Resolve-PresetToParameters
-}
-Catch {
-	Write-Warning -Message "could not resolve '$Preset' preset to parameters: $($_.Exception.Message)"
-	Throw $_
+# if preset present...
+If ([string]::IsNullOrEmpty($script:Preset)) {
+	# define parameter values for all presets
+	$ParameterValuesForPreset = @{
+		WithNumbers = @{
+			IncludeNumbers = [System.Management.Automation.SwitchParameter]::new($true)
+		}
+		WithNumbersAndDelimiter = @{
+			IncludeNumbers    = [System.Management.Automation.SwitchParameter]::new($true)
+			IncludeDelimiters = [System.Management.Automation.SwitchParameter]::new($true)
+		}
+		WithNumbersWithRandomDelimiters = @{
+			IncludeNumbers      = [System.Management.Automation.SwitchParameter]::new($true)
+			IncludeDelimiters   = [System.Management.Automation.SwitchParameter]::new($true)
+			RandomizeDelimiters = [System.Management.Automation.SwitchParameter]::new($true)
+		}
+		WithRandomDelimiters = @{
+			IncludeDelimiters   = [System.Management.Automation.SwitchParameter]::new($true)
+			RandomizeDelimiters = [System.Management.Automation.SwitchParameter]::new($true)
+		}
+	}
+
+	# assert parameter values for specific preset
+	Try {
+		Assert-ParameterValuesForPreset -ParameterValues $ParameterValuesForPreset[$Preset]
+	}
+	Catch {
+		throw $_
+	}
 }
 
 # if path found...
