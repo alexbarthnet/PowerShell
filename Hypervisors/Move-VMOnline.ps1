@@ -27,12 +27,8 @@ param (
 	[string]$VirtualMachinePath,
 	# array of hashtables for VHDs
 	[object[]]$VHDs = @(),
-	# switch to skip warning about VM shut down for quick migration
-	[switch]$Force,
 	# switch to remove planned VMs on destination before move
 	[switch]$RemovePlannedVMs,
-	# switch to shut down VM before move
-	[switch]$QuickMigration,
 	# switch to skip CSV storage check
 	[switch]$SkipClusteredStorageCheck
 )
@@ -2044,22 +2040,6 @@ Process {
 	################################################
 	# move VM
 	################################################
-
-	# if quick migration requested...
-	If ($QuickMigration.IsPresent -and $State -eq 'Running') {
-		# if Force switch not present...
-		If (!$Force.IsPresent) {
-			Write-Warning -Message "found '$Name' VM and QuickMigration requested; continue to shut down VM" -WarningAction Inquire
-		}
-
-		# stop VM before move
-		Try {
-			$VM = Stop-VM -VM $VM -Force -Passthru
-		}
-		Catch {
-			Return $_
-		}
-	}
 
 	# move VM to target computer
 	Try {
