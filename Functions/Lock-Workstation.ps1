@@ -148,3 +148,7 @@ function Lock-Workstation {
         $null = $DynamicType
     }
 }
+
+# define aliases for function
+Set-Alias -Name 'Lock-Desktop' -Value 'Lock-Workstation' -Scope Global
+Set-Alias -Name 'Lock-Session' -Value 'Lock-Workstation' -Scope Global
