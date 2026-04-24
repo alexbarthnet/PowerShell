@@ -53,7 +53,7 @@ Param(
 
 Function Get-RandomNumber {
 	Param(
-		$UpperBound = ([System.UInt64]::MaxValue)
+		[uint64]$UpperBound = ([System.UInt64]::MaxValue)
 	)
 
 	# define an empty 64-bit byte array
@@ -68,10 +68,10 @@ Function Get-RandomNumber {
 	# convert byte array to 64-bit integer
 	$RandomInteger = [BitConverter]::ToUInt64($Bytes, 0)
 
-	# retrieve remainder of dividing 64-bit integer by upperbound
+	# define random number as remainder of dividing 64-bit integer by upperbound
 	$RandomNumber = $RandomInteger % $UpperBound
 
-	# Print the random number
+	# return random number
 	Return $RandomNumber
 }
 
