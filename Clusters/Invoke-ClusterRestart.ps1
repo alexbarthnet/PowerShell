@@ -1650,6 +1650,7 @@ process {
 			Settings    = $Settings
 			Trigger     = $Trigger
 			Description = $Description
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
 
 		# create scheduled task
