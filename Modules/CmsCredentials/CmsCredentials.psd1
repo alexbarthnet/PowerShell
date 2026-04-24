@@ -65,6 +65,7 @@ FunctionsToExport = @(
     'Find-CmsCertificate'
     'Export-CmsCredentialCertificate'
     'New-CmsCredentialCertificate'
+    'New-CmsCredential'
     'Get-CmsCredential'
     'Export-CmsCredential'
     'Import-CmsCredential'
