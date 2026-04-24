@@ -38,11 +38,8 @@ param(
 	[switch]$SkipTextOutput
 )
 
-Begin {
-	Function Test-ClusterForStorageJobs {
-		# define boolean
-		$StorageJobsFound = $false
-
+begin {
+	function Test-ClusterForStorageJobs {
 		# retrieve storage jobs for storage pool
 		try {
 			$StorageJobs = Get-StorageJob | Where-Object { $_.JobState -ne 'Completed' }
@@ -52,24 +49,25 @@ Begin {
 			return $_
 		}
 
-		# loop through storage jobs
-		:NextStorageJob ForEach ($StorageJob in $StorageJobs) {
-			# if storage jobs not already found...
-			If (!$StorageJobsFound) {
-				Write-Host "found '$($StorageJobs.Count)' storage job(s) on '$env:COMPUTERNAME' cluster node"
+		# if storage jobs found...
+		if ($StorageJobs) {
+			# report count of storage jobs
+			Write-Host "found '$($StorageJobs.Count)' storage job(s) on '$env:COMPUTERNAME' cluster node"
+
+			# loop through storage jobs
+			foreach ($StorageJob in $StorageJobs) {
+				# report active job
+				Write-Host " - Name: $($StorageJob.Name); State: $($StorageJob.JobState); Percent Complete: $($StorageJob.PercentComplete)"
 			}
-			# udpate boolean
-			$StorageJobsFound = $true
 
-			# report active job
-			Write-Host " - Name: $($StorageJob.Name); State: $($StorageJob.JobState); Percent Complete: $($StorageJob.PercentComplete)"
+			# return true after reporting
+			return $true
 		}
-
-		# if any storage jobs found...
-		If ($StorageJobsFound) {
-			Return $true
+		# if storage jobs not found...
+		else {
+			# return false
+			return $false
 		}
-
 	}
 
 	function Test-ClusterForIncorrectStateOrStatus {
