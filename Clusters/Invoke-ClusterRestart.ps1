@@ -1716,7 +1716,27 @@ process {
 		}
 
 		################################################
-		# check cluster state before starting
+		# retrieve stored state for cluster from task
+		################################################
+
+		# if description is empty...
+		if ([string]::IsNullOrEmpty($ClusteredScheduledTask.TaskDefinition.Description)) {
+			# warn and return
+			Write-Warning -Message "found empty description on '$ClusterTaskName' clustered scheduled task"
+			return
+		}
+
+		# retrieve cluster state object from scheduled task description
+		try {
+			$ClusterState = ConvertFrom-Json -InputObject $ClusteredScheduledTask.TaskDefinition.Description -ErrorAction 'Stop'
+		}
+		catch {
+			Write-Warning -Message "could not convert description of scheduled task to JSON: $($_.Exception.Message)"
+			return $_
+		}
+
+		################################################
+		# check cluster state before restarting
 		################################################
 
 		# test cluster for incorrect state or status
