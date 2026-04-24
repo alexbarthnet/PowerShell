@@ -15,12 +15,13 @@ param(
 	[switch]$Resume,
 	[Parameter(Mandatory, ParameterSetName = 'Report')]
 	[switch]$Report,
-	# mode to initiate process
-	[Parameter(ParameterSetName = 'Start')]
-	[switch]$Suspended,
 	# path to state file
 	[Parameter(ParameterSetName = 'Start')]
 	[string]$Path,
+	# mode to initiate process
+	[Parameter(ParameterSetName = 'Start')]
+	[Parameter(ParameterSetName = 'Restart')]
+	[switch]$Suspended,
 	# define cluster task name
 	[Parameter(DontShow)]
 	[string]$ClusterTaskName = 'Invoke-ClusterRestart',
