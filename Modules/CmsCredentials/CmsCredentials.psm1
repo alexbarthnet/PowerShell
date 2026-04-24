@@ -1869,6 +1869,8 @@ Function Protect-CmsCredential {
 		[string]$OutFile,
 		[Parameter(ParameterSetName = 'Identity', Position = 1, Mandatory = $true)]
 		[string]$Identity,
+		[Parameter(ParameterSetName = 'Identity', Position = 2)][ValidateSet('NonExportable', 'ExportableEncrypted', 'Exportable')]
+		[string]$KeyExportPolicy = 'NonExportable',
 		[Parameter(ParameterSetName = 'Identity')]
 		[switch]$Reset,
 		[Parameter(ParameterSetName = 'Identity')]
@@ -1975,7 +1977,7 @@ Function Protect-CmsCredential {
 		If (!$local:Certificate) {
 			# create new certificate for identity
 			Try {
-				$Certificate = New-CmsCredentialCertificate -Identity $local:Identity
+				$Certificate = New-CmsCredentialCertificate -Identity $local:Identity -KeyExportPolicy $local:KeyExportPolicy
 			}
 			Catch {
 				Write-Warning -Message "could not create certificate for '$local:Identity' identity on host: $local:Hostname"
