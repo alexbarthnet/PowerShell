@@ -1552,7 +1552,7 @@ process {
 
 		# create list for cluster node state objects
 		try {
-			$ClusterState = [System.Collections.Generic.List[object]]::new()
+			$ClusterNodeStates = [System.Collections.Generic.List[object]]::new()
 		}
 		catch {
 			Write-Warning -Message "could not create list for cluster node state objects: $($_.Exception.Message)"
@@ -1568,8 +1568,16 @@ process {
 			}
 
 			# add state object to list
-			$ClusterState.Add($ClusterNodeState)
+			$ClusterNodeStates.Add($ClusterNodeState)
 		}
+
+		# create state object for cluster
+		$ClusterState = [PSCustomObject]@{
+			Nodes   = $ClusterNodeStates
+		}
+
+		# sort cluster nodes in state object
+		$ClusterState.Nodes = $ClusterState.Nodes | Sort-Object -Property 'Name'
 
 		# create task description from state object
 		try {
@@ -1760,7 +1768,7 @@ process {
 
 		# create list for cluster node state objects
 		try {
-			$ClusterState = [System.Collections.Generic.List[object]]::new()
+			$ClusterNodeStates = [System.Collections.Generic.List[object]]::new()
 		}
 		catch {
 			Write-Warning -Message "could not create list for cluster node state objects: $($_.Exception.Message)"
@@ -1776,12 +1784,20 @@ process {
 			}
 
 			# add state object to list
-			$ClusterState.Add($ClusterNodeState)
+			$ClusterNodeStates.Add($ClusterNodeState)
 		}
+
+		# create state object for cluster
+		$ClusterState = [PSCustomObject]@{
+			Nodes   = $ClusterNodeStates
+		}
+
+		# sort cluster nodes in state object
+		$ClusterState.Nodes = $ClusterState.Nodes | Sort-Object -Property 'Name'
 
 		# create task description from state object
 		try {
-			$Description = $ClusterState | Sort-Object -Property 'Name' | ConvertTo-Json -Compress -Depth 100
+			$Description = $ClusterState | ConvertTo-Json -Compress -Depth 100
 		}
 		catch {
 			Write-Warning -Message "could not convert cluster state object to JSON: $($_.Exception.Message)"
@@ -1972,7 +1988,7 @@ process {
 		# loop through cluster nodes
 		foreach ($ClusterNode in $ClusterNodes) {
 			# get stored state of cluster node
-			$Node = $ClusterState | Where-Object { $_.Name -eq $ClusterNode.NodeName }
+			$Node = $ClusterState.Nodes | Where-Object { $_.Name -eq $ClusterNode.NodeName }
 
 			# get count of entries for cluster node
 			$Count = Measure-Object -InputObject $Node | Select-Object -ExpandProperty 'Count'
@@ -2011,7 +2027,7 @@ process {
 		# loop through cluster nodes
 		foreach ($ClusterNode in $ClusterNodes) {
 			# get stored state of cluster node that has not reached the Complete state
-			$Node = $ClusterState | Where-Object { $_.Name -eq $ClusterNode.NodeName }
+			$Node = $ClusterState.Nodes | Where-Object { $_.Name -eq $ClusterNode.NodeName }
 
 			# if state of node is not complete...
 			if ($Node.State -ne 'Complete') {
@@ -2053,7 +2069,7 @@ process {
 			# loop through cluster state
 			foreach ($ClusterNode in $ClusterNodes) {
 				# get stored state of cluster node that has not reached the Complete state
-				$Node = $ClusterState | Where-Object { $_.Name -eq $ClusterNode.NodeName }
+				$Node = $ClusterState.Nodes | Where-Object { $_.Name -eq $ClusterNode.NodeName }
 
 				# update state of node for final report
 				$Node.State = 'Unregistered'
@@ -2068,7 +2084,7 @@ process {
 		################################################
 
 		# get stored state of first node that has not reached the Complete state
-		$StoredClusterNode = $ClusterState | Sort-Object -Property 'Name' | Where-Object { $_.State -ne 'Complete' } | Select-Object -First 1
+		$StoredClusterNode = $ClusterState.Nodes | Sort-Object -Property 'Name' | Where-Object { $_.State -ne 'Complete' } | Select-Object -First 1
 
 		# if current node name is not local computer name...
 		if ($StoredClusterNode.Name -ne $env:COMPUTERNAME) {
@@ -2134,6 +2150,9 @@ process {
 
 			# update state of current node
 			$StoredClusterNode.State = 'Paused'
+
+			# sort cluster nodes in state object
+			$ClusterState.Nodes = $ClusterState.Nodes | Sort-Object -Property 'Name'
 
 			# create task description from state object
 			try {
@@ -2297,9 +2316,12 @@ process {
 			# update state of current node
 			$StoredClusterNode.State = 'ReadyToRestart'
 
+			# sort cluster nodes in state object
+			$ClusterState.Nodes = $ClusterState.Nodes | Sort-Object -Property 'Name'
+
 			# create task description from state object
 			try {
-				$Description = $ClusterState | Sort-Object -Property 'Name' | ConvertTo-Json -Compress -Depth 100
+				$Description = $ClusterState | ConvertTo-Json -Compress -Depth 100
 			}
 			catch {
 				Write-Warning -Message "could not convert cluster state object to JSON: $($_.Exception.Message)"
@@ -2369,9 +2391,12 @@ process {
 			# update state of current node
 			$StoredClusterNode.State = 'Restarted'
 
+			# sort cluster nodes in state object
+			$ClusterState.Nodes = $ClusterState.Nodes | Sort-Object -Property 'Name'
+
 			# create task description from state object
 			try {
-				$Description = $ClusterState | Sort-Object -Property 'Name' | ConvertTo-Json -Compress -Depth 100
+				$Description = $ClusterState | ConvertTo-Json -Compress -Depth 100
 			}
 			catch {
 				Write-Warning -Message "could not convert cluster state object to JSON: $($_.Exception.Message)"
@@ -2470,9 +2495,12 @@ process {
 			# update state of current node
 			$StoredClusterNode.State = 'Resumed'
 
+			# sort cluster nodes in state object
+			$ClusterState.Nodes = $ClusterState.Nodes | Sort-Object -Property 'Name'
+
 			# create task description from state object
 			try {
-				$Description = $ClusterState | Sort-Object -Property 'Name' | ConvertTo-Json -Compress -Depth 100
+				$Description = $ClusterState | ConvertTo-Json -Compress -Depth 100
 			}
 			catch {
 				Write-Warning -Message "could not convert cluster state object to JSON: $($_.Exception.Message)"
@@ -2563,9 +2591,12 @@ process {
 			# update state of current node
 			$StoredClusterNode.State = 'Complete'
 
+			# sort cluster nodes in state object
+			$ClusterState.Nodes = $ClusterState.Nodes | Sort-Object -Property 'Name'
+
 			# create task description from state object
 			try {
-				$Description = $ClusterState | Sort-Object -Property 'Name' | ConvertTo-Json -Compress -Depth 100
+				$Description = $ClusterState | ConvertTo-Json -Compress -Depth 100
 			}
 			catch {
 				Write-Warning -Message "could not convert cluster state object to JSON: $($_.Exception.Message)"
@@ -2598,7 +2629,7 @@ end {
 		}
 		else {
 			# loop through cluster state
-			ForEach ($ClusterNode in $ClusterState) {
+			foreach ($ClusterNode in $ClusterState.Nodes) {
 				# report node name and state
 				Write-Host "cluster state - Node: $($ClusterNode.Name); State: $($ClusterNode.State)"
 			}
