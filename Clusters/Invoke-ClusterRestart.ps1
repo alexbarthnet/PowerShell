@@ -22,6 +22,10 @@ param(
 	[Parameter(ParameterSetName = 'Start')]
 	[Parameter(ParameterSetName = 'Restart')]
 	[switch]$Suspended,
+	# options to pass to clustered scheduled task
+	[Parameter(ParameterSetName = 'Start')]
+	[Parameter(ParameterSetName = 'Restart')]
+	[string[]]$Options,
 	# time between scheduled task runs; default is 1 minute and must be 1 minute or greater
 	[Parameter(ParameterSetName = 'Start')]
 	[Parameter(ParameterSetName = 'Restart')]
@@ -1574,6 +1578,7 @@ process {
 		# create state object for cluster
 		$ClusterState = [PSCustomObject]@{
 			Nodes   = $ClusterNodeStates
+			Options = $Options
 		}
 
 		# sort cluster nodes in state object
@@ -1766,6 +1771,12 @@ process {
 		# create state objects
 		################################################
 
+		# if options not provided...
+		if (!$PSBoundParameters.ContainsKey('Options')) {
+			# retrieve existing options from cluster state
+			$Options = $ClusterState.Options
+		}
+
 		# create list for cluster node state objects
 		try {
 			$ClusterNodeStates = [System.Collections.Generic.List[object]]::new()
@@ -1790,6 +1801,7 @@ process {
 		# create state object for cluster
 		$ClusterState = [PSCustomObject]@{
 			Nodes   = $ClusterNodeStates
+			Options = $Options
 		}
 
 		# sort cluster nodes in state object
@@ -2641,6 +2653,9 @@ end {
 			Write-Host 'cluster state - not found'
 		}
 		else {
+			# report options
+			Write-Host "cluster state - Options: '$($ClusterState.Options -join ''', ''')'"
+
 			# loop through cluster state
 			foreach ($ClusterNode in $ClusterState.Nodes) {
 				# report node name and state
