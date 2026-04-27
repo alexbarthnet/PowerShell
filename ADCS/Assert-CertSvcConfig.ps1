@@ -202,7 +202,7 @@ Else {
 			PropertyType = 'String'
 		}
 		ValidityPeriodUnits   = @{
-			Value        = 3
+			Value        = 5
 			PropertyType = 'DWord'
 		}
 	}
