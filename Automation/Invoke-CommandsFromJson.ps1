@@ -1722,6 +1722,10 @@ Process {
 
 			# if existing entry has same primary key(s)...
 			If ($JsonData.Where({ $_.Order -eq $Order })) {
+				# define strings for reporting
+				$Verb = 'Replaced'
+				$Preposition = 'in'
+
 				# if Force is not present...
 				if (!$Force.IsPresent) {
 					# inquire before removing existing entry
@@ -1731,6 +1735,11 @@ Process {
 
 				# remove existing entry with same primary key(s)
 				$JsonData = [array]($JsonData.Where({ $_.Order -ne $Order }))
+			}
+			else {
+				# define strings for reporting
+				$Verb = 'Added'
+				$Preposition = 'to'
 			}
 
 			# create ordered dictionary for custom object
@@ -1814,7 +1823,7 @@ Process {
 			}
 
 			# report entry added
-			Write-Host "Added entry with order of '$Order' for '$Command' command to configuration file: $Json"
+			Write-Host "$Verb entry with order of '$Order' for '$Command' command $Preposition configuration file: $Json"
 
 			# display current entries if verbose
 			If ($VerbosePreference -eq 'Continue') { $JsonValue | Format-List }
