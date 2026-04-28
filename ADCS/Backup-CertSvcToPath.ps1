@@ -1,8 +1,11 @@
-#requires -Modules CmsCredentials
-[CmdletBinding(SupportsShouldProcess)]
+[CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Default')]
 param(
-    [Parameter(Mandatory)]
+    [Parameter(Mandatory, Position = 0)]
     [string]$Path,
+    [Parameter(Mandatory, Position = 1, ParameterSetName = 'Password')]
+    [securestring]$Password,
+    [Parameter(Mandatory, Position = 1, ParameterSetName = 'Credential')]
+    [pscredential]$Credential,
     [string]$DateString = [System.DateTime]::Now.ToString('yyyyMMdd'),
     [string]$ConfigurationPath = 'HKLM:\SYSTEM\CurrentControlSet\Services\CertSvc\Configuration'
 )
@@ -26,23 +29,7 @@ catch {
 # if CA name not found...
 if ([System.String]::IsNullOrEmpty($CAName)) {
     # warn and return
-    Write-Warning -Message "could not retrieve CA name from Active property on CertSvc configuration registry key, exiting!"
-    return
-}
-
-# retrieve CMS credential for CA name
-try {
-    $Credential = Get-CmsCredential -Identity $CAName
-}
-catch {
-    Write-Warning -Message "could not retrieve CMS credential for '$CAName' identity, exiting!"
-    throw $_
-}
-
-# if credential not found...
-if ($null -eq $Credential) {
-    # warn and return
-    Write-Warning -Message "could not retrieve CMS credential for '$CAName' identity, exiting!"
+    Write-Warning -Message "found empty string for CA name in Active property on CertSvc configuration registry key, exiting!"
     return
 }
 
@@ -60,12 +47,30 @@ catch {
     throw $_
 }
 
+# define parameters for Backup-CARoleService
+$BackupCARoleService = @{
+    Path = $BackupPathForCAWithDate
+}
+
+# switch on parameter set name
+switch ($PSCmdlet.ParameterSetName) {
+    'Password' {
+        $BackupCARoleService['Password'] = $Password
+    }
+    'Credential' {
+        $BackupCARoleService['Password'] = $Credential.Password
+    }
+    Default {
+        Write-Warning -Message "No password or crendential provided; the CA private key will NOT be protected." -WarningAction Inquire
+    }
+}
+
 # report state
 Write-Host "creating '$DateString' backup for '$CAName' CA..."
 
 # backup CA
 try {
-    Backup-CARoleService -Path $BackupPathForCAWithDate -Password $Credential.Password
+    Backup-CARoleService @BackupCARoleService
 }
 catch {
     throw $_
