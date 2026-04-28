@@ -18,7 +18,7 @@ Param(
 	# credential for accessing the VM with PowerShell Direct
 	[Parameter(ParameterSetName = 'Default', Mandatory = $true, Position = 3)]
 	[System.Management.Automation.PSCredential]$Credential,
-	# switch to empty destination folder before import
+	# switch to empty destination folder before export
 	[Parameter(Mandatory = $false)]
 	[switch]$Purge,
 	# switch to create destination folder if missing
