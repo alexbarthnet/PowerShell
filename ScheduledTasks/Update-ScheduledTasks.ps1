@@ -95,6 +95,9 @@ Switch parameter to skip creating a PowerShell transcript for this script.
 .PARAMETER SkipTextOutput
 Switch parameter to skip creating a text output log file when a PowerShell transcript is created for this script.
 
+.PARAMETER Force
+Switch parameter to force overwriting an existing entry in the JSON configuration file.
+
 .INPUTS
 None.
 
@@ -222,7 +225,9 @@ Param(
 	[switch]$SkipTranscript,
 	# switch to skip text output logging
 	[Parameter(DontShow)]
-	[switch]$SkipTextOutput
+	[switch]$SkipTextOutput,
+	# switch to force overwrite of an existing entry
+	[switch]$Force
 )
 
 Begin {
@@ -1979,15 +1984,6 @@ Begin {
 			Throw $_
 		}
 	}
-
-	# if confirm provided and set to false...
-	If ($PSBoundParameters.ContainsKey('Confirm') -and $PSBoundParameters['Confirm'] -eq $false) {
-		$WarningActionFromConfirm = [System.Management.Automation.ActionPreference]::Continue
-	}
-	# if confirm not provided or set to true...
-	Else {
-		$WarningActionFromConfirm = [System.Management.Automation.ActionPreference]::Inquire
-	}
 }
 
 Process {
@@ -2284,11 +2280,24 @@ Process {
 
 			# if existing entry has same primary key(s)...
 			If ($JsonData.Where({ $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath })) {
-				# inquire before removing existing entry
-				Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json'" -WarningAction Continue
-				Write-Warning -Message "Any previous configuration for this entry will **NOT** be preserved" -WarningAction $WarningActionFromConfirm
+				# define verb for reporting
+				$Verb = 'Replaced'
+				$Preposition = 'in'
+
+				# if Force is not present...
+				if (!$Force.IsPresent) {
+					# inquire before removing existing entry
+					Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json'" -WarningAction Continue
+					Write-Warning -Message "Any previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
+				}
+
 				# remove existing entry with same primary key(s)
 				$JsonData = [array]($JsonData.Where({ !($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath ) }))
+			}
+			else {
+				# define verb for reporting
+				$Verb = 'Added'
+				$Preposition = 'to'
 			}
 
 			# create ordered dictionary for custom object
@@ -2357,7 +2366,7 @@ Process {
 			}
 
 			# report entry added
-			Write-Host "Added entry for '$TaskName' task at '$Taskpath' path to configuration file: '$Json'"
+			Write-Host "$Verb entry for '$TaskName' task at '$Taskpath' path $Preposition configuration file: '$Json'"
 
 			# display current entries if verbose
 			If ($VerbosePreference -eq 'Continue') { $JsonValue | Format-List }

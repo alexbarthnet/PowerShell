@@ -247,6 +247,7 @@ If ($RestartRequired) {
 		Start-Sleep -Seconds 15
 
 	}
+
 	# define should process strings
 	$ShouldProcessTarget = 'CertUtil'
 	$ShouldProcessAction = 'issued new CRLs'
