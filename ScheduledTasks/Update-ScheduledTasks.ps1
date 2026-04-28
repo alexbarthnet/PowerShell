@@ -95,6 +95,9 @@ Switch parameter to skip creating a PowerShell transcript for this script.
 .PARAMETER SkipTextOutput
 Switch parameter to skip creating a text output log file when a PowerShell transcript is created for this script.
 
+.PARAMETER Force
+Switch parameter to force overwriting an existing entry in the JSON configuration file.
+
 .INPUTS
 None.
 
@@ -222,7 +225,9 @@ Param(
 	[switch]$SkipTranscript,
 	# switch to skip text output logging
 	[Parameter(DontShow)]
-	[switch]$SkipTextOutput
+	[switch]$SkipTextOutput,
+	# switch to force overwrite of an existing entry
+	[switch]$Force
 )
 
 Begin {
@@ -2284,9 +2289,13 @@ Process {
 
 			# if existing entry has same primary key(s)...
 			If ($JsonData.Where({ $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath })) {
-				# inquire before removing existing entry
-				Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json'" -WarningAction Continue
-				Write-Warning -Message "Any previous configuration for this entry will **NOT** be preserved" -WarningAction $WarningActionFromConfirm
+				# if Force is not present...
+				if (!$Force.IsPresent) {
+					# inquire before removing existing entry
+					Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json'" -WarningAction Continue
+					Write-Warning -Message "Any previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
+				}
+
 				# remove existing entry with same primary key(s)
 				$JsonData = [array]($JsonData.Where({ !($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath ) }))
 			}
