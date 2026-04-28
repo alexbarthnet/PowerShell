@@ -1984,15 +1984,6 @@ Begin {
 			Throw $_
 		}
 	}
-
-	# if confirm provided and set to false...
-	If ($PSBoundParameters.ContainsKey('Confirm') -and $PSBoundParameters['Confirm'] -eq $false) {
-		$WarningActionFromConfirm = [System.Management.Automation.ActionPreference]::Continue
-	}
-	# if confirm not provided or set to true...
-	Else {
-		$WarningActionFromConfirm = [System.Management.Automation.ActionPreference]::Inquire
-	}
 }
 
 Process {
