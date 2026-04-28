@@ -2281,7 +2281,7 @@ Process {
 				# if Force is not present...
 				if (!$Force.IsPresent) {
 					# inquire before removing existing entry
-					Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json'" -WarningAction Continue
+					Write-Warning -Message "Will overwrite existing entry for '$TaskName' task at '$TaskPath' path in configuration file: '$Json'" -WarningAction Continue
 					Write-Warning -Message "Any previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
 				}
 
