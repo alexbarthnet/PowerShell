@@ -2207,6 +2207,15 @@ Process {
 		}
 		# remove entry from configuration file
 		$Remove {
+			# locate entry to remove by primary key(s)...
+			$JsonDataToRemove = [array]($JsonData.Where({ $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath }))
+
+			# if existing entry not found...
+			if ($JsonDataToRemove.Count -eq 0) {
+				Write-Warning -Message "Could not locate entry with '$TaskName' task at '$Taskpath' path in configuration file: $Json"
+				return
+			}
+
 			# remove existing entry by primary key(s)...
 			$JsonData = [array]($JsonData.Where({ !($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath ) }))
 
