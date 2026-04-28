@@ -214,12 +214,6 @@ Param(
 	[Parameter(ParameterSetName = 'AddSelf')]
 	[Parameter(ParameterSetName = 'Register')]
 	[switch]$RemoveUndefinedTasks,
-	# legacy switch to process JSON entries for previous versions of the script
-	[Parameter(ParameterSetName = 'Default')]
-	[switch]$Run,
-	# legacy switch to process JSON entries for previous versions of the script
-	[Parameter(ParameterSetName = 'Default')]
-	[switch]$Update,
 	# switch to skip transcript logging
 	[Parameter(DontShow)]
 	[switch]$SkipTranscript,
