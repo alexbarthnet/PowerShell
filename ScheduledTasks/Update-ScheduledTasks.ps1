@@ -2283,7 +2283,7 @@ Process {
 
 			# if existing entry has same primary key(s)...
 			If ($JsonData.Where({ $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath })) {
-				# define verb for reporting
+				# define strings for reporting
 				$Verb = 'Replaced'
 				$Preposition = 'in'
 
@@ -2298,7 +2298,7 @@ Process {
 				$JsonData = [array]($JsonData.Where({ !($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath ) }))
 			}
 			else {
-				# define verb for reporting
+				# define strings for reporting
 				$Verb = 'Added'
 				$Preposition = 'to'
 			}
