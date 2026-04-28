@@ -1,9 +1,7 @@
 [CmdletBinding(SupportsShouldProcess)]
 Param(
-	[Parameter(Position = 0, Mandatory)]
-	[string]$Url,
-	[Parameter(Position = 1)]
-	[string]$Name = '*'
+	[Parameter(Position = 0)]
+	[string]$Url
 )
 
 Function Assert-ItemPropertyValue {
@@ -62,18 +60,19 @@ Function Assert-ItemPropertyValue {
 		# report state
 		Write-Host "Verified value(s) of '$Name' property: $Value"
 	}
-
-
 }
 
-# retrieve active CA configuration
+# retrieve active CA configuration name
 $CAName = Get-ItemPropertyValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\CertSvc\Configuration' -Name 'Active'
+
+# if CA name not found or empty...
+if ([System.String]::IsNullOrEmpty($CAName)) {
+	Write-Warning -Message "the Active configuration was not found, cannot assert CA configuration"
+	return
+}
 
 # define path from active CA configuration
 $Path = 'HKLM:\SYSTEM\CurrentControlSet\Services\CertSvc\Configuration\{0}' -f $CAName
-
-# retrieve required values from registry
-$Path = $Configurations.PSPath
 
 # if URL not provided...
 if (!$PSBoundParameters.ContainsKey('Url')) {
