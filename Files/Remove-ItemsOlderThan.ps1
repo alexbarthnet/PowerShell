@@ -77,26 +77,26 @@ Begin {
 }
 
 Process {
-	# if timespan provided...
-	If ($PSCmdLet.ParameterSetName -eq 'TimeSpan') {
-		# ensure timespan is positive
-		If ($TimeSpan -lt [timespan]::Zero) {
-			$TimeSpan = $TimeSpan.Negate()
+	# switch on parameter set name
+	switch ($PSCmdlet.ParameterSetName) {
+		'TimeSpan' {
+			# ensure timespan is positive
+			If ($TimeSpan -lt [timespan]::Zero) {
+				$TimeSpan = $TimeSpan.Negate()
+			}
+		
+			# get datetime from timespan
+			$DateTime = [datetime]::Now.Subtract($TimeSpan)
 		}
-	
-		# get datetime from timespan
-		$DateTime = [datetime]::Now.Subtract($TimeSpan)
-	}
-
-	# if components provided for computing previous datetime...
-	If ($PSCmdLet.ParameterSetName -eq 'Computed') {
-		# get previous date from input
-		Try {
-			$DateTime = Get-PreviousDate -OlderThanUnits $OlderThanUnits -OlderThanType $OlderThanType
-		}
-		Catch {
-			Write-Warning -Message "could not create date from '$OlderThanUnits $OlderThanType'"
-			Throw $_
+		'Computed' {
+			# get previous date from input
+			Try {
+				$DateTime = Get-PreviousDate -OlderThanUnits $OlderThanUnits -OlderThanType $OlderThanType
+			}
+			Catch {
+				Write-Warning -Message "could not create date from '$OlderThanUnits $OlderThanType'"
+				Throw $_
+			}
 		}
 	}
 
