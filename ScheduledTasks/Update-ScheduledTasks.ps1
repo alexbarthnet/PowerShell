@@ -214,12 +214,6 @@ Param(
 	[Parameter(ParameterSetName = 'AddSelf')]
 	[Parameter(ParameterSetName = 'Register')]
 	[switch]$RemoveUndefinedTasks,
-	# legacy switch to process JSON entries for previous versions of the script
-	[Parameter(ParameterSetName = 'Default')]
-	[switch]$Run,
-	# legacy switch to process JSON entries for previous versions of the script
-	[Parameter(ParameterSetName = 'Default')]
-	[switch]$Update,
 	# switch to skip transcript logging
 	[Parameter(DontShow)]
 	[switch]$SkipTranscript,
@@ -2213,6 +2207,15 @@ Process {
 		}
 		# remove entry from configuration file
 		$Remove {
+			# locate entry to remove by primary key(s)...
+			$JsonDataToRemove = [array]($JsonData.Where({ $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath }))
+
+			# if existing entry not found...
+			if ($JsonDataToRemove.Count -eq 0) {
+				Write-Warning -Message "Could not locate entry with '$TaskName' task at '$Taskpath' path in configuration file: $Json"
+				return
+			}
+
 			# remove existing entry by primary key(s)...
 			$JsonData = [array]($JsonData.Where({ !($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath ) }))
 
@@ -2287,7 +2290,7 @@ Process {
 				# if Force is not present...
 				if (!$Force.IsPresent) {
 					# inquire before removing existing entry
-					Write-Warning -Message "Will overwrite existing entry for '$TaskName' at '$TaskPath' in configuration file: '$Json'" -WarningAction Continue
+					Write-Warning -Message "Will overwrite existing entry for '$TaskName' task at '$TaskPath' path in configuration file: '$Json'" -WarningAction Continue
 					Write-Warning -Message "Any previous configuration for this entry will **NOT** be preserved" -WarningAction Inquire
 				}
 

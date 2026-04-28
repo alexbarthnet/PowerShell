@@ -53,6 +53,9 @@ Switch parameter to skip creating a transcript file for this script and any comm
 .PARAMETER SkipTextOutput
 Switch parameter to skip creating a text output file for this script and any commands run by this script.
 
+.PARAMETER Force
+Switch parameter to force overwriting an existing entry or removing multiple entries in the JSON configuration file.
+
 .INPUTS
 String. The path to a JSON file.
 
@@ -154,7 +157,9 @@ Param(
 	# switch parameter to skip transcript logging
 	[switch]$SkipTranscript,
 	# switch parameter to skip text output logging
-	[switch]$SkipTextOutput
+	[switch]$SkipTextOutput,
+	# switch to force overwrite of an existing entry
+	[switch]$Force
 )
 
 Begin {
@@ -1545,15 +1550,6 @@ Begin {
 			Throw $_
 		}
 	}
-
-	# if confirm provided and set to false...
-	If ($PSBoundParameters.ContainsKey('Confirm') -and $PSBoundParameters['Confirm'] -eq $false) {
-		$WarningActionFromConfirm = [System.Management.Automation.ActionPreference]::Continue
-	}
-	# if confirm not provided or set to true...
-	Else {
-		$WarningActionFromConfirm = [System.Management.Automation.ActionPreference]::Inquire
-	}
 }
 
 Process {
@@ -1633,36 +1629,52 @@ Process {
 		}
 		# remove entry from configuration file
 		$Remove {
-			# if order provided...
-			If ($PSBoundParameters.ContainsKey('Command')) {
-				# define report parameter
-				$ParametersForReporting = "Command of '$Command'"
-				# remove existing entry by primary key(s)...
-				$JsonDataToRemove = [array]($JsonData.Where({ $_.Command -eq $Command }))
-				# if JSON data empty...
-				If ($JsonDataToRemove.Count -gt 1) {
-					# inquire before removing multiple entries
-					Write-Warning -Message "Found multiple entries with $ParametersForReporting in configuration file: $Json" -WarningAction Continue
-					Write-Warning -Message "All matching entries will be removed" -WarningAction $WarningActionFromConfirm
+			# switch on parameter set name
+			switch ($PSCmdlet.ParameterSetName) {
+				'RemoveByCommand' {
+					# define report parameter
+					$ParametersForReporting = "Command of '$Command'"
+					# locate entry to remove by primary key(s)...
+					$JsonDataToRemove = [array]($JsonData.Where({ $_.Command -eq $Command }))
+					# if existing entry not found...
+					if ($JsonDataToRemove.Count -eq 0) {
+						Write-Warning -Message "Could not locate entry with $ParametersForReporting in configuration file: $Json"
+						return
+					}
+					# if JSON data empty...
+					If ($JsonDataToRemove.Count -gt 1) {
+						# if Force is not present...
+						if (!$Force.IsPresent) {
+							# inquire before removing multiple entries
+							Write-Warning -Message "Found multiple entries with $ParametersForReporting in configuration file: $Json" -WarningAction Continue
+							Write-Warning -Message "All matching entries will be removed" -WarningAction Inquire
+						}
+					}
+					# remove existing entry by primary key(s)...
+					$JsonData = [array]($JsonData.Where({ $_.Command -ne $Command }))
 				}
-				# remove existing entry by primary key(s)...
-				$JsonData = [array]($JsonData.Where({ $_.Command -ne $Command }))
-			}
-
-			# if order provided...
-			If ($PSBoundParameters.ContainsKey('Order')) {
-				# define report parameter
-				$ParametersForReporting = "Order of '$Order'"
-				# remove existing entry by primary key(s)...
-				$JsonDataToRemove = [array]($JsonData.Where({ $_.Order -eq $Order }))
-				# if JSON data empty...
-				If ($JsonDataToRemove.Count -gt 1) {
-					# inquire before removing multiple entries
-					Write-Warning -Message "Found multiple entries with $ParametersForReporting in configuration file: $Json" -WarningAction Continue
-					Write-Warning -Message "All matching entries will be removed" -WarningAction $WarningActionFromConfirm
+				'RemoveByOrder' {
+					# define report parameter
+					$ParametersForReporting = "Order of '$Order'"
+					# locate entry to remove by primary key(s)...
+					$JsonDataToRemove = [array]($JsonData.Where({ $_.Order -eq $Order }))
+					# if existing entry not found...
+					if ($JsonDataToRemove.Count -eq 0) {
+						Write-Warning -Message "Could not locate entry with $ParametersForReporting in configuration file: $Json"
+						return
+					}
+					# if JSON data empty...
+					If ($JsonDataToRemove.Count -gt 1) {
+						# if Force is not present...
+						if (!$Force.IsPresent) {
+							# inquire before removing multiple entries
+							Write-Warning -Message "Found multiple entries with $ParametersForReporting in configuration file: $Json" -WarningAction Continue
+							Write-Warning -Message "All matching entries will be removed" -WarningAction Inquire
+						}
+					}
+					# remove existing entry by primary key(s)...
+					$JsonData = [array]($JsonData.Where({ $_.Order -ne $Order }))
 				}
-				# remove existing entry by primary key(s)...
-				$JsonData = [array]($JsonData.Where({ $_.Order -ne $Order }))
 			}
 
 			# if JSON data empty...
@@ -1710,9 +1722,13 @@ Process {
 
 			# if existing entry has same primary key(s)...
 			If ($JsonData.Where({ $_.Order -eq $Order })) {
-				# inquire before removing existing entry
-				Write-Warning -Message "Will overwrite existing entry for '$Command' with order '$Order' in configuration file: $Json" -WarningAction Continue
-				Write-Warning -Message 'Any previous configuration for this entry will **NOT** be preserved' -WarningAction $WarningActionFromConfirm
+				# if Force is not present...
+				if (!$Force.IsPresent) {
+					# inquire before removing existing entry
+					Write-Warning -Message "Will overwrite existing entry for '$Command' with order '$Order' in configuration file: $Json" -WarningAction Continue
+					Write-Warning -Message 'Any previous configuration for this entry will **NOT** be preserved' -WarningAction Inquire
+				}
+
 				# remove existing entry with same primary key(s)
 				$JsonData = [array]($JsonData.Where({ $_.Order -ne $Order }))
 			}
