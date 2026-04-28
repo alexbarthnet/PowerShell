@@ -2280,6 +2280,10 @@ Process {
 
 			# if existing entry has same primary key(s)...
 			If ($JsonData.Where({ $_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath })) {
+				# define verb for reporting
+				$Verb = 'Replaced'
+				$Preposition = 'in'
+
 				# if Force is not present...
 				if (!$Force.IsPresent) {
 					# inquire before removing existing entry
@@ -2289,6 +2293,11 @@ Process {
 
 				# remove existing entry with same primary key(s)
 				$JsonData = [array]($JsonData.Where({ !($_.TaskName -eq $TaskName -and $_.TaskPath -eq $TaskPath ) }))
+			}
+			else {
+				# define verb for reporting
+				$Verb = 'Added'
+				$Preposition = 'to'
 			}
 
 			# create ordered dictionary for custom object
@@ -2357,7 +2366,7 @@ Process {
 			}
 
 			# report entry added
-			Write-Host "Added entry for '$TaskName' task at '$Taskpath' path to configuration file: '$Json'"
+			Write-Host "$Verb entry for '$TaskName' task at '$Taskpath' path $Preposition configuration file: '$Json'"
 
 			# display current entries if verbose
 			If ($VerbosePreference -eq 'Continue') { $JsonValue | Format-List }
