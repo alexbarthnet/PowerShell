@@ -88,7 +88,7 @@ catch {
 }
 
 # select all but last seven backups
-$BackupsToRemove = $ChildItems | Select-Object -SkipLast 7
+$BackupsToRemove = $ChildItems | Sort-Object -Property BaseName | Select-Object -SkipLast 7
 
 # loop through backups to remove
 foreach ($BackupToRemove in $BackupsToRemove) {
