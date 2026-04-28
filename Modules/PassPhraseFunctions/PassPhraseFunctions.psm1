@@ -123,7 +123,9 @@ function New-PassPhrase {
 		[ValidateSet('Words', 'WithNumbers', 'WithNumbersAndDelimiter', 'WithNumbersWithRandomDelimiters', 'WithRandomDelimiters')]
 		[string]$Preset = 'WithNumbersAndDelimiter',
 		# switch to skip checking size of local word list file against online word list
-		[switch]$Offline
+		[switch]$Offline,
+		# switch to return the passphrase as a secure string
+		[switch]$AsSecureString
 	)
 
 	# if preset present...
@@ -330,6 +332,12 @@ function New-PassPhrase {
 		$WordCounter++
 	}
 
+	# if AsSecureString is present...
+	if ($AsSecureString.IsPresent) {
+		$Passphrase = ConvertTo-SecureString -String $Passphrase -AsPlainText -Force
+	}
+	
+	# return passphrase
 	return $Passphrase
 }
 
