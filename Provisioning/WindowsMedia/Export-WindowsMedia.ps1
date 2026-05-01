@@ -17,7 +17,7 @@ Path for the updated Windows ISO image. Requires the ISO switch parameter.
 .PARAMETER FilePath
 Path to the required OS CD imaging program from the Windows ADK. Requires the ISO switch parameter. The default value is 'C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe' and is constructed using the path of the 'ProgramFilesx86' special folder.
 
-.PARAMETER ShowProgramOutputInline
+.PARAMETER NoNewWindow
 Switch parameter to display output from OS CD imaging program inline rather than in a new window. Requires the ISO switch parameter.
 
 .PARAMETER SkipBootdata
