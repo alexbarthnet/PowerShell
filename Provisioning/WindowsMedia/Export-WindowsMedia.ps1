@@ -20,6 +20,9 @@ Path to the required OS CD imaging program from the Windows ADK. Requires the IS
 .PARAMETER ShowProgramOutputInline
 Switch parameter to display output from OS CD imaging program inline rather than in a new window. Requires the ISO switch parameter.
 
+.PARAMETER SkipBootdata
+Switch parameter to skip making the new ISO image bootable using boot files from the imported Windows media. Requires the ISO switch parameter.
+
 .PARAMETER DriveLetter
 Character for the drive letter of an existing volume on the USB drive. Requires the USB switch parameter.
 
@@ -59,6 +62,8 @@ param(
 	[string]$FilePath = '{0}\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe' -f [System.Environment]::GetFolderPath('ProgramFilesx86'),
 	[Parameter(ParameterSetName = 'ISO', Mandatory = $false)]
 	[switch]$NoNewWindow,
+	[Parameter(ParameterSetName = 'ISO', Mandatory = $false)]
+	[switch]$SkipBootdata,
 	[Parameter(ParameterSetName = 'USB', Mandatory = $true)]
 	[switch]$USB,
 	[Parameter(ParameterSetName = 'USB', Mandatory = $false)]
@@ -294,12 +299,18 @@ process {
 			# report state
 			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Creating ISO image', $ImagePath
 
-			# define bootdata for ISO image
-			$Bootdata = "2#p0,e,b$TemporaryPathForISO\boot\etfsboot.com#pEF,e,b$TemporaryPathForISO\efi\microsoft\boot\efisys_noprompt.bin"
-
-			# define arguments
+			# define initial arguments WITHOUT bootdata
 			# reference: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/oscdimg-command-line-options?view=windows-11
-			$ArgumentList = "-l$FileSystemLabel -bootdata:$Bootdata -u2 -udfver102 $TemporaryPathForISO $ImagePath"
+			$ArgumentList = "-l$FileSystemLabel -u2 -udfver102 $TemporaryPathForISO $ImagePath"
+
+			# if SkipBootdata is NOT present...
+			if (!$SkipBootdata.IsPresent) {
+				# define bootdata for ISO image
+				$Bootdata = "2#p0,e,b$TemporaryPathForISO\boot\etfsboot.com#pEF,e,b$TemporaryPathForISO\efi\microsoft\boot\efisys_noprompt.bin"
+
+				# update arguments WITH bootdata
+				$ArgumentList = "-bootdata:$Bootdata $ArgumentList"
+			}
 
 			# define parameters for Start-Process
 			$StartProcess = @{
