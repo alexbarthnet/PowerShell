@@ -73,7 +73,7 @@ param(
 	[Parameter(ParameterSetName = 'USB', Mandatory = $false)][ValidateSet('NTFS', 'FAT32')]
 	[string]$FileSystem = 'NTFS',
 	[Parameter(Mandatory = $false)]
-	[string]$FileSystemLabel = 'WindowsMedia',
+	[string]$FileSystemLabel = 'WINDOWS',
 	[Parameter(Mandatory = $false)]
 	[string]$FileSystemLabelSuffix = 'UNATTENDED',
 	[Parameter(Mandatory = $false)]
@@ -208,7 +208,7 @@ process {
 		# if file system label is empty...
 		if ([System.String]::IsNullOrEmpty($FileSystemLabel)) {
 			Write-Warning -Message "found empty file system label file: $FileSystemLabelFile"
-			Write-Warning -Message "continue to use default 'WindowsMedia' as base for file system label" -WarningAction Inquire
+			Write-Warning -Message "continue to use default 'WINDOWS' as base for file system label" -WarningAction Inquire
 		}
 	}
 
