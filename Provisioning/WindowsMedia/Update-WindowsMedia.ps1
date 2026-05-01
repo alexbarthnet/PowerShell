@@ -41,9 +41,6 @@ Path to optional folder containing file resources to add to the ISO image.
 .PARAMETER RelativePathToFeaturesFolder
 Relative path to folder containing FOD resources on the FOD ISO image. The default value is "LanguagesAndOptionalFeatures"
 
-.PARAMETER UpdateAllWindowsImages
-Switch parameter to update all Windows images in the WIM file regardless of Index value in the ExpandStrings hashtable.
-
 .PARAMETER AddVerboseStatusToSetup
 Switch parameter to add the Verbose Status to the offline registry in the Windows image(s)
 
@@ -74,6 +71,12 @@ String array containing the names of Windows Packages to remove from the Windows
 Hashtable containing the names and paths of Windows Packages to add to the Windows image(s). Each entry in the hashtable must be populated as follows:
  - Key: the name of the Windows package
  - Value: a hashtable of the parameters required for the Add-WindowsPackage command to install the Windows package but excluding the Path parameter
+
+.PARAMETER UpdateAllWindowsImages
+Switch parameter to update all Windows images in the WIM file regardless of Index value in the ExpandStrings hashtable.
+
+.PARAMETER SplitImage
+Switch parameter to split the WIM file after applying any requested updates.
 
 .PARAMETER LocalAdminCredential
 Credential containing the local administrator password to add to unattend XML files.
