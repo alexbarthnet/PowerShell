@@ -26,10 +26,12 @@ This script creates or updates the global WindowsMediaStagingPath parameter
 #>
 
 
-[CmdletBinding(DefaultParameterSetName = 'Default')]
+[CmdletBinding(DefaultParameterSetName = 'ImagePath')]
 param(
-	[Parameter(Mandatory = $true)]
+	[Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'ImagePath')]
 	[string]$ImagePath,
+	[Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'StageNewMedia')]
+	[switch]$StageNewMedia,
 	[Parameter(Mandatory = $false)]
 	[string]$Path,
 	[Parameter(Mandatory = $false)]
@@ -236,6 +238,15 @@ begin {
 }
 
 process {
+	# if StageNewMedia is present...
+	if ($StageNewMedia.IsPresent) {
+		# report staging path created
+		"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Created staging path for new media', $global:WindowsMediaStagingPath
+
+		# return early
+		return
+	}
+
 	# report state
 	"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Mounting ISO image', $ImagePath
 
