@@ -106,56 +106,56 @@ None. The function does not generate any output.
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 param(
-	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter(Mandatory = $false)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToFeaturesIsoImage,
-	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter(Mandatory = $false)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToAutounattendFile,
-	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[Parameter(Mandatory = $false)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToUnattendFile,
-	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
-	[string]$PathToUpdateScript,
-	[Parameter()][ValidateScript({ [System.IO.File]::Exists($_) })]
-	[string]$PathToInvokeScript,
-	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
-	[string]$PathToDriverFolder,
-	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[Parameter(Mandatory = $false)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$PathToScriptFolder,
-	[Parameter()][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[Parameter(Mandatory = $false)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
 	[string]$PathToResourcesFolder,
-	[Parameter()]
+	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[string]$PathToUpdateScript,
+	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')][ValidateScript({ [System.IO.File]::Exists($_) })]
+	[string]$PathToInvokeScript,
+	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')][ValidateScript({ [System.IO.Directory]::Exists($_) })]
+	[string]$PathToDriverFolder,
+	[Parameter(Mandatory = $false)]
 	[string]$RelativePathToFeaturesFolder = 'LanguagesAndOptionalFeatures',
-	[Parameter()]
-	[switch]$UpdateAllWindowsImages,
-	[Parameter()]
+	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')]
 	[switch]$AddVerboseStatusToSetup,
-	[Parameter()]
+	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')]
 	[string[]]$OptionalFeaturesToDisable,
-	[Parameter()]
+	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')]
 	[string[]]$OptionalFeaturesToEnable,
-	[Parameter()]
+	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')]
 	[string[]]$CapabilitiesToRemove,
-	[Parameter()]
+	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')]
 	[string[]]$CapabilitiesToAdd,
-	[Parameter()]
+	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')]
 	[string[]]$AppxPackagesToRemove,
-	[Parameter()]
+	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')]
 	[hashtable]$AppxPackagesToAdd,
-	[Parameter()]
+	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')]
 	[string[]]$PackagesToRemove,
-	[Parameter()]
+	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')]
 	[hashtable]$PackagesToAdd,
-	[Parameter()]
+	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')]
+	[switch]$UpdateAllWindowsImages,
+	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')]
+	[switch]$SplitImage,
+	[Parameter(Mandatory = $false)]
 	[pscredential]$LocalAdminCredential,
-	[Parameter()]
+	[Parameter(Mandatory = $false)]
 	[pscredential]$DomainJoinCredential,
-	[Parameter()]
+	[Parameter(Mandatory = $false)]
 	[hashtable]$ExpandStrings = @{
 		DiskID     = 0
 		Index      = 4
 		ProductKey = 'D764K-2NDRG-47T6Q-P8T8W-YP6DF'
 	},
-	[Parameter(Mandatory = $false)]
-	[switch]$SplitImage,
 	[Parameter(Mandatory = $false)]
 	[string]$Path,
 	[Parameter(Mandatory = $false)]
@@ -378,39 +378,15 @@ begin {
 }
 
 process {
-	# if WIM not found...
-	if (![System.IO.File]::Exists($ImagePathForWIM)) {
-		# warn and return
-		Write-Warning -Message "could not locate WIM file at expected location in staging path: $ImagePathForWIM"
-		return
-	}
-
-	# define boolean for updating the WIM
-	$WIMUpdateRequired = $false
-
-	# define parameters that require updating the WIM
-	$WIMUpdatingParameters = @(
-		'PathToUpdateScript'
-		'PathToInvokeScript'
-		'PathToDriverFolder'
-		'AddVerboseStatusToSetup'
-		'OptionalFeaturesToDisable'
-		'OptionalFeaturesToEnable'
-		'CapabilitiesToRemove'
-		'CapabilitiesToAdd'
-	)
-
-	# loop through parameters that require updating the WIM
-	foreach ($WIMUpdatingParameter in $WIMUpdatingParameters) {
-		# if bound parameters contains a parameter that requires updating the WIM...
-		if ($PSBoundParameters.ContainsKey($WIMUpdatingParameter)) {
-			# update boolean
-			$WIMUpdateRequired = $true
+	# if WIM parameter set...
+	if ($PSCmdlet.ParameterSetName -eq 'WIM') {
+		# if WIM file not found...
+		if (![System.IO.File]::Exists($ImagePathForWIM)) {
+			# report and return
+			Write-Warning -Message "could not locate WIM file at expected location in staging path: $ImagePathForWIM"
+			return
 		}
-	}
 
-	# if WIM update required...
-	if ($WIMUpdateRequired) {
 		# if capabilities to add provided...
 		if ($PSBoundParameters.ContainsKey('CapabilitiesToAdd') -and $CapabilitiesToAdd.Count) {
 			# if FOD image not provided...
@@ -983,27 +959,27 @@ process {
 				return $_
 			}
 		}
-	}
 
-	# if split image requested...
-	if ($SplitImage) {
-		# report state
-		"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Splitting WIM image...'
+		# if split image requested...
+		if ($SplitImage) {
+			# report state
+			"{0}`t{1}" -f [System.Datetime]::UtcNow.ToString('o'), 'Splitting WIM image...'
 
-		# split images into 4GB chunks
-		try {
-			$null = Split-WindowsImage -ImagePath $ImagePathForWIM -SplitImagePath $ImagePathForSWM -FileSize 4096 -ScratchDirectory $TemporaryPathForDSD
-		}
-		catch {
-			return $_
-		}
+			# split images into 4GB chunks
+			try {
+				$null = Split-WindowsImage -ImagePath $ImagePathForWIM -SplitImagePath $ImagePathForSWM -FileSize 4096 -ScratchDirectory $TemporaryPathForDSD
+			}
+			catch {
+				return $_
+			}
 
-		# remove original WIM image
-		try {
-			Remove-Item -Path $ImagePathForWIM -Force
-		}
-		catch {
-			return $_
+			# remove original WIM image
+			try {
+				Remove-Item -Path $ImagePathForWIM -Force
+			}
+			catch {
+				return $_
+			}
 		}
 	}
 
