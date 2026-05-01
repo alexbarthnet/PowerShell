@@ -191,18 +191,15 @@ process {
 		# define saved file system label file
 		$FileSystemLabelFile = Join-Path -Path $TemporaryPath -ChildPath 'label.txt'
 
-		# if file system label file not found...
-		if (![System.IO.File]::Exists($FileSystemLabelFile)) {
-			Write-Warning -Message "could not locate file system label file: $FileSystemLabelFile"
-			Write-Warning -Message "continue to use default 'WindowsMedia' as base for file system label" -WarningAction Inquire
-		}
-
-		# retrieve file system label
-		try {
-			$FileSystemLabel = Get-Content -Path $FileSystemLabelFile
-		}
-		catch {
-			return $_
+		# if file system label file found...
+		if ([System.IO.File]::Exists($FileSystemLabelFile)) {
+			# retrieve file system label
+			try {
+				$FileSystemLabel = Get-Content -Path $FileSystemLabelFile
+			}
+			catch {
+				return $_
+			}
 		}
 
 		# if file system label is empty...
