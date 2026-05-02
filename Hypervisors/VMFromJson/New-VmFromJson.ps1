@@ -1534,23 +1534,23 @@ begin {
 			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 		}
 
-		# retrieve DVD drive
+		# retrieve empty DVD drives
 		try {
-			$VMDvdDrive = Get-VMDvdDrive @GetVMDvdDrive
+			$VMDvdDrive = Get-VMDvdDrive @GetVMDvdDrive | Where-Object { [System.String]::IsNullOrEmpty($_.Path) }
 		}
 		catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve DVD drives from VM")
 			throw $_
 		}
 
-		# if multiple DVD drives found...
+		# if multiple empty DVD drives found...
 		if ($VMDvdDrive.Count -gt 1) {
 			# sort drives by controller and LUN then select first drive
-			Write-Host ("$Hostname,$ComputerName,$Name - found multiple DVD drives on VM; selecting first drive")
+			Write-Host ("$Hostname,$ComputerName,$Name - found multiple empty DVD drives on VM; selecting first drive")
 			$VMDvdDrive = $VMDvdDrive | Sort-Object -Property ControllerNumber, ControllerLocation | Select-Object -First 1
 		}
 
-		# if DVD drive not found...
+		# if empty DVD drive not found...
 		if ($null -eq $VMDvdDrive) {
 			# define parameters for Get-VMScsiController
 			$GetVMScsiController = @{
