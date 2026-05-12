@@ -3874,6 +3874,7 @@ begin {
 			[uint64]$MemoryMaximumBytes,
 			[switch]$EnableVMTPM,
 			[switch]$DisableSMT,
+			[switch]$DisableTimeSync,
 			[uint16]$Generation = 2
 		)
 
@@ -3922,7 +3923,7 @@ begin {
 			throw $_
 		}
 
-		# define parameters for integration services
+		# define parameters for enabling integration services
 		$EnableVMIntegrationService = @{
 			VM          = $VM
 			Name        = 'Guest Service Interface'
@@ -3937,6 +3938,26 @@ begin {
 		catch {
 			Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not enable guest services")
 			throw $_
+		}
+
+		# if time sync should be diabled...
+		if ($DisableTimeSync) {
+			# define parameters for disabling time synchronization
+			$DisableVMIntegrationService = @{
+				VM          = $VM
+				Name        = 'Time Synchronization'
+				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# disable integration services
+			try {
+				Write-Host ("$Hostname,$ComputerName,$Name - ...disabling time synchronization")
+				Disable-VMIntegrationService @DisableVMIntegrationService
+			}
+			catch {
+				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not disable time synchronization")
+				throw $_
+			}
 		}
 
 		# define parameters for VM processor
@@ -4382,6 +4403,10 @@ process {
 			if ($null -ne $JsonData.$Name.DisableSMT) {
 				$NewVMFromParams['DisableSMT'] = $JsonData.$Name.DisableSMT
 				Write-Host ("$Hostname,$ComputerName,$Name -   DisableSMT: $($NewVMFromParams['DisableSMT'])")
+			}
+			if ($null -ne $JsonData.$Name.DisableTimeSync) {
+				$NewVMFromParams['DisableTimeSync'] = $JsonData.$Name.DisableTimeSync
+				Write-Host ("$Hostname,$ComputerName,$Name -   DisableTimeSync: $($NewVMFromParams['DisableTimeSync'])")
 			}
 			if ($null -ne $JsonData.$Name.EnableVMTPM) {
 				$NewVMFromParams['EnableVMTPM'] = $JsonData.$Name.EnableVMTPM
