@@ -32,11 +32,11 @@ Path to required "invoke" PowerShell file to add to the Windows image(s). The fi
 .PARAMETER PathToDriverFolder
 Path to optional folder containing drivers to add to the Windows image(s).
 
-.PARAMETER PathToScriptFolder
-Path to optional folder containing PS1 scripts to add to the ISO image.
+.PARAMETER PathToScriptsFolder
+Path to optional folder containing PS1 scripts to add to the 'scripts' folder on the ISO image.
 
-.PARAMETER PathToResourcesFolder
-Path to optional folder containing file resources to add to the ISO image.
+.PARAMETER PathToAdditionalFiles
+Path to optional folder containing additional files and folders to add to the ISO image.
 
 .PARAMETER RelativePathToFeaturesFolder
 Relative path to folder containing FOD resources on the FOD ISO image. The default value is "LanguagesAndOptionalFeatures"
@@ -113,9 +113,9 @@ param(
 	[Parameter(Mandatory = $false)][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToUnattendFile,
 	[Parameter(Mandatory = $false)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
-	[string]$PathToScriptFolder,
+	[string]$PathToScriptsFolder,
 	[Parameter(Mandatory = $false)][ValidateScript({ [System.IO.Directory]::Exists($_) })]
-	[string]$PathToResourcesFolder,
+	[string]$PathToAdditionalFiles,
 	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToUpdateScript,
 	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')][ValidateScript({ [System.IO.File]::Exists($_) })]
@@ -1043,76 +1043,36 @@ process {
 		}
 	}
 
-	# if script folder provided...
-	if ($PSBoundParameters.ContainsKey('PathToScriptFolder')) {
+	# if path to scripts folder provided...
+	if ($PSBoundParameters.ContainsKey('PathToScriptsFolder')) {
 		# define scripts folder on ISO
-		$ScriptFolderForISO = Join-Path -Path $TemporaryPathForISO -ChildPath 'scripts'
+		$ScriptsFolderForISO = Join-Path -Path $TemporaryPathForISO -ChildPath 'scripts'
 
 		# if script folder on ISO not found...
-		if (![System.IO.Directory]::Exists($ScriptFolderForISO)) {
+		if (![System.IO.Directory]::Exists($ScriptsFolderForISO)) {
 			# report state
-			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Creating ISO scripts folder', $ScriptFolderForISO
+			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Creating ISO scripts folder', $ScriptsFolderForISO
 
 			# create folder
 			try {
-				$null = New-Item -ItemType Directory -Path $ScriptFolderForISO -Force -ErrorAction 'Stop'
+				$null = New-Item -ItemType Directory -Path $ScriptsFolderForISO -Force -ErrorAction 'Stop'
 			}
 			catch {
 				return $_
 			}
 		}
 
-		# retrieve files in script folder
-		$Files = Get-ChildItem -Path $PathToScriptFolder -Filter '*.ps1'
-
-		# loop through files
-		foreach ($File in $Files) {
-			# report state
-			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding script to ISO scripts folder', $File.Name
-
-			# create path for file on ISO
-			$FileOnISO = Join-Path -Path $ScriptFolderForISO -ChildPath $File.Name
-
-			# copy file to ISO
-			try {
-				Copy-Item -Path $File.FullName -Destination $FileOnISO -Force -ErrorAction 'Stop'
-			}
-			catch {
-				return $_
-			}
-		}
-	}
-
-	# if resources folder provided...
-	if ($PSBoundParameters.ContainsKey('PathToResourcesFolder')) {
-		# define resources folder on ISO
-		$ResourcesFolderForISO = Join-Path -Path $TemporaryPathForISO -ChildPath 'resources'
-
-		# if resources folder on ISO not found...
-		if (![System.IO.Directory]::Exists($ResourcesFolderForISO)) {
-			# report state
-			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Creating ISO resources folder', $ResourcesFolderForISO
-
-			# create folder
-			try {
-				$null = New-Item -ItemType Directory -Path $ResourcesFolderForISO -Force -ErrorAction 'Stop'
-			}
-			catch {
-				return $_
-			}
-		}
-
-		# retrieve resources folder
+		# retrieve item for path to scripts folder
 		try {
-			$ResourcesFolder = Get-Item -Path $PathToResourcesFolder
+			$FolderWithScriptFiles = Get-Item -Path $PathToScriptsFolder -ErrorAction 'Stop'
 		}
 		catch {
 			return $_
 		}
 
-		# retrieve folders in resources folder
+		# retrieve folders in path to scripts folder
 		try {
-			$Folders = Get-ChildItem -Recurse -Path $PathToResourcesFolder -Directory
+			$Folders = Get-ChildItem -Recurse -Path $PathToScriptsFolder -Directory -ErrorAction 'Stop'
 		}
 		catch {
 			return $_
@@ -1121,26 +1081,26 @@ process {
 		# loop through folders
 		foreach ($Folder in $Folders) {
 			# define relative folder path
-			$RelativeFolderPath = $Folder.FullName.Replace($ResourcesFolder.FullName, '')
+			$RelativeFolderPath = $Folder.FullName.Replace($FolderWithScriptFiles.FullName, '')
 
 			# report state
-			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding folder to ISO resources folder', $RelativeFolderPath
+			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding folder to ISO scripts folder', $RelativeFolderPath
 
-			# file path in ISO
-			$FolderPath = Join-Path -Path $ResourcesFolderForISO -ChildPath $RelativeFolderPath
+			# define folder path on ISO image
+			$FolderOnISO = Join-Path -Path $ScriptsFolderForISO -ChildPath $RelativeFolderPath
 
-			# copy item to folder
+			# create folder on ISO
 			try {
-				$null = New-Item -Path $FolderPath -ItemType Directory -Force -ErrorAction 'Stop'
+				$null = New-Item -Path $FolderOnISO -ItemType Directory -Force -ErrorAction 'Stop'
 			}
 			catch {
 				return $_
 			}
 		}
 
-		# retrieve files in resources folder
+		# retrieve files in path to scripts folder
 		try {
-			$Files = Get-ChildItem -Recurse -Path $PathToResourcesFolder -File -ErrorAction 'Stop'
+			$Files = Get-ChildItem -Recurse -Path $PathToScriptsFolder -File -ErrorAction 'Stop' -Filter '*.ps1'
 		}
 		catch {
 			return $_
@@ -1149,17 +1109,84 @@ process {
 		# loop through files
 		foreach ($File in $Files) {
 			# define relative file path
-			$RelativeFilePath = $File.FullName.Replace($ResourcesFolder.FullName, '')
+			$RelativeFilePath = $File.FullName.Replace($FolderWithScriptFiles.FullName, '')
 
 			# report state
-			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding file to ISO resources folder', $RelativeFilePath
+			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding script to ISO scripts folder', $RelativeFilePath
 
-			# define destination file path in ISO
-			$FileOnISO = Join-Path -Path $ResourcesFolderForISO -ChildPath $RelativeFilePath
+			# define file path on ISO
+			$FilePathOnISO = Join-Path -Path $ScriptsFolderForISO -ChildPath $RelativeFilePath
 
 			# copy file to ISO
 			try {
-				$null = Copy-Item -Path $File.FullName -Destination $FileOnISO -Force -ErrorAction 'Stop'
+				Copy-Item -Path $File.FullName -Destination $FilePathOnISO -Force -ErrorAction 'Stop'
+			}
+			catch {
+				return $_
+			}
+		}
+	}
+
+	# if path to additional files provided...
+	if ($PSBoundParameters.ContainsKey('PathToAdditionalFiles')) {
+		# retrieve item for path to additional files
+		try {
+			$FolderWithAdditionalFiles = Get-Item -Path $PathToAdditionalFiles -ErrorAction 'Stop'
+		}
+		catch {
+			return $_
+		}
+
+		# retrieve folders in path to additional files
+		try {
+			$Folders = Get-ChildItem -Recurse -Path $PathToAdditionalFiles -Directory -ErrorAction 'Stop'
+		}
+		catch {
+			return $_
+		}
+
+		# loop through folders
+		foreach ($Folder in $Folders) {
+			# define relative folder path
+			$RelativeFolderPath = $Folder.FullName.Replace($FolderWithAdditionalFiles.FullName, '')
+
+			# report state
+			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding folder to ISO', $RelativeFolderPath
+
+			# define folder path on ISO image
+			$FolderPathOnISO = Join-Path -Path $TemporaryPathForISO -ChildPath $RelativeFolderPath
+
+			# create folder on ISO
+			try {
+				$null = New-Item -Path $FolderPathOnISO -ItemType Directory -Force -ErrorAction 'Stop'
+			}
+			catch {
+				return $_
+			}
+		}
+
+		# retrieve files in path to additional files
+		try {
+			$Files = Get-ChildItem -Recurse -Path $PathToAdditionalFiles -File -ErrorAction 'Stop'
+		}
+		catch {
+			return $_
+		}
+
+		# loop through files
+		foreach ($File in $Files) {
+			# define relative file path
+			$RelativeFilePath = $File.FullName.Replace($FolderWithAdditionalFiles.FullName, '')
+
+			# report state
+			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Adding file to ISO', $RelativeFilePath
+
+			# define file path on ISO image
+			$FilePathOnISO = Join-Path -Path $TemporaryPathForISO -ChildPath $RelativeFilePath
+
+			# copy file to ISO
+			try {
+				$null = Copy-Item -Path $File.FullName -Destination $FilePathOnISO -Force -ErrorAction 'Stop'
 			}
 			catch {
 				return $_
