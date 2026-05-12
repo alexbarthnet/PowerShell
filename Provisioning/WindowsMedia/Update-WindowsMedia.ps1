@@ -29,7 +29,7 @@ Path to required "update" PowerShell file to add to the Windows image(s). The fi
 .PARAMETER PathToInvokeScript
 Path to required "invoke" PowerShell file to add to the Windows image(s). The file will be saved as 'Invoke-ScriptsFromRemovableMedia.ps1' under the Windows directory in the Windows image(s).
 
-.PARAMETER PathToDriverFolder
+.PARAMETER PathToDriversFolder
 Path to optional folder containing drivers to add to the Windows image(s).
 
 .PARAMETER PathToScriptsFolder
@@ -121,7 +121,7 @@ param(
 	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')][ValidateScript({ [System.IO.File]::Exists($_) })]
 	[string]$PathToInvokeScript,
 	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')][ValidateScript({ [System.IO.Directory]::Exists($_) })]
-	[string]$PathToDriverFolder,
+	[string]$PathToDriversFolder,
 	[Parameter(Mandatory = $false)]
 	[string]$RelativePathToFeaturesFolder = 'LanguagesAndOptionalFeatures',
 	[Parameter(Mandatory = $false, ParameterSetName = 'WIM')]
@@ -496,13 +496,13 @@ process {
 			}
 
 			# if drivers folder provided...
-			if ($PSBoundParameters.ContainsKey('PathToDriverFolder')) {
+			if ($PSBoundParameters.ContainsKey('PathToDriversFolder')) {
 				# report state
-				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating WIM with drivers from folder', $PathToDriverFolder
+				"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Updating WIM with drivers from folder', $PathToDriversFolder
 
 				# retrieve INF files in drivers folder
 				try {
-					$InfFiles = Get-ChildItem -Path $PathToDriverFolder -Filter '*.inf' -Recurse
+					$InfFiles = Get-ChildItem -Path $PathToDriversFolder -Filter '*.inf' -Recurse
 				}
 				catch {
 					return $_
