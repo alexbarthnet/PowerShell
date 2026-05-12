@@ -1571,7 +1571,7 @@ begin {
 			if ($VMScsiController.Count -gt 1) {
 				# sort drives by controller and LUN then select first drive
 				Write-Host ("$Hostname,$ComputerName,$Name - found multiple SCSI controllers on VM; selecting first controller with available LUNs")
-				$VMScsiController = $VMScsiController | Sort-Object -Property ControllerNumber | Where-Object { $_.Drives.Count -16 } | Select-Object -First 1
+				$VMScsiController = $VMScsiController | Sort-Object -Property ControllerNumber | Where-Object { $_.Drives.Count -lt 16 } | Select-Object -First 1
 			}
 
 			# if SCSI controller not found...
