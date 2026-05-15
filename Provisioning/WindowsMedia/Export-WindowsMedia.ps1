@@ -296,18 +296,21 @@ process {
 			# report state
 			"{0}`t{1}: {2}" -f [System.Datetime]::UtcNow.ToString('o'), 'Creating ISO image', $ImagePath
 
-			# define initial arguments WITHOUT bootdata
+			# define initial arguments with file system label and version
 			# reference: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/oscdimg-command-line-options?view=windows-11
-			$ArgumentList = "-l$FileSystemLabel -u2 -udfver102 $TemporaryPathForISO $ImagePath"
+			$ArgumentList = "-l$FileSystemLabel -u2 -udfver102"
 
 			# if SkipBootdata is NOT present...
 			if (!$SkipBootdata.IsPresent) {
 				# define bootdata for ISO image
 				$Bootdata = "2#p0,e,b$TemporaryPathForISO\boot\etfsboot.com#pEF,e,b$TemporaryPathForISO\efi\microsoft\boot\efisys_noprompt.bin"
 
-				# update arguments WITH bootdata
+				# update arguments with bootdata
 				$ArgumentList = "-bootdata:$Bootdata $ArgumentList"
 			}
+
+			# update arguments with source location and destination file
+			$ArgumentList = "$ArgumentList $TemporaryPathForISO $ImagePath"
 
 			# define parameters for Start-Process
 			$StartProcess = @{
