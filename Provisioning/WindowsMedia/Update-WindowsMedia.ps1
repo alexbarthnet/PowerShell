@@ -180,25 +180,35 @@ begin {
 		# if administrator password not provided...
 		else {
 			# hide administrator password expand string from the expand strings loop
-			$String = $String -replace '%ADMINISTRATORPASSWORD%', '<%>ADMINISTRATORPASSWORD<%>'
+			$String = $String -replace '<Value>%ADMINISTRATORPASSWORD%</Value>', '<Value>.ADMINISTRATORPASSWORD.</Value>'
 		}
 
 		# if domain join username and password provided...
-		if ($ExpandStrings.ContainsKey('Username') -and $ExpandStrings.ContainsKey('Password')) {
+		if ($ExpandStrings.ContainsKey('Username') -and $ExpandStrings.ContainsKey('Password') -and $ExpandStrings.ContainsKey('DomainName') -and $ExpandStrings.ContainsKey('OrganizationalUnit')) {
 			# uncomment domain join section in unattend file
 			$String = $String.Replace('<!-- <identification>', '<identification>')
 			$String = $String.Replace('</identification> -->', '</identification>')
-			# uncomment domain accounts section in unattend file
-			$String = $String.Replace('<!-- <DomainAccounts>', '<DomainAccounts>')
-			$String = $String.Replace('</DomainAccounts> -->', '</DomainAccounts>')
 		}
 		# if domain join username and password not provided...
 		else {
 			# hide domain join expand strings from the expand strings loop
-			$String = $String.Replace('%USERNAME%', '<%>USERNAME<%>')
-			$String = $String.Replace('%PASSWORD%', '<%>PASSWORD<%>')
-			$String = $String.Replace('%DOMAINNAME%', '<%>DOMAINNAME<%>')
-			$String = $String.Replace('%ORGANIZATIONALUNIT%', '<%>ORGANIZATIONALUNIT<%>')
+			$String = $String.Replace('<Username>%USERNAME%</Username>', '<Username>.USERNAME.</Username>')
+			$String = $String.Replace('<Password>%PASSWORD%</Password>', '<Password>.PASSWORD.</Password>')
+			$String = $String.Replace('<JoinDomain>%DOMAINNAME%</JoinDomain>', '<JoinDomain>.DOMAINNAME.</JoinDomain>')
+			$String = $String.Replace('<MachineObjectOU>%ORGANIZATIONALUNIT%</MachineObjectOU>', '<MachineObjectOU>.ORGANIZATIONALUNIT.</MachineObjectOU>')
+		}
+
+		# if domain name and domain account name and domain account group provided...
+		if ($ExpandStrings.ContainsKey('DomainAccountName') -and $ExpandStrings.ContainsKey('DomainAccountGroup') -and $ExpandStrings.ContainsKey('DomainName')) {
+			# uncomment domain accounts section in unattend file
+			$String = $String.Replace('<!-- <DomainAccounts>', '<DomainAccounts>')
+			$String = $String.Replace('</DomainAccounts> -->', '</DomainAccounts>')
+		}
+		# if domain name and domain account name and domain account group provided...
+		else {
+			$String = $String.Replace('<Name>%DOMAINACCOUNTNAME%</Name>', '<Name>.DOMAINACCOUNTNAME.</Name>')
+			$String = $String.Replace('<Group>%DOMAINACCOUNTGROUP%</Group>', '<Group>.DOMAINACCOUNTGROUP.</Group>')
+			$String = $String.Replace('<Domain>%DOMAINNAME%</Domain>', '<Domain>.DOMAINNAME.</Domain>')
 		}
 
 		# while content contains XML element with expand string as value...
