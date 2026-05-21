@@ -306,7 +306,7 @@ process {
 				$Bootdata = "2#p0,e,b$TemporaryPathForISO\boot\etfsboot.com#pEF,e,b$TemporaryPathForISO\efi\microsoft\boot\efisys_noprompt.bin"
 
 				# update arguments with bootdata
-				$ArgumentList = "-bootdata:$Bootdata $ArgumentList"
+				$ArgumentList = "$ArgumentList -bootdata:$Bootdata"
 			}
 
 			# update arguments with source location and destination file
