@@ -29,11 +29,11 @@ param(
 	[Parameter()]
 	[switch]$ForceRestart,
 	[Parameter()]
+	[pscredential]$LocalAccountCredential,
+	[Parameter()]
 	[pscredential]$LocalAdminCredential,
 	[Parameter()]
 	[pscredential]$DomainJoinCredential,
-	[Parameter()]
-	[pscredential]$OperatorCredential,
 	[Parameter()][ValidateNotNull()]
 	[hashtable]$ExpandStrings = @{},
 	[Parameter(DontShow)]
@@ -4145,40 +4145,53 @@ begin {
 			$String = $String.Replace('<!-- <AdministratorPassword>', '<AdministratorPassword>')
 			$String = $String.Replace('</AdministratorPassword> -->', '</AdministratorPassword>')
 		}
-		# if administrator password not provided...
+		# if administrator password NOT provided...
 		else {
 			# hide administrator password expand string from the expand strings loop
-			$String = $String.Replace('%ADMINISTRATORPASSWORD%', '<%>ADMINISTRATORPASSWORD<%>')
+			$String = $String -replace '<Value>%ADMINISTRATORPASSWORD%</Value>', '<Value>.ADMINISTRATORPASSWORD.</Value>'
 		}
 
-		# if operator password provided...
-		if ($ExpandStrings.ContainsKey('OperatorPassword')) {
-			# uncomment local accounts section in unattend file
-			$String = $String.Replace('<!-- <LocalAccounts>', '<LocalAccounts>')
-			$String = $String.Replace('</LocalAccounts> -->', '</LocalAccounts>')
-		}
-		# if operator password not provided...
-		else {
-			# hide operator password expand string from the expand strings loop
-			$String = $String.Replace('%OPERATORPASSWORD%', '<%>OPERATORPASSWORD<%>')
-		}
-
-		# if domain join username and password provided...
-		if ($ExpandStrings.ContainsKey('Username') -and $ExpandStrings.ContainsKey('Password')) {
+		# if domain join values provided...
+		if ($ExpandStrings.ContainsKey('Username') -and $ExpandStrings.ContainsKey('Password') -and $ExpandStrings.ContainsKey('DomainName')) {
 			# uncomment domain join section in unattend file
 			$String = $String.Replace('<!-- <identification>', '<identification>')
 			$String = $String.Replace('</identification> -->', '</identification>')
+		}
+		# if domain join values NOT provided...
+		else {
+			# hide domain join expand strings from the expand strings loop
+			$String = $String.Replace('<Username>%USERNAME%</Username>', '<Username>.USERNAME.</Username>')
+			$String = $String.Replace('<Password>%PASSWORD%</Password>', '<Password>.PASSWORD.</Password>')
+			$String = $String.Replace('<JoinDomain>%DOMAINNAME%</JoinDomain>', '<JoinDomain>.DOMAINNAME.</JoinDomain>')
+			$String = $String.Replace('<MachineObjectOU>%ORGANIZATIONALUNIT%</MachineObjectOU>', '<MachineObjectOU>.ORGANIZATIONALUNIT.</MachineObjectOU>')
+		}
+
+		# if domain account values provided...
+		if ($ExpandStrings.ContainsKey('DomainAccountName') -and $ExpandStrings.ContainsKey('DomainAccountGroup') -and $ExpandStrings.ContainsKey('DomainName')) {
 			# uncomment domain accounts section in unattend file
 			$String = $String.Replace('<!-- <DomainAccounts>', '<DomainAccounts>')
 			$String = $String.Replace('</DomainAccounts> -->', '</DomainAccounts>')
 		}
-		# if domain join username and password not provided...
+		# if domain account values NOT provided...
 		else {
-			# hide domain join expand strings from the expand strings loop
-			$String = $String.Replace('%USERNAME%', '<%>USERNAME<%>')
-			$String = $String.Replace('%PASSWORD%', '<%>PASSWORD<%>')
-			$String = $String.Replace('%DOMAINNAME%', '<%>DOMAINNAME<%>')
-			$String = $String.Replace('%ORGANIZATIONALUNIT%', '<%>ORGANIZATIONALUNIT<%>')
+			# hide domain account expand strings from the expand strings loop
+			$String = $String.Replace('<Name>%DOMAINACCOUNTNAME%</Name>', '<Name>.DOMAINACCOUNTNAME.</Name>')
+			$String = $String.Replace('<Group>%DOMAINACCOUNTGROUP%</Group>', '<Group>.DOMAINACCOUNTGROUP.</Group>')
+			$String = $String.Replace('<Domain>%DOMAINNAME%</Domain>', '<Domain>.DOMAINNAME.</Domain>')
+		}
+
+		# if local account values provided...
+		if ($ExpandStrings.ContainsKey('LocalAccountName') -and $ExpandStrings.ContainsKey('LocalAccountGroup') -and $ExpandStrings.ContainsKey('LocalAccountPassword')) {
+			# uncomment local accounts section in unattend file
+			$String = $String.Replace('<!-- <LocalAccounts>', '<LocalAccounts>')
+			$String = $String.Replace('</LocalAccounts> -->', '</LocalAccounts>')
+		}
+		# if local account values NOT provided...
+		else {
+			# hide local account expand strings from the expand strings loop
+			$String = $String.Replace('<Name>%LOCALACCOUNTNAME%</Name>', '<Name>.LOCALACCOUNTNAME.</Name>')
+			$String = $String.Replace('<Group>%LOCALACCOUNTGROUP%</Group>', '<Group>.LOCALACCOUNTGROUP.</Group>')
+			$String = $String.Replace('<Value>%LOCALACCOUNTPASSWORD%</Value>', '<Value>.LOCALACCOUNTPASSWORD.</Value>')
 		}
 
 		# while content contains XML element with expand string as value...
@@ -4968,7 +4981,64 @@ process {
 										}
 									}
 
-									# if administrator password provided...
+									# if local account credential provided...
+									if ($PSBoundParameters.ContainsKey('LocalAccountCredential')) {
+										# define epxand string source
+										$ExpandSource = 'LocalAccountCredential parameter'
+
+										# define expand string
+										$ExpandString = 'LocalAccountName'
+
+										# if expand string already present in hashtable...
+										if ($ExpandStrings.ContainsKey($ExpandString)) {
+											# report state
+											Write-Host ("$Hostname,$ComputerName,$Name - ...skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
+										}
+										else {
+											# report state
+											Write-Host ("$Hostname,$ComputerName,$Name - ...adding value of '$ExpandString' expand string from $ExpandSource")
+
+											# add desired username for local account to expand strings hashtable
+											$ExpandStrings[$ExpandString] = $LocalAccountCredential.GetNetworkCredential().Username
+										}
+
+										# define expand string
+										$ExpandString = 'LocalAccountPassword'
+										
+										# if expand string already present in hashtable...
+										if ($ExpandStrings.ContainsKey($ExpandString)) {
+											# report state
+											Write-Host ("$Hostname,$ComputerName,$Name - ...skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
+										}
+										else {
+											# retrieve plaintext password from credential object
+											try {
+												$OriginalPlainText = $LocalAccountCredential.GetNetworkCredential().Password
+											}
+											catch {
+												throw $_
+											}
+
+											# append required string to plaintext password
+											$AppendedPlainText = '{0}Password' -f $OriginalPlainText
+
+											# encode appended password
+											try {
+												$EncodedPassword = [System.Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($AppendedPlainText))
+											}
+											catch {
+												throw $_
+											}
+
+											# report state
+											Write-Host ("$Hostname,$ComputerName,$Name - ...adding value of '$ExpandString' expand string from $ExpandSource")
+
+											# add encoded password for local account to expand strings hashtable
+											$ExpandStrings[$ExpandString] = $EncodedPassword
+										}
+									}
+
+									# if local administrator credential provided...
 									if ($PSBoundParameters.ContainsKey('LocalAdminCredential')) {
 										# define epxand string source
 										$ExpandSource = 'LocalAdminCredential parameter'
@@ -4984,14 +5054,14 @@ process {
 										else {
 											# retrieve plaintext password from credential object
 											try {
-												$PlainText = $LocalAdminCredential.GetNetworkCredential().Password
+												$OriginalPlainText = $LocalAdminCredential.GetNetworkCredential().Password
 											}
 											catch {
 												throw $_
 											}
 
 											# append required string to plaintext password
-											$AppendedPlainText = '{0}AdministratorPassword' -f $PlainText
+											$AppendedPlainText = '{0}AdministratorPassword' -f $OriginalPlainText
 
 											# encode appended password
 											try {
@@ -5004,7 +5074,7 @@ process {
 											# report state
 											Write-Host ("$Hostname,$ComputerName,$Name - ...adding value of '$ExpandString' expand string from $ExpandSource")
 
-											# add encoded plaintext password to expand strings hashtable
+											# add encoded password for local administrator to expand strings hashtable
 											$ExpandStrings[$ExpandString] = $EncodedAdministratorPassword
 										}
 									}
@@ -5044,47 +5114,6 @@ process {
 
 											# add plaintext unattended join password to expand strings hashtable
 											$ExpandStrings[$ExpandString] = $DomainJoinCredential.GetNetworkCredential().Password
-										}
-									}
-
-									# if power user credential provided...
-									if ($PSBoundParameters.ContainsKey('OperatorCredential')) {
-										# define epxand string source
-										$ExpandSource = 'OperatorCredential parameter'
-
-										# define expand string
-										$ExpandString = 'OperatorPassword'
-										
-										# if expand string already present in hashtable...
-										if ($ExpandStrings.ContainsKey($ExpandString)) {
-											# report state
-											Write-Host ("$Hostname,$ComputerName,$Name - ...skipping value of '$ExpandString' expand string from $ExpandSource; value already set")
-										}
-										else {
-											# retrieve plaintext password from credential object
-											try {
-												$PlainText = $OperatorCredential.GetNetworkCredential().Password
-											}
-											catch {
-												throw $_
-											}
-
-											# append required string to plaintext password
-											$AppendedPlainText = '{0}Password' -f $PlainText
-
-											# encode appended password
-											try {
-												$EncodedPassword = [System.Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($AppendedPlainText))
-											}
-											catch {
-												throw $_
-											}
-
-											# report state
-											Write-Host ("$Hostname,$ComputerName,$Name - ...adding value of '$ExpandString' expand string from $ExpandSource")
-
-											# add encoded plaintext password to expand strings hashtable
-											$ExpandStrings[$ExpandString] = $EncodedPassword
 										}
 									}
 
