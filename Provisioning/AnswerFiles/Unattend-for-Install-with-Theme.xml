@@ -73,8 +73,8 @@
                 <!-- <DomainAccounts>
                     <DomainAccountList wcm:action="add">
                         <DomainAccount wcm:action="add">
-                            <Name>Guest</Name>
-                            <Group>Guests</Group>
+                            <Name>%DOMAINACCOUNTNAME%</Name>
+                            <Group>%DOMAINACCOUNTGROUP%</Group>
                         </DomainAccount>
                         <Domain>%DOMAINNAME%</Domain>
                     </DomainAccountList>
@@ -82,12 +82,11 @@
                 <!-- <LocalAccounts>
                     <LocalAccount wcm:action="add">
                         <Password>
-                            <Value>%OPERATORPASSWORD%</Value>
+                            <Value>%LOCALACCOUNTPASSWORD%</Value>
                             <PlainText>false</PlainText>
                         </Password>
-                        <Description>A user account for operating the computer.</Description>
-                        <Group>Administrators</Group>
-                        <Name>Operator</Name>
+                        <Group>%LOCALACCOUNTGROUP%</Group>
+                        <Name>%LOCALACCOUNTNAME%</Name>
                     </LocalAccount>
                 </LocalAccounts> -->
             </UserAccounts>
