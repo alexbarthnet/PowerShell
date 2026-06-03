@@ -82,6 +82,8 @@ begin {
 			Write-Host "$VMName; VirtualMachinePath; migrated to target path: $VirtualMachinePath"
 		}
 
+		# snapshot file path
+
 		# record original snapshot file path
 		$OriginalSnapshotFilePath = $VM.SnapshotFileLocation
 
@@ -109,6 +111,8 @@ begin {
 			# report state
 			Write-Host "$VMName; SnapshotFilePath; migrated to target path: $SnapshotFilePath"
 		}
+
+		# smart paging file path
 
 		# record original smart paging file path
 		$OriginalSmartPagingFilePath = $VM.SmartPagingFilePath
@@ -264,7 +268,7 @@ begin {
 		}
 
 		################
-		# VM folder
+		# remove paths
 		################
 
 		# if original virtual machine path was not on source volume...
@@ -390,7 +394,7 @@ process {
 
 	# if skip deduplication check not requested...
 	if (!$SkipDeduplicationCheck.IsPresent) {
-		# get deduplication state of source volume
+		# retrieve deduplication volumes
 		try {
 			$IsSourceVolumeEnabledForDedup = Get-DedupVolume -Volume $SourceVolume | Select-Object -ExpandProperty Enabled
 		}
