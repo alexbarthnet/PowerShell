@@ -20,8 +20,16 @@ param (
 	# switch to skip CSV storage check
 	[switch]$SkipClusteredStorageCheck,
 	# switch to skip deduplication check
-	[switch]$SkipDeduplicationCheck
-	
+	# define shared parameters for dedup jobs
+	[hashtable]$DedupJobParameters = @{
+		Wait               = $true # start the job and wait for the job to finish
+		Full               = $true # perform a full pass of the requested job type
+		Preempt            = $true # stop any existing job for this job
+		StopWhenSystemBusy = $false # do not pause for existing IO
+		Cores              = 100 # use all required CPU resources
+		Memory             = 100 # use all required RAM resources
+		ErrorAction        = [System.Management.Automation.ActionPreference]::Stop
+	}
 )
 
 begin {
@@ -473,7 +481,7 @@ end {
 
 		# optimize target volume
 		try {
-			$null = Start-DedupJob -Volume $SourceVolume -Type GarbageCollection -Wait -Full -Preempt -StopWhenSystemBusy:$false -Cores 50 -Memory 50
+			$null = Start-DedupJob -Volume $SourceVolume -Type GarbageCollection @DedupJobParameters
 		}
 		catch {
 			throw $_
