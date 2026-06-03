@@ -2075,17 +2075,20 @@ process {
 	# prepare VM for move
 	################################################
 
-	# if Force switch not present...
-	If (!$Force.IsPresent) {
-		Write-Warning -Message "found '$Name' VM and QuickMigration requested; continue to shut down VM" -WarningAction Inquire
-	}
+	# if VM is running...
+	if ($VM.State -eq 'Running') {
+		# if Force switch not present...
+		if (!$Force.IsPresent) {
+			Write-Warning -Message "found '$Name' VM online; continue to shut down VM" -WarningAction Inquire
+		}
 
-	# stop VM before move
-	Try {
-		$VM = Stop-VM -VM $VM -Force -Passthru
-	}
-	Catch {
-		Return $_
+		# stop VM before move
+		try {
+			$VM = Stop-VM -VM $VM -Force -Passthru
+		}
+		catch {
+			return $_
+		}
 	}
 
 	# if skip version update not present...
