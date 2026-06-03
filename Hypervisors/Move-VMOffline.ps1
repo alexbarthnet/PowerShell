@@ -1440,29 +1440,29 @@ begin {
 		# refresh VM key protector
 		################################################
 
-		# if skip key protector update not present requested and VM on new computer...
-		If (!$script:SkipKeyProtectorUpdate.IsPresent -and $script:DestinationHost -eq $ComputerName) {
-			# declare state
-			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - updating VM key protector..."
+		# # if skip key protector update not present requested and VM on new computer...
+		# if (!$script:SkipKeyProtectorUpdate.IsPresent -and $script:DestinationHost -eq $ComputerName) {
+		# 	# declare state
+		# 	Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - updating VM key protector..."
 
-			# define parameters for Set-VMKeyProtector
-			$SetVMKeyProtector = @{
-				VM                   = $VM
-				NewLocalKeyProtector = $true
-				ErrorAction          = [System.Management.Automation.ActionPreference]::Stop
-			}
+		# 	# define parameters for Set-VMKeyProtector
+		# 	$SetVMKeyProtector = @{
+		# 		VM                   = $VM
+		# 		NewLocalKeyProtector = $true
+		# 		ErrorAction          = [System.Management.Automation.ActionPreference]::Stop
+		# 	}
 
-			# update VM key protector
-			Try {
-				$VM = Set-VMKeyProtector @SetVMKeyProtector
-			}
-			Catch {
-				Throw $_
-			}
+		# 	# update VM key protector
+		# 	try {
+		# 		Set-VMKeyProtector @SetVMKeyProtector
+		# 	}
+		# 	catch {
+		# 		throw $_
+		# 	}
 
-			# declare state
-			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...updated VM key protector"
-		}
+		# 	# declare state
+		# 	Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...updated VM key protector"
+		# }
 
 		################################################
 		# restore VM start action on computer
