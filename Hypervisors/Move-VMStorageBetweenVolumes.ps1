@@ -186,42 +186,8 @@ begin {
 
 		# loop through VM hard disk drives
 		:NextVMHardDiskDrive foreach ($VMHardDiskDrive in $VMHardDiskDrives) {
-			# retrieve volume
-			try {
-				$Volume = Get-Volume -FriendlyName $TargetVolumeFriendlyName -ErrorAction 'Stop'
-			}
-			catch {
-				throw $_
-			}
-
-			# define percentage of volume remaining
-			$VolumeSizeRemainingBeforeMovePercentage = [System.Math]::Round($Volume.SizeRemaining / $Volume.Size * 100, 1)
-
-			# if volume remaining percentage is not more than 25%...
-			if ($VolumeSizeRemainingBeforeMovePercentage -le 25) {
-				Write-Warning -Message "$VMName; $VHDIdentity; stopped VM migration: target volume has $VolumeSizeRemainingBeforeMovePercentage% remaining before move (must be more than 25%)"
-				return
-			}
-
 			# define VHD identity
 			$VHDIdentity = '{0}:{1}:{2}' -f $VMHardDiskDrive.ControllerType.ToString().ToLower(), $VMHardDiskDrive.ControllerNumber, $VMHardDiskDrive.ControllerLocation
-
-			# retrieve VHD item
-			try {
-				$VHD = Get-Item -Path $VMHardDiskDrive.Path -ErrorAction 'Stop'
-			}
-			catch {
-				throw $_
-			}
-
-			# define projected percentage of volume remaining after move
-			$VolumeSizeRemainingAfterMovePercentage = [System.Math]::Round(($Volume.SizeRemaining - $VHD.SizeBytes) / $Volume.Size * 100, 1)
-
-			# if projected percentage of volume remaining after move is not more than 25%...
-			if ($VolumeSizeRemainingAfterMovePercentage -le 25) {
-				Write-Warning -Message "$VMName; $VHDIdentity; stopped VM migration: target volume would have $VolumeSizeRemainingAfterMovePercentage% remaining after move (must be more than 25%)"
-				return
-			}
 
 			# record original VHD file path
 			$OriginalVhdFilePath = $VMHardDiskDrive.Path
@@ -233,12 +199,55 @@ begin {
 			$DestinationFilePath = $VMHardDiskDrive.Path.Replace($SourceVolume, $TargetVolume)
 
 			# if VHD destination file path on target volume matches VHD original file path...
-			if ($DestinationFilePath -eq $VMHardDiskDrive.Path) {
+			if ($DestinationFilePath -eq $OriginalVhdFilePath) {
 				# report state
 				Write-Host "$VMName; $VHDIdentity; already in target path: $DestinationFilePath"
 			}
 			# if VHD destination file path on target volume does not match VHD original file path...
 			else {
+				# if skip volume space check not present...
+				if (!$SkipVolumeSpaceCheck.IsPresent) {
+					# retrieve volume
+					try {
+						$Volume = Get-Volume -FriendlyName $TargetVolumeFriendlyName -ErrorAction 'Stop'
+					}
+					catch {
+						throw $_
+					}
+
+					# define percentage of volume remaining
+					$VolumeSizeRemainingBeforeMovePercentage = [System.Math]::Round($Volume.SizeRemaining / $Volume.Size * 100, 1)
+
+					# if volume remaining percentage is not more than 25%...
+					if ($VolumeSizeRemainingBeforeMovePercentage -le 25) {
+						Write-Warning -Message "$VMName; $VHDIdentity; stopped VM migration: target volume has $VolumeSizeRemainingBeforeMovePercentage% remaining before move (must be more than 25%)"
+						return
+					}
+
+					# retrieve VHD item
+					try {
+						$VHD = Get-Item -Path $OriginalVhdFilePath -ErrorAction 'Stop'
+					}
+					catch {
+						throw $_
+					}
+
+					# if parent directory of VHD not in sorted set...
+					if (!$PathsOnSourceVolume.Contains($VHD.Directory.Parent.FullName)) {
+						# add path of directory of VHD to sorted set
+						$null = $PathsOnSourceVolume.Add($VHD.Directory.FullName)
+					}
+
+					# define projected percentage of volume remaining after move
+					$VolumeSizeRemainingAfterMovePercentage = [System.Math]::Round(($Volume.SizeRemaining - $VHD.SizeBytes) / $Volume.Size * 100, 1)
+
+					# if projected percentage of volume remaining after move is not more than 25%...
+					if ($VolumeSizeRemainingAfterMovePercentage -le 25) {
+						Write-Warning -Message "$VMName; $VHDIdentity; stopped VM migration: target volume would have $VolumeSizeRemainingAfterMovePercentage% remaining after move (must be more than 25%)"
+						return
+					}
+				}
+
 				# define hash table for VHD move
 				$Vhds = @{
 					SourceFilePath      = $OriginalVhdFilePath
