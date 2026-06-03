@@ -270,7 +270,7 @@ begin {
 
 					# optimize target volume
 					try {
-						$null = Start-DedupJob -Volume $TargetVolume -Type Optimization -Wait -Full -Preempt -StopWhenSystemBusy:$false -Cores 50 -Memory 50
+						$null = Start-DedupJob -Volume $TargetVolume -Type Optimization @DedupJobParameters
 					}
 					catch {
 						throw $_
