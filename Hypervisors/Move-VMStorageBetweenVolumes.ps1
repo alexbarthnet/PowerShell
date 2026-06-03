@@ -1,6 +1,6 @@
 #Requires -Modules "Hyper-V","FailoverClusters","Deduplication"
 
-[CmdletBinding(DefaultParameterSetName = 'All')]
+[CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'VM')]
 param (
 	# hostname of local computer
 	[Parameter(DontShow)]
@@ -34,7 +34,7 @@ param (
 
 begin {
 	function Move-VMStorageToVolume {
-		[CmdletBinding()]
+		[CmdletBinding(SupportsShouldProcess)]
 		param (
 			[Parameter(Mandatory)]
 			[Microsoft.HyperV.PowerShell.VirtualMachine]$VM,
@@ -223,32 +223,45 @@ begin {
 					DestinationFilePath = $DestinationFilePath
 				}
 
-				# report state
-				Write-Host "$VMName; $VHDIdentity; migrating to target path: $DestinationFilePath"
+				# define should process elements
+				$ShouldProcessCaption = "$VMName; $VHDIdentity; migrate to target path: $DestinationFilePath"
+				$ShouldProcessWarning = "$ShouldProcessCaption?"
+				$ShouldProcessVerbose = "$ShouldProcessCaption"
 
-				# define stopwatch
-				$Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+				# handle should process
+				if ($PSCmdlet.ShouldProcess($ShouldProcessVerbose, $ShouldProcessWarning, $ShouldProcessCaption)) {
+					# report state
+					Write-Host "$VMName; $VHDIdentity; migrating to target path: $DestinationFilePath"
 
-				# move VHD to target volume
-				try {
-					Move-VMStorage -VM $VM -Vhds $Vhds -ErrorAction 'Stop'
+					# define stopwatch
+					$Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+					# move VHD to target volume
+					try {
+						Move-VMStorage -VM $VM -Vhds $Vhds -ErrorAction 'Stop'
+					}
+					catch {
+						Write-Warning -Message "$VMName; $VHDIdentity; could not move '$OriginalVhdFilePath' to target volume: $($_.Exception.Message)"
+						continue NextVMHardDiskDrive
+					}
+
+					# stop stopwatch
+					$Stopwatch.Stop()
+
+					# define pretty timespan
+					$TimespanString = [timespan]::FromTicks($Stopwatch.ElapsedTicks).ToString('hh\:mm\:ss')
+
+					# report state
+					Write-Host "$VMName; $VHDIdentity; migration complete; time taken: $TimespanString"
 				}
-				catch {
-					Write-Warning -Message "$VMName; $VHDIdentity; could not move '$OriginalVhdFilePath' to target volume: $($_.Exception.Message)"
-					continue NextVMHardDiskDrive
-				}
 
-				# stop stopwatch
-				$Stopwatch.Stop()
-
-				# define pretty timespan
-				$TimespanString = [timespan]::FromTicks($Stopwatch.ElapsedTicks).ToString('hh\:mm\:ss')
-
-				# report state
-				Write-Host "$VMName; $VHDIdentity; migration complete; time taken: $TimespanString"
+				# define should process elements
+				$ShouldProcessCaption = "$VMName; $VHDIdentity; start deduplication job on target volume: $TargetVolume"
+				$ShouldProcessWarning = "$ShouldProcessCaption?"
+				$ShouldProcessVerbose = "$ShouldProcessCaption"
 
 				# if target volume is dedup enabled...
-				if ($IsTargetVolumeEnabledForDedup) {
+				if ($IsTargetVolumeEnabledForDedup -and $PSCmdlet.ShouldProcess($ShouldProcessVerbose, $ShouldProcessWarning, $ShouldProcessCaption)) {
 					# report state
 					Write-Host "$VMName; $VHDIdentity; starting deduplication job on target volume: $TargetVolume"
 
