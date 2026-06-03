@@ -30,16 +30,22 @@ Hashtable with parameters for the command. Cannot be combined with the Arguments
 Hashtable with arguments for the command. Cannot be combined with the Parameters parameter. The keys in the hashtable define the order in which arguments are provided to the command and each key must be castable as a Character object.
 
 .PARAMETER Expression
-An optional string containing a PowerShell expression to evaluate. When the Expression parameter is provided, the evaluated expression must return a boolean of true for the command to run.
+An optional string containing a PowerShell expression to evaluate. When the Expression parameter is provided, the individual command will run if the evaluated expression return a boolean of true.
+
+.PARAMETER StopExpression
+An optional string containing a PowerShell expression to evaluate. When the StopExpression parameter is provided, the individual command and any subsequent commands will run if evaluated expression returns a boolean of true.
 
 .PARAMETER Modules
 The name or path of one or more PowerShell modules to import before running the command.
 
-.PARAMETER InputName
-The name of one or more script-wide variables to add to the parameters of the command.
-
 .PARAMETER OutputName
 The name of the script-wide variable where the output of the command should be stored.
+
+.PARAMETER SessionParameters
+The name of one or more session-wide variables to add to the parameters of the command.
+
+.PARAMETER SwitchParameters
+The name of one or more session-wide variables to add as a switch parameter to the parameters of the command. The variable in the existing session must be a boolean.
 
 .PARAMETER Order
 An unsigned 16-bit integer representing the order that the command will be run when multiple commands are defined in a JSON file. The first command is assigned a value of 1 and each additional command is assigned an incrementing value. Providing a value that is already assigned will prompt the user to overwrite the command assigned the provided value.
@@ -123,26 +129,36 @@ Param(
 	# script parameter - parameters for command
 	[Parameter(Mandatory = $True, ParameterSetName = 'AddWithParameters')]
 	[hashtable]$Parameters,
-	# script parameter - expression for evaluating command
+	# script parameter - skip expression for evaluating command
 	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
 	[string]$Expression,
+	# script parameter - stop expression for evaluating command
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')]
+	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
+	[string]$StopExpression,
 	# script parameter - modules to import before running command
 	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
 	[string[]]$Modules,
-	# script parameter - variable names to add to parameters for command
-	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
-	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')]
-	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
-	[string[]]$InputName,
 	# script parameter - variable name to hold output from command
 	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
 	[string]$OutputName,
+	# script parameter - names of session variables to add to parameters for command
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')]
+	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
+	[string[]]$SessionParameters,
+	# script parameter - names of session variables to add to parameters for command as switch parameters
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
+	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')]
+	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
+	[string[]]$SwitchParameters,
 	# script parameter - order of command
 	[Parameter(Mandatory = $True, ParameterSetName = 'RemoveByOrder')][ValidateRange( 1, [uint16]::MaxValue )]
 	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')][ValidateRange( 1, [uint16]::MaxValue )]
@@ -1603,7 +1619,7 @@ Process {
 	}
 
 	# evaluate parameters
-	switch ($true) {
+	:AllJsonEntries switch ($true) {
 		# show configuration file
 		$Show {
 			# report and display JSON contents
@@ -1774,22 +1790,34 @@ Process {
 				$JsonParameters['Expression'] = [string]$Expression
 			}
 
+			# if StopExpression provided...
+			If ($PSBoundParameters.ContainsKey('StopExpression')) {
+				# add StopExpression to dictionary
+				$JsonParameters['StopExpression'] = [string]$StopExpression
+			}
+
 			# if Modules provided...
 			If ($PSBoundParameters.ContainsKey('Modules')) {
 				# add Modules to dictionary
 				$JsonParameters['Modules'] = [string[]]$Modules
 			}
 
-			# if InputName provided...
-			If ($PSBoundParameters.ContainsKey('InputName')) {
-				# add InputName to dictionary
-				$JsonParameters['InputName'] = [string[]]$InputName
-			}
-
 			# if OutputName provided...
 			If ($PSBoundParameters.ContainsKey('OutputName')) {
 				# add OutputName to dictionary
 				$JsonParameters['OutputName'] = [string]$OutputName
+			}
+
+			# if SessionParameters provided...
+			If ($PSBoundParameters.ContainsKey('SessionParameters')) {
+				# add SessionParameters to dictionary
+				$JsonParameters['SessionParameters'] = [string[]]$SessionParameters
+			}
+
+			# if SwitchParameters provided...
+			If ($PSBoundParameters.ContainsKey('SwitchParameters')) {
+				# add SwitchParameters to dictionary
+				$JsonParameters['SwitchParameters'] = [string[]]$SwitchParameters
 			}
 
 			# add Disable as boolean
@@ -1892,24 +1920,60 @@ Process {
 						Write-Warning -Message 'optional value (Parameters) found in configuration file but was not parsed into a hashtable'
 						Continue NextJsonEntry
 					}
-					($HashtableFromJsonEntry.ContainsKey('InputName') -and $HashtableFromJsonEntry['InputName'] -match '[^\w]') {
-						Write-Warning -Message 'optional value (InputName) found in configuration file but contained a character not in 0-9A-Za-z_'
+					($HashtableFromJsonEntry.ContainsKey('Expression') -and $HashtableFromJsonEntry['Expression'] -isnot [System.String]) {
+						Write-Warning -Message 'optional value (Expression) found in configuration file but was not parsed into a string'
+						Continue NextJsonEntry
+					}
+					($HashtableFromJsonEntry.ContainsKey('StopExpression') -and $HashtableFromJsonEntry['StopExpression'] -isnot [System.String]) {
+						Write-Warning -Message 'optional value (StopExpression) found in configuration file but was not parsed into a string'
+						Continue NextJsonEntry
+					}
+					($HashtableFromJsonEntry.ContainsKey('OutputName') -and $HashtableFromJsonEntry['OutputName'] -isnot [System.String]) {
+						Write-Warning -Message 'optional value (OutputName) found in configuration file but was not parsed into a string'
 						Continue NextJsonEntry
 					}
 					($HashtableFromJsonEntry.ContainsKey('OutputName') -and $HashtableFromJsonEntry['OutputName'] -match '[^\w]') {
 						Write-Warning -Message 'optional value (OutputName) found in configuration file but contained a character not in 0-9A-Za-z_'
 						Continue NextJsonEntry
 					}
+					($HashtableFromJsonEntry.ContainsKey('InputName') -and $HashtableFromJsonEntry['InputName'] -match '[^\w]') {
+						Write-Warning -Message 'optional value (InputName) found in configuration file but contained a character not in 0-9A-Za-z_'
+						Continue NextJsonEntry
+					}
+					($HashtableFromJsonEntry.ContainsKey('SessionParameters') -and $HashtableFromJsonEntry['SessionParameters'] -match '[^\w]') {
+						Write-Warning -Message 'optional value (SessionParameters) found in configuration file but contained a character not in 0-9A-Za-z_'
+						Continue NextJsonEntry
+					}
+					($HashtableFromJsonEntry.ContainsKey('SwitchParameters') -and $HashtableFromJsonEntry['SwitchParameters'] -match '[^\w]') {
+						Write-Warning -Message 'optional value (SwitchParameters) found in configuration file but contained a character not in 0-9A-Za-z_'
+						Continue NextJsonEntry
+					}
 					($HashtableFromJsonEntry.ContainsKey('Parameters') -and $HashtableFromJsonEntry.ContainsKey('Arguments')) {
 						Write-Warning -Message 'optional values (Parameters and Arguments) found in configuration file but cannot be combined'
 						Continue NextJsonEntry
 					}
-					($HashtableFromJsonEntry.ContainsKey('InputName') -and $HashtableFromJsonEntry.ContainsKey('Arguments')) {
-						Write-Warning -Message 'optional values (InputName and Arguments) found in configuration file but cannot be combined'
-						Continue NextJsonEntry
-					}
 					($HashtableFromJsonEntry.ContainsKey('OutputName') -and $HashtableFromJsonEntry.ContainsKey('Arguments')) {
 						Write-Warning -Message 'optional value (OutputName and Arguments) found in configuration file but cannot be combined'
+						Continue NextJsonEntry
+					}
+					($HashtableFromJsonEntry.ContainsKey('InputName') -and $HashtableFromJsonEntry.ContainsKey('Arguments')) {
+						Write-Warning -Message 'optional value (InputName and Arguments) found in configuration file but cannot be combined'
+						Continue NextJsonEntry
+					}
+					($HashtableFromJsonEntry.ContainsKey('SessionParameters') -and $HashtableFromJsonEntry.ContainsKey('Arguments')) {
+						Write-Warning -Message 'optional values (SessionParameters and Arguments) found in configuration file but cannot be combined'
+						Continue NextJsonEntry
+					}
+					($HashtableFromJsonEntry.ContainsKey('SwitchParameters') -and $HashtableFromJsonEntry.ContainsKey('Arguments')) {
+						Write-Warning -Message 'optional value (SwitchParameters and Arguments) found in configuration file but cannot be combined'
+						Continue NextJsonEntry
+					}
+					($HashtableFromJsonEntry.ContainsKey('SessionParameters') -and $HashtableFromJsonEntry.ContainsKey('InputName')) {
+						Write-Warning -Message 'optional values (SessionParameters and InputName) found in configuration file but cannot be combined'
+						Continue NextJsonEntry
+					}
+					($HashtableFromJsonEntry.ContainsKey('SwitchParameters') -and $HashtableFromJsonEntry.ContainsKey('InputName')) {
+						Write-Warning -Message 'optional value (SwitchParameters and InputName) found in configuration file but cannot be combined'
 						Continue NextJsonEntry
 					}
 				}
@@ -1975,9 +2039,9 @@ Process {
 					$HashtableFromJsonEntry['CommandName'] = $HashtableFromJsonEntry['Command']
 				}
 
-				# if trigger expression defined...
+				# if skip expression defined...
 				If ($HashtableFromJsonEntry.ContainsKey('Expression')) {
-					# invoke trigger expression
+					# evaluate skip expression
 					Try {
 						$Evaluation = Invoke-Expression -Command $HashtableFromJsonEntry['Expression']
 					}
@@ -1986,16 +2050,40 @@ Process {
 						Continue NextJsonEntry
 					}
 
-					# if trigger evaluation is not a boolean...
+					# if skip expression evaluation is not a boolean...
 					If ($Evaluation -isnot [boolean]) {
 						Write-Warning -Message "the evaluation of the '$($HashtableFromJsonEntry['Expression'])' Expression for the '$($HashtableFromJsonEntry['Command'])' Command returned an invalid type: '$($Evaluation.GetType().FullName)'"
 						Continue NextJsonEntry
 					}
 
-					# if trigger evaluation is false...
+					# if skip expression evaluation is false...
 					If ($Evaluation -eq $false) {
-						Write-Host "The evaluation of the '$($HashtableFromJsonEntry['Expression'])' Expression for the '$($HashtableFromJsonEntry['Command'])' Command returned 'false'"
+						Write-Host "The evaluation of the '$($HashtableFromJsonEntry['Expression'])' Expression for the '$($HashtableFromJsonEntry['Command'])' Command returned 'false'; skipping individual command"
 						Continue NextJsonEntry
+					}
+				}
+
+				# if stop expression defined...
+				If ($HashtableFromJsonEntry.ContainsKey('StopExpression')) {
+					# evaluate stop expression
+					Try {
+						$Evaluation = Invoke-Expression -Command $HashtableFromJsonEntry['StopExpression']
+					}
+					Catch {
+						Write-Warning -Message "exception caught calling '$($HashtableFromJsonEntry['StopExpression'])' StopExpression for the '$($HashtableFromJsonEntry['Command'])' Command: $($_.Exception.ToString())"
+						Break AllJsonEntries
+					}
+
+					# if stop expression evaluation is not a boolean...
+					If ($Evaluation -isnot [boolean]) {
+						Write-Warning -Message "the evaluation of the '$($HashtableFromJsonEntry['StopExpression'])' StopExpression for the '$($HashtableFromJsonEntry['Command'])' Command returned an invalid type: '$($Evaluation.GetType().FullName)'"
+						Break AllJsonEntries
+					}
+
+					# if stop expression evaluation is false...
+					If ($Evaluation -eq $false) {
+						Write-Host "The evaluation of the '$($HashtableFromJsonEntry['StopExpression'])' StopExpression for the '$($HashtableFromJsonEntry['Command'])' Command returned 'false'; stopping all commands"
+						Break AllJsonEntries
 					}
 				}
 
@@ -2035,16 +2123,40 @@ Process {
 					$Parameters = @{}
 				}
 
-				# if one or more input names defined...
+				# if output name defined...
+				If ($HashtableFromJsonEntry.ContainsKey('OutputName')) {
+					# if outvariable already defined...
+					If ($Parameters.ContainsKey('OutVariable')) {
+						Write-Warning -Message "could not add 'OutputName' OutputName variable as OutVariable; variable already defined in parameters as '[$($Parameters[$VariableName].GetType().FullName)]' type with value: $($Parameters['OutVariable'])"
+						Continue NextJsonEntry
+					}
+
+					# add OutputName as OutVariable to parameters
+					Try {
+						$Parameters.Add('OutVariable', $HashtableFromJsonEntry['OutputName'])
+					}
+					Catch {
+						Write-Warning -Message "exception caught adding 'OutVariable' OutputName variable to Parameters hashtable: $($_.Exception.ToString())"
+						Continue NextJsonEntry
+					}
+				}
+
+				# if one or more legacy input names defined...
 				If ($HashtableFromJsonEntry.ContainsKey('InputName')) {
-					# process each named input variable
+					# process each legacy input name
 					ForEach ($VariableName in $HashtableFromJsonEntry['InputName']) {
 						# retrieve value of the named variable
 						Try {
 							$VariableValue = Get-Variable -Name $VariableName -ValueOnly -Scope 'Global' -ErrorAction 'Stop'
 						}
 						Catch {
-							Write-Warning -Message "exception caught retrieving value of the '$VariableName' variable: $($_.Exception.ToString())"
+							Write-Warning -Message "exception caught retrieving value of the '$VariableName' InputName variable: $($_.Exception.ToString())"
+							Continue NextJsonEntry
+						}
+
+						# if variable name already defined...
+						If ($Parameters.ContainsKey($VariableName)) {
+							Write-Warning -Message "could not add '$VariableName' InputName variable to parameters; variable already defined in parameters as '[$($Parameters[$VariableName].GetType().FullName)]' type with value: $($Parameters[$VariableName])"
 							Continue NextJsonEntry
 						}
 
@@ -2053,26 +2165,76 @@ Process {
 							$Parameters.Add($VariableName, $VariableValue)
 						}
 						Catch {
-							Write-Warning -Message "exception caught adding '$VariableName' parameter to Parameters hashtable: $($_.Exception.ToString())"
+							Write-Warning -Message "exception caught adding '$VariableName' InputName variable to Parameters hashtable: $($_.Exception.ToString())"
 							Continue NextJsonEntry
 						}
 					}
 				}
 
-				# if output name defined...
-				If ($HashtableFromJsonEntry.ContainsKey('OutputName')) {
-					# if outvariable already defined...
-					If ($Parameters.ContainsKey('OutVariable')) {
-						Write-Warning -Message "could not add OutputName as OutVariable; OutVariable already defined in parameters with value: $($Parameters['OutVariable'])"
-						Continue NextJsonEntry
+				# if one or more session parameters defined...
+				If ($HashtableFromJsonEntry.ContainsKey('SessionParameters')) {
+					# process each named session parameter
+					ForEach ($VariableName in $HashtableFromJsonEntry['SessionParameters']) {
+						# retrieve value of the named variable
+						Try {
+							$VariableValue = Get-Variable -Name $VariableName -ValueOnly -Scope 'Global' -ErrorAction 'Stop'
+						}
+						Catch {
+							Write-Warning -Message "exception caught retrieving value of the '$VariableName' SessionParameter variable: $($_.Exception.ToString())"
+							Continue NextJsonEntry
+						}
+
+						# if variable name already defined...
+						If ($Parameters.ContainsKey($VariableName)) {
+							Write-Warning -Message "could not add '$VariableName' SwitchParameter variable to parameters; variable already defined in parameters as '[$($Parameters[$VariableName].GetType().FullName)]' type with value: $($Parameters[$VariableName])"
+							Continue NextJsonEntry
+						}
+
+						# add variable name and value to parameters
+						Try {
+							$Parameters.Add($VariableName, $VariableValue)
+						}
+						Catch {
+							Write-Warning -Message "exception caught adding '$VariableName' SessionParameter variable to Parameters hashtable: $($_.Exception.ToString())"
+							Continue NextJsonEntry
+						}
 					}
-					# add OutputName as OutVariable to parameters
-					Try {
-						$Parameters.Add('OutVariable', $HashtableFromJsonEntry['OutputName'])
-					}
-					Catch {
-						Write-Warning -Message "exception caught adding 'OutVariable' parameter to Parameters hashtable: $($_.Exception.ToString())"
-						Continue NextJsonEntry
+				}
+
+				# if one or more switch parameters defined...
+				If ($HashtableFromJsonEntry.ContainsKey('SwitchParameters')) {
+					# process each named switch parameter
+					ForEach ($VariableName in $HashtableFromJsonEntry['SwitchParameters']) {
+						# retrieve value of the named switch parameter
+						Try {
+							$VariableValue = Get-Variable -Name $VariableName -ValueOnly -Scope 'Global' -ErrorAction 'Stop'
+						}
+						Catch {
+							Write-Warning -Message "exception caught retrieving value of the '$VariableName' SwitchParameter variable: $($_.Exception.ToString())"
+							Continue NextJsonEntry
+						}
+
+						# if variable name already defined...
+						If ($Parameters.ContainsKey($VariableName)) {
+							Write-Warning -Message "could not add '$VariableName' SwitchParameter variable to parameters; variable already defined in parameters as '[$($Parameters[$VariableName].GetType().FullName)]' type with value: $($Parameters[$VariableName])"
+							Continue NextJsonEntry
+						}
+
+						# if value of the named switch parameter is false...
+						If ($VariableValue -eq $false) {
+							Write-Verbose -Message "skipping '$VariableName' SwitchParameter variable; value is false"
+						}
+						# if value of the named switch parameter is true...
+						Else {
+							# add variable name and value to parameters
+							Try {
+								$Parameters.Add($VariableName, $VariableValue)
+							}
+							Catch {
+								Write-Warning -Message "exception caught adding '$VariableName' SwitchParameter variable to Parameters hashtable: $($_.Exception.ToString())"
+								Continue NextJsonEntry
+							}
+						}
 					}
 				}
 
