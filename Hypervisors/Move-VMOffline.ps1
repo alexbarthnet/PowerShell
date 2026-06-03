@@ -27,7 +27,7 @@ param (
 	[string]$VirtualMachinePath,
 	# array of hashtables for VHDs
 	[object[]]$VHDs = @(),
-	# switch to skip warning about VM shut down for quick migration
+	# switch to skip warning about VM shut down for quick migration and VM version update
 	[switch]$Force,
 	# switch to remove planned VMs on destination before move
 	[switch]$RemovePlannedVMs,
@@ -2093,36 +2093,45 @@ process {
 
 	# if skip version update not present...
 	if (!$SkipVersionUpdate.IsPresent) {
-		# define parameters for Get-VMHostSupportedVersion
-		$GetVMHostSupportedVersion = @{
-			ComputerName = $ComputerName
-			Default      = $true
-			ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+		# get supported versions from source hypervisor and sort by version properties
+		try {
+			$SupportedVersionsOnSource = (Get-VMHostSupportedVersion -ComputerName $ComputerName).Version -as [System.Collections.Generic.SortedSet[version]]
+		}
+		catch {
+			throw $_
 		}
 
-		# get default (latest) supported version from hypervisor
-		Try {
-			$VMHostSupportedVersion = Get-VMHostSupportedVersion @GetVMHostSupportedVersion
+		# define highest supported version on source
+		$HighestSupportedVersionOnSource = $SupportedVersionsOnSource | Select-Object -Last 1
+
+		# get supported versions from target hypervisor and sort by version properties
+		try {
+			$SupportedVersionsOnTarget = (Get-VMHostSupportedVersion -ComputerName $DestinationHost).Version -as [System.Collections.Generic.SortedSet[version]]
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
-		# if VM version is less than highest supported VM version...
-		If ([decimal]$VM.Version -lt [decimal]$VMHostSupportedVersion.Version.ToString()) {
+		# define highest supported version on target
+		$HighestSupportedVersionOnTarget = $SupportedVersionsOnTarget | Select-Object -Last 1
+
+		# update supported versions on source to define common supported versions
+		$SupportedVersionsOnSource.IntersectWith($SupportedVersionsOnTarget)
+
+		# select highest common supported version from list
+		$HighestCommonSupportedVersion = $SupportedVersionsOnSource | Select-Object -Last 1
+
+		# if highest common supported version is greater than VM version and highest suppoted version on source...
+		if ($HighestCommonSupportedVersion -gt [version]$VM.Version -and $HighestCommonSupportedVersion -eq $HighestSupportedVersionOnSource) {
 			# declare state
 			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - updating VM version from: $($VM.Version)"
 
 			# define required parameters for Update-VMVersion
 			$UpdateVMVersion = @{
-				VM          = $VM
-				Passthru    = $true
-				ErrorAction = [System.Management.Automation.ActionPreference]::Stop
-			}
-
-			# define optional parameters for Update-VMVersion
-			If ($script:PSBoundParameters.ContainsKey('Force')) {
-				$UpdateVMVersion['Force'] = $script:Force
+				VM            = $VM
+				Force         = $true
+				Passthru      = $true
+				ErrorAction   = [System.Management.Automation.ActionPreference]::Stop
 			}
 
 			# update VM version
@@ -2148,6 +2157,38 @@ process {
 	}
 	catch {
 		Write-Warning -Message "could not move VM: $($_.Exception.Message)"
+	}
+
+	################################################
+	# update VM after move
+	################################################
+
+	# if skip version update not present...
+	if (!$SkipVersionUpdate.IsPresent) {
+		# if highest common supported version is greater than VM version and highest suppoted version on target...
+		if ($HighestCommonSupportedVersion -gt [version]$MovedVM.Version -and $HighestCommonSupportedVersion -eq $HighestSupportedVersionOnTarget) {
+			# declare state
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - updating VM version from: $($MovedVM.Version)"
+
+			# define required parameters for Update-VMVersion
+			$UpdateVMVersion = @{
+				VM            = $MovedVM
+				Force         = $true
+				Passthru      = $true
+				ErrorAction   = [System.Management.Automation.ActionPreference]::Stop
+			}
+
+			# update VM version
+			try {
+				$MovedVM = Update-VMVersion @UpdateVMVersion
+			}
+			catch {
+				Write-Warning -Message "Failed to update VM version: $($_.ToString())"
+			}
+
+			# declare state
+			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...updated VM version: $($MovedVM.Version)"
+		}
 	}
 
 	################################################
