@@ -3,10 +3,10 @@
 [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'VM')]
 param (
 	# VM object(s)
-	[Parameter(Mandatory = $true, ParameterSetName = 'VM', ValueFromPipeline = $true)]
+	[Parameter(ParameterSetName = 'VM', ValueFromPipeline = $true)]
 	[Microsoft.HyperV.PowerShell.VirtualMachine]$VM,
 	# VM name(s)
-	[Parameter(Mandatory = $true, ParameterSetName = 'Name')]
+	[Parameter(ParameterSetName = 'Name')]
 	[string]$Name,
 	# source cluster storage volume
 	[Parameter(Mandatory = $true)]
@@ -55,7 +55,7 @@ begin {
 		)
 
 		# retrieve VM name
-		$VMName = $VM.Name
+		$VMName = '{0}{1}' -f $VM.Name, $script:Message
 
 		# retrieve target volume item
 		try {
@@ -514,49 +514,95 @@ process {
 		$IsTargetVolumeEnabledForDedup = $DedupVolumes.Volume.Contains($TargetVolume)
 	}
 
-	# switch on parameter set name
-	switch ($PSCmdlet.ParameterSetName) {
-		'All' {
-			# retrieve all VMs
-			try {
-				$VMs = Get-VM -ErrorAction 'Stop'
-			}
-			catch {
-				throw $_
-			}
+	# define initial parameters
+	$MoveVMStorageToVolume = @{
+		SourceVolume = $SourceVolume
+		TargetVolume = $TargetVolume
+		ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+	}
 
-			# loop through VMs
-			foreach ($VM in $VMs) {
-				# migrate individual VM
-				try {
-					Move-VMStorageToVolume -VM $VM -SourceVolume $SourceVolume -TargetVolume $TargetVolume -ErrorAction 'Stop'
-				}
-				catch {
-					throw $_
-				}
-			}
+	# define optional parameters
+	if ($WhatIfPreference -eq 'Continue') {
+		$MoveVMStorageToVolume['WhatIf'] = $true
+	}
+
+	# if VM object exists (VM would be retrieved from name parameter or directly provided with VM parameter)...
+	if ($script:VM) {
+		# migrate individual VM
+		try {
+			Move-VMStorageToVolume -VM $VM @MoveVMStorageToVolume
 		}
-		'Name' {
-			# retrieve VM by name
-			try {
-				$VM = Get-VM -Name $Name -ErrorAction 'Stop'
-			}
-			catch {
-				throw $_
+		catch {
+			throw $_
+		}
+
+		# return after moving single VM
+		return
+	}
+	# if VM object does not exist...
+	else {
+		# define initial parameters for Get-VM
+		$GetVM = @{
+			ErrorAction = [System.Management.Automation.ActionPreference]::Stop
+		}
+
+		# define optional parameters for Get-VM
+		if ($PSBoundParameters.ContainsKey('Name')) {
+			$GetVM['Name'] = $Name
+		}
+
+		# retrieve all VMs
+		try {
+			$VMs = Get-VM @GetVM
+		}
+		catch {
+			throw $_
+		}
+
+		# if Name parameter not provided and skip name matching not present...
+		if (!$PSBoundParameters.ContainsKey('Name') -and !$SkipNameMatching.IsPresent) {
+			# filter VMs by name
+			$VMs = $VMs | Where-Object { $_.Name -match $Match -and $_.Name -notmatch $NotMatch }
+			# define message
+			$MessageSuffixWhenNoVMsFound = ";use the '-SkipNameMatching' parameter to disable default Match and NotMatch parameter values"
+		}
+
+		# if VMs is null...
+		if ($null -eq $VMs) {
+			Write-Warning -Message "no VMs found$MessageSuffixWhenNoVMsFound"
+			return
+		}
+		# if VMs is an array...
+		elseif ($VMs -is [array]) {
+			# retrieve count of VMs
+			$VMCount = $VMs.Count
+			# retrieve length of count of VMs as string
+			$VMCountLength = $VMCount.ToString().Length
+		}
+		else {
+			# define count of VMs
+			$VMCount = 1
+			# define length of count of VMs as string
+			$VMCountLength = 1
+		}
+
+		# define VM counter
+		$VMCounter = 0
+
+		# loop through VMs
+		foreach ($VM in $VMs) {
+			# increment VM counter
+			$VMCounter++
+
+			# if multiple VMs...
+			if ($VMCount -gt 1) {
+				# define message
+				$Message = '; VM {0} of {1}' -f $VMCounter.ToString().PadLeft($VMCountLength, '0'), $VMCount
 			}
 
 			# migrate individual VM
 			try {
-				Move-VMStorageToVolume -VM $VM -SourceVolume $SourceVolume -TargetVolume $TargetVolume -ErrorAction 'Stop'
-			}
-			catch {
-				throw $_
-			}
-		}
-		default {
-			# migrate individual VM
-			try {
-				Move-VMStorageToVolume -VM $VM -SourceVolume $SourceVolume -TargetVolume $TargetVolume -ErrorAction 'Stop'
+				Move-VMStorageToVolume -VM $VM @MoveVMStorageToVolume
 			}
 			catch {
 				throw $_
