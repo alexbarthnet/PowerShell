@@ -1885,6 +1885,7 @@ begin {
 			[string]$MacAddress,
 			[string]$Router,
 			[string[]]$DnsServer,
+			[switch]$SkipReplication,
 			[boolean]$ReservationRequired = $true
 		)
 
@@ -2151,27 +2152,36 @@ begin {
 			# declare and continue
 			Write-Host ("$Hostname,$ComputerName,$Name - ...found DHCP failover for scope")
 
-			# define parameters for Invoke-DhcpServerv4FailoverReplication
-			$InvokeDhcpServerv4FailoverReplication = @{
-				ComputerName = $ComputerName
-				ScopeId      = $ScopeId
-				Force        = $true
-				ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+			# if SkipReplication provided...
+			if ($SkipReplication.IsPresent) {
+				# declare and return
+				Write-Host ("$Hostname,$ComputerName,$Name - ...skipping failover replication for DHCP scope")
+				return
+			}
+			else {
+				# define parameters for Invoke-DhcpServerv4FailoverReplication
+				$InvokeDhcpServerv4FailoverReplication = @{
+					ComputerName = $ComputerName
+					ScopeId      = $ScopeId
+					Force        = $true
+					ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
+				}
+
+				# replicate DHCP scope to peer
+				try {
+					Write-Host ("$Hostname,$ComputerName,$Name - replicating DHCP scope to peer: '$($Failover.PartnerServer)'")
+					$null = Invoke-DhcpServerv4FailoverReplication @InvokeDhcpServerv4FailoverReplication
+				}
+				catch {
+					Write-Host ("$Hostname,$ComputerName,$Name - ERROR: replicating DHCP scope")
+					throw $_
+				}
+
+				# declare and return
+				Write-Host ("$Hostname,$ComputerName,$Name - ...replicated DHCP scope to peer")
+				return
 			}
 
-			# replicate DHCP scope to peer
-			try {
-				Write-Host ("$Hostname,$ComputerName,$Name - replicating DHCP scope to peer: '$($Failover.PartnerServer)'")
-				$null = Invoke-DhcpServerv4FailoverReplication @InvokeDhcpServerv4FailoverReplication
-			}
-			catch {
-				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: replicating DHCP scope")
-				throw $_
-			}
-
-			# declare and return
-			Write-Host ("$Hostname,$ComputerName,$Name - ...replicated DHCP scope to peer")
-			return
 		}
 		else {
 			# declare and return
@@ -4748,6 +4758,9 @@ process {
 					}
 					if (![System.String]::IsNullOrEmpty($VMNetworkAdapterEntry.DnsServers)) {
 						$AddVMNetworkAdapterToDHCP['DnsServer'] = $VMNetworkAdapterEntry.DnsServers
+					}
+					if (![System.String]::IsNullOrEmpty($VMNetworkAdapterEntry.DhcpSkipReplication)) {
+						$AddVMNetworkAdapterToDHCP['SkipReplication'] = $VMNetworkAdapterEntry.DhcpSkipReplication
 					}
 
 					# define override parameters for DHCP reservation
