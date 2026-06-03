@@ -127,7 +127,7 @@ begin {
 			{ $_ -ge 1GB } { "$([math]::Round($Size / 1GB,$RoundTo)) GB"; break }
 			{ $_ -ge 1MB } { "$([math]::Round($Size / 1MB,$RoundTo)) MB"; break }
 			{ $_ -ge 1KB } { "$([math]::Round($Size / 1KB,$RoundTo)) KB"; break }
-			Default { "$([math]::Round($Size,$RoundTo)) B" }
+			default { "$([math]::Round($Size,$RoundTo)) B" }
 		}
 	}
 
@@ -586,7 +586,7 @@ begin {
 				return $VMList[0]
 			}
 			# multiple VMs found
-			Default {
+			default {
 				# declare and report then return null
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: multiple VMs found with name")
 				foreach ($VMObject in $VMList) {
@@ -3127,7 +3127,7 @@ begin {
 					}
 				}
 			}
-			Default {
+			default {
 				Write-Host ("$Hostname,$ComputerName,$Name - ERROR: found unsupported '$ControllerType' controller type")
 				throw $_
 			}
