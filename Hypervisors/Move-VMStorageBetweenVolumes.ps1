@@ -84,7 +84,7 @@ begin {
 		# define virtual machine path on target volume
 		$VirtualMachinePath = $OriginalVirtualMachinePath.Replace($SourceVolume, $TargetVolume)
 
-		# ifvirtual machine path on target volume matches original virtual machine path...
+		# if virtual machine path on target volume matches original virtual machine path...
 		if ($VirtualMachinePath -eq $OriginalVirtualMachinePath) {
 			# report state
 			Write-Host "$VMName; VirtualMachinePath; already in target path: $VirtualMachinePath"
