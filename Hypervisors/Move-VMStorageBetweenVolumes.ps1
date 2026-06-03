@@ -396,19 +396,70 @@ process {
 			return
 		}
 
-		# retrieve cluster shared volume for targetvolume
+		# retrieve cluster shared volume for source volume
 		try {
-			$ClusterSharedVolume = $ClusterSharedVolumes | Where-Object { $_.SharedVolumeInfo.FriendlyVolumeName -eq $TargetVolume }
+			$SourceClusterSharedVolume = $ClusterSharedVolumes | Where-Object { $_.SharedVolumeInfo.FriendlyVolumeName -eq $SourceVolume }
 		}
 		catch {
 			throw $_
 		}
 
-		# if cluster shared volume 
-		if ($env:COMPUTERNAME -ne $ClusterSharedVolume.OwnerNode.NodeName) {
-			Write-Warning -Message "The '$TargetVolume' volume is owned by the '$($ClusterSharedVolume.OwnerNode.Name)' and must be moved the current cluster node."
-			Write-Warning -Message "Run the following command to move the cluster shared volume to the current cluster node:"
-			Write-Host "Move-ClusterSharedVolume -Name '$($ClusterSharedVolume.Name)' -Node $env:COMPUTERNAME"
+		# if cluster shared volume
+		if ($env:COMPUTERNAME -ne $SourceClusterSharedVolume.OwnerNode.NodeName) {
+			# if force volume move present...
+			if ($ForceVolumeMove) {
+				# warn before move
+				Write-Warning -Message "The '$SourceVolume' volume will be moved from the '$($SourceClusterSharedVolume.OwnerNode.Name)' node to the current cluster node" -WarningAction Inquire
+
+				# move volume
+				try {
+					$null = Move-ClusterSharedVolume -Name $SourceClusterSharedVolume.Name -Node $env:COMPUTERNAME
+				}
+				catch {
+					throw $_
+				}
+			}
+			else {
+				# warn and set boolean
+				Write-Warning -Message "The '$SourceVolume' volume is owned by the '$($SourceClusterSharedVolume.OwnerNode.Name)' and must be moved the current cluster node"
+				Write-Warning -Message "Run the following command to move the volume: Move-ClusterSharedVolume -Name '$($SourceClusterSharedVolume.Name)' -Node $env:COMPUTERNAME"
+				$VolumeOnOtherNode = $true
+			}
+		}
+
+		# retrieve cluster shared volume for target volume
+		try {
+			$TargetClusterSharedVolume = $ClusterSharedVolumes | Where-Object { $_.SharedVolumeInfo.FriendlyVolumeName -eq $TargetVolume }
+		}
+		catch {
+			throw $_
+		}
+
+		# if cluster shared volume
+		if ($env:COMPUTERNAME -ne $TargetClusterSharedVolume.OwnerNode.NodeName) {
+			# if force volume move present...
+			if ($ForceVolumeMove) {
+				# warn before move
+				Write-Warning -Message "The '$TargetVolume' volume will be moved from the '$($TargetClusterSharedVolume.OwnerNode.Name)' node to the current cluster node" -WarningAction Inquire
+
+				# move volume
+				try {
+					$null = Move-ClusterSharedVolume -Name $TargetClusterSharedVolume.Name -Node $env:COMPUTERNAME
+				}
+				catch {
+					throw $_
+				}
+			}
+			else {
+				# warn and set boolean
+				Write-Warning -Message "The '$TargetVolume' volume is owned by the '$($TargetClusterSharedVolume.OwnerNode.Name)' and must be moved the current cluster node"
+				Write-Warning -Message "Run the following command to move the volume: Move-ClusterSharedVolume -Name '$($TargetClusterSharedVolume.Name)' -Node $env:COMPUTERNAME"
+				$VolumeOnOtherNode = $true
+			}
+		}
+
+		# if volumes are not on the local node...
+		if ($VolumeOnOtherNode) {
 			return
 		}
 	}
@@ -417,19 +468,17 @@ process {
 	if (!$SkipDeduplicationCheck.IsPresent) {
 		# retrieve deduplication volumes
 		try {
-			$IsSourceVolumeEnabledForDedup = Get-DedupVolume -Volume $SourceVolume | Select-Object -ExpandProperty Enabled
+			$DedupVolumes = Get-DedupVolume -ErrorAction 'Stop'
 		}
 		catch {
 			throw $_
 		}
 
+		# get deduplication state of source volume
+		$IsSourceVolumeEnabledForDedup = $DedupVolumes.Volume.Contains($SourceVolume)
+
 		# get deduplication state of target volume
-		try {
-			$IsTargetVolumeEnabledForDedup = Get-DedupVolume -Volume $TargetVolume | Select-Object -ExpandProperty Enabled
-		}
-		catch {
-			throw $_
-		}
+		$IsTargetVolumeEnabledForDedup = $DedupVolumes.Volume.Contains($TargetVolume)
 	}
 
 	# switch on parameter set name
