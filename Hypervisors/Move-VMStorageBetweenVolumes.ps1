@@ -275,6 +275,9 @@ begin {
 
 					# report state
 					Write-Host "$VMName; $VHDIdentity; migration complete; time taken: $TimespanString"
+
+					# update VM storage moved boolean
+					$script:VMStorageMoved = $true
 				}
 
 				# define should process elements
@@ -360,6 +363,9 @@ begin {
 }
 
 process {
+	# define VM storage moved boolean
+	$VMStorageMoved = $false
+
 	# if skip clustered storage check not requested...
 	if (!$SkipClusteredStorageCheck.IsPresent) {
 		# retrieve cluster shared volumes
@@ -551,8 +557,8 @@ process {
 }
 
 end {
-	# if source volume is dedup enabled...
-	if ($IsSourceVolumeEnabledForDedup) {
+	# if source volume is dedup enabled and moves happened and skip not present...
+	if ($IsSourceVolumeEnabledForDedup -and $VMStorageMoved -and -not $SkipGarbageCollectionJob.IsPresent) {
 		# report state
 		Write-Host "starting garbage collection job on source volume: $SourceVolume"
 
