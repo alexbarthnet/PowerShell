@@ -39,52 +39,52 @@ param (
 	[switch]$SkipClusteredStorageCheck
 )
 
-Begin {
-	Function Test-PSSessionByName {
+begin {
+	function Test-PSSessionByName {
 		[CmdletBinding()]
-		Param(
+		param(
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName
 		)
 
 		# if computername matches hostname...
-		If ($ComputerName -eq $Hostname) {
+		if ($ComputerName -eq $Hostname) {
 			# ...return false as no session is needed
-			Return $false
+			return $false
 		}
 
 		# if hashtable is missing...
-		If ($script:PSSessions -isnot [hashtable]) {
+		if ($script:PSSessions -isnot [hashtable]) {
 			# ...create hashtable
 			$script:PSSessions = @{}
 		}
 
 		# if session exists for computer...
-		If ($script:PSSessions.ContainsKey($ComputerName) -and $script:PSSessions[$ComputerName] -is [System.Management.Automation.Runspaces.PSSession]) {
+		if ($script:PSSessions.ContainsKey($ComputerName) -and $script:PSSessions[$ComputerName] -is [System.Management.Automation.Runspaces.PSSession]) {
 			# ...return true as session can already be referenced
-			Return $true
+			return $true
 		}
-		Else {
+		else {
 			# ...try to create a session
-			Try {
+			try {
 				$script:PSSessions[$ComputerName] = New-PSSession -ComputerName $ComputerName -Name $ComputerName -Authentication Kerberos
 			}
-			Catch {
-				Return $false
+			catch {
+				return $false
 			}
 			# ...validate session
-			If ($script:PSSessions[$ComputerName] -is [System.Management.Automation.Runspaces.PSSession]) {
-				Return $true
+			if ($script:PSSessions[$ComputerName] -is [System.Management.Automation.Runspaces.PSSession]) {
+				return $true
 			}
-			Else {
-				Return $false
+			else {
+				return $false
 			}
 		}
 	}
 
-	Function Get-PSSessionInvoke {
+	function Get-PSSessionInvoke {
 		[CmdletBinding()]
-		Param(
+		param(
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName,
 			[hashtable]$ArgumentList
@@ -97,7 +97,7 @@ Begin {
 		}
 
 		# optional arguments passed to ScriptBlock run by Invoke-Command
-		ForEach ($Key in $ArgumentList.Keys) {
+		foreach ($Key in $ArgumentList.Keys) {
 			$ArgumentListForInvokeCommand[$Key] = $ArgumentList[$Key]
 		}
 
@@ -110,53 +110,53 @@ Begin {
 		}
 
 		# if computername matches hostname...
-		If ($ComputerName -eq $Hostname) {
+		if ($ComputerName -eq $Hostname) {
 			# ...update hashtable to invoke commands in the current scope on the local computer
 			$InvokeCommand['NoNewScope'] = $true
 			# ...return hashtable
-			Return $InvokeCommand
+			return $InvokeCommand
 		}
 
 		# check for session
-		Try {
+		try {
 			$SessionExists = Test-PSSessionByName -ComputerName $ComputerName
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# if a session exists...
-		If ($SessionExists) {
+		if ($SessionExists) {
 			# ...update hashtable to invoke commands in the session
 			$InvokeCommand['Session'] = $script:PSSessions[$ComputerName]
 			# ...return hashtable
-			Return $InvokeCommand
+			return $InvokeCommand
 		}
-		Else {
+		else {
 			# ...update hashtable to invoke commands in a standalone session
 			$InvokeCommand['ComputerName'] = $ComputerName
 			# ...return hashtable
-			Return $InvokeCommand
+			return $InvokeCommand
 		}
 	}
 
-	Function Get-ClusterName {
+	function Get-ClusterName {
 		[CmdletBinding()]
-		Param(
+		param(
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName
 		)
 
 		# get hashtable for InvokeCommand splat
-		Try {
+		try {
 			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# test for cluster
-		Try {
+		try {
 			$ClusterName = Invoke-Command @InvokeCommand -ScriptBlock {
 				$GetItemProperty = @{
 					Path        = 'HKLM:\System\CurrentControlSet\Services\ClusSvc\Parameters'
@@ -166,36 +166,36 @@ Begin {
 				Get-ItemProperty @GetItemProperty | Select-Object -ExpandProperty $GetItemProperty['Name']
 			}
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# return the cluster name
-		If ($ClusterName) {
-			Return $ClusterName.ToLowerInvariant()
+		if ($ClusterName) {
+			return $ClusterName.ToLowerInvariant()
 		}
-		Else {
-			Return $null
+		else {
+			return $null
 		}
 	}
 
-	Function Get-ClusterSharedVolumePaths {
+	function Get-ClusterSharedVolumePaths {
 		[CmdletBinding()]
-		Param(
+		param(
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName
 		)
 
 		# get hashtable for InvokeCommand splat
-		Try {
+		try {
 			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# test for cluster
-		Try {
+		try {
 			$ClusterSharedVolumePaths = Invoke-Command @InvokeCommand -ScriptBlock {
 				# retrieve cluster shared volumes
 				$ClusterSharedVolumes = Get-ClusterSharedVolume
@@ -203,22 +203,22 @@ Begin {
 				$ClusterSharedVolumes.SharedVolumeInfo.FriendlyVolumeName
 			}
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# return the cluster shared volume paths
-		If ($ClusterSharedVolumePaths) {
-			Return $ClusterSharedVolumePaths
+		if ($ClusterSharedVolumePaths) {
+			return $ClusterSharedVolumePaths
 		}
-		Else {
-			Return $null
+		else {
+			return $null
 		}
 	}
 
-	Function Assert-PathCreated {
+	function Assert-PathCreated {
 		[CmdletBinding()]
-		Param(
+		param(
 			[Parameter(Mandatory = $true)]
 			[string]$Path,
 			[Parameter(Mandatory = $true)]
@@ -234,11 +234,11 @@ Begin {
 		################################################
 
 		# get hashtable for InvokeCommand splat
-		Try {
+		try {
 			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# update argument list
@@ -250,19 +250,19 @@ Begin {
 		################################################
 
 		# test path before attempting to create path
-		Try {
+		try {
 			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
-				Param($ArgumentList)
+				param($ArgumentList)
 				Test-Path -Path $ArgumentList['Path'] -PathType $ArgumentList['PathType']
 			}
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# if path found before attempting to create path...
-		If ($TestPath) {
-			Return $true
+		if ($TestPath) {
+			return $true
 		}
 
 		################################################
@@ -273,11 +273,11 @@ Begin {
 		[uint16]$Counter = 0
 
 		# while counter less than attempts and path not found...
-		While ($Counter -le $Attempts -and -not $TestPath) {
+		while ($Counter -le $Attempts -and -not $TestPath) {
 			# attempt to create path
-			Try {
+			try {
 				Invoke-Command @InvokeCommand -ScriptBlock {
-					Param($ArgumentList)
+					param($ArgumentList)
 
 					# define parameters
 					$NewItem = @{
@@ -287,7 +287,7 @@ Begin {
 					}
 
 					# if path type is container...
-					If ($ArgumentList['PathType'] -eq [Microsoft.PowerShell.Commands.TestPathType]::Container) {
+					if ($ArgumentList['PathType'] -eq [Microsoft.PowerShell.Commands.TestPathType]::Container) {
 						# add item type of directory to parameters
 						$NewItem['ItemType'] = 'Directory'
 					}
@@ -296,25 +296,25 @@ Begin {
 					$null = New-Item @NewItem
 				}
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 
 			# test path after attempting to create path
-			Try {
+			try {
 				$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
-					Param($ArgumentList)
+					param($ArgumentList)
 					Test-Path -Path $ArgumentList['Path'] -PathType $ArgumentList['PathType']
 				}
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 
 			# if path found after attempt to create path...
-			If ($TestPath) {
+			if ($TestPath) {
 				# return true
-				Return $true
+				return $true
 			}
 
 			# increment counter
@@ -329,12 +329,12 @@ Begin {
 		################################################
 
 		# return false after attempts did not succeed
-		Return $false
+		return $false
 	}
 
-	Function Assert-PathNotFound {
+	function Assert-PathNotFound {
 		[CmdletBinding()]
-		Param(
+		param(
 			[Parameter(Mandatory = $true)]
 			[string]$Path,
 			[Parameter(Mandatory = $true)]
@@ -348,11 +348,11 @@ Begin {
 		################################################
 
 		# get hashtable for InvokeCommand splat
-		Try {
+		try {
 			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# update argument list
@@ -364,23 +364,23 @@ Begin {
 		################################################
 
 		# test path before attempting to remove path
-		Try {
+		try {
 			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
-				Param($ArgumentList)
+				param($ArgumentList)
 				Test-Path -Path $ArgumentList['Path'] -PathType $ArgumentList['PathType']
 			}
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# return inverted results from Test-Path
-		Return !$TestPath
+		return !$TestPath
 	}
 
-	Function Assert-PathRemoved {
+	function Assert-PathRemoved {
 		[CmdletBinding()]
-		Param(
+		param(
 			[Parameter(Mandatory = $true)]
 			[string]$Path,
 			[Parameter(Mandatory = $true)]
@@ -400,11 +400,11 @@ Begin {
 		################################################
 
 		# get hashtable for InvokeCommand splat
-		Try {
+		try {
 			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# update argument list
@@ -417,19 +417,19 @@ Begin {
 		################################################
 
 		# test path before attempting to remove path
-		Try {
+		try {
 			$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
-				Param($ArgumentList)
+				param($ArgumentList)
 				Test-Path -Path $ArgumentList['Path'] -PathType $ArgumentList['PathType']
 			}
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# if path not found before first attempt to remove path...
-		If (!$TestPath) {
-			Return $true
+		if (!$TestPath) {
+			return $true
 		}
 
 		################################################
@@ -437,11 +437,11 @@ Begin {
 		################################################
 
 		# if skip when files present requested and path type is a container...
-		If ($SkipWhenFilesPresent -and $PathType -eq [Microsoft.PowerShell.Commands.TestPathType]::Container) {
+		if ($SkipWhenFilesPresent -and $PathType -eq [Microsoft.PowerShell.Commands.TestPathType]::Container) {
 			# test if files exist in path
-			Try {
+			try {
 				$FilesInPath = Invoke-Command @InvokeCommand -ScriptBlock {
-					Param($ArgumentList)
+					param($ArgumentList)
 
 					# define required parameters
 					$GetChildItems = @{
@@ -453,7 +453,7 @@ Begin {
 					}
 
 					# define optional parameters
-					If (![string]::IsNullOrEmpty($ArgumentList['ExcludedFileFilter'])) {
+					if (![string]::IsNullOrEmpty($ArgumentList['ExcludedFileFilter'])) {
 						$GetChildItems['Exclude'] = $ArgumentList['ExcludedFileFilter']
 					}
 
@@ -461,23 +461,23 @@ Begin {
 					$FileItems = Get-ChildItem @GetChildItems
 
 					# if file items found...
-					If ($FileItems) {
-						Return $true
+					if ($FileItems) {
+						return $true
 					}
 					# if file items not found...
-					Else {
-						Return $false
+					else {
+						return $false
 					}
 				}
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 
 			# if files exist in path...
-			If ($FilesInPath) {
+			if ($FilesInPath) {
 				Write-Warning -Message "found files in '$Path' path on '$ComputerName' computer"
-				Return $false
+				return $false
 			}
 		}
 
@@ -489,11 +489,11 @@ Begin {
 		[uint16]$Counter = 0
 
 		# while counter less than attempts and path still found...
-		While ($Counter -le $Attempts -and $TestPath) {
+		while ($Counter -le $Attempts -and $TestPath) {
 			# attempt to remove path
-			Try {
+			try {
 				Invoke-Command @InvokeCommand -ScriptBlock {
-					Param($ArgumentList)
+					param($ArgumentList)
 
 					# define parameters
 					$RemoveItem = @{
@@ -503,7 +503,7 @@ Begin {
 					}
 
 					# if path type is container...
-					If ($ArgumentList['PathType'] -eq [Microsoft.PowerShell.Commands.TestPathType]::Container) {
+					if ($ArgumentList['PathType'] -eq [Microsoft.PowerShell.Commands.TestPathType]::Container) {
 						# add recurse to parameters
 						$RemoveItem['Recurse'] = $true
 					}
@@ -512,25 +512,25 @@ Begin {
 					$null = Remove-Item @RemoveItem
 				}
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 
 			# test path after attempting to remove path
-			Try {
+			try {
 				$TestPath = Invoke-Command @InvokeCommand -ScriptBlock {
-					Param($ArgumentList)
+					param($ArgumentList)
 					Test-Path -Path $ArgumentList['Path'] -PathType $ArgumentList['PathType']
 				}
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 
 			# if path not found after attempt to remove path...
-			If (!$TestPath) {
+			if (!$TestPath) {
 				# return true
-				Return $true
+				return $true
 			}
 
 			# increment counter
@@ -545,12 +545,12 @@ Begin {
 		################################################
 
 		# return false after attempts did not succeed
-		Return $false
+		return $false
 	}
 
-	Function Assert-VMNotFound {
+	function Assert-VMNotFound {
 		[CmdletBinding()]
-		Param(
+		param(
 			[Parameter(Mandatory = $true)]
 			[object]$VM,
 			[Parameter(Mandatory = $true)]
@@ -570,11 +570,11 @@ Begin {
 		################################################
 
 		# get hashtable for InvokeCommand splat
-		Try {
+		try {
 			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# update argument list
@@ -585,27 +585,27 @@ Begin {
 		################################################
 
 		# retrieve name of planned VM if found by Id
-		Try {
+		try {
 			$PlannedVM = Invoke-Command @InvokeCommand -ScriptBlock {
-				Param($ArgumentList)
+				param($ArgumentList)
 
 				# retrieve planned VM by Id
 				$CimInstance = Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_PlannedComputerSystem' -Filter "Name = '$($ArgumentList['VMId'])'"
 
 				# if planned VM found by Id...
-				If ($CimInstance) {
+				if ($CimInstance) {
 					# return VM name
-					Return $CimInstance.ElementName
+					return $CimInstance.ElementName
 				}
 				# if planned VM not found by Id...
-				Else {
+				else {
 					# return empty string
-					Return [string]::Empty
+					return [string]::Empty
 				}
 			}
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		################################################
@@ -613,28 +613,28 @@ Begin {
 		################################################
 
 		# retrieve name of realized VM if found by Id
-		Try {
+		try {
 			$RealizedVM = Invoke-Command @InvokeCommand -ScriptBlock {
 				# import argument list hashtable
-				Param($ArgumentList)
+				param($ArgumentList)
 
 				# retrieve realized VM by Id
 				$CimInstance = Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_ComputerSystem' -Filter "Name = '$($ArgumentList['VMId'])'"
 
 				# if realized VM found by Id...
-				If ($CimInstance) {
+				if ($CimInstance) {
 					# return VM name
-					Return $CimInstance.ElementName
+					return $CimInstance.ElementName
 				}
 				# if realized VM not found by Id...
-				Else {
+				else {
 					# return empty string
-					Return [string]::Empty
+					return [string]::Empty
 				}
 			}
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		################################################
@@ -642,30 +642,30 @@ Begin {
 		################################################
 
 		# if planned VM and realized VM are empty strings...
-		If ([string]::IsNullOrEmpty($PlannedVM) -and [string]::IsNullOrEmpty($RealizedVM)) {
+		if ([string]::IsNullOrEmpty($PlannedVM) -and [string]::IsNullOrEmpty($RealizedVM)) {
 			# return true
-			Return $true
+			return $true
 		}
 
 		# if planned VM found and quiet not requested...
-		If (![string]::IsNullOrEmpty($PlannedVM) -and !$Quiet) {
+		if (![string]::IsNullOrEmpty($PlannedVM) -and !$Quiet) {
 			# declare state
 			Write-Warning -Message "found planned VM by Id with '$PlannedVM' name on '$ComputerName' computer"
 		}
 
 		# if realized VM found...
-		If (![string]::IsNullOrEmpty($RealizedVM) -and !$Quiet) {
+		if (![string]::IsNullOrEmpty($RealizedVM) -and !$Quiet) {
 			# declare state
 			Write-Warning -Message "found realized VM by Id with '$RealizedVM' name on '$ComputerName' computer"
 		}
 
 		# return false
-		Return $false
+		return $false
 	}
 
-	Function Assert-VMRemoved {
+	function Assert-VMRemoved {
 		[CmdletBinding()]
-		Param(
+		param(
 			[Parameter(Mandatory = $true)]
 			[object]$VM,
 			[Parameter(Mandatory = $true)]
@@ -681,11 +681,11 @@ Begin {
 		################################################
 
 		# get hashtable for InvokeCommand splat
-		Try {
+		try {
 			$InvokeCommand = Get-PSSessionInvoke -ComputerName $ComputerName
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# update argument list
@@ -698,35 +698,35 @@ Begin {
 		# if planned VM requested by mode...
 		if ($Mode -eq 'PlannedVM' -or $Mode -eq 'VM') {
 			# retrieve CIM instance for planned VM by Id
-			Try {
+			try {
 				$PlannedVM = Invoke-Command @InvokeCommand -ScriptBlock {
-					Param($ArgumentList)
+					param($ArgumentList)
 					Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_PlannedComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
 				}
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 		}
 
 		# if realized VM requested by mode...
 		if ($Mode -eq 'RealizedVM' -or $Mode -eq 'VM') {
 			# retrieve CIM instance for realized VM by Id
-			Try {
+			try {
 				$RealizedVM = Invoke-Command @InvokeCommand -ScriptBlock {
-					Param($ArgumentList)
+					param($ArgumentList)
 					Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_ComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
 				}
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 		}
 
 		# if planned VM and realized VM not found before first attempt to remove VM...
-		If (!$PlannedVM -and !$RealizedVM) {
+		if (!$PlannedVM -and !$RealizedVM) {
 			# return
-			Return $true
+			return $true
 		}
 
 		################################################
@@ -734,9 +734,9 @@ Begin {
 		################################################
 
 		# if planned VM found...
-		If ($PlannedVM) {
+		if ($PlannedVM) {
 			# if planned VM found still in migrating state...
-			If ($PlannedVM.OperationalStatus -contains '32774') {
+			if ($PlannedVM.OperationalStatus -contains '32774') {
 				# declare state
 				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...found planned VM in migrating state, waiting for planned VM to exit state..."
 
@@ -744,7 +744,7 @@ Begin {
 				$Counter = [int32]0
 
 				# while counter less than attempts and planned VM found still in migrating state...
-				While ($Counter -lt $Attempts -and $PlannedVM.OperationalStatus -contains '32774') {
+				while ($Counter -lt $Attempts -and $PlannedVM.OperationalStatus -contains '32774') {
 					# increment counter
 					$Counter++
 
@@ -752,29 +752,29 @@ Begin {
 					Start-Sleep -Seconds 5
 
 					# retrieve CIM instance for planned VM by Id
-					Try {
+					try {
 						$PlannedVM = Invoke-Command @InvokeCommand -ScriptBlock {
-							Param($ArgumentList)
+							param($ArgumentList)
 							Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_PlannedComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
 						}
 					}
-					Catch {
-						Throw $_
+					catch {
+						throw $_
 					}
 				}
 
 				# if planned VM not found in migrating state...
-				If ($PlannedVM.OperationalStatus -contains '32774') {
+				if ($PlannedVM.OperationalStatus -contains '32774') {
 					# declare state and set boolean
 					Write-Warning -Message 'found planned VM still in migrating state after 30 seconds'
 					$PlannedVMStuckInMigratingState = $true
 				}
-				Else {
+				else {
 					# declare state
 					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...found planned VM has exited migrating state, removing VM..."
 				}
 			}
-			Else {
+			else {
 				# declare state
 				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...found planned VM, removing VM..."
 			}
@@ -783,17 +783,17 @@ Begin {
 			$Counter = [int32]1
 
 			# while counter less than attempts and planned VM found not in migrating state...
-			While ($Counter -lt $Attempts -and $PlannedVM -and -not $PlannedVMStuckInMigratingState) {
+			while ($Counter -lt $Attempts -and $PlannedVM -and -not $PlannedVMStuckInMigratingState) {
 				# remove planned VM by Id
-				Try {
+				try {
 					$null = Invoke-Command @InvokeCommand -ScriptBlock {
-						Param($ArgumentList)
+						param($ArgumentList)
 						$VM = Get-VM -Id $ArgumentList['Id']
 						$VM | Remove-VM -Force
 					}
 				}
-				Catch {
-					Throw $_
+				catch {
+					throw $_
 				}
 
 				# increment counter
@@ -803,19 +803,19 @@ Begin {
 				Start-Sleep -Seconds 5
 
 				# retrieve CIM instance for planned VM by Id
-				Try {
+				try {
 					$PlannedVM = Invoke-Command @InvokeCommand -ScriptBlock {
-						Param($ArgumentList)
+						param($ArgumentList)
 						Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_PlannedComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
 					}
 				}
-				Catch {
-					Throw $_
+				catch {
+					throw $_
 				}
 			}
 
 			# if planned VM still found...
-			If ($PlannedVM) {
+			if ($PlannedVM) {
 				# declare state
 				Write-Warning -Message 'could not remove planned VM after 30 seconds'
 			}
@@ -826,7 +826,7 @@ Begin {
 		################################################
 
 		# if realized VM found...
-		If ($RealizedVM) {
+		if ($RealizedVM) {
 			# declare state
 			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...found realized VM, removing VM..."
 
@@ -834,39 +834,39 @@ Begin {
 			$Counter = [int32]0
 
 			# while counter less than attempts and realized VM found...
-			While ($Counter -lt $Attempts -and $RealizedVM) {
+			while ($Counter -lt $Attempts -and $RealizedVM) {
 				# increment counter
 				$Counter++
 
 				# remove realized VM by Id
-				Try {
+				try {
 					$null = Invoke-Command @InvokeCommand -ScriptBlock {
-						Param($ArgumentList)
+						param($ArgumentList)
 						$VM = Get-VM -Id $ArgumentList['Id']
 						$VM | Remove-VM -Force
 					}
 				}
-				Catch {
-					Throw $_
+				catch {
+					throw $_
 				}
 
 				# sleep
 				Start-Sleep -Seconds 5
 
 				# retrieve CIM instance for realized VM by Id
-				Try {
+				try {
 					$RealizedVM = Invoke-Command @InvokeCommand -ScriptBlock {
-						Param($ArgumentList)
+						param($ArgumentList)
 						Get-CimInstance -Namespace 'Root\Virtualization\V2' -ClassName 'Msvm_ComputerSystem' -Filter "Name = '$($ArgumentList['Id'])'"
 					}
 				}
-				Catch {
-					Throw $_
+				catch {
+					throw $_
 				}
 			}
 
 			# if realized VM still found...
-			If ($RealizedVM) {
+			if ($RealizedVM) {
 				# declare state
 				Write-Warning -Message 'could not remove realized VM after 30 seconds'
 			}
@@ -877,17 +877,17 @@ Begin {
 		################################################
 
 		# if planned VM and realized VM not found after attempts to remove...
-		If (!$PlannedVM -and !$RealizedVM) {
-			Return $true
+		if (!$PlannedVM -and !$RealizedVM) {
+			return $true
 		}
 		# if planned VM and realized VM not found after attempts to remove...
-		Else {
-			Return $false
+		else {
+			return $false
 		}
 	}
 
-	Function Resolve-VMCompatibilityReport {
-		Param(
+	function Resolve-VMCompatibilityReport {
+		param(
 			[Parameter(Mandatory)]
 			[Microsoft.HyperV.PowerShell.VMCompatibilityReport]$CompatibilityReport
 		)
@@ -900,7 +900,7 @@ Begin {
 		$ComputerName = $CompatibilityReport.VM.ComputerName
 
 		# if one or more VM switch references incompatibilites reported...
-		If (33012 -in $CompatibilityReport.Incompatibilities.MessageID) {
+		if (33012 -in $CompatibilityReport.Incompatibilities.MessageID) {
 			# define parameters for Get-VMSwitch
 			$GetVMSwitch = @{
 				ComputerName = $ComputerName
@@ -909,18 +909,18 @@ Begin {
 			}
 
 			# get external VM switches
-			Try {
+			try {
 				$VMSwitch = Get-VMSwitch @GetVMSwitch
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 
 			# get external VM switch names
 			$SwitchNames = $VMSwitch | Select-Object -ExpandProperty Name
 
 			# if switchname parameter provided but not found in external VM switch names...
-			If ($script:PSBoundParameters.ContainsKey('SwitchName') -and $script:PSBoundParameters['SwitchName'] -notin $SwitchNames ) {
+			if ($script:PSBoundParameters.ContainsKey('SwitchName') -and $script:PSBoundParameters['SwitchName'] -notin $SwitchNames ) {
 				# warn and inquire
 				Write-Warning -Message "could not locate '$script:SwitchName' switch on '$ComputerName' computer; attempt to connect VM to another available external switch?" -WarningAction Inquire
 
@@ -930,22 +930,22 @@ Begin {
 		}
 
 		# process each incompatibility
-		:NextIncompatibility ForEach ($Incompatibility in $CompatibilityReport.Incompatibilities) {
+		:NextIncompatibility foreach ($Incompatibility in $CompatibilityReport.Incompatibilities) {
 			switch ($Incompatibility.MessageID) {
 				# target does not have VM switch references in VM configuration
 				33012 {
 					# get VM network adapter from report
-					Try {
+					try {
 						$VMNetworkAdapterName = $Incompatibility.Source.Name
 					}
-					Catch {
+					catch {
 						$CompatibilityReport.CannotResolve = $true
 						$CompatibilityReport.CannotResolveMessages.Add("Could not retrieve VM network adapter name from incompatibility object: '$($_.Exception.Message)'")
-						Continue NextIncompatibility
+						continue NextIncompatibility
 					}
 
 					# if switch name not provided or forced to null...
-					If ([string]::IsNullOrEmpty($SwitchName)) {
+					if ([string]::IsNullOrEmpty($SwitchName)) {
 						# switch on count of switchnames
 						switch ($SwitchNames.Count) {
 							# no external switches found
@@ -965,7 +965,7 @@ Begin {
 								Write-Warning -Message "Found '$SwitchName' external switch on '$ComputerName' destination. VM network adapter '$VMNetworkAdapterName' on '$Name' VM will be connected to VM switch '$SwitchNames'" -WarningAction Continue
 							}
 							# multiple external switches found
-							Default {
+							default {
 								# warn about switch name hint
 								Write-Warning -Message "Multiple external switches found on '$ComputerName' destination. Will use '$SwitchNameHint' switch name hint to locate available external switch" -WarningAction Continue
 
@@ -990,7 +990,7 @@ Begin {
 										# warn about reconnect to new switch
 										Write-Warning -Message "Will connect '$VMNetworkAdapterName' VM network adapter on '$Name' VM to the external switch matching '$SwitchNameHint' switch name hint: $SwitchName" -WarningAction Continue
 									}
-									Default {
+									default {
 										# select first external switch matching switch name hint after sorting by name
 										$SwitchName = $SwitchNamesMatchingHint | Sort-Object | Select-Object -First 1
 
@@ -1003,46 +1003,46 @@ Begin {
 					}
 
 					# if switch name is null...
-					If ([string]::IsNullOrEmpty($SwitchName)) {
+					if ([string]::IsNullOrEmpty($SwitchName)) {
 						# ...disconnect VM network adapter
-						Try {
+						try {
 							$Incompatibility.Source | Disconnect-VMNetworkAdapter
 						}
-						Catch {
+						catch {
 							$CompatibilityReport.CannotResolve = $true
 							$CompatibilityReport.CannotResolveMessages.Add("Could not disconnect '$VMNetworkAdapterName' VM network adapter on '$Name' VM to address VM switch incompatibility: '$($_.Exception.Message)'")
-							Continue NextIncompatibility
+							continue NextIncompatibility
 						}
 					}
 					# if switch name is not null...
-					Else {
+					else {
 						# ...reconnect VM network adapter to new switch
-						Try {
+						try {
 							$Incompatibility.Source | Connect-VMNetworkAdapter -SwitchName $SwitchName
 							# $Incompatibility.Source | Disconnect-VMNetworkAdapter -Passthru | Connect-VMNetworkAdapter -SwitchName $SwitchName
 						}
-						Catch {
+						catch {
 							$CompatibilityReport.CannotResolve = $true
 							$CompatibilityReport.CannotResolveMessages.Add("Could not connect '$VMNetworkAdapterName' VM network adapter on '$Name' VM to '$SwitchName' switch to address VM switch incompatibility: '$($_.Exception.Message)'")
-							Continue NextIncompatibility
+							continue NextIncompatibility
 						}
 					}
 				}
 				# target has an incompatibility with imported VM not addressed above
-				Default {
+				default {
 					$CompatibilityReport.CannotResolve = $true
 					$CompatibilityReport.CannotResolveMessages.Add("found unhandled incompatibility with '$($Incompatibility.MessageID) and message: '$($Incompatibility.Message)'")
-					Continue NextIncompatibility
+					continue NextIncompatibility
 				}
 			}
 		}
 
 		# return updated compatibility object
-		Return $CompatibilityReport
+		return $CompatibilityReport
 	}
 
-	Function Move-VMToComputer {
-		Param(
+	function Move-VMToComputer {
+		param(
 			[Parameter(Mandatory)]
 			[object]$VM,
 			[Parameter(Mandatory)]
@@ -1066,12 +1066,12 @@ Begin {
 		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - comparing VM with destination host: $DestinationHost"
 
 		# compare VM with target computer
-		Try {
+		try {
 			$CompatibilityReport = Compare-VM -VM $VM -DestinationHost $DestinationHost @Parameters
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not compare VM: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# declare state
@@ -1085,32 +1085,32 @@ Begin {
 		################################################
 
 		# if incompatibilities found...
-		If ($CompatibilityReport.Incompatibilities.Count) {
+		if ($CompatibilityReport.Incompatibilities.Count) {
 			# declare state
 			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - resolving compatibility report for VM..."
 
 			# resolve incompatibilities
-			Try {
+			try {
 				$CompatibilityReport = Resolve-VMCompatibilityReport -CompatibilityReport $CompatibilityReport
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "could not resolve incompatibilities: $($_.Exception.Message)"
-				Return $CompatibilityReport.VM
+				return $CompatibilityReport.VM
 			}
 
 			# save resolved compatibility report to global scope
 			New-Variable -Name 'ResolvedCompatibilityReport' -Value $CompatibilityReport -Scope Global -Force
 
 			# if incompatibilities could not be resolved...
-			If ($CompatibilityReport.CannotResolve) {
+			if ($CompatibilityReport.CannotResolve) {
 				# loop through cannot resolve messages
-				ForEach ($CannotResolveMessage in $CompatibilityReport.CannotResolveMessages) {
+				foreach ($CannotResolveMessage in $CompatibilityReport.CannotResolveMessages) {
 					# report message
 					Write-Warning -Message "found cannot resolve message: $CannotResolveMessage"
 				}
 
 				# return VM from compatibility report
-				Return $CompatibilityReport.VM
+				return $CompatibilityReport.VM
 			}
 
 			# declare state
@@ -1125,28 +1125,28 @@ Begin {
 		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - moving VM..."
 
 		# move VM to target computer
-		Try {
+		try {
 			$MovedVM = Move-VM -CompatibilityReport $CompatibilityReport -Passthru
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not move VM: $($_.Exception.Message)"
 		}
 
 		# if VM move completed...
-		If ($MovedVM) {
+		if ($MovedVM) {
 			# report and return VM returned by move function
 			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...move completed"
-			Return $MovedVM
+			return $MovedVM
 		}
-		Else {
+		else {
 			# report and return VM from compatibility report
 			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...move failed"
-			Return $CompatibilityReport.VM
+			return $CompatibilityReport.VM
 		}
 	}
 
-	Function Remove-VMOnComputer {
-		Param(
+	function Remove-VMOnComputer {
+		param(
 			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] })]
 			[object]$VM
 		)
@@ -1169,7 +1169,7 @@ Begin {
 		$VHDPaths = Get-VMHardDiskDrive -VM $VM | Select-Object -ExpandProperty Path
 
 		# loop through VHD parent paths
-		ForEach ($VHDPath in $VHDPaths) {
+		foreach ($VHDPath in $VHDPaths) {
 			# get VHD parent path from VHD path
 			$VHDParentPath = Split-Path -Path $VHDPath -Parent
 
@@ -1177,7 +1177,7 @@ Begin {
 			$VHDParentPath = $VHDParentPath.TrimEnd('\')
 
 			# if VHD parent path property not in VM path list and not null or empty...
-			If ($VHDParentPath -notin $VMPaths -and -not [string]::IsNullOrEmpty($VHDParentPath)) {
+			if ($VHDParentPath -notin $VMPaths -and -not [string]::IsNullOrEmpty($VHDParentPath)) {
 				# add VHD parent path to VM path list
 				$VMPaths.Add($VHDParentPath)
 			}
@@ -1187,7 +1187,7 @@ Begin {
 		$VMPathProperties = 'Path', 'ConfigurationLocation', 'CheckpointFileLocation', 'SmartPagingFilePath', 'SnapshotFileLocation'
 
 		# add VM path properties to VM path list
-		ForEach ($VMPathProperty in $VMPathProperties) {
+		foreach ($VMPathProperty in $VMPathProperties) {
 			# get VM path from VM property
 			$VMPath = $VM | Select-Object -ExpandProperty $VMPathProperty
 
@@ -1195,7 +1195,7 @@ Begin {
 			$VMPath = $VMPath.TrimEnd('\')
 
 			# if VM path property not in VM path list and not null or empty...
-			If ($VMPath -notin $VMPaths -and -not [string]::IsNullOrEmpty($VMPath)) {
+			if ($VMPath -notin $VMPaths -and -not [string]::IsNullOrEmpty($VMPath)) {
 				# add VM path property to VM path list
 				$VMPaths.Add($VMPath)
 			}
@@ -1216,19 +1216,19 @@ Begin {
 		}
 
 		# check VM
-		Try {
+		try {
 			$VMNotFound = Assert-VMNotFound @AssertVMNotFound
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# if VM not found...
-		If ($VMNotFound) {
+		if ($VMNotFound) {
 			# declare state
 			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM not found"
 		}
-		Else {
+		else {
 			# define parameters
 			$AssertVMRemoved = @{
 				VM           = $VM
@@ -1236,21 +1236,21 @@ Begin {
 			}
 
 			# remove VM
-			Try {
+			try {
 				$VMRemoved = Assert-VMRemoved @AssertVMRemoved
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 
 			# if VM removed...
-			If ($VMRemoved) {
+			if ($VMRemoved) {
 				# declare state
 				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removed VM"
 			}
-			Else {
+			else {
 				# return; warnings issued by function
-				Return
+				return
 			}
 		}
 
@@ -1262,7 +1262,7 @@ Begin {
 		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VHDs..."
 
 		# remove VM hard disk drive files
-		ForEach ($VHDPath in $VHDPaths) {
+		foreach ($VHDPath in $VHDPaths) {
 			# define parameters
 			$AssertPathNotFound = @{
 				Path         = $VHDPath
@@ -1271,19 +1271,19 @@ Begin {
 			}
 
 			# test path
-			Try {
+			try {
 				$PathNotFound = Assert-PathNotFound @AssertPathNotFound
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 
 			# if path not found...
-			If ($PathNotFound) {
+			if ($PathNotFound) {
 				# declare state
 				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VHD not found: $VHDPath"
 			}
-			Else {
+			else {
 				# declare state
 				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removing VHD: $VHDPath"
 
@@ -1295,15 +1295,15 @@ Begin {
 				}
 
 				# remove path
-				Try {
+				try {
 					$PathRemoved = Assert-PathRemoved @AssertPathRemoved
 				}
-				Catch {
-					Throw $_
+				catch {
+					throw $_
 				}
 
 				# if path removed...
-				If ($PathRemoved) {
+				if ($PathRemoved) {
 					# declare state
 					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VHD removed"
 				}
@@ -1318,7 +1318,7 @@ Begin {
 		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM folders..."
 
 		# remove VM path folders
-		ForEach ($VMPath in $VMPaths) {
+		foreach ($VMPath in $VMPaths) {
 			# define parameters
 			$AssertPathNotFound = @{
 				Path         = $VMPath
@@ -1327,19 +1327,19 @@ Begin {
 			}
 
 			# test path
-			Try {
+			try {
 				$PathNotFound = Assert-PathNotFound @AssertPathNotFound
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 
 			# if path not found...
-			If ($PathNotFound) {
+			if ($PathNotFound) {
 				# declare state
 				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM folder not found: $VMPath"
 			}
-			Else {
+			else {
 				# declare state
 				Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...removing VM folder: $VMPath"
 
@@ -1353,15 +1353,15 @@ Begin {
 				}
 
 				# remove path
-				Try {
+				try {
 					$PathRemoved = Assert-PathRemoved @AssertPathRemoved
 				}
-				Catch {
-					Throw $_
+				catch {
+					throw $_
 				}
 
 				# if path removed...
-				If ($PathRemoved) {
+				if ($PathRemoved) {
 					# declare state
 					Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM folder removed"
 				}
@@ -1369,8 +1369,8 @@ Begin {
 		}
 	}
 
-	Function Restore-VMOnComputer {
-		Param(
+	function Restore-VMOnComputer {
+		param(
 			[Parameter(Mandatory = $true)][ValidateScript({ $_ -is [Microsoft.HyperV.PowerShell.VirtualMachine] })]
 			[object]$VM
 		)
@@ -1387,11 +1387,11 @@ Begin {
 		################################################
 
 		# get cluster for target server
-		Try {
+		try {
 			$ClusterName = Get-ClusterName -ComputerName $ComputerName
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		################################################
@@ -1399,7 +1399,7 @@ Begin {
 		################################################
 
 		# if computer is clustered...
-		If ($ClusterName) {
+		if ($ClusterName) {
 			# declare state
 			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - adding VM to '$ClusterName' cluster..."
 
@@ -1411,24 +1411,24 @@ Begin {
 			}
 
 			# add VM to cluster by ID
-			Try {
+			try {
 				$ClusterGroup = Add-ClusterVirtualMachineRole @AddClusterVirtualMachineRole
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 
 			# declare state
 			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM clustered"
 
 			# if original priority retrieved and cluster group priority does not match original priority...
-			If ($script:Priority -and $ClusterGroup.Priority -ne $script:Priority) {
+			if ($script:Priority -and $ClusterGroup.Priority -ne $script:Priority) {
 				# update cluster group
-				Try {
+				try {
 					$ClusterGroup.Priority = $script:Priority
 				}
-				Catch {
-					Throw $_
+				catch {
+					throw $_
 				}
 
 				# declare state
@@ -1469,7 +1469,7 @@ Begin {
 		################################################
 
 		# if computer is not clustered...
-		If ([string]::IsNullOrEmpty($ClusterName)) {
+		if ([string]::IsNullOrEmpty($ClusterName)) {
 			# declare state
 			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - restoring VM start action configuration..."
 
@@ -1481,11 +1481,11 @@ Begin {
 			}
 
 			# restore automatic start action
-			Try {
+			try {
 				Set-VM @SetVM
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 
 			# declare state
@@ -1497,7 +1497,7 @@ Begin {
 		################################################
 
 		# if VM was running before move...
-		If ($State -eq 'Running' -and $VM.State -ne 'Running') {
+		if ($State -eq 'Running' -and $VM.State -ne 'Running') {
 			# declare state
 			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - starting VM..."
 
@@ -1508,11 +1508,11 @@ Begin {
 			}
 
 			# start VM on computer
-			Try {
+			try {
 				Start-VM @StartVM
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 
 			# declare state
@@ -1521,13 +1521,13 @@ Begin {
 	}
 }
 
-Process {
+process {
 	################################################
 	# check for VM on source computer
 	################################################
 
 	# if VM provided...
-	If ($PSBoundParameters.ContainsKey('VM')) {
+	if ($PSBoundParameters.ContainsKey('VM')) {
 		# retrieve name from VM
 		$Name = $VM.Name.ToLowerInvariant()
 	}
@@ -1536,7 +1536,7 @@ Process {
 	Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking source computer for VM..."
 
 	# if name provided...
-	If ($PSCmdlet.ParameterSetName.StartsWith('Name')) {
+	if ($PSCmdlet.ParameterSetName.StartsWith('Name')) {
 		# define required parameters for Get-VM
 		$GetVM = @{
 			Name         = $Name
@@ -1545,18 +1545,18 @@ Process {
 		}
 
 		# get VM object from input
-		Try {
+		try {
 			$VM = Get-VM @GetVM
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 	}
 
 	# check for snapshot
-	If ($VM.ParentSnapshotId) {
+	if ($VM.ParentSnapshotId) {
 		Write-Warning 'VM has an active snapshot. Remove or consolidate snapshots before migration'
-		Return
+		return
 	}
 
 	# get VM properties
@@ -1564,8 +1564,8 @@ Process {
 	$ComputerName = $VM.ComputerName.ToLowerInvariant()
 
 	# check for Protected Users
-	If ($Hostname -ne $ComputerName -and ([Security.Principal.WindowsIdentity]::GetCurrent().Groups | Where-Object { $_.Value -match '-525$' })) {
-		Throw [System.UnauthorizedAccessException]::new('Users in the Protected Users group must run this script from the source hypervisor')
+	if ($Hostname -ne $ComputerName -and ([Security.Principal.WindowsIdentity]::GetCurrent().Groups | Where-Object { $_.Value -match '-525$' })) {
+		throw [System.UnauthorizedAccessException]::new('Users in the Protected Users group must run this script from the source hypervisor')
 	}
 
 	# get VM configuration for restoration
@@ -1577,25 +1577,25 @@ Process {
 	################################################
 
 	# get cluster for source computer
-	Try {
+	try {
 		$SourceClusterName = Get-ClusterName -ComputerName $ComputerName
 	}
-	Catch {
-		Throw $_
+	catch {
+		throw $_
 	}
 
 	# if source computer is clustered...
-	If ($SourceClusterName) {
+	if ($SourceClusterName) {
 		# declare state
 		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - checking if VM clustered on source computer..."
 
 		# validate source cluster is accessible
-		Try {
+		try {
 			$null = Get-Cluster -Name $SourceClusterName -ErrorAction 'Stop'
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not reach '$SourceClusterName' cluster: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# define parameters for Get-ClusterGroup
@@ -1612,14 +1612,14 @@ Process {
 		$Error.Clear()
 
 		# if source cluster group found...
-		If ($SourceClusterGroup) {
+		if ($SourceClusterGroup) {
 			# retrieve cluster priority
 			$script:Priority = $SourceClusterGroup.Priority
 
 			# declare state
 			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM found on '$SourceClusterName' cluster with '$script:Priority' priority; will remove from cluster before migration"
 		}
-		Else {
+		else {
 			# declare state
 			Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - ...VM not found on '$SourceClusterName' cluster"
 		}
@@ -1630,25 +1630,25 @@ Process {
 	################################################
 
 	# get cluster for target computer
-	Try {
+	try {
 		$TargetClusterName = Get-ClusterName -ComputerName $DestinationHost
 	}
-	Catch {
-		Throw $_
+	catch {
+		throw $_
 	}
 
 	# if target computer is clustered...
-	If ($TargetClusterName) {
+	if ($TargetClusterName) {
 		# declare state
 		Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost,$Name - checking if VM clustered on target computer..."
 
 		# retrieve target cluster nodes
-		Try {
+		try {
 			$TargetClusterNodes = Get-ClusterNode -Cluster $TargetClusterName -ErrorAction 'Stop'
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not retrieves nodes from '$TargetClusterName' cluster: $($_.Exception.Message)"
-			Return $_
+			return $_
 		}
 
 		# define parameters for Get-ClusterGroup
@@ -1665,12 +1665,12 @@ Process {
 		$Error.Clear()
 
 		# if target cluster group found...
-		If ($TargetClusterGroup) {
+		if ($TargetClusterGroup) {
 			# declare state
 			Write-Warning -Message "found VM on '$($TargetClusterGroup.OwnerNode.Name)' node in '$TargetClusterName' cluster"
-			Return
+			return
 		}
-		Else {
+		else {
 			# declare state
 			Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost,$Name - ...VM not found on '$TargetClusterName' cluster"
 		}
@@ -1684,18 +1684,18 @@ Process {
 	$TargetComputerNames = [System.Collections.Generic.SortedSet[System.String]]::new()
 
 	# if target computer is clustered...
-	If ($TargetClusterName) {
+	if ($TargetClusterName) {
 		# define host type
 		$HostType = 'target cluster node'
 
 		# loop through nodes in target cluster
-		ForEach ($TargetClusterNode in $TargetClusterNodes) {
+		foreach ($TargetClusterNode in $TargetClusterNodes) {
 			# add node name to sorted set
 			$null = $TargetComputerNames.Add($TargetClusterNode.Name)
 		}
 	}
 	# if target computer is not clustered...
-	Else {
+	else {
 		# define host type
 		$HostType = 'destination host'
 
@@ -1704,7 +1704,7 @@ Process {
 	}
 
 	# loop through target computer names
-	ForEach ($TargetComputerName in $TargetComputerNames) {
+	foreach ($TargetComputerName in $TargetComputerNames) {
 		# declare state
 		Write-Host "$([datetime]::Now.ToString('s')),$TargetComputerName,$Name - checking $HostType for VM..."
 
@@ -1718,11 +1718,11 @@ Process {
 			}
 
 			# ensure VM not found on destination host
-			Try {
+			try {
 				$VMNotFound = Assert-VMRemoved @AssertVMRemoved
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 		}
 
@@ -1733,17 +1733,17 @@ Process {
 		}
 
 		# ensure VM not found on destination host
-		Try {
+		try {
 			$VMNotFound = Assert-VMNotFound @AssertVMNotFound
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# if VM found on destination host
-		If (!$VMNotFound) {
+		if (!$VMNotFound) {
 			# return immediately; warnings were issued by function
-			Return
+			return
 		}
 	}
 
@@ -1764,7 +1764,7 @@ Process {
 	$VMPaths = [System.Collections.Generic.List[string]]::new()
 
 	# if destination storage path provided...
-	If ($PSBoundParameters.ContainsKey('DestinationStoragePath')) {
+	if ($PSBoundParameters.ContainsKey('DestinationStoragePath')) {
 		# add destination storage path to list
 		$VMPaths.Add($DestinationStoragePath)
 
@@ -1776,9 +1776,9 @@ Process {
 	}
 
 	# if destination storage path not provided...
-	If (!$PSBoundParameters.ContainsKey('DestinationStoragePath')) {
+	if (!$PSBoundParameters.ContainsKey('DestinationStoragePath')) {
 		# if virtual machine path not provided as parameter...
-		If (!$PSBoundParameters.ContainsKey('VirtualMachinePath')) {
+		if (!$PSBoundParameters.ContainsKey('VirtualMachinePath')) {
 			# assume virtual machine path is same as path property on VM
 			$VirtualMachinePath = $VM | Select-Object -ExpandProperty 'Path'
 		}
@@ -1796,10 +1796,10 @@ Process {
 		}
 
 		# add VM path properties to VM path list
-		:NextVMPathProperty ForEach ($VMPathProperty in $VMPathPropertyMap.Keys) {
+		:NextVMPathProperty foreach ($VMPathProperty in $VMPathPropertyMap.Keys) {
 			# if VM path property not provided as parameter...
-			If (!$PSBoundParameters.ContainsKey($VMPathProperty)) {
-				Continue NextVMPathProperty
+			if (!$PSBoundParameters.ContainsKey($VMPathProperty)) {
+				continue NextVMPathProperty
 			}
 
 			# get VM path from parameter
@@ -1809,8 +1809,8 @@ Process {
 			$VMPath = $VMPath.TrimEnd('\')
 
 			# if VM path property in VM path list or null or empty...
-			If ($VMPath -in $VMPaths -or [string]::IsNullOrEmpty($VMPath)) {
-				Continue NextVMPathProperty
+			if ($VMPath -in $VMPaths -or [string]::IsNullOrEmpty($VMPath)) {
+				continue NextVMPathProperty
 			}
 
 			# add VM path to list
@@ -1829,17 +1829,17 @@ Process {
 	################################################
 
 	# if destination storage path parameter not provided...
-	If (!$PSBoundParameters.ContainsKey('DestinationStoragePath')) {
+	if (!$PSBoundParameters.ContainsKey('DestinationStoragePath')) {
 		# get VM hard disk drive
 		$VHDPaths = Get-VMHardDiskDrive -VM $VM | Select-Object -ExpandProperty Path
 
 		# if VHDs hashtable array not provided...
-		If (!$PSBoundParameters.ContainsKey('VHDs')) {
+		if (!$PSBoundParameters.ContainsKey('VHDs')) {
 			# create list for VHD strings
 			$VHDsStringList = [System.Collections.Generic.List[string]]::new()
 
 			# get VHD paths from array of VHD hashtables
-			ForEach ($VHDPath in $VHDPaths) {
+			foreach ($VHDPath in $VHDPaths) {
 				# define VHD hashtable as string
 				$VHDString = "@{ SourceFilePath = '$VHDPath'; 'DestinationFilePath' = '$VHDPath' }"
 
@@ -1865,80 +1865,80 @@ Process {
 		$InvalidVHDArrayMember = $false
 
 		# loop through VHDs
-		ForEach ($VHD in $VHDs) {
+		foreach ($VHD in $VHDs) {
 			# if VHD is not a hashtable...
-			If ($VHD -isnot [hashtable]) {
+			if ($VHD -isnot [hashtable]) {
 				Write-Warning -Message 'invalid VHDs parameter: found array member that is not a hashtable'
 				$InvalidVHDArrayMember = $true
-				Continue
+				continue
 			}
 
 			# if source file path key missing...
-			If (!$VHD.ContainsKey('SourceFilePath')) {
+			if (!$VHD.ContainsKey('SourceFilePath')) {
 				# warn and update boolean
 				Write-Warning -Message "invalid VHDs parameter: found hashtable in array missing required 'SourceFilePath' key"
 				$InvalidVHDArrayMember = $true
-				Continue
+				continue
 			}
-			Else {
+			else {
 				$SourceFilePath = $VHD['SourceFilePath']
 			}
 
 			# if destination file path key missing...
-			If (!$VHD.ContainsKey('DestinationFilePath')) {
+			if (!$VHD.ContainsKey('DestinationFilePath')) {
 				# warn and update boolean
 				Write-Warning -Message "invalid VHDs parameter: found hashtable in array missing required 'DestinationFilePath' key"
 				$InvalidVHDArrayMember = $true
-				Continue
+				continue
 			}
-			Else {
+			else {
 				$DestinationFilePath = $VHD['DestinationFilePath']
 			}
 
 			# if source file path value null or empty...
-			If ([string]::IsNullOrEmpty($SourceFilePath)) {
+			if ([string]::IsNullOrEmpty($SourceFilePath)) {
 				# warn and update boolean
 				Write-Warning -Message "invalid VHDs parameter: found hashtable where 'SourceFilePath' value is null or empty"
 				$InvalidVHDArrayMember = $true
-				Continue
+				continue
 			}
-			Else {
+			else {
 				$SourceFilePaths.Add($SourceFilePath)
 			}
 
 			# if destination file path value null or empty...
-			If ([string]::IsNullOrEmpty($DestinationFilePath)) {
+			if ([string]::IsNullOrEmpty($DestinationFilePath)) {
 				# warn and update boolean
 				Write-Warning -Message "invalid VHDs parameter: found hashtable where 'DestinationFilePath' value is null or empty"
 				$InvalidVHDArrayMember = $true
-				Continue NextVHD
+				continue NextVHD
 			}
-			Else {
+			else {
 				# add destination file path to list
 				$DestinationFilePaths.Add($DestinationFilePath)
 			}
 		}
 
 		# if any invalid VHD array members found...
-		If ($InvalidVHDArrayMember) {
-			Return
+		if ($InvalidVHDArrayMember) {
+			return
 		}
 
 		# define boolean for missing source file paths
 		$SourceFilePathMissing = $false
 
 		# loop through source file paths
-		ForEach ($VHDPath in $SourceFilePaths) {
+		foreach ($VHDPath in $SourceFilePaths) {
 			# assert source file path exists
-			Try {
+			try {
 				$TestPath = Assert-PathCreated -Path $VHD['SourceFilePath'] -ComputerName $ComputerName -PathType 'Leaf'
 			}
-			Catch {
-				Throw $_
+			catch {
+				throw $_
 			}
 
 			# if source file path not found...
-			If (!$TestPath) {
+			if (!$TestPath) {
 				# warn and update boolean
 				Write-Warning -Message "could not locate file for '$($VHD['SourceFilePath'])' path in 'SourceFilePath' value"
 				$SourceFilePathMissing = $true
@@ -1946,12 +1946,12 @@ Process {
 		}
 
 		# if any source file paths are missing...
-		If ($SourceFilePathMissing) {
-			Return
+		if ($SourceFilePathMissing) {
+			return
 		}
 
 		# loop through destination file paths
-		ForEach ($VHDPath in $DestinationFilePaths) {
+		foreach ($VHDPath in $DestinationFilePaths) {
 			# get VHD parent path from VHD path
 			$VHDParentPath = Split-Path -Path $VHDPath -Parent
 
@@ -1959,7 +1959,7 @@ Process {
 			$VHDParentPath = $VHDParentPath.TrimEnd('\')
 
 			# if VHD parent path property not in VM path list and not null or empty...
-			If ($VHDParentPath -notin $VMPaths -and -not [string]::IsNullOrEmpty($VHDParentPath)) {
+			if ($VHDParentPath -notin $VMPaths -and -not [string]::IsNullOrEmpty($VHDParentPath)) {
 				# add VHD parent path to VM path list
 				$VMPaths.Add($VHDParentPath)
 			}
@@ -1974,26 +1974,26 @@ Process {
 	################################################
 
 	# if target computer is clustered and skip of clustered storage check not requested...
-	If ($TargetClusterName -and -not $SkipClusteredStorageCheck) {
+	if ($TargetClusterName -and -not $SkipClusteredStorageCheck) {
 		# retrieve CSV paths from target computer
-		Try {
+		try {
 			$ClusterSharedVolumePaths = Get-ClusterSharedVolumePaths -ComputerName $DestinationHost
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# define boolean
 		$VMPathsNotClustered = $false
 
 		# loop through VM paths...
-		:NextVMPath ForEach ($VMPath in $VMPaths) {
+		:NextVMPath foreach ($VMPath in $VMPaths) {
 			# loop through CSV paths
-			ForEach ($ClusterSharedVolumePath in $ClusterSharedVolumePaths) {
+			foreach ($ClusterSharedVolumePath in $ClusterSharedVolumePaths) {
 				# if VM path starts with CSV path...
-				If ($VMPath.StartsWith($ClusterSharedVolumePath, [System.StringComparison]::InvariantCultureIgnoreCase)) {
+				if ($VMPath.StartsWith($ClusterSharedVolumePath, [System.StringComparison]::InvariantCultureIgnoreCase)) {
 					# continue with next VM path
-					Continue NextVMPath
+					continue NextVMPath
 				}
 			}
 
@@ -2003,8 +2003,8 @@ Process {
 		}
 
 		# if any VM paths are not clustered...
-		If ($VMPathsNotClustered) {
-			Return
+		if ($VMPathsNotClustered) {
+			return
 		}
 	}
 
@@ -2016,19 +2016,19 @@ Process {
 	Write-Host "$([datetime]::Now.ToString('s')),$DestinationHost,$Name - checking path(s) on destination..."
 
 	# loop through paths...
-	ForEach ($VMPath in $VMPaths) {
+	foreach ($VMPath in $VMPaths) {
 		# ensure path is created
-		Try {
+		try {
 			$PathCreated = Assert-PathCreated -Path $VMPath -ComputerName $DestinationHost
 		}
-		Catch {
-			Throw $_
+		catch {
+			throw $_
 		}
 
 		# if path is not created...
-		If (!$PathCreated) {
+		if (!$PathCreated) {
 			Write-Warning -Message "could not create '$VMPath' path on '$DestinationHost' computer"
-			Return
+			return
 		}
 
 		# declare state
@@ -2040,16 +2040,16 @@ Process {
 	################################################
 
 	# if VM clustered on source computer...
-	If ($SourceClusterGroup) {
+	if ($SourceClusterGroup) {
 		# declare state
 		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - removing VM from '$SourceClusterName' cluster..."
 
 		# remove cluster group and resources
-		Try {
+		try {
 			Remove-ClusterGroup -Cluster $SourceClusterName -VMId $VM.Id -RemoveResources -Force
 		}
-		Catch {
-			Return $_
+		catch {
+			return $_
 		}
 
 		# declare state
@@ -2057,13 +2057,13 @@ Process {
 		Write-Host "$([datetime]::Now.ToString('s')),$ComputerName,$Name - waiting for VM to refresh after cluster removal..."
 
 		# while VM reports as clustered...
-		While ($VM.IsClustered) {
+		while ($VM.IsClustered) {
 			# update VM object after cluster removal
-			Try {
+			try {
 				$VM = Get-VM -Id $VM.Id -ComputerName $VM.ComputerName
 			}
-			Catch {
-				Return $_
+			catch {
+				return $_
 			}
 		}
 
@@ -2123,10 +2123,10 @@ Process {
 			}
 
 			# update VM version
-			Try {
+			try {
 				$VM = Update-VMVersion @UpdateVMVersion
 			}
-			Catch {
+			catch {
 				Write-Warning -Message "Failed to update VM version: $($_.ToString())"
 			}
 
@@ -2140,10 +2140,10 @@ Process {
 	################################################
 
 	# move VM to target computer
-	Try {
+	try {
 		$MovedVM = Move-VMToComputer -VM $VM -DestinationHost $DestinationHost -Parameters $Parameters
 	}
-	Catch {
+	catch {
 		Write-Warning -Message "could not move VM: $($_.Exception.Message)"
 	}
 
@@ -2152,22 +2152,22 @@ Process {
 	################################################
 
 	# if VM moved to target...
-	If ($MovedVM -and $MovedVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
+	if ($MovedVM -and $MovedVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
 		# restore moved VM
-		Try {
+		try {
 			Restore-VMOnComputer -VM $MovedVM
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not restore migrated VM: $($_.Exception.Message)"
 		}
 	}
 	# if VM move failed...
-	Else {
+	else {
 		# restore original VM
-		Try {
+		try {
 			Restore-VMOnComputer -VM $VM
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not restore original VM: $($_.Exception.Message)"
 		}
 	}
@@ -2177,37 +2177,37 @@ Process {
 	################################################
 
 	# if VM moved to target...
-	If ($MovedVM -and $MovedVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
+	if ($MovedVM -and $MovedVM.VirtualMachineType -eq 'RealizedVirtualMachine') {
 		# remove remnants of original VM
-		Try {
+		try {
 			Remove-VMOnComputer -VM $VM
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not remove remnants of original VM: $($_.Exception.Message)"
 		}
 
 	}
 	# if VM move failed and reference to planned VM exists...
-	ElseIf ($MovedVM -and $MovedVM.VirtualMachineType -eq 'PlannedVirtualMachine') {
+	elseif ($MovedVM -and $MovedVM.VirtualMachineType -eq 'PlannedVirtualMachine') {
 		# remove remnants of failed VM move
-		Try {
+		try {
 			Remove-VMOnComputer -VM $MovedVM
 		}
-		Catch {
+		catch {
 			Write-Warning -Message "could not remove remnants of planned VM: $($_.Exception.Message)"
 		}
 	}
 }
 
-End {
+end {
 	# loop through sessions
-	ForEach ($SessionName in $script:PSSessions.Keys) {
+	foreach ($SessionName in $script:PSSessions.Keys) {
 		# remove sessions created by this script
-		Try {
+		try {
 			Remove-PSSession -Session $script:PSSessions[$SessionName]
 		}
-		Catch {
-			Return $_
+		catch {
+			return $_
 		}
 	}
 }
