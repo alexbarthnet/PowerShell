@@ -363,6 +363,38 @@ begin {
 }
 
 process {
+	# retrieve destination item
+	try {
+		$PathItem = Get-Item -Path $Path -ErrorAction 'Stop'
+	}
+	catch {
+		throw $_
+	}
+
+	# retrieve destination item
+	try {
+		$DestinationItem = Get-Item -Path $Destination -ErrorAction 'Stop'
+	}
+	catch {
+		throw $_
+	}
+
+	# define source volume from destination value
+	try {
+		$SourceVolume = $PathItem.FullName.TrimEnd('\')
+	}
+	catch {
+		throw $_
+	}
+
+	# define target volume from destination value
+	try {
+		$TargetVolume = $DestinationItem.FullName.TrimEnd('\')
+	}
+	catch {
+		throw $_
+	}
+
 	# define VM storage moved boolean
 	$VMStorageMoved = $false
 
@@ -371,38 +403,6 @@ process {
 		# retrieve cluster shared volumes
 		try {
 			$ClusterSharedVolumes = Get-ClusterSharedVolume -ErrorAction 'Stop'
-		}
-		catch {
-			throw $_
-		}
-
-		# retrieve destination item
-		try {
-			$PathItem = Get-Item -Path $Path -ErrorAction 'Stop'
-		}
-		catch {
-			throw $_
-		}
-
-		# retrieve destination item
-		try {
-			$DestinationItem = Get-Item -Path $Destination -ErrorAction 'Stop'
-		}
-		catch {
-			throw $_
-		}
-
-		# define source volume from destination value
-		try {
-			$SourceVolume = $PathItem.FullName.TrimEnd('\')
-		}
-		catch {
-			throw $_
-		}
-
-		# define target volume from destination value
-		try {
-			$TargetVolume = $DestinationItem.FullName.TrimEnd('\')
 		}
 		catch {
 			throw $_
