@@ -2,9 +2,6 @@
 
 [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'VM')]
 param (
-	# hostname of local computer
-	[Parameter(DontShow)]
-	[string]$Hostname = [System.Environment]::MachineName.ToLowerInvariant(),
 	# VM object(s)
 	[Parameter(Mandatory = $true, ParameterSetName = 'VM', ValueFromPipeline = $true)]
 	[Microsoft.HyperV.PowerShell.VirtualMachine]$VM,
@@ -17,9 +14,22 @@ param (
 	# target cluster storage volume
 	[Parameter(Mandatory = $true)]
 	[string]$Destination,
+	# regular expression to positively filter VM names, default includes VM names starting with any alphanumeric character
+	[string]$Match = '^[0-9A-Za-z]',
+	# regular expression to negatively filter VM names, default excludes VM names starting with 'sysprep'
+	[string]$NotMatch = '^sysprep',
+	# switch to skip VM name matching
+	[switch]$SkipNameMatching,
 	# switch to skip CSV storage check
 	[switch]$SkipClusteredStorageCheck,
 	# switch to skip deduplication check
+	[switch]$SkipDeduplicationCheck,
+	# switch to skip garbage collection job
+	[switch]$SkipGarbageCollectionJob,
+	# switch to skip volume space check
+	[switch]$SkipVolumeSpaceCheck,
+	# switch to force volume moves
+	[switch]$ForceVolumeMove,
 	# define shared parameters for dedup jobs
 	[hashtable]$DedupJobParameters = @{
 		Wait               = $true # start the job and wait for the job to finish
