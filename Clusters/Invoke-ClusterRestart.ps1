@@ -53,7 +53,7 @@ begin {
 	function Test-ClusterForStorageJobs {
 		# retrieve storage jobs for storage pool
 		try {
-			$StorageJobs = Get-StorageJob | Where-Object { $_.JobState -ne 'Completed' }
+			$StorageJobs = Get-StorageJob -ErrorAction 'Stop' | Where-Object { $_.JobState -ne 'Completed' }
 		}
 		catch {
 			Write-Warning -Message "could not retrieve storage jobs on '$env:COMPUTERNAME' cluster node: $($_.Exception.Message)"
