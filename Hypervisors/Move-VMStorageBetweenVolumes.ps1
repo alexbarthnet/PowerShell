@@ -58,6 +58,9 @@ begin {
 		# define target volume friendly name from base name
 		$TargetVolumeFriendlyName = $TargetVolumeItem.BaseName
 
+		# define sorted set for paths on source volume
+		$PathsOnSourceVolume = [System.Collections.Generic.SortedSet[string]]::new()
+
 		################
 		# VM paths
 		################
@@ -78,6 +81,9 @@ begin {
 		}
 		# if virtual machine path on target volume does not match original virtual machine path...
 		else {
+			# add original virtual machine path to sorted set
+			$null = $PathsOnSourceVolume.Add($OriginalVirtualMachinePath)
+
 			# move virtual machine path to target volume
 			try {
 				Move-VMStorage -VM $VM -VirtualMachinePath $VirtualMachinePath -ErrorAction 'Stop'
@@ -108,6 +114,9 @@ begin {
 		}
 		# if snapshot file path on target volume does not match original snapshot file path...
 		else {
+			# add original snapshot file path to sorted set
+			$null = $PathsOnSourceVolume.Add($OriginalSnapshotFilePath)
+
 			# move snapshot file path to target volume
 			try {
 				Move-VMStorage -VM $VM -SnapshotFilePath $SnapshotFilePath -ErrorAction 'Stop'
@@ -138,6 +147,9 @@ begin {
 		}
 		# if smart paging file path on target volume does not match original smart paging file path...
 		else {
+			# add original smart paging file path to sorted set
+			$null = $PathsOnSourceVolume.Add($OriginalSmartPagingFilePath)
+
 			# move smart paging file path to target volume
 			try {
 				Move-VMStorage -VM $VM -SmartPagingFilePath $SmartPagingFilePath -ErrorAction 'Stop'
@@ -292,51 +304,47 @@ begin {
 		# remove paths
 		################
 
-		# if original virtual machine path was not on source volume...
-		if (!$OriginalVirtualMachinePath.Contains($SourceVolume)) {
-			# report state
-			Write-Host "$VMName; source volume ($SourceVolume) did not include original VM path: $OriginalVirtualMachinePath"
-			return
-		}
+		# loop through paths on source volume
+		foreach ($PathOnSourceVolume in $PathsOnSourceVolume) {
+			# test path on source volume
+			$TestPathOnSourceVolume = Test-Path -Path $PathOnSourceVolume -PathType Container
 
-		# test path original virtual machine path
-		$TestOriginalVirtualMachinePath = Test-Path -Path $OriginalVirtualMachinePath -PathType Container
+			# if path on source volume was not found...
+			if (!$TestPathOnSourceVolume) {
+				# report state
+				Write-Host "$VMName; path on source volume not found: $PathOnSourceVolume"
+				return
+			}
 
-		# if original virtual machine path was not found...
-		if (!$TestOriginalVirtualMachinePath) {
-			# report state
-			Write-Host "$VMName; VM path not found on source volume: $OriginalVirtualMachinePath"
-			return
-		}
-
-		# get files in VM folder
-		try {
-			$Files = Get-ChildItem -Path $OriginalVirtualMachinePath -File -Recurse -Force -ErrorAction 'Stop'
-		}
-		catch {
-			throw $_
-		}
-
-		# get count of files
-		$Count = $Files | Measure-Object | Select-Object -ExpandProperty Count
-
-		# if files found...
-		if ($Files) {
-			Write-Warning -Message "skipped removing VM path; found $Count file(s) in VM path on source volume: $OriginalVirtualMachinePath "
-			return
-		}
-		# if files not found...
-		else {
-			# remove folder
+			# get files in path on source volume
 			try {
-				Remove-Item -Path $OriginalVirtualMachinePath -Recurse -Confirm:$false -ErrorAction 'Stop'
+				$Files = Get-ChildItem -Path $PathOnSourceVolume -File -Recurse -Force -ErrorAction 'Stop'
 			}
 			catch {
 				throw $_
 			}
 
-			# report state
-			Write-Host "$VMName; removed VM path on source volume: $OriginalVirtualMachinePath"
+			# get count of files
+			$Count = $Files | Measure-Object | Select-Object -ExpandProperty Count
+
+			# if files found...
+			if ($Files) {
+				Write-Warning -Message "skipped removing path on source volume; found $Count file(s) in path on source volume: $PathOnSourceVolume "
+				return
+			}
+			# if files not found...
+			else {
+				# remove folder
+				try {
+					Remove-Item -Path $PathOnSourceVolume -Recurse -Confirm:$false -ErrorAction 'Stop'
+				}
+				catch {
+					throw $_
+				}
+
+				# report state
+				Write-Host "$VMName; removed path on source volume: $PathOnSourceVolume"
+			}
 		}
 	}
 }
