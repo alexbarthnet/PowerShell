@@ -1955,11 +1955,12 @@ begin {
 					$ReservationRequired = $false
 					continue NextReservation
 				}
+				# if reservation found with client id but NOT IP address...
 				elseif ($Reservation.IPAddress -ne $IPAddress) {
 					# define parameters for Remove-DhcpServerv4Reservation
 					$RemoveDhcpServerv4Reservation = @{
 						ComputerName = $ComputerName
-						IPAddress    = $IPAddress
+						IPAddress    = $Reservation.IPAddress
 						ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 					}
 
@@ -1973,18 +1974,19 @@ begin {
 						throw $_
 					}
 				}
+				# if reservation found with IP address but NOT client id...
 				elseif ($Reservation.ClientId -ne $ClientId) {
 					# define parameters for Remove-DhcpServerv4Reservation
 					$RemoveDhcpServerv4Reservation = @{
 						ComputerName = $ComputerName
 						ScopeId      = $ScopeId
-						ClientId     = $ClientId
+						ClientId     = $Reservation.ClientId.ToUpperInvariant()
 						ErrorAction  = [System.Management.Automation.ActionPreference]::Stop
 					}
 
 					# remove DHCP reservation with same client ID
 					try {
-						Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing DHCP reservation with conflicting client ID: '$($Reservation.ClientId)'")
+						Write-Host ("$Hostname,$ComputerName,$Name - ...removing existing DHCP reservation with conflicting client ID: '$($Reservation.ClientId.ToUpperInvariant())'")
 						Remove-DhcpServerv4Reservation @RemoveDhcpServerv4Reservation
 					}
 					catch {
