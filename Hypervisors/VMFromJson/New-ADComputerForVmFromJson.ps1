@@ -8,9 +8,7 @@ param(
 	[Parameter(Position = 0, Mandatory)][ValidateScript({ Test-Path -Path $_ })]
 	[string]$Json,
 	[Parameter(Position = 1, Mandatory, ValueFromPipeline)]
-	[string[]]$VMName,
-	[Parameter(Position = 2)]
-	[switch]$Reset
+	[string[]]$VMName
 )
 
 # if Json is not an absolute path...
@@ -115,7 +113,7 @@ catch {
 	$GetADComputer = @{
 		Server      = $Server
 		Identity    = $Identity
-		Properties  = 'AuthenticationPolicySilo'
+		Properties  = 'AuthenticationPolicySilo', 'Description', 'ServicePrincipalNames'
 		ErrorAction = [System.Management.Automation.ActionPreference]::Stop
 	}
 
@@ -165,7 +163,54 @@ catch {
 	$Identities.Add($Name, $Identity)
 
 	################################
-	# update computer object
+	# update computer state
+	################################
+
+	# if cluster state present...
+	if ($JsonData.$Name.ADComputer.IsClusterComputerObject) {
+		# report state
+		Write-Host ("$Hostname,$Name - checking cluster computer object...")
+
+		# if any service principal names are present on computer object...
+		if ($ComputerObject.ServicePrincipalNames.Count -gt 0) {
+			# report state
+			Write-Host ("$Hostname,$Name - ...skipping disabling cluster computer object; assuming deployed cluster as service principal names found")
+		}
+		# if no service principal names are present on computer object...
+		else {
+			# disable computer object
+			try {
+				Disable-ADAccount -Server $Server -Identity $Identity
+			}
+			catch {
+				Write-Warning -Message "could not disable cluster computer object with '$Name' name on '$Server' server in '$DomainName' domain: $($_.Exception.Message)"
+			}
+
+			# report state
+			Write-Host ("$Hostname,$Name - ...disabled cluster computer object; assuming new cluster as service principal names not found")
+		}
+
+		# if description is not expected value...
+		if ($ComputerObject.Description -eq 'Failover cluster virtual network name account') {
+			# report state
+			Write-Host ("$Hostname,$Name - ...found expected description on cluster computer object")
+		}
+		else {
+			# disable computer object
+			try {
+				Set-ADComputer -Server $Server -Identity $Identity -Replace @{ Description = 'Failover cluster virtual network name account' } -ErrorAction 'Stop'
+			}
+			catch {
+				Write-Warning -Message "could not disable cluster computer object with '$Name' name on '$Server' server in '$DomainName' domain: $($_.Exception.Message)"
+			}
+
+			# report state
+			Write-Host ("$Hostname,$Name - ...updated description on cluster computer object")
+		}
+	}
+
+	################################
+	# update computer permissions
 	################################
 
 	# if join account present...
