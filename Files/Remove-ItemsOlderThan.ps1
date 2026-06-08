@@ -175,6 +175,8 @@ Process {
 		Get-ChildItem -Path $Path -Recurse -Force -Directory | Sort-Object -Property 'FullName' -Descending | ForEach-Object {
 			# if directory has files
 			If ((Get-ChildItem -Path $_.FullName -Recurse -Force -File)) {
+				# verbose output rather than warning
+				Write-Verbose -Message "will not perform `"Remove Directory`" on target `"$($_.FullName)`": path has child file items"
 			}
 			Else {
 				$EmptyDirectories.Add($_)
