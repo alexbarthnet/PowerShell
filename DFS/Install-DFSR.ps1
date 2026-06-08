@@ -164,16 +164,16 @@ else {
     Write-Host "Found '$GroupName' DFS-R group has multiple members: will set '$ComputerName' as secondary member"
 }
 
-# retrieve DFS-R admin command
-try { 
-    $DfsrAdminCommand = Get-Command -Name 'DfsrAdmin.exe' -ErrorAction 'Stop'
-}
-catch { 
-    Write-Warning "could not locate 'DfsrAdmin.exe' command: former members cannot be automatically removed on this system"
-}
-
 # if DFS-R group has former members...
 if ($DfsrFormerMembers.Count) {
+    # retrieve DFS-R admin command
+    try { 
+        $DfsrAdminCommand = Get-Command -Name 'DfsrAdmin.exe' -ErrorAction 'Stop'
+    }
+    catch { 
+        Write-Warning "could not locate 'DfsrAdmin.exe' command: former members cannot be automatically removed on this system"
+    }
+
     # loop through former members
     foreach ($Guid in $DfsrFormerMembers.Identifier.Guid) { 
         # if DFS-R admin command found...
