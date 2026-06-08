@@ -139,7 +139,7 @@ Process {
 	Write-Host "Retrieving directories written before '$DateTime' from '$Path'"
 	Get-ChildItem -Path $Path -Recurse -Force -Directory | Where-Object { $_.LastWriteTime -lt $DateTime } | Sort-Object -Property 'FullName' -Descending | ForEach-Object {
 		# if old directory has files or directories
-		If ((Get-ChildItem -Path $_ -Recurse -Force)) {
+		If ((Get-ChildItem -Path $_.FullName -Recurse -Force)) {
 			Write-Warning -Message "will not perform `"Remove Directory`" on target `"$($_.FullName)`": path has child items last written after '$DateTime'"
 		}
 		Else {
@@ -174,8 +174,7 @@ Process {
 		Write-Host "Retrieving empty directories from '$Path'"
 		Get-ChildItem -Path $Path -Recurse -Force -Directory | Sort-Object -Property 'FullName' -Descending | ForEach-Object {
 			# if directory has files
-			If ((Get-ChildItem -Path $_ -Recurse -Force -File)) {
-				Write-Warning -Message "will not perform `"Remove Directory`" on target `"$($_.FullName)`": path has child items"
+			If ((Get-ChildItem -Path $_.FullName -Recurse -Force -File)) {
 			}
 			Else {
 				$EmptyDirectories.Add($_)	
