@@ -1,3 +1,4 @@
+using assembly 'C:\windows\Microsoft.NET\assembly\GAC_MSIL\System.DirectoryServices.Protocols\v4.0_4.0.0.0__b03f5f7f11d50a3a\System.DirectoryServices.Protocols.dll'
 using namespace System.DirectoryServices.Protocols
 
 <#
