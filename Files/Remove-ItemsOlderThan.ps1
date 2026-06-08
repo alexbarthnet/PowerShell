@@ -89,7 +89,7 @@ Process {
 			If ($TimeSpan -lt [timespan]::Zero) {
 				$TimeSpan = $TimeSpan.Negate()
 			}
-		
+
 			# get datetime from timespan
 			$DateTime = [datetime]::Now.Subtract($TimeSpan)
 		}
@@ -143,7 +143,7 @@ Process {
 			Write-Warning -Message "will not perform `"Remove Directory`" on target `"$($_.FullName)`": path has child items last written after '$DateTime'"
 		}
 		Else {
-			$Directories.Add($_)	
+			$Directories.Add($_)
 		}
 	}
 
