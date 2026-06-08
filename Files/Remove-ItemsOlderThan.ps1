@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-Removes files and empty directories older than a defined point in time.
+Removes files and directories older than a defined point in time.
 
 .DESCRIPTION
-Removes files and empty directories where the last write time is older than the provided or computed datetime.
+Removes files and directories where the LastWriteTime is older than the provided or computed datetime.
 
 .PARAMETER Path
 The path containing the files and empty directories.
@@ -12,13 +12,13 @@ The path containing the files and empty directories.
 The datetime used to compare with the last write time on files and directories. Cannot be combined with the TimeSpan, OlderThanUnits, or OlderThanType parameters.
 
 .PARAMETER TimeSpan
-The timespan used to create the computed datetime. A negative timespan will be inverted to correctly compute the datetime. Cannot be combined with the DateTime, OlderThanUnits, or OlderThanType parameters.
+The timespan used to compute the datetime object. A negative timespan will be inverted to correctly compute the datetime. Cannot be combined with the DateTime, OlderThanUnits, or OlderThanType parameters.
 
 .PARAMETER OlderThanUnits
-The number of datetime units to create the computed datetime. Cannot be combined with the DateTime or TimeSpan parameters.
+The number of datetime units to compute the datetime object. Cannot be combined with the DateTime or TimeSpan parameters. Must be a positive 16-bit integer.
 
 .PARAMETER OlderThanType
-The type of datetime units to create the computed datetime. Cannot be combined with the DateTime or TimeSpan parameters. Valid values are 'Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', and 'Years'
+The type of datetime units to compute the datetime object. Cannot be combined with the DateTime or TimeSpan parameters. Valid values are 'Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', and 'Years'
 
 .PARAMETER RemoveEmptyPath
 Switch parameter to remove provided path if empty.
@@ -132,7 +132,7 @@ Process {
 	# retrieve old directories
 	Write-Host "Retrieving directories written before '$DateTime' from '$Path'"
 	Get-ChildItem -Path $Path -Recurse -Force -Directory | Where-Object { $_.LastWriteTime -lt $DateTime } | Sort-Object -Property 'FullName' -Descending | ForEach-Object {
-		# if old directory has files
+		# if old directory has files or directories
 		If ((Get-ChildItem -Path $_ -Recurse -Force)) {
 			Write-Warning -Message "will not perform `"Remove Directory`" on target `"$($_.FullName)`": path has child items last written after '$DateTime'"
 		}
