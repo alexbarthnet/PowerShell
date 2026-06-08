@@ -325,10 +325,10 @@ if ($DestinationComputers -and -not $PrimaryMember) {
     # start service on current computer
     Start-Service -Name 'DFSR'
 
-    # if no DFSR local connections exist...
+    # if no DFSR local connections existed...
     if (!$DfsrLocalConnections) {
         # report state
-        Write-Host "Waiting for initial replication to complete"
+        Write-Host 'Waiting for initial replication to complete'
 
         # define values for while loop and reporting
         $While = @{
