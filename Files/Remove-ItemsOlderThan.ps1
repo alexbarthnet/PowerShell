@@ -177,7 +177,7 @@ Process {
 			If ((Get-ChildItem -Path $_.FullName -Recurse -Force -File)) {
 			}
 			Else {
-				$EmptyDirectories.Add($_)	
+				$EmptyDirectories.Add($_)
 			}
 		}
 
