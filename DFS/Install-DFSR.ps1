@@ -198,8 +198,9 @@ if ($ComputerName -notin $DfsrCurrentMembers.ComputerName) {
         Write-Warning -Message "could not add '$ComputerName' computer to '$GroupName' DFS-R group: $($_.Exception.Message)"
         return $_
     }
-    # report state
-    Write-Host "Added '$ComputerName' as a member of '$GroupName' DFS-R group"
+    # report state and allow 30 seconds for AD replication
+    Write-Host "Added '$ComputerName' as a member of '$GroupName' DFS-R group; pausing 30 seconds for AD replication of new membership..."
+    Start-Sleep -Seconds 30
 }
 # if computer is a member...
 else {
@@ -263,8 +264,9 @@ if ($UpdateMembership) {
         return $_
     }
 
-    # report state
-    Write-Host "Updated DFS-R membership: set '$ContentPath' on '$ComputerName' as content path for '$GroupName' folder in '$GroupName' DFS-R group"
+    # report state and allow 30 seconds for AD replication
+    Write-Host "Updated DFS-R membership: set '$ContentPath' on '$ComputerName' as content path for '$GroupName' folder in '$GroupName' DFS-R group; pausing 30 seconds for AD replication of membership change..."
+    Start-Sleep -Seconds 30
 }
 
 # retrieve DFS-R connections
