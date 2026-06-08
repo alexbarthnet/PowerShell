@@ -111,7 +111,7 @@ Process {
 
 	# remove old files first
 	Write-Host "Removing '$($Files.Count)' file item(s) written before '$DateTime' from '$Path'"
-	ForEach ($File in $Files) {
+	:NextFile ForEach ($File in $Files) {
 		If ($PSCmdlet.ShouldProcess($File.FullName, 'Remove File')) {
 			# remove file
 			Try {
@@ -119,6 +119,7 @@ Process {
 			}
 			Catch {
 				Write-Warning -Message "could not perform `"Remove File`" on target `"$($File.FullName)`": $($_.Exception.Message)"
+				continue NextFile
 			}
 
 			# report file removed
@@ -143,7 +144,7 @@ Process {
 
 	# remove old directories last
 	Write-Host "Removing '$($Directories.Count)' directory item(s) written before '$DateTime' from '$Path'"
-	ForEach ($Directory in $Directories) {
+	:NextDirectory ForEach ($Directory in $Directories) {
 		If ($PSCmdlet.ShouldProcess($Directory.FullName, 'Remove Directory')) {
 			# remove directory
 			Try {
@@ -151,6 +152,7 @@ Process {
 			}
 			Catch {
 				Write-Warning -Message "could not perform `"Remove Directory`" on target `"$($Directory.FullName)`": $($_.Exception.Message)"
+				continue NextDirectory
 			}
 
 			# report directory removed
