@@ -20,6 +20,9 @@ The number of datetime units to compute the datetime object. Cannot be combined 
 .PARAMETER OlderThanType
 The type of datetime units to compute the datetime object. Cannot be combined with the DateTime or TimeSpan parameters. Valid values are 'Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', and 'Years'
 
+.PARAMETER RemoveEmptyDirectories
+Switch parameter to remove empty directories under path regardless of LastWriteTime property.
+
 .PARAMETER RemoveEmptyPath
 Switch parameter to remove provided path if empty.
 
@@ -50,6 +53,8 @@ Param(
 	# type for computing previous datetime
 	[Parameter(Mandatory = $True, Position = 2, ParameterSetName = 'Computed')][ValidateSet('Seconds', 'Minutes', 'Hours', 'Days', 'Weeks', 'Months', 'Years')]
 	[string]$OlderThanType,
+	# switch to remove empty directories
+	[switch]$RemoveEmptyDirectories,
 	# switch to remove empty path
 	[switch]$RemoveEmptyPath
 )
@@ -158,6 +163,43 @@ Process {
 			# report directory removed
 			Write-Verbose -Message "removed '$($Directory.FullName)' directory with '$($Directory.LastWriteTime)' LastWriteTime"
 		}
+	}
+
+	# if remove empty directories requested...
+	If ($RemoveEmptyDirectories.IsPresent) {
+		# define list for empty directories
+		$EmptyDirectories = [System.Collections.Generic.List[System.IO.DirectoryInfo]]::new()
+
+		# retrieve empty directories
+		Write-Host "Retrieving empty directories from '$Path'"
+		Get-ChildItem -Path $Path -Recurse -Force -Directory | Sort-Object -Property 'FullName' -Descending | ForEach-Object {
+			# if directory has files
+			If ((Get-ChildItem -Path $_ -Recurse -Force -File)) {
+				Write-Warning -Message "will not perform `"Remove Directory`" on target `"$($_.FullName)`": path has child items"
+			}
+			Else {
+				$EmptyDirectories.Add($_)	
+			}
+		}
+
+		# remove old directories last
+		Write-Host "Removing '$($EmptyDirectories.Count)' empty directory item(s) from '$Path'"
+		:NextEmptyDirectory ForEach ($EmptyDirectory in $EmptyDirectories) {
+			If ($PSCmdlet.ShouldProcess($EmptyDirectory.FullName, 'Remove Directory')) {
+				# remove directory
+				Try {
+					Remove-Item -Path $EmptyDirectory.FullName -Force -ErrorAction 'Stop' -WarningAction 'Continue'
+				}
+				Catch {
+					Write-Warning -Message "could not perform `"Remove Directory`" on target `"$($EmptyDirectory.FullName)`": $($_.Exception.Message)"
+					continue NextEmptyDirectory
+				}
+
+				# report directory removed
+				Write-Verbose -Message "removed '$($Directory.FullName)' empty directory"
+			}
+		}
+
 	}
 
 	# if remove empty path requested...
