@@ -161,7 +161,7 @@ Process {
 	}
 
 	# if remove empty path requested...
-	If ($RemoveEmptyPath) {
+	If ($RemoveEmptyPath.IsPresent) {
 		# if path is not empty...
 		If ((Get-ChildItem -Path $Path -Recurse -Force)) {
 			Write-Warning -Message "will not perform `"Remove Directory`" on target `"$Path`": path has existing child items"
