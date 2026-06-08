@@ -309,7 +309,7 @@ if ($DestinationComputers -and -not $PrimaryMember) {
     foreach ($ComputerName in $DestinationComputers.ComputerName) {
         # update configuration on remote computers
         try {
-            Update-DfsrConfigurationFromAD -ComputerName $ComputerName
+            Update-DfsrConfigurationFromAD -ComputerName $ComputerName -ErrorAction 'Stop'
         }
         catch {
             Write-Warning -Message "could not update '$ComputerName' with DFS-R configuration from AD: $($_.Exception.Message)"
