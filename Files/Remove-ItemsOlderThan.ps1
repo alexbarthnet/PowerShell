@@ -181,7 +181,7 @@ Process {
 			}
 		}
 
-		# remove old directories last
+		# remove empty directories in descending order to avoid recurse switch parameter
 		Write-Host "Removing '$($EmptyDirectories.Count)' empty directory item(s) from '$Path'"
 		:NextEmptyDirectory ForEach ($EmptyDirectory in $EmptyDirectories) {
 			If ($PSCmdlet.ShouldProcess($EmptyDirectory.FullName, 'Remove Directory')) {
