@@ -195,7 +195,7 @@ Process {
 				}
 
 				# report directory removed
-				Write-Verbose -Message "removed '$($Directory.FullName)' empty directory"
+				Write-Verbose -Message "removed '$($EmptyDirectory.FullName)' empty directory"
 			}
 		}
 
