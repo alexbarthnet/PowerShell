@@ -172,7 +172,7 @@ $ChildDirectories = Get-ChildItem -Path $Path -Directory -System:$false
 # loop through child directories
 foreach ($ChildDirectory in $ChildDirectories) {
 	# retrieve child items in path
-	$ChildItems = Get-ChildItem -Path $ChildDirectory -File -Force -Recurse
+	$ChildItems = Get-ChildItem -Path $ChildDirectory.FullName -File -Force -Recurse
 
 	# if child items found...
 	if ($ChildItems) {
