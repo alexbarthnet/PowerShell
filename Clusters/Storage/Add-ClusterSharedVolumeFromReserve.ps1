@@ -7,6 +7,7 @@ param(
 	[ValidateSet('Off', 'ReFS', 'Windows')]
 	[string]$DeduplicationMode = 'Off',
 	[uint64]$StoragePoolIndex = 0,
+	[switch]$ShowVolumeState,
 	[switch]$WhatIf,
 	[switch]$Force
 )
@@ -300,13 +301,13 @@ if ($IsAzureLocal) {
 		# update boolean
 		$FullyEncrypted = $BitLockerVolume.VolumeStatus -eq 'FullyEncrypted'
 
-		# if verbose present...
-		if ($VerbosePreference -eq 'Continue') {
+		# if show volume state present...
+		if ($ShowVolumeState.IsPresent) {
 			# create object with state of cluster shared volume
 			$VolumeState = [PSCustomObject]@{
-				FriendlyVolumeName = $ClusterSharedVolume.FriendlyVolumeName
-				MaintenanceMode    = $ClusterSharedVolume.MaintenanceMode
-				RedirectedAccess   = $ClusterSharedVolume.RedirectedAccess
+				FriendlyVolumeName = $ClusterSharedVolume.SharedVolumeInfo.FriendlyVolumeName
+				MaintenanceMode    = $ClusterSharedVolume.SharedVolumeInfo.MaintenanceMode
+				RedirectedAccess   = $ClusterSharedVolume.SharedVolumeInfo.RedirectedAccess
 				BitLockerStatus    = $BitLockerVolume.VolumeStatus
 			}
 

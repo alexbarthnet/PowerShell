@@ -7,6 +7,7 @@ param(
 	[ValidateSet('Off', 'ReFS', 'Windows')]
 	[string]$DeduplicationMode = 'Off',
 	[uint64]$StoragePoolIndex = 0,
+	[switch]$ShowVolumeState,
 	[switch]$WhatIf,
 	[switch]$Force
 )
@@ -315,12 +316,6 @@ if ($IsAzureLocal) {
 		# retrieve cluster shared volume to ensure current mount point is available
 		$ClusterSharedVolume = Get-ClusterSharedVolume -Name $ClusterSharedVolume.Name
 
-		# if verbose...
-		if ($VerbosePreference) {
-			# report state of cluster shared volume
-			$ClusterSharedVolume | Format-Table -Property FriendlyVolumeName, MaintenanceMode, RedirectedAccess
-		}
-
 		# retrieve current mount point
 		$MountPoint = $ClusterSharedVolume.SharedVolumeInfo.Partition.Name
 
@@ -330,13 +325,13 @@ if ($IsAzureLocal) {
 		# update boolean
 		$FullyEncrypted = $BitLockerVolume.VolumeStatus -eq 'FullyEncrypted'
 
-		# if verbose present...
-		if ($VerbosePreference -eq 'Continue') {
+		# if show volume state present...
+		if ($ShowVolumeState.IsPresent) {
 			# create object with state of cluster shared volume
 			$VolumeState = [PSCustomObject]@{
-				FriendlyVolumeName = $ClusterSharedVolume.FriendlyVolumeName
-				MaintenanceMode    = $ClusterSharedVolume.MaintenanceMode
-				RedirectedAccess   = $ClusterSharedVolume.RedirectedAccess
+				FriendlyVolumeName = $ClusterSharedVolume.SharedVolumeInfo.FriendlyVolumeName
+				MaintenanceMode    = $ClusterSharedVolume.SharedVolumeInfo.MaintenanceMode
+				RedirectedAccess   = $ClusterSharedVolume.SharedVolumeInfo.RedirectedAccess
 				BitLockerStatus    = $BitLockerVolume.VolumeStatus
 			}
 
