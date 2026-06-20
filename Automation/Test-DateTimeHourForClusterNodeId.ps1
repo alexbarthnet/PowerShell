@@ -12,7 +12,7 @@ None.
 Boolean.
 
 .EXAMPLE
-.\Test-HourForClusterNodeId.ps1
+.\Test-DateTimeHourForClusterNodeId.ps1
 
 #>
 

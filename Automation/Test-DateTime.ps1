@@ -19,13 +19,13 @@ None.
 Boolean.
 
 .EXAMPLE
-.\Test-CurrentDateTime.ps1
+.\Test-DateTime.ps1
 
 .EXAMPLE
-.\Test-CurrentDateTime.ps1 -Mode StartsWithin
+.\Test-DateTime.ps1 -Mode StartsWithin
 
 .EXAMPLE
-.\Test-CurrentDateTime.ps1 -DayOfWeek 'Friday'
+.\Test-DateTime.ps1 -DayOfWeek 'Friday'
 
 #>
 
@@ -47,7 +47,7 @@ Param(
 	[switch]$AsVariable,
 	# name of variable when AsVariable is true
 	[Parameter(Position = 2)]
-	[string]$VariableName = 'TestCurrentDateTime',
+	[string]$VariableName = 'TestDateTime',
 	# scope of variable when AsVariable is true
 	[Parameter(Position = 3)]
 	[string]$VariableScope = 'global'
