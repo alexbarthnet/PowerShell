@@ -23,7 +23,7 @@ Param(
 	[switch]$AsVariable,
 	# name of variable when AsVariable is true
 	[Parameter(Position = 1)]
-	[string]$VariableName = 'TestHourForClusterNodeId',
+	[string]$VariableName = 'TestDateTimeHourForClusterNodeId',
 	# scope of variable when AsVariable is true
 	[Parameter(Position = 2)]
 	[string]$VariableScope = 'global'
