@@ -942,6 +942,9 @@ Function New-CmsCredential {
 	.PARAMETER Password
 	Specifies the password for the PSCredential object. Must be a secure string.
 
+	.PARAMETER Message
+	Specifies the text for the Read-Host prompt.
+
 	.INPUTS
 	None.
 
@@ -955,13 +958,15 @@ Function New-CmsCredential {
 		[Parameter(Position = 0, Mandatory = $true)]
 		[string]$Username,
 		[Parameter(Position = 1, Mandatory = $true)]
-		[securestring]$Password
+		[securestring]$Password,
+		[Parameter(Position = 2)]
+		[string]$Message
 	)
 
 	# if password not provided...
 	If (!$PSBoundParameters.ContainsKey('Password')) {
 		try {
-			$Password = Read-Host -AsSecureString -Prompt 'Password'
+			$Password = Read-Host -AsSecureString -Prompt $Message
 		}
 		catch {
 			throw $_
