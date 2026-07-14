@@ -2742,8 +2742,11 @@ end {
 			Write-Host 'cluster state - not found'
 		}
 		else {
-			# report options
-			Write-Host "cluster state - Options: '$($ClusterState.Options -join ''', ''')'"
+			# if options present...
+			if ($ClusterState.Options) {
+				# report options
+				Write-Host "cluster state - Options: '$($ClusterState.Options -join ''', ''')'"
+			}
 
 			# loop through cluster state
 			foreach ($ClusterNode in $ClusterState.Nodes) {
