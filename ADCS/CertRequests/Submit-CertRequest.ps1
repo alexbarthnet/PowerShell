@@ -3,7 +3,9 @@ Param(
 	[Parameter(Position = 0, Mandatory, ValueFromPipeline)]
 	[string]$Path,
 	[Parameter(Position = 1)]
-	[switch]$PassThru
+	[switch]$PassThru,
+	[Parameter(Position = 1)]
+	[switch]$SkipRequestFileCleanup
 )
 
 # create configuration object
@@ -72,6 +74,16 @@ Catch {
 
 # report state
 Write-Host "received certificate request ID: $RequestID"
+
+# if skip request file cleanup was not provided...
+if (!$SkipRequestFileCleanup.IsPresent) {
+	try {
+		Remove-Item -Path $Path -Force
+	}
+	catch {
+		Write-Warning -Message "could not remove submitted request file: $($_.Exception.Message)"
+	}
+}
 
 # if passthru requested...
 If ($PassThru) {
