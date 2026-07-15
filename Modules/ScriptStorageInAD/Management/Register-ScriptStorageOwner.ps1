@@ -16,12 +16,24 @@ param(
     [string]$ProgramDataContainer = "CN=Program Data,$DomainDistinguishedName",
     # parent script container
     [Parameter(DontShow)]
-    [string]$ParentScriptContainer = "CN=ScriptParameters,$ProgramDataContainer"
+    [string]$ParentScriptContainer = "CN=ScriptStorage,$ProgramDataContainer"
 )
 
 # retrieve parent script container
 try {
     $null = Get-ADObject -Server $Server -Identity $ParentScriptContainer -ErrorAction 'Stop'
+}
+catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
+    # create parent script container
+    try {
+        New-ADObject -Server $Server -Name 'ScriptStorage' -Path $ProgramDataContainer -Type 'Container' -ErrorAction 'Stop'
+    }
+    catch {
+        Write-Warning -Message "could not create parent script container: $($_.Exception.Message)"
+        throw $_
+    }
+    # report state
+    Write-Host "created parent script container: $ParentScriptContainer"
 }
 catch {
     Write-Warning -Message "could not retrieve parent script container: $($_.Exception.Message)"

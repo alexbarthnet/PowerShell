@@ -16,10 +16,13 @@ param(
     [string]$ProgramDataContainer = "CN=Program Data,$DomainDistinguishedName",
     # parent script container
     [Parameter(DontShow)]
-    [string]$ParentScriptContainer = "CN=ScriptParameters,$ProgramDataContainer",
+    [string]$ParentScriptContainer = "CN=ScriptStorage,$ProgramDataContainer",
     # named script container
     [Parameter(DontShow)]
     [string]$NamedScriptContainer = "CN=$ScriptName,$ParentScriptContainer",
+    # child script containers
+    [Parameter(DontShow)]
+    [string[]]$ChildContainers = @('Parameters', 'State'),
     # name of principal with rights to the object
     [Parameter(Mandatory)]
     [string]$Principal
@@ -32,7 +35,7 @@ try {
 catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
     # create parent script container
     try {
-        New-ADObject -Server $Server -Name 'ADScriptParameters' -Path $ProgramDataContainer -Type 'Container' -ErrorAction 'Stop'
+        $null = New-ADObject -Server $Server -Name 'ScriptStorage' -Path $ProgramDataContainer -Type 'Container' -ErrorAction 'Stop'
     }
     catch {
         Write-Warning -Message "could not create parent script container: $($_.Exception.Message)"
@@ -53,7 +56,7 @@ try {
 catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
     # create container for named script
     try {
-        New-ADObject -Server $Server -Name $ScriptName -Path $ParentScriptContainer -Type 'Container' -ErrorAction 'Stop'
+        $null = New-ADObject -Server $Server -Name $ScriptName -Path $ParentScriptContainer -Type 'Container' -ErrorAction 'Stop'
     }
     catch {
         Write-Warning -Message "could not create named script container: $($_.Exception.Message)"
@@ -96,3 +99,30 @@ catch {
 
 # report state
 Write-Host "granted '$Principal' principal rights to create and manage contact objects in named script container: $NamedScriptContainer"
+
+# loop through child containers
+foreach ($ChildContainer in $ChildContainers) {
+    # define child script container DN
+    $ChildScriptContainer = "CN=$ChildContainer,$NamedScriptContainer"
+
+    # retrieve container for named script
+    try {
+        $null = Get-ADObject -Server $Server -Identity $ChildScriptContainer -ErrorAction 'Stop'
+    }
+    catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
+        # create container for named script
+        try {
+            $null = New-ADObject -Server $Server -Name $ChildContainer -Path $NamedScriptContainer -Type 'Container' -ErrorAction 'Stop'
+        }
+        catch {
+            Write-Warning -Message "could not create child script container: $($_.Exception.Message)"
+            throw $_
+        }
+        # report state
+        Write-Host "created child script container: $ChildScriptContainer"
+    }
+    catch {
+        Write-Warning -Message "could not retrieve child script container: $($_.Exception.Message)"
+        throw $_
+    }
+}
