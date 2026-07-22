@@ -1,7 +1,7 @@
 @{
 
 # Script module or binary module file associated with this manifest.
-RootModule = 'ScriptParametersInAD.psm1'
+RootModule = 'ScriptStorageInAD.psm1'
 
 # Version number of this module.
 ModuleVersion = '1.0.0.0'
@@ -22,7 +22,7 @@ CompanyName = 'Alex Barth'
 Copyright = '(c) Alex Barth. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'ScriptParametersInAD'
+Description = 'ScriptStorageInAD'
 
 # Minimum version of the Windows PowerShell engine required by this module
 # PowerShellVersion = ''
@@ -63,6 +63,7 @@ Description = 'ScriptParametersInAD'
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
 FunctionsToExport = @(
     'Initialize-ScriptParameterValueInAD'
+    'Initialize-ScriptStateInAD'
 )
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
@@ -82,10 +83,10 @@ AliasesToExport = @()
 
 # List of all files packaged with this module
 FileList = @(
-    'Management\Register-ScriptParametersContainer.ps1'
-    'Management\Register-ScriptParametersOwner.ps1'
-    'Management\Unregister-ScriptParametersContainer.ps1'
-    'Management\Unregister-ScriptParametersOwner.ps1'
+    'Management\Register-ScriptStorageContainers.ps1'
+    'Management\Register-ScriptStorageOwner.ps1'
+    'Management\Unregister-ScriptStorageContainers.ps1'
+    'Management\Unregister-ScriptStorageOwner.ps1'
 )
 
 # Private data to pass to the module specified in RootModule/ModuleToProcess. This may also contain a PSData hashtable with additional module metadata used by PowerShell.

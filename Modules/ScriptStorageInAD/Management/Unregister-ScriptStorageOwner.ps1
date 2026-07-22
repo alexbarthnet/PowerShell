@@ -16,7 +16,7 @@ param(
     [string]$ProgramDataContainer = "CN=Program Data,$DomainDistinguishedName",
     # parent script container
     [Parameter(DontShow)]
-    [string]$ParentScriptContainer = "CN=ScriptParameters,$ProgramDataContainer"
+    [string]$ParentScriptContainer = "CN=ScriptStorage,$ProgramDataContainer"
 )
 
 # retrieve parent script container
