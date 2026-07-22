@@ -727,7 +727,8 @@ begin {
 		param(
 			[Parameter(Mandatory = $true)]
 			[string]$ComputerName,
-			[string]$Path = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization\Worker'
+			[string]$Path = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization\Worker',
+			[switch]$PassThru
 		)
 
 		# get hashtable for InvokeCommand splat
@@ -771,7 +772,7 @@ begin {
 
 		# update current MAC address
 		try {
-			$UpdateMacAddress = Invoke-Command @InvokeCommand -ScriptBlock {
+			$UpdatedMacAddress = Invoke-Command @InvokeCommand -ScriptBlock {
 				param($ArgumentList)
 				# increment last byte in current MAC address
 				$ArgumentList['CurrentMacAddress'][-1]++
@@ -790,8 +791,14 @@ begin {
 			throw $_
 		}
 
-		# report updated MAC address
-		Write-Host ("$Hostname,$ComputerName - updated CurrentMacAddress registry value: $UpdateMacAddress")
+		# if PassThru...
+		if ($PassThru.IsPresent) {
+			return $UpdatedMacAddress
+		}
+		else {
+			# report updated MAC address
+			Write-Host ("$Hostname,$ComputerName - updated CurrentMacAddress registry value: $UpdatedMacAddress")
+		}
 	}
 
 	function Get-VMHostNextMacAddress {
@@ -4710,14 +4717,14 @@ process {
 					# retrieve MAC address from host
 					try {
 						Write-Host ("$Hostname,$ComputerName,$Name - ...updating current MAC address from host")
-						Update-VMHostCurrentMacAddress -ComputerName $ComputerName
+						$StaticMacAddress = Update-VMHostCurrentMacAddress -ComputerName $ComputerName -PassThru
 					}
 					catch {
 						Write-Host ("$Hostname,$ComputerName,$Name - ERROR: could not retrieve current MAC address from host")
 						throw $_
 					}
 					# report MAC address was updated
-					Write-Host ("$Hostname,$ComputerName,$Name - ...incremented current MAC address on host: $StaticAddress")
+					Write-Host ("$Hostname,$ComputerName,$Name - ...incremented current MAC address on host: $StaticMacAddress")
 				}
 
 				# define required parameters for VLAN
