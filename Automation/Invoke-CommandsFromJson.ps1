@@ -100,7 +100,7 @@ None. The script reports the actions taken and does not provide any actionable o
 
 #>
 
-[CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Default')]
+[CmdletBinding(DefaultParameterSetName = 'Default')]
 Param(
 	# path to JSON configuration file
 	[Parameter(Mandatory = $True, Position = 0)]
