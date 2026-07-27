@@ -2344,9 +2344,9 @@ Process {
 						Break AllJsonEntries
 					}
 
-					# if stop expression evaluation is false...
-					If ($Evaluation -eq $false) {
-						Write-Host "The evaluation of the '$($HashtableFromJsonEntry['StopExpression'])' StopExpression for the '$($HashtableFromJsonEntry['Command'])' Command returned 'false'; stopping all commands"
+					# if stop expression evaluation is true...
+					If ($Evaluation -eq $true) {
+						Write-Host "The evaluation of the '$($HashtableFromJsonEntry['StopExpression'])' StopExpression for the '$($HashtableFromJsonEntry['Command'])' Command returned 'true'; stopping all subsequent commands"
 						Break AllJsonEntries
 					}
 				}
