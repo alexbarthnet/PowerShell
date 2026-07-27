@@ -2127,7 +2127,7 @@ Process {
 				If ($HashtableFromJsonEntry.ContainsKey('OutputName')) {
 					# if outvariable already defined...
 					If ($Parameters.ContainsKey('OutVariable')) {
-						Write-Warning -Message "could not add 'OutputName' OutputName variable as OutVariable; variable already defined in parameters as '[$($Parameters[$VariableName].GetType().FullName)]' type with value: $($Parameters['OutVariable'])"
+						Write-Warning -Message "could not add 'OutputName' OutputName variable as OutVariable; variable already defined in parameters as '[$($Parameters['OutVariable'].GetType().FullName)]' type with value: $($Parameters['OutVariable'])"
 						Continue NextJsonEntry
 					}
 
