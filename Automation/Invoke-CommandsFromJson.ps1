@@ -2266,6 +2266,9 @@ Process {
 					Continue NextJsonEntry
 				}
 
+				# sleep between transcripts
+				Start-Sleep -Seconds 1
+
 				# start transcript for command
 				Try {
 					Start-TranscriptForCommand -TranscriptName $HashtableFromJsonEntry['CommandName']
@@ -2308,6 +2311,9 @@ Process {
 					$ExceptionCaught = $true
 					Continue NextJsonEntry
 				}
+
+				# sleep between transcripts
+				Start-Sleep -Seconds 1
 
 				# resume current transcript
 				Try {
