@@ -710,14 +710,14 @@ Begin {
 			}
 
 			# sort files-to-remove by name then process files
-			ForEach ($FileToRemove in ($FilesToRemove | Sort-Object -Property FullName)) {
+			:NextTranscriptFileToRemove ForEach ($FileToRemove in ($FilesToRemove | Sort-Object -Property FullName)) {
 				# remove file
 				Try {
 					Remove-Item -Path $FileToRemove.FullName -Force -ErrorAction 'Stop'
 				}
 				Catch {
-					Write-Warning -Message "could not remove transcript file: $($FileToRemove.FullName)"
-					Return $_
+					Write-Warning -Message "could not remove transcript file: $($FileToRemove.FullName); $($_.Exception.Message)"
+					continue NextTranscriptFileToRemove
 				}
 				# report complete
 				Write-Verbose -Message "Removed transcript file: $($FileToRemove.FullName)"
@@ -837,14 +837,14 @@ Begin {
 			}
 
 			# sort files-to-remove by name then process files
-			ForEach ($FileToRemove in ($FilesToRemove | Sort-Object -Property FullName)) {
+			:NextTextOutputFileToRemove ForEach ($FileToRemove in ($FilesToRemove | Sort-Object -Property FullName)) {
 				# remove file
 				Try {
 					Remove-Item -Path $FileToRemove.FullName -Force -ErrorAction 'Stop'
 				}
 				Catch {
-					Write-Warning -Message "could not remove text output file: $($FileToRemove.FullName)"
-					Return $_
+					Write-Warning -Message "could not remove text output file: $($FileToRemove.FullName); $($_.Exception.Message)"
+					continue NextTextOutputFileToRemove
 				}
 				# report complete
 				Write-Verbose -Message "Removed text output file: $($FileToRemove.FullName)"
