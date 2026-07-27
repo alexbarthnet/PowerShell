@@ -1624,7 +1624,7 @@ Process {
 		$Show {
 			# report and display JSON contents
 			Write-Host "Displaying entries in configuration file: $Json"
-			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+			$JsonData | Format-List
 		}
 		# clear configuration file
 		$Clear {
