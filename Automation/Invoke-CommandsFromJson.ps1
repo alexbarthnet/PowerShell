@@ -1624,7 +1624,7 @@ Process {
 		$Show {
 			# report and display JSON contents
 			Write-Host "Displaying entries in configuration file: $Json"
-			$JsonData | ConvertTo-Json -Depth 100 | ConvertFrom-Json | Format-List
+			$JsonData | Format-List
 		}
 		# clear configuration file
 		$Clear {
@@ -2127,7 +2127,7 @@ Process {
 				If ($HashtableFromJsonEntry.ContainsKey('OutputName')) {
 					# if outvariable already defined...
 					If ($Parameters.ContainsKey('OutVariable')) {
-						Write-Warning -Message "could not add 'OutputName' OutputName variable as OutVariable; variable already defined in parameters as '[$($Parameters[$VariableName].GetType().FullName)]' type with value: $($Parameters['OutVariable'])"
+						Write-Warning -Message "could not add 'OutputName' OutputName variable as OutVariable; variable already defined in parameters as '[$($Parameters['OutVariable'].GetType().FullName)]' type with value: $($Parameters['OutVariable'])"
 						Continue NextJsonEntry
 					}
 
