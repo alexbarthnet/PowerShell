@@ -30,10 +30,10 @@ Hashtable with parameters for the command. Cannot be combined with the Arguments
 Hashtable with arguments for the command. Cannot be combined with the Parameters parameter. The keys in the hashtable define the order in which arguments are provided to the command and each key must be castable as a Character object.
 
 .PARAMETER Expression
-An optional string containing a PowerShell expression to evaluate. When the Expression parameter is provided, the individual command will run if the evaluated expression return a boolean of true.
+An optional string containing a PowerShell expression to evaluate before an individual command will run. When the Expression parameter is provided, the individual command will run if the evaluated expression return a boolean of true.
 
 .PARAMETER StopExpression
-An optional string containing a PowerShell expression to evaluate. When the StopExpression parameter is provided, the individual command and any subsequent commands will run if evaluated expression returns a boolean of true.
+An optional string containing a PowerShell expression to evaluate after an individual command has run. When the StopExpression parameter is provided, the script will not any subsequent commands if the evaluated expression returns a boolean of true.
 
 .PARAMETER Modules
 The name or path of one or more PowerShell modules to import before running the command.
@@ -129,12 +129,12 @@ Param(
 	# script parameter - parameters for command
 	[Parameter(Mandatory = $True, ParameterSetName = 'AddWithParameters')]
 	[hashtable]$Parameters,
-	# script parameter - skip expression for evaluating command
+	# script parameter - expression to evaluate before running individual command
 	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
 	[string]$Expression,
-	# script parameter - stop expression for evaluating command
+	# script parameter - expression to evaluate after running individual command to stop all subsequent commands
 	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithArguments')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'AddWithParameters')]
 	[Parameter(Mandatory = $False, ParameterSetName = 'Add')]
@@ -2063,30 +2063,6 @@ Process {
 					}
 				}
 
-				# if stop expression defined...
-				If ($HashtableFromJsonEntry.ContainsKey('StopExpression')) {
-					# evaluate stop expression
-					Try {
-						$Evaluation = Invoke-Expression -Command $HashtableFromJsonEntry['StopExpression']
-					}
-					Catch {
-						Write-Warning -Message "exception caught calling '$($HashtableFromJsonEntry['StopExpression'])' StopExpression for the '$($HashtableFromJsonEntry['Command'])' Command: $($_.Exception.ToString())"
-						Break AllJsonEntries
-					}
-
-					# if stop expression evaluation is not a boolean...
-					If ($Evaluation -isnot [boolean]) {
-						Write-Warning -Message "the evaluation of the '$($HashtableFromJsonEntry['StopExpression'])' StopExpression for the '$($HashtableFromJsonEntry['Command'])' Command returned an invalid type: '$($Evaluation.GetType().FullName)'"
-						Break AllJsonEntries
-					}
-
-					# if stop expression evaluation is false...
-					If ($Evaluation -eq $false) {
-						Write-Host "The evaluation of the '$($HashtableFromJsonEntry['StopExpression'])' StopExpression for the '$($HashtableFromJsonEntry['Command'])' Command returned 'false'; stopping all commands"
-						Break AllJsonEntries
-					}
-				}
-
 				# if arguments provided...
 				If ($HashtableFromJsonEntry.ContainsKey('Arguments')) {
 					# process each key in Arguments
@@ -2348,6 +2324,30 @@ Process {
 						Write-Warning -Message "exception caught creating the '$($HashtableFromJsonEntry['OutputName'])' variable: $($_.Exception.ToString())"
 						$ExceptionCaught = $true
 						Continue NextJsonEntry
+					}
+				}
+
+				# if stop expression defined...
+				If ($HashtableFromJsonEntry.ContainsKey('StopExpression')) {
+					# evaluate stop expression
+					Try {
+						$Evaluation = Invoke-Expression -Command $HashtableFromJsonEntry['StopExpression']
+					}
+					Catch {
+						Write-Warning -Message "exception caught calling '$($HashtableFromJsonEntry['StopExpression'])' StopExpression for the '$($HashtableFromJsonEntry['Command'])' Command: $($_.Exception.ToString())"
+						Break AllJsonEntries
+					}
+
+					# if stop expression evaluation is not a boolean...
+					If ($Evaluation -isnot [boolean]) {
+						Write-Warning -Message "the evaluation of the '$($HashtableFromJsonEntry['StopExpression'])' StopExpression for the '$($HashtableFromJsonEntry['Command'])' Command returned an invalid type: '$($Evaluation.GetType().FullName)'"
+						Break AllJsonEntries
+					}
+
+					# if stop expression evaluation is true...
+					If ($Evaluation -eq $true) {
+						Write-Host "The evaluation of the '$($HashtableFromJsonEntry['StopExpression'])' StopExpression for the '$($HashtableFromJsonEntry['Command'])' Command returned 'true'; stopping all subsequent commands"
+						Break AllJsonEntries
 					}
 				}
 			}
