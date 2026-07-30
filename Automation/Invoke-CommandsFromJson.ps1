@@ -2186,7 +2186,7 @@ Process {
 
 						# if variable name already defined...
 						If ($Parameters.ContainsKey($VariableName)) {
-							Write-Warning -Message "could not add '$VariableName' SwitchParameter variable to parameters; variable already defined in parameters as '[$($Parameters[$VariableName].GetType().FullName)]' type with value: $($Parameters[$VariableName])"
+							Write-Warning -Message "could not add '$VariableName' SessionParameter variable to parameters; variable already defined in parameters as '[$($Parameters[$VariableName].GetType().FullName)]' type with value: $($Parameters[$VariableName])"
 							Continue NextJsonEntry
 						}
 
