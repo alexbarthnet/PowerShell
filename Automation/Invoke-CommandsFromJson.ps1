@@ -2175,7 +2175,7 @@ Process {
 				If ($HashtableFromJsonEntry.ContainsKey('SessionParameters')) {
 					# process each named session parameter
 					ForEach ($VariableName in $HashtableFromJsonEntry['SessionParameters']) {
-						# retrieve value of the named variable
+						# retrieve value of the named variable in the global scope
 						Try {
 							$VariableValue = Get-Variable -Name $VariableName -ValueOnly -Scope 'Global' -ErrorAction 'Stop'
 						}
@@ -2205,7 +2205,7 @@ Process {
 				If ($HashtableFromJsonEntry.ContainsKey('SwitchParameters')) {
 					# process each named switch parameter
 					ForEach ($VariableName in $HashtableFromJsonEntry['SwitchParameters']) {
-						# retrieve value of the named switch parameter
+						# retrieve value of the named variable in the global scope
 						Try {
 							$VariableValue = Get-Variable -Name $VariableName -ValueOnly -Scope 'Global' -ErrorAction 'Stop'
 						}
@@ -2281,7 +2281,7 @@ Process {
 
 				# if argument list defined...
 				If ($ArgumentList -is [System.Collections.SortedList]) {
-					# call command with values from argument list
+					# call command with ordered values from argument list
 					Try {
 						. $HashtableFromJsonEntry['Command'] $ArgumentList.Values
 					}
@@ -2292,7 +2292,7 @@ Process {
 				}
 				# if argument list not defined...
 				Else {
-					# call command with parameters
+					# call command with parameters from splatted hashtable
 					Try {
 						. $HashtableFromJsonEntry['Command'] @Parameters
 					}
